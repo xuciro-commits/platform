@@ -212,7 +212,7 @@ func requiredEmpty(value reflect.Value) bool {
 	}
 }
 
-func CheckFields(info platform.RecordTypeInfo, entity any, v reflect.Value, replaying bool, lookup RecordLookup, resolve func(platform.AssetBinding) (platform.ValueType, bool), engines ...platform.RuleEngine) ([]platform.FieldIssue, *platform.Error) {
+func CheckFields(info platform.RecordTypeInfo, entity any, v, previous reflect.Value, replaying bool, lookup RecordLookup, resolve func(platform.AssetBinding) (platform.ValueType, bool), engines ...platform.RuleEngine) ([]platform.FieldIssue, *platform.Error) {
 	invalid := &platform.Error{Code: pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT}
 	stored := func(name string) string {
 		i := slices.IndexFunc(info.Fields, func(x platform.FieldInfo) bool { return x.Name == name })
@@ -284,7 +284,7 @@ func CheckFields(info platform.RecordTypeInfo, entity any, v reflect.Value, repl
 			switch active := f.Active(stringOf, engines...); {
 			case active && f.Required && f.Constraints == nil && requiredEmpty(fv):
 				return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "{field} is required when {condition} is {values}", f.Title, on.Title, strings.Join(f.When.In, ", "))
-			case !active && !fv.IsZero():
+			case !active && !fv.IsZero() && !keptAcrossStates(info, f, fv, previous):
 				return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "{field} applies only when {condition} is {values}", f.Title, on.Title, strings.Join(f.When.In, ", "))
 			case !active:
 				continue
@@ -656,4 +656,18 @@ func EnterpriseCurrent(info platform.RecordTypeInfo, value reflect.Value, now ti
 	}
 	result, err := program.Eval(context)
 	return err != nil || string(result.Value.Data) != "false"
+}
+
+func keptAcrossStates(info platform.RecordTypeInfo, f platform.FieldInfo, value, previous reflect.Value) bool {
+	if info.Lifecycle == nil || f.When.Field != info.Lifecycle.Field || !previous.IsValid() {
+		return false
+	}
+	before := previous
+	for before.Kind() == reflect.Pointer {
+		if before.IsNil() {
+			return false
+		}
+		before = before.Elem()
+	}
+	return reflect.DeepEqual(before.FieldByIndex(f.Index).Interface(), value.Interface())
 }

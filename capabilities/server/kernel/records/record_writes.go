@@ -141,7 +141,7 @@ func (s *Store) Check(c platform.Caller, entity any, now time.Time) *platform.Er
 	if err := CheckEnterpriseReferences(c.Enterprise(), c.Replaying, et.info.Fields, v, previous, now); err != nil {
 		return err
 	}
-	issues, refusal := CheckFields(et.info, entity, v, c.Replaying, s, c.ResolveValueType, s.rules)
+	issues, refusal := CheckFields(et.info, entity, v, previous, c.Replaying, s, c.ResolveValueType, s.rules)
 	if len(issues) > 0 {
 		return c.RefuseFields(issues)
 	}
