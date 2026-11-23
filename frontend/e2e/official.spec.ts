@@ -46,7 +46,7 @@ test("official tenant: settings are one page, and an activity added on an accoun
   await create.getByRole("textbox", { name: "Account" }).fill("曦和精密");
   await create.getByRole("button", { name: "Create", exact: true }).click();
   await expect(page.getByRole("heading", { level: 1, name: "曦和精密" })).toBeVisible();
-  await page.getByRole("tab", { name: "Activity" }).click();
+  await page.getByRole("navigation", { name: "Tabs" }).getByRole("link", { name: "Activity", exact: true }).click();
   await page.getByRole("button", { name: "Add Activity", exact: true }).click();
   const add = page.getByRole("dialog");
   await add.getByRole("textbox", { name: "Subject" }).fill("给曦和打电话");
@@ -58,7 +58,7 @@ test("official tenant: settings are one page, and an activity added on an accoun
   await done.getByRole("textbox", { name: "Outcome" }).fill("约好下周演示");
   await done.getByRole("button", { name: "Complete", exact: true }).click();
   await expect(done).toBeHidden();
-  await expect(page.getByRole("main").getByText("Done", { exact: true })).toBeVisible();
+  await expect(page.getByRole("main").getByText("Done", { exact: true }).first()).toBeVisible();
   await expect(page.getByRole("main").getByRole("button", { name: "Reopen", exact: true })).toBeVisible();
 });
 });
