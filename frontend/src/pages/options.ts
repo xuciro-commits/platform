@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { type Api, request, useRead } from "../host";
 import { t } from "../i18n";
 import type { Described } from "./describe";
+import { elementType, stereotypesOf } from "./enterprise";
 import { type Dot, dots } from "./Transitions";
 import { plain, shown } from "./values";
 import { newView, readView } from "./view";
@@ -17,12 +18,18 @@ export function useOptions(described: Described | undefined, only?: string[]) {
   const types = useRead<Api.EntityInfo[]>("/v1/entities");
   const [references, setReferences] = useState<Options>({});
   const targets = useMemo(() => (described ? described.entity.fields.filter((field) => field.type === "reference" && field.ref &&
-    (wanted === undefined || wanted.split(",").includes(field.name))).map((field) => [field.name, String(field.ref)] as const) : []), [described, wanted]);
+    (wanted === undefined || wanted.split(",").includes(field.name))).map((field) => [field.name, String(field.ref), stereotypesOf(field)] as const) : []), [described, wanted]);
   useEffect(() => {
     if (types.status !== "ready" || targets.length === 0) return;
     let live = true;
     void Promise.all(
-      targets.map(async ([name, type]) => {
+      targets.map(async ([name, type, stereotypes]) => {
+        if (type === elementType) {
+          const params = new URLSearchParams({ limit: "200" });
+          if (stereotypes?.length) params.set("stereotype", stereotypes.join(","));
+          const answer = await request<Api.EnterpriseQueryResult>(`/v1/enterprise-query?${params}`).catch(() => undefined);
+          return [name, (answer?.elements ?? []).map((element) => ({ value: element.id, label: element.name || element.id }))] as const;
+        }
         const target = types.data.find((entity) => entity.type === type);
         const display = target?.display;
         const color = target?.fields.some((field) => field.name === "color" && field.type === "choice");

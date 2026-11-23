@@ -16,6 +16,7 @@ import { describe } from "./describe";
 import { PageTitle, useGutter } from "./frame";
 import { useOptions } from "./options";
 import { present } from "./values";
+import { ErrorBoundary } from "../shell/ErrorBoundary";
 
 type Hue = "blue" | "orange" | "green" | "purple" | "teal" | "pink" | "cyan" | "red";
 type Point = { key: string; value: unknown; label: string; amount: number; href?: string; hue: Hue };
@@ -50,12 +51,12 @@ export function AppDashboard({ title, blocks, listOf }: { title: string; blocks:
           <VStack gap={6}>
             <PageTitle title={t(title)} />
             <Grid columns={{ minWidth: 200, max: 4 }} gap={4}>
-              {metrics.map((block) => <Block key={block.title} block={block} entity={entityOf(block)} list={listOf(block.object)} />)}
+              {metrics.map((block) => <ErrorBoundary key={block.title} compact><Block block={block} entity={entityOf(block)} list={listOf(block.object)} /></ErrorBoundary>)}
             </Grid>
             <Grid columns={{ minWidth: 360, max: 2 }} gap={4}>
               {charts.map((block) => (
                 <GridSpan key={block.title} columns={block.kind === "line" ? "full" : 1}>
-                  <Block block={block} entity={entityOf(block)} list={listOf(block.object)} />
+                  <ErrorBoundary compact><Block block={block} entity={entityOf(block)} list={listOf(block.object)} /></ErrorBoundary>
                 </GridSpan>
               ))}
             </Grid>
@@ -124,7 +125,7 @@ function Block({ block, entity, list }: { block: Api.DashboardBlock; entity?: Ap
           <Heading level={4}>{t(block.title)}</Heading>
           {list && <Link href={href(base) ?? list}>{t("View all")}</Link>}
         </HStack>
-        {!shown ? <Pending read={read} /> : block.kind === "share" ? <Share shown={shown} /> : <Chart kind={block.kind} shown={shown} />}
+        {!shown ? <Pending read={read} /> : shown.points.length === 0 ? <Text type="supporting" color="secondary">{t("No data yet")}</Text> : block.kind === "share" ? <Share shown={shown} /> : <Chart kind={block.kind} shown={shown} />}
       </VStack>
     </Card>
   );
@@ -137,7 +138,7 @@ function rank(order: string[], key: string) {
 
 function Pending({ read }: { read: Read<Api.RecordsAggregate> }) {
   if (read.status === "loading") return <Skeleton height={40} />;
-  if (read.status === "refused") return <Text type="supporting" color="secondary">{read.reason || t("You cannot see this page")}</Text>;
+  if (read.status === "refused") return <Text type="supporting" color="secondary">{read.reason || t("You do not have access to this data")}</Text>;
   return <Banner status="error" title={t("This page could not be loaded")} description={read.status === "error" ? read.reason : undefined} />;
 }
 

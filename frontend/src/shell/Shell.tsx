@@ -6,22 +6,24 @@ import { HStack } from "@astryxdesign/core/HStack";
 import { ChartPieIcon, Cog6ToothIcon, RectangleGroupIcon } from "@heroicons/react/24/outline";
 import { MobileNav } from "@astryxdesign/core/MobileNav";
 import { useToast } from "@astryxdesign/core/Toast";
-import { Suspense, useEffect, useMemo, useState } from "react";
+import { lazy, Suspense, useEffect, useMemo, useState } from "react";
 import { type App, apps, locate, type NavItem, type NavSection } from "../apps";
 import { entries, recordHref } from "../apps/entries";
 import { type Api, useRead, useSession } from "../host";
-import { AppDashboard } from "../pages/AppDashboard";
 import { Records } from "../pages/RecordList";
-import { SettingsTables } from "../pages/SettingsTables";
 import { setLanguage, t } from "../i18n";
 import { navigate, useHash, usePath, useSearch } from "../router";
 import { AppRail } from "./AppRail";
 import { setAppearance } from "./appearance";
 import { AppSidebar } from "./AppSidebar";
 import { CommandSearch } from "./CommandSearch";
+import { ErrorBoundary } from "./ErrorBoundary";
 import { legacyTarget } from "./legacy";
 import { SignIn } from "./SignIn";
 import { iconOf } from "../pages/icons";
+
+const AppDashboard = lazy(() => import("../pages/AppDashboard").then((module) => ({ default: module.AppDashboard })));
+const SettingsTables = lazy(() => import("../pages/SettingsTables").then((module) => ({ default: module.SettingsTables })));
 
 const slug = (text: string) => text.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "") || "settings";
 
@@ -114,7 +116,9 @@ export function Shell() {
           </MobileNav>
         ) }}
       >
-        <Suspense fallback={null}>{content}</Suspense>
+        <ErrorBoundary key={path}>
+          <Suspense fallback={null}>{content}</Suspense>
+        </ErrorBoundary>
       </AppShell>
     </CommandSearch>
   );

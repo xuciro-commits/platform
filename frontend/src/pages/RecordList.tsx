@@ -2,15 +2,16 @@ import { Banner } from "@astryxdesign/core/Banner";
 import { Button } from "@astryxdesign/core/Button";
 import { HStack, VStack } from "@astryxdesign/core/Layout";
 import { MoreMenu } from "@astryxdesign/core/MoreMenu";
-import { type ComponentType, useEffect, useMemo, useState } from "react";
+import { type ComponentType, lazy, Suspense, useEffect, useMemo, useState } from "react";
 import { type Api, type Read, requestBlob, useRead } from "../host";
 import { t } from "../i18n";
 import { navigate, usePath, useSearch } from "../router";
 import { ActionDialog } from "./ActionDialog";
 import { type Intent, reasonOf, send, stepIntent, useAct } from "./act";
 import { type ListShape, ListView, type Move } from "./ListPage";
-import { ImportWizard } from "./ImportWizard";
 import { enterable } from "./ParameterInput";
+
+const ImportWizard = lazy(() => import("./ImportWizard").then((module) => ({ default: module.ImportWizard })));
 import { type Described, describe, numeric, type Step } from "./describe";
 import { BatchActions, canBatch } from "./BatchActions";
 import { type Options, useOptions, useRelatedCounts } from "./options";
@@ -503,7 +504,7 @@ export function Records({ declared, listPath, id, back }: { declared: Declared; 
         ) : undefined}
       />
       {exportFailure && <Banner status="error" title={t("Not done")} description={exportFailure} />}
-      {importing && described && <ImportWizard described={described} onClose={() => setImporting(false)} />}
+      {importing && described && <Suspense fallback={null}><ImportWizard described={described} onClose={() => setImporting(false)} /></Suspense>}
       {act.element}
       {creating && create && described && declared.creator && (
         <declared.creator onClose={() => setCreating(false)} onDone={(created) => navigate(`${listPath}/${encodeURIComponent(created)}`, { fresh: created })} />

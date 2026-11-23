@@ -178,9 +178,6 @@ importers:
       '@stylexjs/stylex':
         specifier: ^0.19.2
         version: 0.19.2
-      lucide-react:
-        specifier: ^1.73.0
-        version: 1.73.0(@types/react@19.3.0)(react@19.3.1)
       pdfjs-dist:
         specifier: ^6.5.438
         version: 6.5.438

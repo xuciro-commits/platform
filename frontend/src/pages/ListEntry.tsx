@@ -3,14 +3,16 @@ import { Button } from "@astryxdesign/core/Button";
 import { HStack, VStack } from "@astryxdesign/core/Layout";
 import { MoreMenu } from "@astryxdesign/core/MoreMenu";
 import { useToast } from "@astryxdesign/core/Toast";
-import { type ReactNode, useMemo, useRef, useState } from "react";
+import { lazy, type ReactNode, Suspense, useMemo, useRef, useState } from "react";
 import { type Api, type Read, request, useRead } from "../host";
 import { t } from "../i18n";
 import { useSearch } from "../router";
 import { reasonOf, send, useAct } from "./act";
 import { ActionDialog } from "./ActionDialog";
 import type { Values } from "./describe";
-import { type ImportTarget, ImportWizard } from "./ImportWizard";
+import type { ImportTarget } from "./ImportWizard";
+
+const ImportWizard = lazy(() => import("./ImportWizard").then((module) => ({ default: module.ImportWizard })));
 import { type ListColumn, type ListShape, ListView } from "./ListPage";
 import { enterable } from "./ParameterInput";
 import { newView, readView } from "./view";
@@ -162,7 +164,7 @@ export function listPage<Answer, Row>(definition: ListDefinition<Answer, Row>) {
             </HStack>
           ) : undefined}
         />
-        {importing && importTarget && <ImportWizard target={importTarget} onClose={() => setImporting(false)} />}
+        {importing && importTarget && <Suspense fallback={null}><ImportWizard target={importTarget} onClose={() => setImporting(false)} /></Suspense>}
         {act.element}
         {creating && create && (
           <ActionDialog action={create} heading={t(create.title)} confirm={t("Create")} onClose={() => setCreating(false)} onDone={() => setCreating(false)}

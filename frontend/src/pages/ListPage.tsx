@@ -18,14 +18,11 @@ import { colorVars } from "@astryxdesign/core/theme/tokens.stylex";
 import { AdjustmentsHorizontalIcon, ArrowPathIcon, Bars3BottomLeftIcon, CalendarDaysIcon, MagnifyingGlassIcon, TableCellsIcon, ViewColumnsIcon } from "@heroicons/react/24/outline";
 import { AdjustmentsHorizontalIcon as AdjustmentsHorizontalSolidIcon } from "@heroicons/react/24/solid";
 import * as stylex from "@stylexjs/stylex";
-import { type ReactNode, useEffect, useMemo, useState } from "react";
+import { lazy, type ReactNode, Suspense, useEffect, useMemo, useState } from "react";
 import { HostRefusal, type Read, reread } from "../host";
 import { t } from "../i18n";
 import { navigate, usePath, useSearch } from "../router";
 import { PageTitle, useGutter } from "./frame";
-import { BoardView } from "./BoardView";
-import { CalendarView } from "./CalendarView";
-import { GanttView } from "./GanttView";
 import { useListWindow } from "./ListWindow";
 import { type CellEdit, CellProperty } from "./PropertyField";
 import { type Chip, FilterBar } from "./ListFilters";
@@ -37,6 +34,10 @@ import { type Density, type GanttScale, newView, readView, hasFilters, shownMont
 
 import type { ListShape } from "./listShape";
 export type { ListColumn, ListGroup, ListShape, Move } from "./listShape";
+
+const BoardView = lazy(() => import("./BoardView").then((module) => ({ default: module.BoardView })));
+const CalendarView = lazy(() => import("./CalendarView").then((module) => ({ default: module.CalendarView })));
+const GanttView = lazy(() => import("./GanttView").then((module) => ({ default: module.GanttView })));
 
 type Raw = Record<string, unknown>;
 const compare = (left: unknown, right: unknown) =>
@@ -470,53 +471,59 @@ export function ListView<Answer, Row>({ definition, read, primary, back, exportR
               </VStack>
             )}
             {ready && board && (
-              <BoardView
-                columns={board.lanes}
-                page={definition.page}
-                total={board.total?.label}
-                cards={shown.map((cells) => {
-                  const ownerCol = definition.columns.find((column) => column.kind === "member" && cells[column.key]);
-                  const timeCol = definition.columns.find((column) => column.kind === "time" && cells[column.key]);
-                  return {
-                    id: cells[idKey],
-                    column: cells.__lane,
-                    title: cells[orderedColumns[0].key],
-                    href: cells.__href,
-                    lines: orderedColumns.slice(1, 5).filter((column) => column.key !== board.key && column.kind !== "time" && column.key !== ownerCol?.key && cells[column.key]).map((column) => ({ label: t(column.header), value: cells[column.key], kind: column.kind })),
-                    amount: cells.__amount === undefined ? undefined : Number(cells.__amount),
-                    currency: cells.__currency,
-                    owner: ownerCol ? cells[ownerCol.key] : undefined,
-                    updated: timeCol ? cells[timeCol.key] : undefined,
-                    related: cells.__related || undefined,
-                  };
-                })}
-                accepts={board.accepts}
-                onCreate={board.create}
-                onMove={board.move && ((id, to) => { setFailure(""); return board.move?.(id, to).catch((err: Error) => { moveFailed(err); throw err; }); })}
-              />
+              <Suspense fallback={<VStack gap={2} paddingInline={gutter}><Skeleton height={240} /></VStack>}>
+                <BoardView
+                  columns={board.lanes}
+                  page={definition.page}
+                  total={board.total?.label}
+                  cards={shown.map((cells) => {
+                    const ownerCol = definition.columns.find((column) => column.kind === "member" && cells[column.key]);
+                    const timeCol = definition.columns.find((column) => column.kind === "time" && cells[column.key]);
+                    return {
+                      id: cells[idKey],
+                      column: cells.__lane,
+                      title: cells[orderedColumns[0].key],
+                      href: cells.__href,
+                      lines: orderedColumns.slice(1, 5).filter((column) => column.key !== board.key && column.kind !== "time" && column.key !== ownerCol?.key && cells[column.key]).map((column) => ({ label: t(column.header), value: cells[column.key], kind: column.kind })),
+                      amount: cells.__amount === undefined ? undefined : Number(cells.__amount),
+                      currency: cells.__currency,
+                      owner: ownerCol ? cells[ownerCol.key] : undefined,
+                      updated: timeCol ? cells[timeCol.key] : undefined,
+                      related: cells.__related || undefined,
+                    };
+                  })}
+                  accepts={board.accepts}
+                  onCreate={board.create}
+                  onMove={board.move && ((id, to) => { setFailure(""); return board.move?.(id, to).catch((err: Error) => { moveFailed(err); throw err; }); })}
+                />
+              </Suspense>
             )}
             {ready && calendar && (
-              <CalendarView
-                month={shownMonth(view)}
-                field={dateField}
-                fields={calendar.fields}
-                onMonth={(month) => update({ month })}
-                onField={(dates) => update({ dates })}
-                page={definition.page}
-                items={shown.map((cells) => ({ id: cells[idKey], day: cells.__day, title: cells[orderedColumns[0].key], href: cells.__href }))}
-                accepts={calendar.accepts}
-                onMove={calendar.move && ((id, day) => { setFailure(""); calendar.move?.(id, dateField, day).catch(moveFailed); })}
-              />
+              <Suspense fallback={<VStack gap={2} paddingInline={gutter}><Skeleton height={240} /></VStack>}>
+                <CalendarView
+                  month={shownMonth(view)}
+                  field={dateField}
+                  fields={calendar.fields}
+                  onMonth={(month) => update({ month })}
+                  onField={(dates) => update({ dates })}
+                  page={definition.page}
+                  items={shown.map((cells) => ({ id: cells[idKey], day: cells.__day, title: cells[orderedColumns[0].key], href: cells.__href }))}
+                  accepts={calendar.accepts}
+                  onMove={calendar.move && ((id, day) => { setFailure(""); calendar.move?.(id, dateField, day).catch(moveFailed); })}
+                />
+              </Suspense>
             )}
             {ready && gantt && (
-              <GanttView
-                month={shownMonth(view)} scale={view.scale} startField={gantt.startField} endField={gantt.endField} fields={gantt.fields}
-                grouped={Boolean(group)} groupOrder={group?.order} activeId={active} page={definition.page} unscheduled={gantt.unscheduled}
-                onMonth={(month) => update({ month })} onScale={(scale: GanttScale) => update({ scale })} onStartField={(dates) => update({ dates })} onEndField={(until) => update({ until })} onSelect={setActive}
-                items={shown.filter((cells) => Boolean(cells.__start && cells.__end)).map((cells) => ({ id: cells[idKey], title: cells[orderedColumns[0].key], start: cells.__start, end: cells.__end, after: cells.__after || undefined, group: cells.__group || undefined, dot: (cells.__ganttDot || undefined) as Dot | undefined, href: cells.__href }))}
-                accepts={gantt.accepts}
-                onMove={gantt.move && ((id, start, end) => { setFailure(""); return gantt.move?.(id, gantt.startField, gantt.endField, start, end).catch((err: Error) => { moveFailed(err); throw err; }); })}
-              />
+              <Suspense fallback={<VStack gap={2} paddingInline={gutter}><Skeleton height={240} /></VStack>}>
+                <GanttView
+                  month={shownMonth(view)} scale={view.scale} startField={gantt.startField} endField={gantt.endField} fields={gantt.fields}
+                  grouped={Boolean(group)} groupOrder={group?.order} activeId={active} page={definition.page} unscheduled={gantt.unscheduled}
+                  onMonth={(month) => update({ month })} onScale={(scale: GanttScale) => update({ scale })} onStartField={(dates) => update({ dates })} onEndField={(until) => update({ until })} onSelect={setActive}
+                  items={shown.filter((cells) => Boolean(cells.__start && cells.__end)).map((cells) => ({ id: cells[idKey], title: cells[orderedColumns[0].key], start: cells.__start, end: cells.__end, after: cells.__after || undefined, group: cells.__group || undefined, dot: (cells.__ganttDot || undefined) as Dot | undefined, href: cells.__href }))}
+                  accepts={gantt.accepts}
+                  onMove={gantt.move && ((id, start, end) => { setFailure(""); return gantt.move?.(id, gantt.startField, gantt.endField, start, end).catch((err: Error) => { moveFailed(err); throw err; }); })}
+                />
+              </Suspense>
             )}
             {ready && shown.length > 0 && !board && !calendar && !gantt && (
               <VStack height="100%" paddingInline={gutter}>

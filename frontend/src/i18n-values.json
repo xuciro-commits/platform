@@ -390,5 +390,10 @@
   "Installed": "已安装",
   "Done": "已完成",
   "Updated": "更新时间",
-  "Created": "创建时间"
+  "Created": "创建时间",
+  "Something went wrong": "页面出现异常",
+  "This section could not be displayed": "该区域暂时无法显示",
+  "Try again": "重试",
+  "No data yet": "暂无数据",
+  "You do not have access to this data": "无权查看此数据"
 }
