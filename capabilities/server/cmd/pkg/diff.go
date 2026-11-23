@@ -72,7 +72,11 @@ func diff(dir string, out io.Writer) (built, error) {
 		fmt.Fprintln(out, "  no resource changes")
 	}
 	if len(review.Problems) > 0 {
-		return b, fmt.Errorf("%s@%s: the platform refuses this upgrade:\n  %s", b.id, b.version, strings.Join(review.Problems, "\n  "))
+		if b.listing == nil || b.listing.Stage != "preview" || versionBump(previous.Version, current.Version) < bumpMajor {
+			return b, fmt.Errorf("%s@%s: the platform refuses this upgrade:\n  %s", b.id, b.version, strings.Join(review.Problems, "\n  "))
+		}
+		fmt.Fprintf(out, "  breaking preview release: tenants holding %s %s data are refused the upgrade and must uninstall it, then install %s:\n    %s\n",
+			b.id, previous.Version, current.Version, strings.Join(review.Problems, "\n    "))
 	}
 	if got := versionBump(previous.Version, current.Version); got < needed {
 		hint := ""

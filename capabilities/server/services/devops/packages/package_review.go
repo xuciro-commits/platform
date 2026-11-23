@@ -215,7 +215,11 @@ func diffObjectFields(object string, beforeRaw, afterRaw json.RawMessage, checkU
 			item := protocol.PackageFieldChange{Name: field.Name, Change: "changed", Before: prev.Type, After: field.Type}
 			if checkUpgrade {
 				item.Incompatible = true
-				item.Reason = "Changing field " + object + "." + field.Name + " from " + prev.Type + " to " + field.Type + " is incompatible with existing records"
+				from, to := prev.Type, field.Type
+				if prev.Type == field.Type && prev.Ref != field.Ref {
+					from, to = prev.Type+" "+prev.Ref, field.Type+" "+field.Ref
+				}
+				item.Reason = "Changing field " + object + "." + field.Name + " from " + from + " to " + to + " is incompatible with existing records"
 			}
 			out = append(out, item)
 		}
