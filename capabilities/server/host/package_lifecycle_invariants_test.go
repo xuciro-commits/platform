@@ -406,7 +406,11 @@ func TestInvariantK9PackageMarketLibrary(t *testing.T) {
 		case "/repo/catalog.json":
 			return &http.Response{StatusCode: http.StatusOK, Body: io.NopCloser(bytes.NewReader(catalogBytes))}, nil
 		case "/repo/packages/itempkg-1.0.0.json":
+			return &http.Response{StatusCode: http.StatusFound, Header: http.Header{"Location": {"/assets/itempkg?signed=1"}}, Body: io.NopCloser(strings.NewReader(""))}, nil
+		case "/assets/itempkg":
 			return &http.Response{StatusCode: http.StatusOK, Body: io.NopCloser(bytes.NewReader(pkgBytes))}, nil
+		case "/repo/packages/plain.json":
+			return &http.Response{StatusCode: http.StatusFound, Header: http.Header{"Location": {"http://packages.example.com/itempkg"}}, Body: io.NopCloser(strings.NewReader(""))}, nil
 		default:
 			return &http.Response{StatusCode: http.StatusNotFound, Body: io.NopCloser(strings.NewReader("not found"))}, nil
 		}
@@ -443,6 +447,13 @@ func TestInvariantK9PackageMarketLibrary(t *testing.T) {
 	preview, err := target.inspectPackage(t.Context(), protocol.PackageInspectRequest{URL: entry.URL, ExpectedSha256: entry.Sha256})
 	if err != nil || preview.Descriptor.ID != desc.ID {
 		t.Fatalf("inspect from catalog entry: %+v err=%v", preview, err)
+	}
+	if preview.Origin != entry.URL {
+		t.Fatalf("a followed redirect keeps the catalog address as the origin: %q", preview.Origin)
+	}
+	plain := (&url.URL{Scheme: "http", Host: "127.0.0.1:18999", Path: "/repo/packages/plain.json"}).String()
+	if _, err := target.inspectPackage(t.Context(), protocol.PackageInspectRequest{URL: plain}); err == nil || !strings.Contains(err.Error(), "not HTTPS") {
+		t.Fatalf("a redirect to a plain HTTP address must be refused: %v", err)
 	}
 	online = false
 	stale, err := packages.RefreshLibraries(t.Context(), target.ID, target.PackageOwner.PackageLibraries(), libID, target.sender(), target.files())

@@ -5,6 +5,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net"
@@ -282,18 +283,16 @@ func FetchLibraryCatalog(ctx context.Context, tenant string, lib runtimeprotocol
 				continue
 			}
 			attemptCtx, cancel := context.WithTimeout(ctx, 10*time.Second)
-			req, reqErr := http.NewRequestWithContext(attemptCtx, http.MethodGet, address.String(), nil)
-			if reqErr != nil {
-				cancel()
-				lastErr = reqErr
-				continue
-			}
-			req.Header.Set("Accept", "application/json")
-			resp, doErr := send(req, allowPrivate)
-			if doErr != nil {
+			resp, doErr := Download(attemptCtx, address, allowPrivate, send)
+			if errors.Is(doErr, ErrUnreachable) {
 				cancel()
 				lastErr = fmt.Errorf("The library catalog could not be downloaded; check its address and try again")
 				continue
+			}
+			if doErr != nil {
+				cancel()
+				lastErr = doErr
+				break
 			}
 			body, readErr := io.ReadAll(io.LimitReader(resp.Body, MaxCatalogBytes+1))
 			resp.Body.Close()

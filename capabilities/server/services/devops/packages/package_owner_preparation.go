@@ -5,6 +5,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -206,14 +207,12 @@ func Inspect(ctx context.Context, resolver publication.Resolver, tenant string, 
 		}
 		ctx, cancel := context.WithTimeout(ctx, 10*time.Second)
 		defer cancel()
-		req, err := http.NewRequestWithContext(ctx, http.MethodGet, address.String(), nil)
+		response, err := Download(ctx, address, allowPrivate, send)
+		if errors.Is(err, ErrUnreachable) {
+			return preview, fmt.Errorf("The package could not be downloaded; check its address and try again")
+		}
 		if err != nil {
 			return preview, err
-		}
-		req.Header.Set("Accept", "application/json")
-		response, err := send(req, allowPrivate)
-		if err != nil {
-			return preview, fmt.Errorf("The package could not be downloaded; check its address and try again")
 		}
 		defer response.Body.Close()
 		if response.StatusCode != http.StatusOK {
