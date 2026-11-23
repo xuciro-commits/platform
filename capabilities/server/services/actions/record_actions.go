@@ -78,6 +78,8 @@ func transactionGuard(c platform.Caller, txn *platform.BusinessTxn, spec platfor
 			switch field.Type {
 			case "text", "longtext", "choice", "reference":
 				subject[field.Name] = ""
+			default:
+				subject[field.Name] = nil
 			}
 		}
 	}
