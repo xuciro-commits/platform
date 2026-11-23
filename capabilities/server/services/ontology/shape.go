@@ -35,7 +35,7 @@ func CheckEnterpriseUse(o Object, engine platform.RuleEngine) error {
 	return err
 }
 
-func CheckFields(fields []Field, known func(string) bool) error {
+func CheckFields(fields []Field, known func(string) bool, states ...State) error {
 	seen := map[string]bool{}
 	for _, f := range fields {
 		switch {
@@ -72,7 +72,7 @@ func CheckFields(fields []Field, known func(string) bool) error {
 	if err := CheckOneOf(fields); err != nil {
 		return err
 	}
-	return CheckConditions(fields)
+	return CheckConditions(fields, states)
 }
 
 func oneOfGroups(fields []Field) ([]string, map[string][]Field) {
@@ -159,7 +159,7 @@ func CheckEnterpriseReference(kind, ref, stereotype string, stereotypes []string
 	return nil
 }
 
-func CheckConditions(fields []Field) error {
+func CheckConditions(fields []Field, states []State) error {
 	for _, f := range fields {
 		if f.When == "" {
 			continue
@@ -169,6 +169,14 @@ func CheckConditions(fields []Field) error {
 			return fmt.Errorf("the field %q applies \"only when\" %q, which is not field=value,value", f.Name, f.When)
 		}
 		name := condition.Field
+		if name == "state" && len(states) > 0 {
+			for _, v := range condition.In {
+				if !slices.ContainsFunc(states, func(s State) bool { return s.Name == v }) {
+					return fmt.Errorf("the field %q applies only in state %q, which the object does not have", f.Name, v)
+				}
+			}
+			continue
+		}
 		i := slices.IndexFunc(fields, func(x Field) bool { return x.Name == name })
 		switch {
 		case i < 0 || name == f.Name:

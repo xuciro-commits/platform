@@ -13,5 +13,8 @@ func checkObjectActions(body *object) error {
 	if err := json.Unmarshal([]byte(stringify(body)), &declared); err != nil {
 		return err
 	}
+	if err := ontology.CheckFields(declared.Fields, nil, declared.States...); err != nil {
+		return err
+	}
 	return ontology.CheckProcess(declared, authoring.ID, declared.Type(), authoring.Builder, authoring.User, protocol.FunctionCallType, nil)
 }

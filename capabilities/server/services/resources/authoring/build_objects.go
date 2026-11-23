@@ -112,7 +112,7 @@ func (b *Build) Check(o ontology.Object, id string, engine platform.RuleEngine) 
 	if err := ontology.CheckValueTypeFields(o.Fields, ID, b.host); err != nil {
 		return err
 	}
-	if err := ontology.CheckFields(o.Fields, b.fieldKnown); err != nil {
+	if err := ontology.CheckFields(o.Fields, b.fieldKnown, o.States...); err != nil {
 		return err
 	}
 	if err := ontology.CheckDataSources(o); err != nil {

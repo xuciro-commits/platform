@@ -214,7 +214,7 @@ func requiredEmpty(value reflect.Value) bool {
 
 func CheckFields(info platform.RecordTypeInfo, entity any, v reflect.Value, replaying bool, lookup RecordLookup, resolve func(platform.AssetBinding) (platform.ValueType, bool), engines ...platform.RuleEngine) ([]platform.FieldIssue, *platform.Error) {
 	invalid := &platform.Error{Code: pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT}
-	stringOf := func(name string) string {
+	stored := func(name string) string {
 		i := slices.IndexFunc(info.Fields, func(x platform.FieldInfo) bool { return x.Name == name })
 		if i < 0 {
 			return ""
@@ -230,6 +230,13 @@ func CheckFields(info platform.RecordTypeInfo, entity any, v reflect.Value, repl
 			return strconv.FormatBool(cv.Bool())
 		}
 		return cv.String()
+	}
+	stringOf := func(name string) string {
+		value := stored(name)
+		if l := info.Lifecycle; value == "" && l != nil && name == l.Field {
+			return l.Initial
+		}
+		return value
 	}
 	if !replaying && slices.ContainsFunc(info.Fields, func(f platform.FieldInfo) bool { return f.Constraints != nil || f.ValueType != nil }) {
 		raw, marshalErr := json.Marshal(entity)
