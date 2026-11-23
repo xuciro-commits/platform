@@ -32,12 +32,12 @@ func NewTenantWithCapabilities(id string, services runtimeprotocol.RuntimeCapabi
 	services.BindOwner = runtimeprotocol.BindOwner
 	services.NewAgentEvaluator = agentevaluation.NewAgentEvaluator
 	services.NewTransactionExecutor = actions.NewRuntime
-	return platformserver.NewTenantWithCapabilities(id, services, BuiltinApps(id, seats...)...)
+	return platformserver.NewTenantWithCapabilities(id, services, BuiltinApps(id, platform.OrgSeed{Memberships: controlowner.Memberships(seats)}, seats...)...)
 }
-func BuiltinApps(id string, seats ...runtimeprotocol.Seat) []platform.Service {
+func BuiltinApps(id string, org platform.OrgSeed, seats ...runtimeprotocol.Seat) []platform.Service {
 	return []platform.Service{
 		NewConsole(id, seats...),
-		enterprise.New(id, actions.NewAuthority, platform.OrgSeed{Memberships: controlowner.Memberships(seats)}), activity.New(id, actions.NewAuthority), ai.New(id, actions.NewAuthority), work.New(id, actions.NewAuthority), monitoring.New(id, actions.NewAuthority), automation.New(id, actions.NewAuthority, platformserver.PublicationResolver()), sources.New(id, actions.NewAuthority),
+		enterprise.New(id, actions.NewAuthority, org), activity.New(id, actions.NewAuthority), ai.New(id, actions.NewAuthority), work.New(id, actions.NewAuthority), monitoring.New(id, actions.NewAuthority), automation.New(id, actions.NewAuthority, platformserver.PublicationResolver()), sources.New(id, actions.NewAuthority),
 		agentowner.New(id, actions.NewAuthority), files.New(id, actions.NewAuthority), build.New(id, actions.NewAuthority, []publication.Hooks{ontology.ActionTypePublication()}, platformserver.PublicationResolver(), ontology.ObjectPublication, objects.QueryPublication, functionauthoring.NewOwner, agentowner.BuilderPublication, agentevaluation.NewOwner, devopsauthoring.TestPlanPublication, agentevaluation.EvaluationPublication, devopsauthoring.SampleSetPublication, build.ApplicationOwners{New: appsauthoring.NewOwner, ObjectPage: appsauthoring.CompileObjectPage, ListDetailPage: appsauthoring.ListDetailPage}, automationauthoring.New),
 	}
 }

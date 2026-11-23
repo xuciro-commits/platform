@@ -11,6 +11,7 @@ import (
 	"path/filepath"
 	"regexp"
 	"slices"
+	"strconv"
 	"strings"
 	"time"
 
@@ -21,7 +22,9 @@ import (
 	"platformserver/host/composition"
 	"platformserver/kernel/protocol"
 	"platformserver/platform"
+	"platformserver/services/actions"
 	"platformserver/services/ai"
+	agentevaluation "platformserver/services/ai/evaluation"
 	"platformserver/services/devops/packages"
 	authoring "platformserver/services/resources/authoring"
 	"platformserver/services/security"
@@ -36,13 +39,29 @@ const (
 )
 
 type tryScript struct {
+	Roles   map[string]string    `yaml:"roles"`
+	At      string               `yaml:"at"`
+	Org     tryOrg               `yaml:"org"`
+	Members map[string]tryPerson `yaml:"members"`
+	Steps   []tryStep            `yaml:"steps"`
+}
+
+type tryOrg struct {
+	Units     []platform.Unit     `yaml:"units"`
+	Parents   map[string]string   `yaml:"parents"`
+	Calendars []platform.Calendar `yaml:"calendars"`
+}
+
+type tryPerson struct {
 	Roles map[string]string `yaml:"roles"`
-	At    string            `yaml:"at"`
-	Steps []tryStep         `yaml:"steps"`
+	Units map[string]string `yaml:"units"`
 }
 
 type tryStep struct {
 	Do      string         `yaml:"do"`
+	Approve string         `yaml:"approve"`
+	Reject  string         `yaml:"reject"`
+	As      string         `yaml:"as"`
 	On      string         `yaml:"on"`
 	Read    string         `yaml:"read"`
 	With    map[string]any `yaml:"with"`
@@ -52,11 +71,13 @@ type tryStep struct {
 }
 
 type trial struct {
-	tenant *host.Tenant
-	member platform.Member
-	at     time.Time
-	keys   int
-	out    io.Writer
+	tenant    *host.Tenant
+	member    platform.Member
+	members   map[string]platform.Member
+	approvals map[string]string
+	at        time.Time
+	keys      int
+	out       io.Writer
 }
 
 var placeholder = regexp.MustCompile(`\{([A-Za-z0-9_.-]+)/([^{}./]+)\.([^{}]+)\}`)
@@ -73,20 +94,30 @@ func readTryScript(path string) (tryScript, error) {
 		return script, fmt.Errorf("%s: %w", path, err)
 	}
 	for i, step := range script.Steps {
-		if (step.Do == "") == (step.Read == "") {
-			return script, fmt.Errorf("%s: step %d needs exactly one of do and read", path, i+1)
+		kinds := 0
+		for _, given := range []string{step.Do, step.Read, step.Approve, step.Reject} {
+			if given != "" {
+				kinds++
+			}
+		}
+		if kinds != 1 {
+			return script, fmt.Errorf("%s: step %d needs exactly one of do, read, approve and reject", path, i+1)
+		}
+		if _, known := script.Members[step.As]; step.As != "" && !known {
+			return script, fmt.Errorf("%s: step %d acts as %s, who is not under members", path, i+1, step.As)
 		}
 		if step.Do != "" && step.On == "" {
 			return script, fmt.Errorf("%s: step %d (%s) needs on: <type>/<id>", path, i+1, step.Do)
 		}
-		if step.Read != "" && (step.With != nil || step.Refused) {
-			return script, fmt.Errorf("%s: step %d reads a record and takes no with or refused", path, i+1)
+		if step.Read != "" && step.With != nil {
+			return script, fmt.Errorf("%s: step %d reads a record and takes no with", path, i+1)
 		}
 	}
 	return script, nil
 }
 
-func newTrial(roles map[string]string, at time.Time, out io.Writer) (*trial, error) {
+func newTrial(script tryScript, at time.Time, out io.Writer) (*trial, error) {
+	roles := script.Roles
 	granted := map[string]string{
 		controlowner.PlatformApp: controlowner.Admin, authoring.ID: authoring.Builder, ai.ID: ai.Admin,
 		work.ID: work.Admin, protocol.AgentApp: protocol.AgentAdmin,
@@ -94,8 +125,36 @@ func newTrial(roles map[string]string, at time.Time, out io.Writer) (*trial, err
 	for app, role := range roles {
 		granted[app] = role
 	}
-	seat := protocol.Seat{Subjects: []string{tryMember}, Member: platform.Member{ID: tryMember, Roles: granted}}
-	tenant, err := composition.NewTenantWithCapabilities("try", protocol.DefaultRuntimeCapabilities(security.Standard{}), seat)
+	seats := []protocol.Seat{{Subjects: []string{tryMember}, Member: platform.Member{ID: tryMember, Roles: granted}}}
+	names := make([]string, 0, len(script.Members))
+	for name := range script.Members {
+		names = append(names, name)
+	}
+	slices.Sort(names)
+	for _, name := range names {
+		if name == tryMember {
+			return nil, fmt.Errorf("members: %s is the trial's own member", name)
+		}
+		m := script.Members[name]
+		seat := protocol.Seat{Subjects: []string{name}, Member: platform.Member{ID: name, Roles: m.Roles}}
+		for unit, role := range m.Units {
+			seat.Units = append(seat.Units, platform.Membership{Unit: unit, Role: role, Primary: len(m.Units) == 1})
+		}
+		slices.SortFunc(seat.Units, func(a, b platform.Membership) int { return strings.Compare(a.Unit, b.Unit) })
+		seats = append(seats, seat)
+	}
+	org := platform.OrgSeed{Units: script.Org.Units, Calendars: script.Org.Calendars}
+	if len(script.Org.Parents) > 0 {
+		org.Structures = []platform.Structure{{ID: "line", Name: "Line", Kind: "line"}}
+		for unit, parent := range script.Org.Parents {
+			org.Edges = append(org.Edges, platform.Edge{Structure: "line", Unit: unit, Parent: parent})
+		}
+		slices.SortFunc(org.Edges, func(a, b platform.Edge) int { return strings.Compare(a.Unit, b.Unit) })
+	}
+	org.Memberships = controlowner.Memberships(seats)
+	services := protocol.DefaultRuntimeCapabilities(security.Standard{})
+	services.BindOwner, services.NewAgentEvaluator, services.NewTransactionExecutor = protocol.BindOwner, agentevaluation.NewAgentEvaluator, actions.NewRuntime
+	tenant, err := host.NewTenantWithCapabilities("try", services, composition.BuiltinApps("try", org, seats...)...)
 	if err != nil {
 		return nil, err
 	}
@@ -104,20 +163,42 @@ func newTrial(roles map[string]string, at time.Time, out io.Writer) (*trial, err
 	if !ok {
 		return nil, errors.New("the trial member is not seated")
 	}
-	return &trial{tenant: tenant, member: member, at: at, out: out}, nil
+	tr := &trial{tenant: tenant, member: member, members: map[string]platform.Member{tryMember: member}, approvals: map[string]string{}, at: at, out: out}
+	for _, name := range names {
+		m, ok := tenant.Member(name)
+		if !ok {
+			return nil, fmt.Errorf("members: %s is not seated", name)
+		}
+		tr.members[name] = m
+	}
+	return tr, nil
 }
 
 func (tr *trial) submit(authority, schema, typ, id string, payload any) error {
+	return tr.submitAs(tr.member, authority, schema, typ, id, payload)
+}
+
+func (tr *trial) submitAs(who platform.Member, authority, schema, typ, id string, payload any) error {
 	tr.keys++
-	sub := &pb.Submission{TenantId: tr.tenant.ID, PrincipalId: tr.member.ID, Authority: authority,
+	tr.approvals[typ+"/"+id] = authority + ".try-" + strconv.Itoa(tr.keys)
+	sub := &pb.Submission{TenantId: tr.tenant.ID, PrincipalId: who.ID, Authority: authority,
 		IdempotencyKey: fmt.Sprintf("try-%d", tr.keys), Target: &pb.EntityRef{Type: typ, Id: id},
 		Schema: &pb.SchemaRef{Name: schema, Version: 1}, Payload: platform.Raw(payload)}
-	if _, refusal := tr.tenant.Submit(tr.member, sub, tr.at); refusal != nil {
+	if _, refusal := tr.tenant.Submit(who, sub, tr.at); refusal != nil {
 		lines := []string{refusal.Code.String() + ": " + refusal.Message}
 		sub.IdempotencyKey += "-simulated"
-		if simulated, err := tr.tenant.Simulate(tr.member, "", "", sub, tr.at); err == nil {
+		if simulated, err := tr.tenant.Simulate(who, "", "", sub, tr.at); err == nil {
 			for _, issue := range simulated.Issues {
 				lines = append(lines, string(platform.Raw(issue)))
+			}
+			for _, step := range simulated.Trace {
+				if step.Refusal != "" || step.Authorization != nil && !step.Authorization.Allow {
+					where := strings.TrimSpace(step.Kind + " " + step.Operation + " " + step.Type + "/" + step.ID)
+					if step.Request != nil {
+						where += " (" + step.Request.Kind + " " + step.Request.Action + ")"
+					}
+					lines = append(lines, "refused at "+where+": "+step.Refusal)
+				}
 			}
 		}
 		return errors.New(strings.Join(lines, "\n    "))
@@ -152,11 +233,15 @@ func (tr *trial) install(b built) error {
 }
 
 func (tr *trial) record(ref string) (map[string]any, error) {
+	return tr.recordAs(tr.member, ref)
+}
+
+func (tr *trial) recordAs(who platform.Member, ref string) (map[string]any, error) {
 	typ, id, ok := strings.Cut(ref, "/")
 	if !ok || typ == "" || id == "" {
 		return nil, fmt.Errorf("%q is not <type>/<id>", ref)
 	}
-	view, refusal := tr.tenant.RecordOf(context.Background(), tr.member, typ, id, tr.at)
+	view, refusal := tr.tenant.RecordOf(context.Background(), who, typ, id, tr.at)
 	if refusal != nil {
 		return nil, fmt.Errorf("read %s: %s", ref, refusal.Message)
 	}
@@ -254,12 +339,36 @@ func subset(want, got any) bool {
 
 func (tr *trial) run(script tryScript) error {
 	for i, step := range script.Steps {
-		ref, err := tr.resolve(step.On + step.Read)
+		ref, err := tr.resolve(step.On + step.Read + step.Approve + step.Reject)
 		if err != nil {
 			return fmt.Errorf("step %d: %w", i+1, err)
 		}
 		target := ref.(string)
-		if step.Do != "" {
+		who := tr.member
+		if step.As != "" {
+			who = tr.members[step.As]
+		}
+		if step.Approve != "" || step.Reject != "" {
+			verb := map[bool]string{true: "approve", false: "reject"}[step.Approve != ""]
+			fmt.Fprintf(tr.out, "%d. %s %s as %s\n", i+1, verb, target, who.ID)
+			approval, held := tr.approvals[target]
+			if !held {
+				return fmt.Errorf("step %d: no action on %s was submitted for approval", i+1, target)
+			}
+			note, _ := tr.resolve(map[string]any(step.With))
+			err := tr.submitAs(who, "work", "work.approval."+verb, "work.approval", approval, note)
+			tr.approvals[target] = approval
+			if step.Refused {
+				if err == nil {
+					return fmt.Errorf("step %d: the %s was accepted, the script expects a refusal", i+1, verb)
+				}
+				fmt.Fprintf(tr.out, "  refused as expected: %v\n", err)
+				continue
+			}
+			if err != nil {
+				return fmt.Errorf("step %d: %s refused: %w", i+1, verb, err)
+			}
+		} else if step.Do != "" {
 			fmt.Fprintf(tr.out, "%d. %s %s\n", i+1, step.Do, target)
 			input, err := tr.resolve(map[string]any(step.With))
 			if err != nil {
@@ -270,7 +379,7 @@ func (tr *trial) run(script tryScript) error {
 			if authority == "" {
 				return fmt.Errorf("step %d: no installed app holds records of type %s", i+1, typ)
 			}
-			err = tr.submit(authority, step.Do, typ, id, input)
+			err = tr.submitAs(who, authority, step.Do, typ, id, input)
 			if step.Refused {
 				if err == nil {
 					return fmt.Errorf("step %d: %s was accepted, the script expects a refusal", i+1, step.Do)
@@ -282,9 +391,16 @@ func (tr *trial) run(script tryScript) error {
 				return fmt.Errorf("step %d: %s refused: %w", i+1, step.Do, err)
 			}
 		} else {
-			fmt.Fprintf(tr.out, "%d. read %s\n", i+1, target)
+			fmt.Fprintf(tr.out, "%d. read %s as %s\n", i+1, target, who.ID)
+			if step.Refused {
+				if _, err := tr.recordAs(who, target); err == nil {
+					return fmt.Errorf("step %d: %s could read %s, the script expects a refusal", i+1, who.ID, target)
+				}
+				fmt.Fprintln(tr.out, "  refused as expected")
+				continue
+			}
 		}
-		rec, err := tr.record(target)
+		rec, err := tr.recordAs(who, target)
 		if err != nil {
 			return fmt.Errorf("step %d: %w", i+1, err)
 		}
@@ -339,7 +455,7 @@ func try(dirs []string, scriptPath string, out io.Writer) error {
 			}
 		}
 	}
-	tr, err := newTrial(script.Roles, at, out)
+	tr, err := newTrial(script, at, out)
 	if err != nil {
 		return err
 	}
@@ -368,7 +484,7 @@ func try(dirs []string, scriptPath string, out io.Writer) error {
 
 func installCheck(dirs []string, checked []built, out io.Writer) error {
 	if len(dirs) != 1 || !exists(filepath.Join(dirs[0], tryFile)) {
-		tr, err := newTrial(nil, time.Now().UTC().Truncate(time.Second), out)
+		tr, err := newTrial(tryScript{}, time.Now().UTC().Truncate(time.Second), out)
 		if err != nil {
 			return err
 		}
