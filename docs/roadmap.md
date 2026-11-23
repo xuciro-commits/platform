@@ -7,7 +7,7 @@
 
 - 一项一次提交。先写能跑的验收，再动手；做完把这一项删掉，一行的项删完就删掉 plan 里的那一行。
 - 路上发现的新项加在本行末尾，不另起清单。
-- 验收里的“trunk”指在 `frontend/e2e/<模块>.spec.ts`（records、builder、crm、workspace、marketplace）加一步并让它通过；
+- 验收里的“trunk”指在 `frontend/e2e/<模块>.spec.ts`（records、builder、crm、workspace、marketplace、official）加一步并让它通过；
   共用的登录与取值在 `e2e/support.ts`。`make trunk-changed` 按 `scripts/trunk-affected.mjs` 的映射只跑改动影响到的文件，
   碰到宿主、契约、`host/`、`shell/`、公共 `pages/`、夹具或 `support.ts` 就跑全部；`make trunk SPEC=crm` 只跑一个文件。“夹具”指 `scripts/frontend-seed.json`。
 - 改到哪个 spec 文件就顺手整理它：只读写自己的租户、互不依赖的用例去掉 `serial`、前置状态经接口造好，界面只走要验的那一步。
@@ -60,12 +60,10 @@
   - flow 的 `actions` 写空表与不写不等价，安装报“定义与编译绑定不同”；比较前规范化。
   - 未发布的版本改了模式，`pkg lock` 因“上一版不可得”拒绝；同版本未发布时直接重写模式历史。
 - **2.8.9 CRM 用出来的平台组件。** 每个做成 `src/pages/` 里的一个表现，所有类型同时得到；先看成熟产品怎样表达，再找 Astryx 官方模板，最后用 StyleX 实现：
-  - 颜色点按字典的九种颜色画（`--color-data-categorical-*`）；现在 StatusDot 只有五种语气，蓝、紫、青、粉都画成同一个强调色，琥珀与橙不分。
   - 设置页的排序改成拖动（`drag.ts` 加行内重排），上移下移按钮留作键盘操作。
-  - 看板的列头可新建，新建的记录直接落在那一列（空看板已能列出每一列）。
-  - 记录页的时间线把关联的活动、备注、状态变化与评论合成一条，按条目类型给动作（完成活动、置顶备注）。参照 `idea/from-frappe-crm/record-view`。
+  - 时间线的条目按类型过滤（只看活动、只看备注、只看变更），一个事件流加过滤，不为每类另做页签（Frappe 的教训）；备注可置顶。
   - 四个夹具应用的图标 `hotel`、`thermometer`、`boxes`、`factory` 不在平台图标表里，一直显示成默认方块；已发布的版本放行，夹具下次改版时换成表里的名字。
-  验收：CRM 不改源，装上后设置是一页、在“方案报价”列头新建的商机落在那一列、商机页的时间线里能完成活动；各加一步 trunk。
+  验收：各加一步 trunk。
 - 许可：借业务流程、模块划分、字段含义与交互思路，做出的是我们自己的设计（`redesign`），以 Apache-2.0 发布，不沿用来源的 GPL、AGPL；
   逐个翻写定义属于转换（`derived`），只对宽松许可的来源做。细则在官方包库的 sources；向客户交付前，负责人先取得法律意见。
 

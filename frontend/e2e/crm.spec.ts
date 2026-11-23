@@ -581,4 +581,24 @@ test("crm board: stage lanes carry their own colours and the plus in a lane head
   await expect(dialog).toBeHidden();
 });
 
+test("crm timeline: tasks and notes attached to a deal show in its activity, and a task added there is attached to it", async ({ page }) => {
+  await page.goto("/");
+  await page.getByRole("button", { name: "manager-1 · crm" }).click();
+  await page.goto("/crm/crm.deal/DEL-007/activity");
+  await page.getByRole("button", { name: "Add Task", exact: true }).click();
+  const dialog = page.getByRole("dialog");
+  await dialog.getByRole("textbox", { name: "Title" }).fill("时间线里新建的任务");
+  await dialog.getByRole("combobox", { name: "Status" }).click();
+  await page.getByRole("option", { name: "Todo", exact: true }).click();
+  await dialog.getByRole("button", { name: "Create", exact: true }).click();
+  await expect(dialog).toBeHidden();
+  const added = page.getByRole("main").getByRole("link", { name: "时间线里新建的任务", exact: true });
+  await expect(added).toBeVisible();
+  await page.reload();
+  await expect(added).toBeVisible();
+  await page.goto("/crm/crm.deal/DEL-005/activity");
+  await expect(page.getByRole("button", { name: "Add Task", exact: true })).toBeVisible();
+  await expect(page.getByRole("main").getByRole("link", { name: "时间线里新建的任务", exact: true })).toHaveCount(0);
+});
+
 });

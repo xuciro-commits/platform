@@ -17,6 +17,7 @@ import { t, useLocale } from "../i18n";
 import { ActionDialog } from "./ActionDialog";
 import { reasonOf, send } from "./act";
 import { type Described, statusField } from "./describe";
+import { type FollowUp, FollowUpBody, useFollowUps } from "./RecordFollowUps";
 import { plain, present } from "./values";
 
 type Comment = { id: string; text: string; by: string; created: { at: string } };
@@ -26,7 +27,8 @@ type ChangeEvent = { kind: "change"; key: string; at: string; by: string; title:
 type Event =
   | ChangeEvent
   | { kind: "comment"; key: string; at: string; by: string; text: string }
-  | { kind: "activity"; key: string; at: string; by: string; title: string; text: string };
+  | { kind: "activity"; key: string; at: string; by: string; title: string; text: string }
+  | { kind: "followup"; key: string; at: string; by: string; item: FollowUp };
 type TimelineItem =
   | Event
   | { kind: "group"; key: string; at: string; by: string; items: ChangeEvent[] };
@@ -65,7 +67,8 @@ function collapse(events: Event[]): TimelineItem[] {
   return result;
 }
 
-export function RecordActivity({ described, id, comments, catalog }: { described: Described; id: string; comments: Section; catalog: Api.Action[] }) {
+export function RecordActivity({ described, id, comments, catalog, entities }: { described: Described; id: string; comments: Section; catalog: Api.Action[]; entities: Api.EntityInfo[] }) {
+  const follow = useFollowUps(described, id, entities, catalog);
   const target = `${described.type}/${id}`;
   const root = `/v1/records/${described.type}/${encodeURIComponent(id)}/sections`;
   const activity = useRead<Api.RecordSectionView>(`${root}/activity`);
@@ -100,7 +103,7 @@ export function RecordActivity({ described, id, comments, catalog }: { described
     }
   };
   const refs = history.status === "ready" ? history.data.refs : undefined;
-  const people = Object.assign({}, ...[activity, history, comments].map((section) => section.status === "ready" ? section.data.people : undefined));
+  const people = Object.assign({}, follow.people, ...[activity, history, comments].map((section) => section.status === "ready" ? section.data.people : undefined));
   const say = (field: Api.FieldInfo, value: unknown) => {
     const given = plain(value);
     const name = typeof given === "string" ? refs?.[field.name]?.[given] : undefined;
@@ -145,11 +148,12 @@ export function RecordActivity({ described, id, comments, catalog }: { described
       events.push({ kind: "comment", key: message.id, at: message.created.at, by: message.by, text: message.text });
     }
   }
+  for (const item of follow.items) events.push({ kind: "followup", key: item.key, at: item.at, by: item.by, item });
   events.sort((a, b) => Date.parse(b.at) - Date.parse(a.at));
   const items = collapse(events);
   const sources = [activity, history, comments];
   const unavailable = sources.find((entry) => entry.status === "error" || entry.status === "refused");
-  const loading = sources.some((entry) => entry.status === "loading");
+  const loading = sources.some((entry) => entry.status === "loading") || follow.loading;
   const renderChanges = (lines: ChangeLine[]) => (
     <VStack gap={1} role="list">
       {lines.map((line, index) => (
@@ -176,6 +180,9 @@ export function RecordActivity({ described, id, comments, catalog }: { described
           <HStack hAlign="end"><Button label={t("Post comment")} variant="primary" isDisabled={!text.trim() || busy} onClick={post} /></HStack>
         </VStack>
       )}
+      {follow.adders.length > 0 && <HStack gap={2} wrap="wrap">{follow.adders}</HStack>}
+      {follow.failure && <Banner status="error" title={t("Not done")} description={follow.failure} />}
+      {follow.element}
       {stays.length > 0 && (
         <VStack gap={2}>
           <Text type="label" color="secondary">{t("Time in each state")}</Text>
@@ -196,7 +203,7 @@ export function RecordActivity({ described, id, comments, catalog }: { described
         {items.map((item, position) => {
           const last = position === items.length - 1;
           const actor = person(item.by);
-          const glyph = item.kind === "comment" ? ChatBubbleLeftIcon : item.kind === "activity" ? DocumentTextIcon : PencilSquareIcon;
+          const glyph = item.kind === "comment" ? ChatBubbleLeftIcon : item.kind === "activity" ? DocumentTextIcon : item.kind === "followup" ? item.item.icon : PencilSquareIcon;
           const open = item.kind === "group" && expanded.has(item.key);
           return (
             <HStack key={item.key} id={item.key} gap={3} vAlign="stretch">
@@ -209,7 +216,7 @@ export function RecordActivity({ described, id, comments, catalog }: { described
                   <HStack gap={2} vAlign="center" wrap="wrap">
                     <HStack gap={1} vAlign="center" wrap="wrap">
                       <Text type="body" weight="medium">{actor}</Text>
-                      <Text type="body" color="secondary">{item.kind === "comment" ? t("Commented") : item.kind === "group" ? item.items[0].title : item.title}</Text>
+                      <Text type="body" color="secondary">{item.kind === "comment" ? t("Commented") : item.kind === "group" ? item.items[0].title : item.kind === "followup" ? item.item.kind : item.title}</Text>
                     </HStack>
                     <HStack xstyle={styles.stamp}>
                       <Timestamp value={item.at} format="relative" type="supporting" color="secondary" />
@@ -236,6 +243,7 @@ export function RecordActivity({ described, id, comments, catalog }: { described
                       ))}
                     </VStack>
                   )}
+                  {item.kind === "followup" && <FollowUpBody item={item.item} />}
                   {item.kind === "comment" && (
                     <VStack xstyle={styles.bubble}>
                       <Text type="body">{item.text}</Text>

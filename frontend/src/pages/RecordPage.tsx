@@ -269,7 +269,7 @@ export function RecordPage({ described, id, listPath, listTitle, instances, enti
           )}
           {kept && tab === "links" && <RecordLinks read={links} id={id} entities={entities} />}
           {kept && tab === "files" && <RecordFiles read={files} attach={attach} target={`${described.type}/${id}`} />}
-          {kept && tab === "activity" && <RecordActivity described={described} id={id} comments={comments} catalog={catalog} />}
+          {kept && tab === "activity" && <RecordActivity described={described} id={id} comments={comments} catalog={catalog} entities={entities} />}
           {kept && tab === "preview" && definition && <ObjectPreview definition={definition} source={detail} catalog={catalog} />}
           {kept && tab === "properties" && <Rail described={body} editor={editor} kept={kept} refs={refs} people={people} restricted={restricted} collaboration={collaboration} />}
         </LayoutContent>

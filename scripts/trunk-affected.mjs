@@ -22,6 +22,8 @@ const rules = [
   [/^frontend\/src\/pages\/(Package[A-Za-z]*|FormWizard|MemberRoles)\.tsx$/, ["builder", "marketplace"]],
   [/^frontend\/src\/pages\/(CalendarView|AppDashboard|DashboardPage|ImportWizard)\.tsx$/, ["crm", "workspace"]],
   [/^deploy\/packages\/crm\.json$/, ["crm", "marketplace"]],
+  [/^scripts\/frontend-fixtures\/crm-official-[^/]+\.json$/, ["official"]],
+  [/^frontend\/src\/pages\/(SettingsTables|RecordFollowUps|RecordActivity|BoardView|DotMark)\.tsx$/, ["crm", "official"]],
   [/^deploy\/packages\/[^/]+\.json$/, ["builder"]],
   [/^deploy\/packages\/[^/]+\//, []],
   [/^capabilities\/server\/cmd\/pkg\//, []],
