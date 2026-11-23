@@ -79,8 +79,8 @@ func declarations() []platform.Action {
 			Payload:     []platform.Field{f("name", "string", "Name", true), f("kind", "string", "Kind", true), f("matrix", "boolean", "An organisation may have several parents", false)}},
 		platform.Action{Schema: SchemaRelationshipAdd, Target: RelationshipType, Capability: "relationships", Title: "Relate", Roles: admin,
 			Description: "Relate two elements: place an organisation under a parent in a kind, make a party a member, fill a post, give a capability, assign responsibility.",
-			Payload: []platform.Field{f("stereotype", "string", "Directory relationship: ActualResourceRelationship, ActualOrganizationRole, FillsPost or ResponsibleFor", true),
-				f("source", "string", "Source element id, or member:<id> for a membership", true), f("target", "string", "Target element id", true),
+			Payload: []platform.Field{f("stereotype", "string", "Directory relationship: ActualResourceRelationship, ActualOrganizationRole, FillsPost, ResponsibleFor or SignsInAs", true),
+				f("source", "string", "Source element id, or member:<id> for a membership or the person an account signs in as", true), f("target", "string", "Target element id", true),
 				f("kind", "string", "For a placement: the relationship kind id", false), f("role", "string", "For a membership: employee, chair, volunteer …", false),
 				f("relation", "string", "e.g. part of, owned by, reports to", false), f("share", "number", "Ownership share", false), f("primary", "boolean", "The party's primary organisation", false), from, until}},
 		platform.Action{Schema: SchemaRelationshipEnd, Target: RelationshipType, Capability: "relationships", Title: "End relationship", Roles: admin,
@@ -511,8 +511,11 @@ func (e *Enterprise) Holders(kind, unit, role string, day platform.Date) []strin
 		return out
 	}
 	for _, r := range e.model.Relationships {
-		id, person := strings.CutPrefix(r.Source, "member:")
-		if r.Stereotype != Membership || !person || role != "" && r.Role != role || !r.ActiveOn(day) || !e.model.LiveOn(r.Target, day) || slices.Contains(out, id) {
+		if r.Stereotype != Membership || role != "" && r.Role != role || !r.ActiveOn(day) || !e.model.LiveOn(r.Target, day) {
+			continue
+		}
+		id, account := e.model.Account(r.Source, day)
+		if !account || slices.Contains(out, id) {
 			continue
 		}
 		if r.Target == unit || e.model.BelowIn(kind, r.Target, unit, day) {
@@ -533,8 +536,9 @@ func (e *Enterprise) Calendar(party string, day platform.Date) platform.Calendar
 		return platform.Calendar{}, false
 	}
 	var units []string
+	parties := m.Parties(party, day)
 	for _, r := range m.Relationships {
-		if r.Stereotype == Membership && r.Source == party && r.ActiveOn(day) && m.LiveOn(r.Target, day) {
+		if r.Stereotype == Membership && slices.Contains(parties, r.Source) && r.ActiveOn(day) && m.LiveOn(r.Target, day) {
 			if r.Primary {
 				units = append([]string{r.Target}, units...)
 			} else {
@@ -628,7 +632,7 @@ func Profile() []ProfileEntry {
 }
 
 func Views(mm *DirectoryModel) []Viewpoint {
-	return []Viewpoint{{ID: "organization", Title: "Organisation", Note: "Units, posts and people", Elements: []string{Organization, Post, Person}, Relationships: []string{Placement, Membership, FillsPost, Owns}}}
+	return []Viewpoint{{ID: "organization", Title: "Organisation", Note: "Units, posts and people", Elements: []string{Organization, Post, Person}, Relationships: []string{Placement, Membership, FillsPost, Owns, SignsInAs}}}
 }
 
 func directoryActions() []platform.Action {

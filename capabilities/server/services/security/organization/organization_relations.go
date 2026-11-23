@@ -28,6 +28,7 @@ func Contracts(mm *DirectoryModel) []Contract {
 		{Stereotype: Membership, Platform: true, Extension: []Pair{{Person, Organization}, {Organization, Organization}}},
 		{Stereotype: FillsPost, Platform: true, Extension: []Pair{{Person, Post}}},
 		{Stereotype: Owns, Platform: true, Extension: []Pair{{Organization, Post}}},
+		{Stereotype: SignsInAs, Platform: true, Extension: []Pair{{Person, Person}}},
 	}
 }
 
@@ -116,7 +117,7 @@ func decideRelationship(m *Model, mm *DirectoryModel, id string, p payload, stri
 		return nil, notFound
 	}
 	source := m.ElementOf(p.Source)
-	if source == nil && !(p.Stereotype == Membership && strings.HasPrefix(p.Source, "member:")) {
+	if source == nil && !((p.Stereotype == Membership || p.Stereotype == SignsInAs) && strings.HasPrefix(p.Source, "member:")) {
 		return nil, notFound
 	}
 	if source != nil && p.Source == p.Target {
@@ -191,6 +192,20 @@ func decideRelationship(m *Model, mm *DirectoryModel, id string, p payload, stri
 	case Membership:
 		if p.Role == "" {
 			return nil, invalid("a membership needs a role")
+		}
+	case SignsInAs:
+		if source != nil || p.Source == "member:" {
+			return nil, invalid("An account signs in as a person: the source is member:<id>")
+		}
+		for _, r := range m.Relationships {
+			if r.Stereotype != SignsInAs || r.Source != p.Source && r.Target != p.Target {
+				continue
+			}
+			for _, period := range r.PeriodsFromLegacy() {
+				if overlap(p.From, p.Until, period.From, period.Until) {
+					return nil, invalid("An account signs in as at most one person, and a person has at most one account")
+				}
+			}
 		}
 	}
 	return func(*pb.ChangeRecord) {

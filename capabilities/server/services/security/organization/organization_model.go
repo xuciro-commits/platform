@@ -24,6 +24,7 @@ const (
 	Exhibits     = "Exhibits"
 	System       = "System"
 	Owns         = "ResponsibleFor"
+	SignsInAs    = "SignsInAs"
 	Typed        = "typedBy"
 )
 
@@ -142,6 +143,31 @@ func (m *Model) RelationshipOf(id string) *Relationship {
 	return nil
 }
 
+func (m Model) Parties(party string, day platform.Date) []string {
+	out := []string{party}
+	if !strings.HasPrefix(party, "member:") {
+		return out
+	}
+	for _, r := range m.Relationships {
+		if r.Stereotype == SignsInAs && r.Source == party && r.ActiveOn(day) && m.LiveOn(r.Target, day) {
+			out = append(out, r.Target)
+		}
+	}
+	return out
+}
+
+func (m Model) Account(party string, day platform.Date) (string, bool) {
+	if id, ok := strings.CutPrefix(party, "member:"); ok {
+		return id, true
+	}
+	for _, r := range m.Relationships {
+		if r.Stereotype == SignsInAs && r.Target == party && r.ActiveOn(day) && m.LiveOn(party, day) {
+			return strings.TrimPrefix(r.Source, "member:"), true
+		}
+	}
+	return "", false
+}
+
 func (m Model) LiveOn(id string, day platform.Date) bool {
 	e := m.ElementOf(id)
 	return e != nil && e.ActiveOn(day)
@@ -180,7 +206,7 @@ func (m Model) UnitsIn(party, kind string, day platform.Date) []string {
 		out = append(out, u)
 		return true
 	}
-	parties := []string{party}
+	parties := m.Parties(party, day)
 	for len(parties) > 0 {
 		p := parties[0]
 		parties = parties[1:]

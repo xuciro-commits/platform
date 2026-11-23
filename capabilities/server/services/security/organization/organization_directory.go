@@ -110,12 +110,12 @@ func directoryElement(name string) bool {
 }
 
 func directoryRelationship(name string) bool {
-	return name == Placement || name == Membership || name == FillsPost || name == Owns
+	return name == Placement || name == Membership || name == FillsPost || name == Owns || name == SignsInAs
 }
 
 func directory() *DirectoryModel {
 	types := map[string]*DirectoryType{}
-	for _, name := range []string{Organization, Post, Person, Placement, Membership, FillsPost, Owns} {
+	for _, name := range []string{Organization, Post, Person, Placement, Membership, FillsPost, Owns, SignsInAs} {
 		types[name] = &DirectoryType{Name: name, ID: name, Domain: "Organisation"}
 	}
 	return &DirectoryModel{Version: "directory-1", URI: "platform:directory:1", Domains: []string{"Organisation"}, Stereotypes: types, Enumerations: map[string]*DirectoryEnumeration{}}
