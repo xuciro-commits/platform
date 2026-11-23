@@ -108,7 +108,7 @@ func Validate(p platform.PackageDescriptor, withDependencies func(platform.Relea
 			Values map[string]any   `json:"values"`
 			Rows   []map[string]any `json:"rows"`
 		}
-		known := json.Unmarshal(raw, &seed) == nil && (objects[seed.Type] || objects[strings.SplitN(seed.Type, ".", 2)[0]+".*"])
+		known := json.Unmarshal(raw, &seed) == nil && (objects[seed.Type] || objects[strings.SplitN(seed.Type, ".", 2)[0]+".*"] || seed.Type == "enterprise.element" && seed.Kind == "")
 		if seed.Kind == "data" {
 			rows += len(seed.Rows)
 			if len(raw) > 64<<10 || !known || len(seed.Rows) == 0 || seed.ID != "" || seed.Values != nil || rows > 20000 {

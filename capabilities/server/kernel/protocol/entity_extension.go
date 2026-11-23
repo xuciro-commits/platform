@@ -11,6 +11,19 @@ import (
 
 const EnterpriseBase = "enterprise.element"
 
+func WithEnterpriseElements(lookup func(string) (platform.RecordTypeInfo, bool)) func(string) (platform.RecordTypeInfo, bool) {
+	return func(typ string) (platform.RecordTypeInfo, bool) {
+		if typ != EnterpriseBase {
+			return lookup(typ)
+		}
+		element := platform.RecordTypeInfo{Type: EnterpriseBase}
+		for _, name := range []string{"name", "stereotype", "kind"} {
+			element.Fields = append(element.Fields, platform.FieldInfo{Name: name, Type: "text"})
+		}
+		return element, true
+	}
+}
+
 func CheckEnterpriseExtension(extension platform.RecordTypeInfo) error {
 	link, ok := extension.Field("base")
 	if !ok || link.Type != "reference" || link.Ref != EnterpriseBase || !link.Required || link.Stereotype == "" || len(link.Stereotypes) > 0 {

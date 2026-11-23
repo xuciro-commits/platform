@@ -144,6 +144,15 @@ func ReadRecordPath(c platform.Caller, typ, id string, path []string, now time.T
 	}
 	var sources []string
 	for i, name := range path {
+		if typ == "enterprise.element" {
+			element, live := c.Element(id, now)
+			value, readable := map[string]string{"name": element.Name, "stereotype": element.Stereotype, "kind": element.Kind}[name]
+			if !live || !readable || i != len(path)-1 {
+				return nil, sources, platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "Record input is unavailable")
+			}
+			raw, _ := json.Marshal(value)
+			return raw, append(sources, "enterprise.element/"+id), nil
+		}
 		raw, refusal := read(typ, id, now)
 		if refusal != nil {
 			return nil, nil, refusal

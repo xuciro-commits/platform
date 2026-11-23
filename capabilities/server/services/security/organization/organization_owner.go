@@ -47,6 +47,7 @@ type Enterprise struct {
 	model       Model
 	authority   platform.Authority
 	authorities platform.Authorities
+	seeds       func(string) ([]json.RawMessage, bool)
 }
 
 func declarations() []platform.Action {
@@ -147,12 +148,18 @@ func (e *Enterprise) Manifest() platform.Manifest {
 const memberOffboard = "platform.member.offboard"
 
 func (e *Enterprise) Interested(names []string, _ platform.Event) bool {
-	return slices.Contains(names, memberOffboard)
+	return slices.ContainsFunc(names, func(name string) bool {
+		return slices.Contains([]string{memberOffboard, packageInstall, packageClearDemo}, name)
+	})
 }
 
 func (e *Enterprise) Listen(c platform.Caller, ev platform.Event, _ []string, _ time.Time) *platform.Error {
 	sub := ev.Record.GetSubmission()
-	if sub.GetSchema().GetName() != memberOffboard {
+	switch sub.GetSchema().GetName() {
+	case packageInstall, packageClearDemo:
+		return e.seedPeople(c, sub.GetTarget().GetId(), sub.GetPrincipalId(), ev.Record.GetRecordedTime().AsTime(), sub.GetSchema().GetName() == packageClearDemo)
+	case memberOffboard:
+	default:
 		return nil
 	}
 	party, now := "member:"+sub.GetTarget().GetId(), ev.Record.GetRecordedTime().AsTime()

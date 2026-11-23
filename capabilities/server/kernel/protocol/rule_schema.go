@@ -96,7 +96,7 @@ func RuleSchema(expr platform.Expr, spec platform.RuleReadSpec, lookup func(stri
 				if input.Kind != "reference" || input.Object == "" {
 					return fmt.Errorf("rule path input is not a declared reference")
 				}
-				final, err := platform.RecordPathField(input.Object, path, lookup)
+				final, err := platform.RecordPathField(input.Object, path, WithEnterpriseElements(lookup))
 				if err != nil {
 					return err
 				}
@@ -112,7 +112,7 @@ func RuleSchema(expr platform.Expr, spec platform.RuleReadSpec, lookup func(stri
 			if !ok || !found || field.Type != "reference" || field.Ref == "" {
 				return fmt.Errorf("rule path base %s is not a declared reference", ref)
 			}
-			final, err := platform.RecordPathField(field.Ref, path, lookup)
+			final, err := platform.RecordPathField(field.Ref, path, WithEnterpriseElements(lookup))
 			if err != nil {
 				return err
 			}

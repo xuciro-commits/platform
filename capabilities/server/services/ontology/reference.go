@@ -5,6 +5,7 @@ import (
 	"reflect"
 	"slices"
 	"strings"
+	"time"
 
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
 	"platformserver/kernel/protocol"
@@ -16,6 +17,14 @@ const referenceLimit = 500
 var referenceEvents = []string{SchemaPublish, "platform.package.install", "platform.package.upgrade", "platform.package.downgrade", "platform.package.rollback"}
 
 var packageDemoEvents = []string{"platform.package.install", "platform.package.clear-demo"}
+
+func PeopleSeeded(e platform.Event) (string, string, bool) {
+	s := e.Record.GetSubmission()
+	rest, seeded := strings.CutPrefix(strings.TrimSuffix(s.GetIdempotencyKey(), protocol.ContinuationSuffix), "seed:")
+	pkg, _, found := strings.Cut(rest, ":")
+	_, installer, by := strings.Cut(rest, "?by=")
+	return pkg, installer, seeded && found && by && s.GetSchema().GetName() == "enterprise.element.add" && protocol.Continues(s.GetIdempotencyKey())
+}
 
 func DataContinues(e platform.Event) (string, bool) {
 	key := e.Record.GetSubmission().GetIdempotencyKey()
@@ -101,7 +110,15 @@ func FillReference(c platform.Caller, lang string, model func(string) (reflect.T
 	return nil
 }
 
-func FillSeed(c platform.Caller, pkgID string, seeds []json.RawMessage, demo bool, model func(string) (reflect.Type, bool), submit func(*pb.Submission) *platform.Error) *platform.Error {
+func FillSeed(c platform.Caller, pkgID string, seeds []json.RawMessage, demo bool, now time.Time, model func(string) (reflect.Type, bool), submit func(*pb.Submission) *platform.Error) *platform.Error {
+	for _, raw := range seeds {
+		var seed struct{ Kind, Type, ID string }
+		if json.Unmarshal(raw, &seed) == nil && seed.Kind == "" && seed.Type == "enterprise.element" {
+			if _, live := c.Element(seed.ID, now); !live {
+				demo = false
+			}
+		}
+	}
 	filled := false
 	for _, raw := range seeds {
 		var seed struct {

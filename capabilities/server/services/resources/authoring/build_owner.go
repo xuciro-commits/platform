@@ -272,7 +272,8 @@ func (b *Build) Manifest() platform.Manifest {
 
 func (b *Build) Interested(names []string, e platform.Event) bool {
 	_, continues := ontology.DataContinues(e)
-	return continues || ontology.FillsReference(names) || ontology.HandlesPackageDemo(names)
+	_, _, people := ontology.PeopleSeeded(e)
+	return continues || people || ontology.FillsReference(names) || ontology.HandlesPackageDemo(names)
 }
 
 func (b *Build) Handle(c platform.Caller, e platform.Event) *platform.Error {
@@ -281,7 +282,8 @@ func (b *Build) Handle(c platform.Caller, e platform.Event) *platform.Error {
 
 func (b *Build) Listen(c platform.Caller, e platform.Event, names []string, now time.Time) *platform.Error {
 	continuing, continues := ontology.DataContinues(e)
-	if !continues && !ontology.FillsReference(names) && !ontology.HandlesPackageDemo(names) {
+	seeded, installer, people := ontology.PeopleSeeded(e)
+	if !continues && !people && !ontology.FillsReference(names) && !ontology.HandlesPackageDemo(names) {
 		return nil
 	}
 	model := func(typ string) (reflect.Type, bool) {
@@ -292,7 +294,11 @@ func (b *Build) Listen(c platform.Caller, e platform.Event, names []string, now 
 		_, refusal := b.Submit(c, s, now)
 		return refusal
 	}
-	member, _ := b.host.Member(e.Record.GetSubmission().GetPrincipalId())
+	principal := e.Record.GetSubmission().GetPrincipalId()
+	if people {
+		principal = installer
+	}
+	member, _ := b.host.Member(principal)
 	if ontology.FillsReference(names) {
 		lang := cmp.Or(member.Language, b.host.Caller(c, member, "platform").Setting("language"))
 		if refusal := ontology.FillReference(c, lang, model, submit); refusal != nil {
@@ -302,6 +308,9 @@ func (b *Build) Listen(c platform.Caller, e platform.Event, names []string, now 
 	pkgID := e.Record.GetSubmission().GetTarget().GetId()
 	if continues {
 		pkgID = continuing
+	}
+	if people {
+		pkgID = seeded
 	}
 	seedCaller := c
 	if member.ID != "" {
@@ -317,12 +326,12 @@ func (b *Build) Listen(c platform.Caller, e platform.Event, names []string, now 
 		_, refusal := b.Submit(seedCaller, s, now)
 		return refusal
 	}
-	install := slices.Contains(names, "platform.package.install")
+	install := slices.Contains(names, "platform.package.install") || people
 	if install || continues || slices.ContainsFunc(names, func(name string) bool {
 		return slices.Contains([]string{"platform.package.upgrade", "platform.package.downgrade", "platform.package.rollback"}, name)
 	}) {
 		if seeds, ok := b.host.PackageSeed(pkgID); ok {
-			if refusal := ontology.FillSeed(seedCaller, pkgID, seeds, install, model, seedSubmit); refusal != nil {
+			if refusal := ontology.FillSeed(seedCaller, pkgID, seeds, install, now, model, seedSubmit); refusal != nil {
 				return refusal
 			}
 		}

@@ -406,6 +406,7 @@ func expand(dir string, resources []resource, released bool, external map[string
 	for name, fields := range external {
 		types[name] = fields
 	}
+	types["enterprise.element"] = map[string]exprField{"id": {kind: "text"}, "name": {kind: "text"}, "stereotype": {kind: "text"}, "kind": {kind: "text"}}
 	definitions := map[string]map[string]*object{}
 	var out []resource
 	for _, r := range resources {

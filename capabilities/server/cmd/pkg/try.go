@@ -427,7 +427,7 @@ func (tr *trial) run(script tryScript) error {
 			if err != nil {
 				return fmt.Errorf("step %d: %s refused: %w", i+1, step.Do, err)
 			}
-			if typ == protocol.PackageType && len(step.Show) == 0 && len(step.Expect) == 0 {
+			if (typ == protocol.PackageType || strings.HasPrefix(typ, "enterprise.")) && len(step.Show) == 0 && len(step.Expect) == 0 {
 				continue
 			}
 		} else {

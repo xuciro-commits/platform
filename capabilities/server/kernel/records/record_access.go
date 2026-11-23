@@ -20,6 +20,22 @@ type ScopeDirectory interface {
 	Units(party, structure string, day platform.Date) []string
 	Below(units []string, structure string, day platform.Date) []string
 	Holders(structure, unit, role string, day platform.Date) []string
+	Related(element, stereotype string, outgoing bool, day platform.Date) []string
+}
+
+func signedInAs(directory ScopeDirectory, members []string, day platform.Date) []string {
+	out := slices.Clone(members)
+	if directory == nil {
+		return out
+	}
+	for _, member := range members {
+		for _, person := range directory.Related("member:"+member, "SignsInAs", true, day) {
+			if !slices.Contains(out, person) {
+				out = append(out, person)
+			}
+		}
+	}
+	return out
 }
 
 func FieldView(m platform.Member, source platform.RecordTypeInfo) (view platform.RecordTypeInfo, hidden []platform.FieldInfo) {
@@ -153,7 +169,15 @@ func scopeExpr(directory ScopeDirectory, m platform.Member, info platform.Record
 		if !ok {
 			return boolLit(false), true
 		}
-		return compare("=", owner, textLit(m.ID)), true
+		parties := signedInAs(directory, []string{m.ID}, m.Today(now))
+		if len(parties) == 1 {
+			return compare("=", owner, textLit(m.ID)), true
+		}
+		items := make([]any, len(parties))
+		for i, id := range parties {
+			items[i] = id
+		}
+		return ruleexpr.Expr{Op: "in", Kind: "boolean", Args: []ruleexpr.Expr{owner, setLit("text", items)}}, true
 	case platform.ScopeTeam:
 		members := []string{m.ID}
 		if directory != nil {
@@ -166,6 +190,7 @@ func scopeExpr(directory ScopeDirectory, m platform.Member, info platform.Record
 				}
 			}
 		}
+		members = signedInAs(directory, members, m.Today(now))
 		owner := ruleexpr.RefOf("text", createdBy.Ref)
 		if scope.Owner != platform.OwnerCreated {
 			var ok bool
@@ -239,7 +264,7 @@ func Write(info platform.RecordTypeInfo, receipt *pb.ChangeRecord, prev *Row, v 
 		}
 	}
 	if owner := info.Scope.Owner; prev == nil && owner != "" && owner != platform.OwnerCreated {
-		if f, _ := info.Field(owner); v.FieldByIndex(f.Index).String() == "" {
+		if f, _ := info.Field(owner); f.Type != "reference" && v.FieldByIndex(f.Index).String() == "" {
 			v.FieldByIndex(f.Index).SetString(stamp.By)
 		}
 	}
