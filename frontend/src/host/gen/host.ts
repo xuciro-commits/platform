@@ -2537,6 +2537,7 @@ export type InstalledPackage = {
   changedAt?: string;
   retained?: RetainedArtifact[];
   demoRecords?: string[];
+  demoCleared?: boolean;
 };
 
 export type IntegrationEffect = {

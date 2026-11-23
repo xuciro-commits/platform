@@ -22,6 +22,7 @@ type InstalledPackage struct {
 	ChangedAt     time.Time                      `json:"changedAt,omitempty"`
 	Retained      []RetainedArtifact             `json:"retained,omitempty"`
 	DemoRecords   []string                       `json:"demoRecords,omitempty"`
+	DemoCleared   bool                           `json:"demoCleared,omitempty"`
 }
 
 type RetainedArtifact struct {

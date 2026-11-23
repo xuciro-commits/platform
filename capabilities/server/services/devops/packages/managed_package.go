@@ -21,6 +21,7 @@ type ManagedRows struct {
 	Archived func(resource protocol.Resource, archived bool) any
 	Decode   func(typ string, image json.RawMessage) (any, error)
 	Image    func(record string) json.RawMessage
+	Exists   func(typ, id string) bool
 	Install  func(platform.ReleaseInstallation)
 	Fail     func(*platform.Error)
 }
@@ -56,8 +57,12 @@ func NewManaged(caller platform.Caller, descriptor platform.PackageDescriptor, r
 		Archived: func(resource protocol.Resource, archived bool) any {
 			return rows().ArchivedCopy(resource.Type, resource.Draft, archived)
 		},
-		Decode:  func(typ string, image json.RawMessage) (any, error) { return rows().DecodeRow(typ, image) },
-		Image:   func(record string) json.RawMessage { return rows().RowImage(record) },
+		Decode: func(typ string, image json.RawMessage) (any, error) { return rows().DecodeRow(typ, image) },
+		Image:  func(record string) json.RawMessage { return rows().RowImage(record) },
+		Exists: func(typ, id string) bool {
+			entity := rows().Type(typ)
+			return entity != nil && entity.Rows().Get(id) != nil
+		},
 		Install: install,
 		Fail:    fail,
 	}}
@@ -107,6 +112,20 @@ func (p ManagedPreparation) Prepare() (func(*pb.ChangeRecord), *platform.Error) 
 	}
 	if p.Archive {
 		return p.Managed.Archive, nil
+	}
+	if !p.Upgrade && !p.Downgrade {
+		for _, raw := range p.Descriptor.Blueprint.Seed {
+			var seed struct {
+				Type string `json:"type"`
+				ID   string `json:"id"`
+			}
+			if json.Unmarshal(raw, &seed) != nil || seed.Type == "" || seed.ID == "" {
+				return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "Invalid demo seed record")
+			}
+			if p.Rows.Exists(seed.Type, seed.ID) {
+				return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "Demo seed record {type}/{id} already exists", seed.Type, seed.ID)
+			}
+		}
 	}
 	if space := Space(p.Descriptor); space != "" && p.Managed.Taken() {
 		return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "A project named {name} already exists; install under another name", space)

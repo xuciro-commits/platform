@@ -223,6 +223,16 @@ func (d *Owner) PackageSeed(id string) ([]json.RawMessage, bool) {
 	if held == nil || held.Artifact == "" {
 		return nil, false
 	}
+	if held.DemoCleared {
+		seeds := make([]json.RawMessage, 0, len(held.DemoRecords))
+		for _, ref := range held.DemoRecords {
+			typ, id, ok := strings.Cut(ref, "/")
+			if ok && typ != "" && id != "" {
+				seeds = append(seeds, platform.Raw(map[string]string{"type": typ, "id": id}))
+			}
+		}
+		return seeds, len(seeds) > 0
+	}
 	descriptor, err := d.sealedPackageDescriptor(held.ID, held.Version, held.Artifact)
 	if err != nil || descriptor.Blueprint == nil || len(descriptor.Blueprint.Seed) == 0 {
 		return nil, false
@@ -265,7 +275,7 @@ func AttachDemo(views []protocol.ApplicationView, owner PreparationOwner, store 
 	for i := range views {
 		if pkg := byApp[views[i].Name]; pkg != nil {
 			views[i].Package = pkg.ID
-			views[i].HasDemo = len(pkg.DemoRecords) > 0
+			views[i].HasDemo = len(pkg.DemoRecords) > 0 && !pkg.DemoCleared
 		}
 	}
 	return views
@@ -485,12 +495,12 @@ func (d *Owner) decide(c platform.Caller, s *pb.Submission) (func(*pb.ChangeReco
 		if held == nil || held.State == "retired" {
 			return nil, &platform.Error{Code: pb.ErrorCode_ERROR_CODE_NOT_FOUND}
 		}
-		if len(held.DemoRecords) == 0 {
+		if len(held.DemoRecords) == 0 || held.DemoCleared {
 			return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "This package has no demo data to clear")
 		}
 		return func(*pb.ChangeRecord) {
 			copy := *held
-			copy.DemoRecords = nil
+			copy.DemoCleared = true
 			copy.ChangedAt = time.Now().UTC()
 			d.packages[p.ID] = &copy
 		}, nil
@@ -664,6 +674,7 @@ func (d *Owner) decide(c platform.Caller, s *pb.Submission) (func(*pb.ChangeReco
 			Artifact: sealed, InstalledAt: now, ChangedAt: now, Space: namespace}
 		if prior != nil && prior.State != "retired" {
 			installed.DemoRecords = slices.Clone(prior.DemoRecords)
+			installed.DemoCleared = prior.DemoCleared
 		} else if descriptor.Blueprint != nil && len(descriptor.Blueprint.Seed) > 0 {
 			demo := make([]string, 0, len(descriptor.Blueprint.Seed))
 			for _, raw := range descriptor.Blueprint.Seed {

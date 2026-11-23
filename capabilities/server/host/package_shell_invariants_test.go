@@ -238,6 +238,23 @@ func TestInvariantK24PackageDemoSeedInstallAndClear(t *testing.T) {
 		t.Fatalf("expected seeded demo record, got %v", ids)
 	}
 	live.accept(t, typ+".create", typ, "user-order-1", map[string]any{"number": "USER-1", "product": "real", "quantity": 1, "unitcost": 10})
+	offer.Version = "0.1.6"
+	offer.Blueprint.Seed = []json.RawMessage{
+		platform.Raw(map[string]any{"type": typ, "id": "user-order-1", "values": map[string]any{"number": "WRONG", "product": "collision", "quantity": 1, "unitcost": 1}}),
+	}
+	upgrade, err := live.InspectPackage(t.Context(), protocol.PackageInspectRequest{Content: platform.Raw(offer)})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if refusal := submit(packages.SchemaPackageImport, map[string]any{"id": descriptor.ID, "digest": upgrade.Digest}); refusal != nil {
+		t.Fatalf("upgrade import: %v", refusal)
+	}
+	if refusal := submit(packages.SchemaPackageUpgrade, map[string]any{"id": descriptor.ID, "version": offer.Version}); refusal != nil {
+		t.Fatalf("upgrade: %v", refusal)
+	}
+	if ids := recordIDs(); !slices.Equal(ids, []string{"demo-order-1", "user-order-1"}) {
+		t.Fatalf("upgrade must not seed new version, got %v", ids)
+	}
 	if refusal := submit(packages.SchemaPackageClearDemo, map[string]any{"id": descriptor.ID}); refusal != nil {
 		t.Fatalf("clear-demo: %v", refusal)
 	}
@@ -249,5 +266,22 @@ func TestInvariantK24PackageDemoSeedInstallAndClear(t *testing.T) {
 	}
 	if refusal := submit(packages.SchemaPackageClearDemo, map[string]any{"id": descriptor.ID}); refusal == nil || refusal.Code != pb.ErrorCode_ERROR_CODE_CONFLICT {
 		t.Fatalf("second clear-demo should be refused, got %v", refusal)
+	}
+	if refusal := submit(packages.SchemaPackageDrain, map[string]any{"id": descriptor.ID}); refusal != nil {
+		t.Fatalf("drain: %v", refusal)
+	}
+	if refusal := submit(packages.SchemaPackageRetire, map[string]any{"id": descriptor.ID}); refusal != nil {
+		t.Fatalf("retire: %v", refusal)
+	}
+	offer.Version = "0.1.7"
+	clashing, err := live.InspectPackage(t.Context(), protocol.PackageInspectRequest{Content: platform.Raw(offer)})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if refusal := submit(packages.SchemaPackageImport, map[string]any{"id": descriptor.ID, "digest": clashing.Digest}); refusal != nil {
+		t.Fatalf("clashing import: %v", refusal)
+	}
+	if refusal := submit(packages.SchemaPackageInstall, map[string]any{"id": descriptor.ID, "version": offer.Version}); refusal == nil || refusal.Code != pb.ErrorCode_ERROR_CODE_CONFLICT {
+		t.Fatalf("install with existing user record as seed must be rejected, got %v", refusal)
 	}
 }
