@@ -23,6 +23,7 @@ const views = new Map(Object.entries({
   "/ontology/shared-properties": ["property-type"],
   "/ontology/value-types": ["value-type"],
   "/ontology/object-type-groups": ["object-type-group"],
+  "/ontology/contracts": ["contracts"],
   "/ontology/objects": ["explorer", "records", "catalog-records", "object-set", "saved"],
   "/logic/functions": ["functions", "code-functions", "code", "ai-functions", "function"],
   "/logic/automations": ["automation", "logic-flows", "flow"],

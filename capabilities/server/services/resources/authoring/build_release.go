@@ -76,7 +76,7 @@ func (b *Build) ReleaseAssets() ([]platform.ReleaseAsset, error) {
 		return nil, err
 	}
 	for _, read := range []func() ([]platform.ReleaseAsset, error){
-		b.functions.Assets, b.agent.Assets, b.queries.Assets, b.kindAssets(&linkKind), b.kindAssets(&interfaceKind), b.kindAssets(&propertyKind), b.kindAssets(&valueKind), b.kindAssets(&objectTypeGroupKind),
+		b.functions.Assets, b.agent.Assets, b.queries.Assets, b.kindAssets(&linkKind), b.kindAssets(&interfaceKind), b.kindAssets(&propertyKind), b.kindAssets(&valueKind), b.kindAssets(&objectTypeGroupKind), b.kindAssets(&contractKind),
 		b.CodeReleaseAssets, b.data.Assets, b.testPlans.Assets, b.sampleSets.Assets,
 	} {
 		owned, err := read()
@@ -141,6 +141,11 @@ func readDefinitionInventoryOf(c platform.Caller, typ reflect.Type) ([]any, erro
 }
 
 func (b *Build) validateObjectInstallation(c platform.Caller, record ontology.Object) error {
+	if len(record.Protocols) > 0 {
+		if err := b.checkImplementedContracts(b.entity(record)); err != nil {
+			return err
+		}
+	}
 	return ontology.ValidateObjectInstallation(c, record, ontology.ObjectInstallationEnvironment{
 		Host: b.host, Entity: Entity, CheckProcesses: b.automation.CheckObjectDefinition,
 		Pages: b.objectInstallationPages, Actions: objectActions, JointMode: func() bool { return b.jointMode },

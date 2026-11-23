@@ -26,6 +26,9 @@ func (b *Build) checkObjectProtocols(object ontology.Object) error {
 			return out
 		},
 		Contract: func(id string) (platform.Protocol, bool) {
+			if contract, declared := b.installedContract(id); declared {
+				return contract.Protocol(), true
+			}
 			if b.host == nil {
 				return platform.Protocol{}, false
 			}

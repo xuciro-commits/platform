@@ -320,7 +320,7 @@ func (b *Build) ReferencedDrafts(kind platform.AssetKind, id, owner string) ([]J
 	if id == "" {
 		return nil, fmt.Errorf("a saved draft is required")
 	}
-	if kind == platform.AssetInterface {
+	if kind == platform.AssetInterface || kind == protocol.AssetContract {
 		return nil, nil
 	}
 	if kind == platform.AssetApp {

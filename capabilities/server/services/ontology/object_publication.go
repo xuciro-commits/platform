@@ -472,6 +472,7 @@ type ObjectPublicationEnvironment struct {
 	Pages     func(Object) ([]platform.Page, string, error)
 	Validate  func(platform.Caller, Object) error
 	Installed func(platform.RecordType)
+	Contracts func(platform.RecordType) error
 }
 
 func ObjectPublication(env ObjectPublicationEnvironment) publication.Hooks {
@@ -505,6 +506,9 @@ func ObjectPublication(env ObjectPublicationEnvironment) publication.Hooks {
 			Install: func(raw json.RawMessage) error {
 				published, entity, actions, pages, err := image(raw)
 				if err != nil {
+					return err
+				}
+				if err := env.Contracts(entity); err != nil {
 					return err
 				}
 				pages, _, err = env.Pages(published)

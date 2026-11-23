@@ -54,10 +54,11 @@ type resourceKind[T interface{ Definition() D }, D interface{ Check() error }] s
 	admit           func(D) bool
 	install         func(protocol.BuildHost, platform.Caller, D, int) error
 	validateInstall func(protocol.BuildHost, D) error
+	checkInstall    func(*Build, D) error
 	beforeInstall   func(*Build)
 }
 
-var definitionKinds = []definitionKind{&propertyKind, &valueKind, &linkKind, &interfaceKind, &objectTypeGroupKind}
+var definitionKinds = []definitionKind{&propertyKind, &valueKind, &linkKind, &interfaceKind, &objectTypeGroupKind, &contractKind}
 
 func definitionKindOf(kind platform.AssetKind) definitionKind {
 	for _, k := range definitionKinds {
@@ -205,6 +206,11 @@ func (k *resourceKind[T, D]) installRecord(b *Build, c platform.Caller, f T) err
 	family := definitionFamilyOf(f)
 	if k.beforeInstall != nil {
 		k.beforeInstall(b)
+	}
+	if k.checkInstall != nil {
+		if err := k.checkInstall(b, f.Definition()); err != nil {
+			return err
+		}
 	}
 	if err := k.install(b.host, c, f.Definition(), family.Version); err != nil {
 		return err

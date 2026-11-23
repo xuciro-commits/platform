@@ -353,6 +353,14 @@ func (resolver Resolver) describeAsset(asset platform.ReleaseAsset, historical b
 			fields = append(fields, platform.Field{Name: field.Name, Type: field.Type, Description: field.Title})
 		}
 		capability("interface", shape.Name, platform.CapabilityPure, nil, platform.ValueSchema{}, runtimeprotocol.CapabilityFieldsSchema(fields), fields)
+	case runtimeprotocol.AssetContract:
+		var contract runtimeprotocol.ProtocolContract
+		if err := json.Unmarshal(asset.Body, &contract); err != nil {
+			return out, err
+		}
+		if err := contract.Check(); err != nil {
+			return out, err
+		}
 	case platform.AssetProtocol:
 		dependencies, err := describeProtocolDependencies(asset)
 		if err != nil {

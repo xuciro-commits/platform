@@ -20,4 +20,6 @@ const (
 	InterfaceType         = ontology.InterfaceType
 	SchemaLinkType        = ontology.SchemaLinkType
 	SchemaInterface       = ontology.SchemaInterface
+	ContractType          = ontology.ContractType
+	SchemaContract        = ontology.SchemaContract
 )

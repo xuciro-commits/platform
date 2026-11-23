@@ -4553,6 +4553,9 @@ export type ProtocolEvent = {
 export type ProtocolInfo = {
   contract?: Protocol;
   id: string;
+  title?: string;
+  description?: string;
+  declared?: boolean;
   actions: string[];
   reads: string[];
   events: ProtocolEvent[];

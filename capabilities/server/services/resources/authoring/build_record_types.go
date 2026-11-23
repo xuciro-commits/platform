@@ -138,6 +138,7 @@ func (b *Build) recordTypes(schema string, manifest bool) []platform.RecordType 
 	selectType(LinkTypeType, func() platform.RecordType { return linkKind.entity(b) })
 	selectType(QueryType, b.queries.Entity)
 	selectType(InterfaceType, func() platform.RecordType { return interfaceKind.entity(b) })
+	selectType(ContractType, func() platform.RecordType { return contractKind.entity(b) })
 	selectType(protocol.FunctionType, b.functions.Entity)
 	selectType(protocol.FunctionCallType, b.functions.CallEntity)
 	evaluation := b.evaluations.Entity()

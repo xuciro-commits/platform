@@ -132,6 +132,10 @@
         {
           "type": "build.objecttypegroup",
           "view": "object-type-group"
+        },
+        {
+          "type": "build.contract",
+          "view": "contracts"
         }
       ]
     },

@@ -74,6 +74,7 @@ type Build struct {
 	valueTypes                map[string]ontology.ValueType
 	objectTypeGroups          map[string]ontology.ObjectTypeGroup
 	interfaces                map[string]ontology.InterfaceRecord
+	contracts                 map[string]ontology.ContractRecord
 	functions                 publication.FunctionAuthoring
 	apps                      publication.ApplicationAuthoring
 	application               ApplicationOwners
@@ -108,6 +109,7 @@ func (b *Build) bindPublications() {
 			b.installed[entity.Type] = entity
 			b.invalidateManifest()
 		},
+		Contracts: b.checkImplementedContracts,
 	})
 	b.publications = append([]publication.Hooks{object}, b.publicationBase...)
 	queries := b.queries
@@ -150,7 +152,7 @@ func (b *Build) AttachOwner(bindings runtimeprotocol.OwnerBindings) {
 }
 
 func New(tenant string, authorities platform.Authorities, publications []publication.Hooks, resolver publication.Resolver, objectPublication func(ontology.ObjectPublicationEnvironment) publication.Hooks, queryFactory func(publication.QueryAuthoringEnvironment) publication.QueryAuthoringBinding, functionFactory func(publication.FunctionEnvironment) publication.FunctionAuthoring, agentFactory func(platform.AgentAuthoringEnvironment) platform.AgentAuthoringBinding, functionEvaluationFactory func(publication.FunctionEvaluationEnvironment) publication.FunctionEvaluationBinding, testPlanFactory func(testPlanEnvironment, evaluationPublication) testPlanPublication, evaluationSetFactory func(testPlanEnvironment) evaluationPublication, sampleSetFactory func(devopsmodel.SampleSetEnvironment) devopsmodel.SampleSetPublication, application ApplicationOwners, automationFactory func(publication.AutomationEnvironment, publication.Resolver) publication.AutomationAuthoring) *Build {
-	b := &Build{resolver: resolver, publicationBase: slices.Clone(publications), objectPublication: objectPublication, queryFactory: queryFactory, functionFactory: functionFactory, agentFactory: agentFactory, functionEvaluationFactory: functionEvaluationFactory, testPlanFactory: testPlanFactory, evaluationSetFactory: evaluationSetFactory, sampleSetFactory: sampleSetFactory, installed: map[string]platform.RecordType{}, linkTypes: map[string]ontology.LinkType{}, propertyTypes: map[string]ontology.PropertyType{}, valueTypes: map[string]ontology.ValueType{}, objectTypeGroups: map[string]ontology.ObjectTypeGroup{}, interfaces: map[string]ontology.InterfaceRecord{}, manifestCache: new(buildManifestCache)}
+	b := &Build{resolver: resolver, publicationBase: slices.Clone(publications), objectPublication: objectPublication, queryFactory: queryFactory, functionFactory: functionFactory, agentFactory: agentFactory, functionEvaluationFactory: functionEvaluationFactory, testPlanFactory: testPlanFactory, evaluationSetFactory: evaluationSetFactory, sampleSetFactory: sampleSetFactory, installed: map[string]platform.RecordType{}, linkTypes: map[string]ontology.LinkType{}, propertyTypes: map[string]ontology.PropertyType{}, valueTypes: map[string]ontology.ValueType{}, objectTypeGroups: map[string]ontology.ObjectTypeGroup{}, interfaces: map[string]ontology.InterfaceRecord{}, contracts: map[string]ontology.ContractRecord{}, manifestCache: new(buildManifestCache)}
 	b.queries = b.queryFactory(b.queryEnvironment())
 	b.data = dataowner.New(buildDataHost{b}, resolver)
 	b.data.AttachIntegrationRuntime(b.integrationRuntime())
@@ -179,6 +181,7 @@ func New(tenant string, authorities platform.Authorities, publications []publica
 	actions = append(actions, actioncatalog.EntityActions(b.objectTypeGroupEntity())...)
 	actions = append(actions, actioncatalog.EntityActions(b.queries.Entity())...)
 	actions = append(actions, actioncatalog.EntityActions(interfaceKind.entity(b))...)
+	actions = append(actions, actioncatalog.EntityActions(contractKind.entity(b))...)
 	actions = append(actions, b.evaluations.Actions()...)
 	actions = append(actions, actioncatalog.EntityActions(b.functions.CodeEntity())...)
 	actions = append(actions, b.data.Actions()...)
@@ -197,7 +200,7 @@ func New(tenant string, authorities platform.Authorities, publications []publica
 	actions = append(actions, devopsmodel.ProductVersionActions()...)
 	actions = append(actions, platform.Action{Schema: SchemaEvaluationSetPublish, Target: TestPlanType, Title: "Publish test plan", Description: "Freeze a portable business scenario or the evaluation cases for one function version.", Capability: "objects", Roles: []string{Builder}, Payload: []platform.Field{}})
 	actions = resourceActions(actions)
-	classes := []string{ObjectType, ActionTypeType, runtimeprotocol.PageType, runtimeprotocol.AppType, TestPlanType, runtimeprotocol.ProcessType, runtimeprotocol.FunctionType, PropertyTypeType, ValueTypeType, ObjectTypeGroupType, LinkTypeType, b.queries.Entity().Type, InterfaceType, runtimeprotocol.FunctionCallType, b.evaluations.Entity().Type, runtimeprotocol.CodeType, runtimeprotocol.TableType, AgentType, SampleSetType, BranchType, ResourceType, FolderType, WorkingStateType, ProductType, ProductVersionType, runtimeprotocol.OwnedRelationType(ID), runtimeprotocol.ConfirmationType, runtimeprotocol.DispatchType}
+	classes := []string{ObjectType, ActionTypeType, runtimeprotocol.PageType, runtimeprotocol.AppType, TestPlanType, runtimeprotocol.ProcessType, runtimeprotocol.FunctionType, PropertyTypeType, ValueTypeType, ObjectTypeGroupType, LinkTypeType, b.queries.Entity().Type, InterfaceType, ContractType, runtimeprotocol.FunctionCallType, b.evaluations.Entity().Type, runtimeprotocol.CodeType, runtimeprotocol.TableType, AgentType, SampleSetType, BranchType, ResourceType, FolderType, WorkingStateType, ProductType, ProductVersionType, runtimeprotocol.OwnedRelationType(ID), runtimeprotocol.ConfirmationType, runtimeprotocol.DispatchType}
 	classes = append(classes, b.data.Types()...)
 	b.authorities = authorities
 	b.authority = authorities(tenant, ID, platform.NewCatalog(actions...), classes...)
@@ -545,6 +548,7 @@ func (b *Build) Fork(authority platform.Authority) (platform.Service, error) {
 	fork.objectTypeGroups = maps.Clone(b.objectTypeGroups)
 	fork.queries = b.queries.Fork(fork.queryEnvironment())
 	fork.interfaces = maps.Clone(b.interfaces)
+	fork.contracts = maps.Clone(b.contracts)
 	fork.functions = b.functions.Fork(functionEnvironment{&fork})
 	fork.evaluations = b.functionEvaluationFactory(fork.functionEvaluationEnvironment())
 	fork.apps = b.application.New(appEnvironment{&fork})

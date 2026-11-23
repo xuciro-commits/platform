@@ -40,7 +40,7 @@ var kindDirectories = map[string]string{
 	"observation": "integrations/observations", "sample-set": "tests/sample-sets", "test-plan": "tests/test-plans",
 	"evaluation-set": "tests/evaluations", "link-type": "objects/link-types", "property-type": "objects/property-types",
 	"value-type": "objects/value-types", "interface": "objects/interfaces", "object-type-group": "objects/groups",
-	"protocol": "protocols", "product": "products",
+	"protocol": "protocols", "product": "products", "contract": "contracts",
 }
 
 var defaultContract = map[string]int{"link-type": 4}
@@ -49,7 +49,7 @@ var sourceFamily = map[string]string{
 	"agent": "agent", "connection": "connection", "dataset": "dataset", "evaluation-set": "evaluation", "function": "function",
 	"link-type": "link", "matching": "matching", "observation": "observation", "query": "query", "sample-set": "samples",
 	"source": "source", "test-plan": "tests", "writeback": "writeback", "listener": "listener", "mediaset": "mediaset",
-	"schedule": "schedule", "pipeline": "pipeline",
+	"schedule": "schedule", "pipeline": "pipeline", "contract": "contract",
 }
 
 func firstSourceVersion(kind string) string {

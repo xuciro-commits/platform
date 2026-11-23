@@ -133,6 +133,7 @@ export const apps: App[] = [
           { id: "shared-properties", label: "Shared properties", icon: SwatchIcon },
           { id: "value-types", label: "Value types", icon: AdjustmentsHorizontalIcon },
           { id: "object-type-groups", label: "Object type groups", icon: Square3Stack3DIcon },
+          { id: "contracts", label: "Capability contracts", icon: ArrowsRightLeftIcon },
         ],
       },
       {

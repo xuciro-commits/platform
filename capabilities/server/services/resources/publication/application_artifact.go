@@ -39,7 +39,7 @@ func (resolver Resolver) ArtifactOfApplication(root platform.AssetRef, available
 		}
 		artifact.Roles = append(artifact.Roles, roles...)
 		switch asset.Ref.Kind {
-		case platform.AssetObject, platform.AssetObjectTypeGroup, platform.AssetLinkType, platform.AssetPropertyType, platform.AssetValueType, platform.AssetQuery:
+		case platform.AssetObject, platform.AssetObjectTypeGroup, platform.AssetLinkType, platform.AssetPropertyType, platform.AssetValueType, platform.AssetQuery, protocol.AssetContract:
 			artifact.Model = append(artifact.Model, binding)
 		case platform.AssetAction:
 			artifact.Rules = append(artifact.Rules, binding)

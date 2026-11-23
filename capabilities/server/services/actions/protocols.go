@@ -333,14 +333,17 @@ func (r Router) Event(name string) (platform.ProtocolEvent, bool) {
 }
 
 type ProtocolInfo struct {
-	Contract  *platform.Protocol       `json:"contract,omitempty"`
-	ID        string                   `json:"id"`
-	Actions   []string                 `json:"actions"`
-	Reads     []string                 `json:"reads"`
-	Events    []platform.ProtocolEvent `json:"events"`
-	Providers []string                 `json:"providers"`
-	Consumers []string                 `json:"consumers"`
-	Bound     string                   `json:"bound,omitempty"`
+	Contract    *platform.Protocol       `json:"contract,omitempty"`
+	ID          string                   `json:"id"`
+	Title       string                   `json:"title,omitempty"`
+	Description string                   `json:"description,omitempty"`
+	Declared    bool                     `json:"declared,omitempty"`
+	Actions     []string                 `json:"actions"`
+	Reads       []string                 `json:"reads"`
+	Events      []platform.ProtocolEvent `json:"events"`
+	Providers   []string                 `json:"providers"`
+	Consumers   []string                 `json:"consumers"`
+	Bound       string                   `json:"bound,omitempty"`
 }
 
 func (r Router) Protocols() []ProtocolInfo {
@@ -368,6 +371,27 @@ func (r Router) Protocols() []ProtocolInfo {
 				byID[c.Protocol], order = &ProtocolInfo{ID: c.Protocol, Providers: []string{}}, append(order, c.Protocol)
 			}
 			byID[c.Protocol].Consumers = append(byID[c.Protocol].Consumers, a.Manifest().ID)
+		}
+	}
+	var contracts []runtimeprotocol.ProtocolContract
+	for _, a := range r.Host.LiveApps() {
+		if declared, ok := a.(interface {
+			ProtocolContracts() []runtimeprotocol.ProtocolContract
+		}); ok {
+			contracts = append(contracts, declared.ProtocolContracts()...)
+		}
+	}
+	for _, contract := range contracts {
+		p := contract.Protocol()
+		id := p.ID()
+		if byID[id] == nil {
+			byID[id], order = &ProtocolInfo{ID: id, Providers: []string{}, Consumers: []string{}}, append(order, id)
+		}
+		i := byID[id]
+		i.Contract, i.Title, i.Description, i.Declared = &p, contract.Title, contract.Description, true
+		i.Actions, i.Reads, i.Events = nil, p.Reads, p.Events
+		for _, a := range p.Actions {
+			i.Actions = append(i.Actions, a.Schema)
 		}
 	}
 	out := []ProtocolInfo{}

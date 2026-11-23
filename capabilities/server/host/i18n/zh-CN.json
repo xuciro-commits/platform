@@ -2929,5 +2929,16 @@
   "update": "更新",
   "Resources": "资源",
   "Mark the package for uninstall before retiring it": "请先将包标记为待卸载，再执行退役",
-  "The package SHA-256 checksum does not match the expected digest": "产品包的 SHA-256 校验和与预期摘要不符"
+  "The package SHA-256 checksum does not match the expected digest": "产品包的 SHA-256 校验和与预期摘要不符",
+  "Capability contract": "能力契约",
+  "Capability contracts": "能力契约",
+  "Major version": "主版本",
+  "A versioned interface of a capability: its actions, reads and events. Objects implement it through protocol bindings; the tenant chooses which implementation serves it.": "一项能力的带版本接口：动作、读取与事件。对象通过协议绑定实现它，由租户选定用哪个实现。",
+  "Publish this capability contract as its next retained version.": "把这个能力契约发布为它的下一个保留版本。",
+  "A published capability contract keeps its name, major version, actions and their parameters, reads and events; a breaking change needs a new contract name": "已发布的能力契约不能改名字、主版本、动作及其参数、读取与事件；破坏性改动请用新的契约名",
+  "A capability contract needs a lowercase dotted name, a major version from 1 to 999 and a title": "能力契约需要小写、以点分段的名字，1 到 999 的主版本和标题",
+  "A capability contract needs 1–64 actions or reads and at most 64 events": "能力契约需要 1–64 个动作或读取，事件至多 64 个",
+  "Capability contract actions need unique lowercase names and titles": "能力契约的动作需要唯一的小写名字和标题",
+  "Capability contract reads need unique lowercase names": "能力契约的读取需要唯一的小写名字",
+  "Capability contract events need unique lowercase names and titles": "能力契约的事件需要唯一的小写名字和标题"
 }
