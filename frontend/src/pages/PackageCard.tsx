@@ -60,7 +60,7 @@ const listingLabels: Record<string, string> = {
 };
 
 const officialCovers = new Set(["crm", "helpdesk", "hr-core", "party", "uom"]);
-const coverBase = "https://raw.githubusercontent.com/xuciro-commits/platform-packages/cdc2e70089f688ffdb4050d9322d8597b251e6e2/";
+const coverBase = "https://raw.githubusercontent.com/xuciro-commits/platform-packages/3a13d89d9183add8a5d5e2faa248bc67c43dd039/";
 function coverFor(id: string, source: "index" | "official") {
   if (source === "index") {
     if (id === "crm") return coverBase + "marketplace/covers/crm-index.avif";
