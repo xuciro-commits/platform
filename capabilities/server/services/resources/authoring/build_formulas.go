@@ -26,6 +26,15 @@ func computeRulesOf(o ontology.Object, lookup func(string) (platform.RecordTypeI
 		if orderErr != nil {
 			return platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, orderErr.Error())
 		}
+		if previous == nil {
+			for _, f := range defaults {
+				if f.From == nil {
+					if err := applyDefault(c, f, record, now); err != nil {
+						return err
+					}
+				}
+			}
+		}
 		for _, f := range followed {
 			if err := follow(c, o, f, lookup, record, previous, now); err != nil {
 				return err
@@ -33,8 +42,10 @@ func computeRulesOf(o ontology.Object, lookup func(string) (platform.RecordTypeI
 		}
 		if previous == nil {
 			for _, f := range defaults {
-				if err := applyDefault(c, f, record, now); err != nil {
-					return err
+				if f.From != nil {
+					if err := applyDefault(c, f, record, now); err != nil {
+						return err
+					}
 				}
 			}
 		}
@@ -155,6 +166,9 @@ func follow(c platform.Caller, o ontology.Object, f ontology.Field, lookup func(
 		return platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "Field {field}: {reason} / 字段 {field}：{reason}", f.Name, err.Error(), f.Name, err.Error())
 	}
 	if result.Value.Status != "value" {
+		if f.Required && f.Default == "" {
+			return c.RefuseFields([]platform.FieldIssue{{Code: "required", Message: "Enter a value.", Path: []string{f.Name}}})
+		}
 		target.SetZero()
 		return nil
 	}

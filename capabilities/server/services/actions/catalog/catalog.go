@@ -67,6 +67,10 @@ func EntityActions(e platform.RecordType) []platform.Action {
 		createField := field
 		if f.Default != "" {
 			createField.Default = defaultPayload(f.Type, f.Default)
+			createField.Required = createField.Required && f.Type == "money"
+		}
+		if f.Provenance == "from" {
+			createField.Required = false
 		}
 		fields = append(fields, createField)
 		field.Required = false
