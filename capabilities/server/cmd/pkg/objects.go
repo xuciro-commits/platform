@@ -22,6 +22,9 @@ func checkObjectActions(body *object) error {
 	if err := describes(declared); err != nil {
 		return err
 	}
+	if refusal := ontology.CheckReferenceRecords(&declared); refusal != nil {
+		return fmt.Errorf("%s: %s", declared.Type(), refusal.Message)
+	}
 	return ontology.CheckProcess(declared, authoring.ID, declared.Type(), authoring.Builder, authoring.User, protocol.FunctionCallType, nil)
 }
 

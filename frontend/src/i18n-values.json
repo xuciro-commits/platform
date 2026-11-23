@@ -367,5 +367,6 @@
   "Dependency": "依赖",
   "Clear demo data": "清理演示数据",
   "Demo data cleared": "演示数据已清理",
-  "This archives the sample records installed with this app. Your settings, reference data, and any records you created stay.": "这会归档随本应用安装的演示记录。你的设置、参考数据以及你自己创建的记录都会保留。"
+  "This archives the sample records installed with this app. Your settings, reference data, and any records you created stay.": "这会归档随本应用安装的演示记录。你的设置、参考数据以及你自己创建的记录都会保留。",
+  "Master data": "主数据"
 }

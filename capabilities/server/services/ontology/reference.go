@@ -24,7 +24,7 @@ func HandlesPackageDemo(names []string) bool {
 	return slices.ContainsFunc(names, func(name string) bool { return slices.Contains(packageDemoEvents, name) })
 }
 
-func checkReferenceRecords(o *Object) *platform.Error {
+func CheckReferenceRecords(o *Object) *platform.Error {
 	invalid := pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT
 	if len(o.Records) > referenceLimit {
 		return platform.Refuse(invalid, "An object type ships at most {count} reference records", referenceLimit)
@@ -37,9 +37,16 @@ func checkReferenceRecords(o *Object) *platform.Error {
 			return platform.Refuse(invalid, "Each reference record is an object with its own id")
 		}
 		seen[id] = true
-		for key := range row {
-			if key != "id" && !slices.ContainsFunc(o.Fields, func(f Field) bool { return f.Name == key }) {
+		for key, raw := range row {
+			if key == "id" {
+				continue
+			}
+			k := slices.IndexFunc(o.Fields, func(f Field) bool { return f.Name == key })
+			if k < 0 {
 				return platform.Refuse(invalid, "Reference record {id} names the unknown field {field}", id, key)
+			}
+			if !referenceValueFits(o.Fields[k].Type, raw) {
+				return platform.Refuse(invalid, "Reference record {id} gives {field} a value that is not a {type}", id, key, o.Fields[k].Type)
 			}
 		}
 	}
@@ -137,4 +144,29 @@ func ClearSeed(c platform.Caller, pkgID string, seeds []json.RawMessage, model f
 		}
 	}
 	return nil
+}
+
+func referenceValueFits(kind string, raw json.RawMessage) bool {
+	var value any
+	if json.Unmarshal(raw, &value) != nil {
+		return false
+	}
+	if value == nil {
+		return true
+	}
+	switch kind {
+	case "integer", "decimal":
+		_, ok := value.(float64)
+		return ok
+	case "boolean":
+		_, ok := value.(bool)
+		return ok
+	case "text", "longtext", "choice", "reference", "member", "date", "datetime":
+		_, ok := value.(string)
+		return ok
+	case "money":
+		_, ok := value.(map[string]any)
+		return ok
+	}
+	return true
 }

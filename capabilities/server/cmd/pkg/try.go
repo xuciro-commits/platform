@@ -228,7 +228,44 @@ func (tr *trial) install(b built) error {
 	if err := tr.submit(controlowner.PlatformApp, packages.SchemaPackageInstall, protocol.PackageType, b.id, map[string]any{"id": b.id, "version": b.version}); err != nil {
 		return fmt.Errorf("%s@%s: install refused: %w", b.id, b.version, err)
 	}
+	tr.settle()
+	if err := tr.referenceRecords(b); err != nil {
+		return fmt.Errorf("%s@%s: %w", b.id, b.version, err)
+	}
 	fmt.Fprintf(tr.out, "installed %s@%s (%d resources) in %s\n", b.id, b.version, b.assets, time.Since(started).Round(time.Millisecond))
+	return nil
+}
+
+func (tr *trial) referenceRecords(b built) error {
+	var artifact struct {
+		Blueprint struct {
+			Assets []struct {
+				Ref  platform.AssetRef `json:"ref"`
+				Body struct {
+					Records []struct {
+						ID string `json:"id"`
+					} `json:"records"`
+				} `json:"body"`
+			} `json:"assets"`
+		} `json:"blueprint"`
+	}
+	if err := json.Unmarshal([]byte(b.artifact), &artifact); err != nil {
+		return err
+	}
+	var missing []string
+	for _, asset := range artifact.Blueprint.Assets {
+		if asset.Ref.Kind != platform.AssetObject {
+			continue
+		}
+		for _, row := range asset.Body.Records {
+			if _, err := tr.record(asset.Ref.Name + "/" + row.ID); err != nil {
+				missing = append(missing, asset.Ref.Name+"/"+row.ID)
+			}
+		}
+	}
+	if len(missing) > 0 {
+		return fmt.Errorf("the install did not write these reference records: %s", strings.Join(missing, ", "))
+	}
 	return nil
 }
 
@@ -486,23 +523,95 @@ func try(dirs []string, scriptPath string, out io.Writer) error {
 }
 
 func installCheck(dirs []string, checked []built, out io.Writer) error {
+	order, err := installOrder(checked)
+	if err != nil {
+		return err
+	}
 	if len(dirs) != 1 || !exists(filepath.Join(dirs[0], tryFile)) {
 		tr, err := newTrial(tryScript{}, time.Now().UTC().Truncate(time.Second), out)
 		if err != nil {
 			return err
 		}
-		for _, b := range checked {
-			if err := tr.install(b); err != nil {
+		for _, i := range order {
+			if err := tr.install(checked[i]); err != nil {
 				return err
 			}
 		}
 	}
-	for _, dir := range dirs {
-		if exists(filepath.Join(dir, tryFile)) {
-			if err := try([]string{dir}, "", out); err != nil {
-				return err
+	for i, dir := range dirs {
+		if !exists(filepath.Join(dir, tryFile)) {
+			continue
+		}
+		needed := requiredBy(checked, i)
+		var chain []string
+		for _, k := range order {
+			if needed[checked[k].id] {
+				chain = append(chain, dirs[k])
 			}
+		}
+		if err := try(append(chain, dir), "", out); err != nil {
+			return err
 		}
 	}
 	return nil
+}
+
+func requiredID(need string) string {
+	id, _, _ := strings.Cut(need, "@")
+	return strings.TrimSpace(id)
+}
+
+func requiredBy(checked []built, i int) map[string]bool {
+	byID := map[string]int{}
+	for k, b := range checked {
+		byID[b.id] = k
+	}
+	needed := map[string]bool{}
+	pending := slices.Clone(checked[i].lock.Requires)
+	for len(pending) > 0 {
+		id := requiredID(pending[0])
+		pending = pending[1:]
+		k, known := byID[id]
+		if needed[id] || !known {
+			continue
+		}
+		needed[id] = true
+		pending = append(pending, checked[k].lock.Requires...)
+	}
+	return needed
+}
+
+func installOrder(checked []built) ([]int, error) {
+	byID := map[string]int{}
+	for k, b := range checked {
+		byID[b.id] = k
+	}
+	state := make([]int, len(checked))
+	var order []int
+	var visit func(int) error
+	visit = func(k int) error {
+		switch state[k] {
+		case 1:
+			return fmt.Errorf("%s: requires form a cycle", checked[k].id)
+		case 2:
+			return nil
+		}
+		state[k] = 1
+		for _, need := range checked[k].lock.Requires {
+			if dep, known := byID[requiredID(need)]; known {
+				if err := visit(dep); err != nil {
+					return err
+				}
+			}
+		}
+		state[k] = 2
+		order = append(order, k)
+		return nil
+	}
+	for k := range checked {
+		if err := visit(k); err != nil {
+			return nil, err
+		}
+	}
+	return order, nil
 }

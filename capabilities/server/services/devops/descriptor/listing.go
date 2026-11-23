@@ -16,7 +16,7 @@ var Industries = []string{
 
 var Capabilities = []string{
 	"sales", "marketing", "service", "hr", "payroll", "accounting", "inventory", "purchasing", "production",
-	"projects", "assets", "maintenance", "quality", "learning", "knowledge", "lending", "operations",
+	"projects", "assets", "maintenance", "quality", "learning", "knowledge", "lending", "operations", "master-data",
 }
 
 var Stages = []string{"stable", "preview", "test"}

@@ -44,7 +44,7 @@ const listingLabels: Record<string, string> = {
   nonprofit: "Nonprofit", "public-sector": "Public sector", sales: "Sales", marketing: "Marketing", service: "Service", hr: "HR",
   payroll: "Payroll", accounting: "Accounting", inventory: "Inventory", purchasing: "Purchasing", production: "Production",
   projects: "Project management", assets: "Assets", maintenance: "Maintenance", quality: "Quality", learning: "Learning",
-  knowledge: "Knowledge management", lending: "Lending", operations: "Business operations",
+  knowledge: "Knowledge management", lending: "Lending", operations: "Business operations", "master-data": "Master data",
 };
 
 export function listingLabel(value: string) {
