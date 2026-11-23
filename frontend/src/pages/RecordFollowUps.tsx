@@ -9,7 +9,7 @@ import { useRecordHref } from "../apps/entries";
 import { type Api, useRead, useReads } from "../host";
 import { t } from "../i18n";
 import { ActionDialog } from "./ActionDialog";
-import { stepIntent, useAct } from "./act";
+import { reasonOf, send, stepIntent, useAct } from "./act";
 import { type Described, describe } from "./describe";
 import { DotMark } from "./DotMark";
 import { iconOf } from "./icons";
@@ -21,6 +21,8 @@ type Source = { described: Described; field: string };
 
 export type FollowUp = {
   key: string;
+  type: string;
+  pinned: boolean;
   at: string;
   by: string;
   icon: ReturnType<typeof iconOf>;
@@ -52,6 +54,7 @@ export function useFollowUps(described: Described, id: string, entities: Api.Ent
       const page = reads.data[index];
       const due = source.entity.fields.find((field) => field.type === "date" || field.type === "datetime");
       const body = source.entity.fields.find((field) => field.type === "longtext" && !field.readOnly);
+      const pin = source.field("pinned")?.type === "boolean" && source.editable.has("pinned") ? source.edit : undefined;
       for (const row of page.records as Row[]) {
         const values = Object.fromEntries(Object.entries(row).map(([key, value]) => [key, plain(value)]));
         const lifecycle = source.lifecycle;
@@ -60,8 +63,12 @@ export function useFollowUps(described: Described, id: string, entities: Api.Ent
         const allowed = (schema: string) => page.actions?.[row.id]?.some((action) => action.schema === schema && action.allowed);
         const name = source.name(values, row.id);
         const steps = source.steps.filter(({ transition, action }) => transition.from.includes(current) && allowed(action.schema));
+        const pinned = values.pinned === true;
+        const toggle = pin && allowed(pin.schema) ? () => send(pin, row.id, { pinned: !pinned }, row.revision).catch((problem) => setFailure(reasonOf(problem))) : undefined;
         items.push({
           key: `${source.type}/${row.id}`,
+          type: source.type,
+          pinned,
           at: row.changed?.at ?? row.created?.at ?? "",
           by: row.created?.by ?? "",
           icon: iconOf(source.entity.icon, RectangleGroupIcon),
@@ -71,8 +78,9 @@ export function useFollowUps(described: Described, id: string, entities: Api.Ent
           state: state && { label: t(state.title), dot: dots[(state.tone ?? "neutral") as keyof typeof dots] ?? dots.neutral },
           due: due && values[due.name] ? present(due, values[due.name]) : undefined,
           text: body && values[body.name] ? String(values[body.name]) : undefined,
-          actions: steps.length ? (
+          actions: steps.length || toggle ? (
             <HStack gap={1} wrap="wrap">
+              {toggle && <Button label={pinned ? t("Unpin") : t("Pin")} variant="ghost" size="sm" onClick={() => void toggle()} />}
               {steps.map((step) => (
                 <Button key={step.action.schema} label={t(step.transition.title)} variant="secondary" size="sm"
                   onClick={() => act.run(stepIntent(source, step, current, { id: row.id, revision: row.revision, name }, { onRefused: setFailure }))} />
@@ -96,7 +104,8 @@ export function useFollowUps(described: Described, id: string, entities: Api.Ent
       )}
     </>
   );
-  return { items, adders, element, people, failure, loading: reads.status === "loading" };
+  const kinds = sources.map(({ described: source }) => ({ value: source.type, label: t(source.entity.plural) }));
+  return { items, adders, element, people, kinds, failure, loading: reads.status === "loading" };
 }
 
 export function FollowUpBody({ item }: { item: FollowUp }) {

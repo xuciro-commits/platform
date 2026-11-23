@@ -601,4 +601,26 @@ test("crm timeline: tasks and notes attached to a deal show in its activity, and
   await expect(page.getByRole("main").getByRole("link", { name: "时间线里新建的任务", exact: true })).toHaveCount(0);
 });
 
+test("crm timeline: a note added on a deal can be pinned above the timeline, and the timeline filters to one kind", async ({ page }) => {
+  await page.goto("/");
+  await page.getByRole("button", { name: "manager-1 · crm" }).click();
+  await page.goto("/crm/crm.deal/DEL-003/activity");
+  await page.getByRole("button", { name: "Add Note", exact: true }).click();
+  const dialog = page.getByRole("dialog");
+  await dialog.getByRole("textbox", { name: "Title" }).fill("要置顶的备注");
+  await dialog.getByRole("button", { name: "Create", exact: true }).click();
+  await expect(dialog).toBeHidden();
+  const main = page.getByRole("main");
+  await main.getByRole("button", { name: "Pin", exact: true }).first().click();
+  const pinned = page.getByRole("list", { name: "Pinned" });
+  await expect(pinned.getByRole("link", { name: "要置顶的备注", exact: true })).toBeVisible();
+  await page.getByRole("radio", { name: "Tasks" }).click();
+  await expect(pinned).toHaveCount(0);
+  await page.getByRole("radio", { name: "Notes" }).click();
+  await expect(pinned.getByRole("link", { name: "要置顶的备注", exact: true })).toBeVisible();
+  await pinned.getByRole("listitem").filter({ hasText: "要置顶的备注" }).getByRole("button", { name: "Unpin", exact: true }).click();
+  await expect(pinned.getByRole("link", { name: "要置顶的备注", exact: true })).toHaveCount(0);
+  await expect(main.getByRole("link", { name: "要置顶的备注", exact: true })).toBeVisible();
+});
+
 });

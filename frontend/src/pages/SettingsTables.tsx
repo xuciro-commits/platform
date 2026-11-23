@@ -10,9 +10,11 @@ import { Skeleton } from "@astryxdesign/core/Skeleton";
 import { Table, type TableColumn, pixel, proportional } from "@astryxdesign/core/Table";
 import { Text } from "@astryxdesign/core/Text";
 import { colorVars, radiusVars } from "@astryxdesign/core/theme/tokens.stylex";
-import { ArchiveBoxIcon, ArrowDownIcon, ArrowUpIcon, Cog6ToothIcon, PlusIcon } from "@heroicons/react/24/outline";
+import { createReorderable } from "@astryxdesign/core";
+import { List, ListItem } from "@astryxdesign/core/List";
+import { ArchiveBoxIcon, Cog6ToothIcon, PlusIcon } from "@heroicons/react/24/outline";
 import * as stylex from "@stylexjs/stylex";
-import { useMemo, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import { type Api, useRead } from "../host";
 import { t } from "../i18n";
 import { ActionDialog } from "./ActionDialog";
@@ -30,6 +32,8 @@ type Row = Record<string, unknown> & { id: string; revision?: number };
 
 const styles = stylex.create({
   wash: { backgroundColor: colorVars["--color-background-body"] },
+  cell: (width: number) => ({ width, flexShrink: 0, minWidth: 0 }),
+  first: { flexGrow: 1, minWidth: 160 },
   tile: {
     display: "grid",
     placeItems: "center",
@@ -58,20 +62,28 @@ function Group({ described, isOpen, onOpenChange }: { described: Described; isOp
   const ordered = described.field("position")?.type === "integer" && view.sort[0]?.sortKey === "position" && Boolean(edit);
   const fields = view.columns.flatMap((name) => (name === "position" && ordered ? [] : described.field(name) ?? []));
 
-  const move = async (index: number, by: -1 | 1) => {
-    const here = rows[index];
-    const there = rows[index + by];
-    if (!edit || !here || !there) return;
-    const mine = Number(plain(here.position));
-    const theirs = Number(plain(there.position));
+  const [pending, setPending] = useState<string[]>();
+  const shown = pending ? pending.flatMap((key) => rows.find((row) => row.id === key) ?? []) : rows;
+  const reorder = async (key: string, to: number) => {
+    if (!edit) return;
+    const keys = shown.map((row) => row.id).filter((other) => other !== key);
+    keys.splice(to, 0, key);
+    setPending(keys);
     setFailure("");
     try {
-      await send(edit, here.id, { position: theirs === mine ? mine + by : theirs }, Number(here.revision));
-      await send(edit, there.id, { position: mine }, Number(there.revision));
+      for (const [index, id] of keys.entries()) {
+        const row = rows.find((candidate) => candidate.id === id);
+        if (row && Number(plain(row.position)) !== index + 1) await send(edit, id, { position: index + 1 }, Number(row.revision));
+      }
     } catch (problem) {
       setFailure(reasonOf(problem));
+    } finally {
+      setPending(undefined);
     }
   };
+  const latest = useRef(reorder);
+  latest.current = reorder;
+  const reorderable = useMemo(() => createReorderable({ onReorder: ({ key, to }) => void latest.current(String(key), to) }), []);
 
   const cell = (field: Api.FieldInfo) => (row: Row) => {
     const name = refs[field.name]?.[String(plain(row[field.name]))];
@@ -96,17 +108,12 @@ function Group({ described, isOpen, onOpenChange }: { described: Described; isOp
     {
       key: "__row",
       header: "",
-      width: pixel(ordered ? 116 : 44),
+      width: pixel(44),
       align: "end",
       renderCell: (row) => {
-        const index = rows.indexOf(row);
         const name = described.name(row, row.id);
         return (
           <HStack gap={0} hAlign="end">
-            {ordered && <IconButton label={`${t("Move up")} ${name}`} tooltip={t("Move up")} variant="ghost" size="sm" icon={<Icon icon={ArrowUpIcon} size="sm" />}
-              isDisabled={index <= 0} onClick={() => void move(index, -1)} />}
-            {ordered && <IconButton label={`${t("Move down")} ${name}`} tooltip={t("Move down")} variant="ghost" size="sm" icon={<Icon icon={ArrowDownIcon} size="sm" />}
-              isDisabled={index < 0 || index >= rows.length - 1} onClick={() => void move(index, 1)} />}
             {archive && allowed(row.id, archive.schema) && (
               <IconButton label={`${t("Archive")} ${name}`} tooltip={t("Archive")} variant="ghost" size="sm" icon={<Icon icon={ArchiveBoxIcon} size="sm" />}
                 onClick={() => act.run({ action: archive, id: row.id, revision: Number(row.revision), label: t("Archive"), name, reversible: false, onRefused: setFailure })} />
@@ -135,7 +142,24 @@ function Group({ described, isOpen, onOpenChange }: { described: Described; isOp
           {entity.description && <Text type="supporting" color="secondary">{t(entity.description)}</Text>}
           {failure && <Banner status="error" title={t("Not saved")} description={failure} />}
           {read.status === "loading" ? <Skeleton height={96} /> : (
-            <Table data={rows} columns={columns} idKey="id" density="compact" dividers="rows" textOverflow="truncate" />
+            ordered ? (
+              <List reorderable={reorderable} density="compact" edge="bleed" hasDividers>
+                {shown.map((row) => (
+                  <ListItem
+                    key={row.id}
+                    itemKey={row.id}
+                    label={
+                      <HStack gap={3} vAlign="center">
+                        {fields.map((field, index) => (
+                          <HStack key={field.name} xstyle={index === 0 ? styles.first : styles.cell(field.type === "longtext" ? 280 : 160)}>{cell(field)(row)}</HStack>
+                        ))}
+                      </HStack>
+                    }
+                    endContent={columns[columns.length - 1].renderCell?.(row)}
+                  />
+                ))}
+              </List>
+            ) : <Table data={rows} columns={columns} idKey="id" density="compact" dividers="rows" textOverflow="truncate" />
           )}
           {described.create && (
             <HStack paddingInline={2} paddingBlockEnd={1}>

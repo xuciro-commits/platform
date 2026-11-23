@@ -156,8 +156,8 @@ export default recordList({
 | `BoardView` | 看板：按可编辑的选项字段分列，没有记录也列出每一列；拖卡即提交编辑动作；列头加号在那一列新建 | 官方 `kanban-board` |
 | `CalendarView` | 日历：按日期字段排进月格（周一起），只取可见六周的记录，拖到另一天即提交编辑动作；拖动与看板共用 `drag.ts` | 官方 `Calendar` 的 `useCalendarDays`、`useCalendarNavigation` |
 | `RecordPeek` | 记录侧滑抽屉：点引用字段与列表详情共用，显示页头、状态、字段、主动作与“打开完整页面”，Esc 关闭并回焦 | 官方 `Drawer`、`DrawerHeader` |
-| `RecordPage` | 记录页：页头、页签（字段、活动、关联、文件）、右栏。活动按时间合并历史、活动事件、评论与挂在这条记录上的记录（以 `oneOf` 引用它的类型，如活动、备注），后者可就地新建与执行状态动作；关联与附件分别读宿主小节，页签进地址 | 官方 `work-item-detail`、`detail-page` |
-| `SettingsTables` | 设置页：应用菜单里 `layout: settings` 的分组合成一页，每个对象一张可折叠的就地编辑表，按 `position` 排序的可上移下移 | 官方 `table-collapsible` |
+| `RecordPage` | 记录页：页头、页签（字段、活动、关联、文件）、右栏。活动是一条按类型可过滤的事件流：历史、评论与挂在这条记录上的记录（`oneOf` 引用它的类型），后者可就地新建、执行状态动作与置顶；关联与附件分别读宿主小节，页签进地址 | 官方 `work-item-detail`、`detail-page` |
+| `SettingsTables` | 设置页：应用菜单里 `layout: settings` 的分组合成一页，每个对象一张可折叠的就地编辑表；按 `position` 排序的对象改用可拖动的列表（把手可键盘上下移） | 官方 `table-collapsible`、`createReorderable` |
 | `Transitions` | 记录页头的状态流转：按类型的生命周期给出当前可做的转换，没有时把声明的状态不变动作提为主动作；有参数开表单，无参数且回不去的先确认 | 官方 `AlertDialog` |
 | `RecordFields` | 记录页的属性区：按分节排 `PropertyField`，一次提交一个字段，没填的可选字段收起 | 官方表单组件的组合 |
 | `ActionDialog` | 按动作参数生成的表单对话框 | 官方对话框与表单组件的组合 |

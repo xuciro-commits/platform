@@ -5,6 +5,7 @@ import { Card } from "@astryxdesign/core/Card";
 import { Icon } from "@astryxdesign/core/Icon";
 import { HStack, StackItem, VStack } from "@astryxdesign/core/Layout";
 import { Switch } from "@astryxdesign/core/Switch";
+import { SegmentedControl, SegmentedControlItem } from "@astryxdesign/core/SegmentedControl";
 import { Text } from "@astryxdesign/core/Text";
 import { TextArea } from "@astryxdesign/core/TextArea";
 import { Timestamp } from "@astryxdesign/core/Timestamp";
@@ -69,6 +70,7 @@ function collapse(events: Event[]): TimelineItem[] {
 
 export function RecordActivity({ described, id, comments, catalog, entities }: { described: Described; id: string; comments: Section; catalog: Api.Action[]; entities: Api.EntityInfo[] }) {
   const follow = useFollowUps(described, id, entities, catalog);
+  const [only, setOnly] = useState("all");
   const target = `${described.type}/${id}`;
   const root = `/v1/records/${described.type}/${encodeURIComponent(id)}/sections`;
   const activity = useRead<Api.RecordSectionView>(`${root}/activity`);
@@ -148,9 +150,12 @@ export function RecordActivity({ described, id, comments, catalog, entities }: {
       events.push({ kind: "comment", key: message.id, at: message.created.at, by: message.by, text: message.text });
     }
   }
-  for (const item of follow.items) events.push({ kind: "followup", key: item.key, at: item.at, by: item.by, item });
+  const pinned = follow.items.filter((item) => item.pinned && (only === "all" || only === item.type));
+  for (const item of follow.items) if (!item.pinned) events.push({ kind: "followup", key: item.key, at: item.at, by: item.by, item });
   events.sort((a, b) => Date.parse(b.at) - Date.parse(a.at));
-  const items = collapse(events);
+  const sort = (event: Event) => event.kind === "followup" ? event.item.type : event.kind === "comment" ? "comments" : "changes";
+  const items = collapse(only === "all" ? events : events.filter((event) => sort(event) === only));
+  const filters = [{ value: "all", label: t("All") }, ...follow.kinds, { value: "changes", label: t("Changes") }, ...(comments.status === "ready" ? [{ value: "comments", label: t("Comments") }] : [])];
   const sources = [activity, history, comments];
   const unavailable = sources.find((entry) => entry.status === "error" || entry.status === "refused");
   const loading = sources.some((entry) => entry.status === "loading") || follow.loading;
@@ -181,6 +186,24 @@ export function RecordActivity({ described, id, comments, catalog, entities }: {
         </VStack>
       )}
       {follow.adders.length > 0 && <HStack gap={2} wrap="wrap">{follow.adders}</HStack>}
+      {follow.kinds.length > 0 && (
+        <SegmentedControl size="sm" label={t("Show")} value={only} onChange={setOnly}>
+          {filters.map((filter) => <SegmentedControlItem key={filter.value} value={filter.value} label={filter.label} />)}
+        </SegmentedControl>
+      )}
+      {pinned.length > 0 && (
+        <VStack gap={2} role="list" aria-label={t("Pinned")}>
+          <Text type="label" color="secondary">{t("Pinned")}</Text>
+          {pinned.map((item) => (
+            <Card key={item.key} padding={3}>
+              <VStack gap={2} role="listitem">
+                <Text type="supporting" color="secondary">{item.kind}</Text>
+                <FollowUpBody item={item} />
+              </VStack>
+            </Card>
+          ))}
+        </VStack>
+      )}
       {follow.failure && <Banner status="error" title={t("Not done")} description={follow.failure} />}
       {follow.element}
       {stays.length > 0 && (
