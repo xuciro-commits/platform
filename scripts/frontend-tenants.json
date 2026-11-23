@@ -308,6 +308,24 @@
         "roles": {
           "crm": "salesmanager"
         }
+      },
+      {
+        "id": "rep-1",
+        "subjects": [
+          "rep"
+        ],
+        "roles": {
+          "crm": "salesrep"
+        }
+      },
+      {
+        "id": "rep-2",
+        "subjects": [
+          "rep2"
+        ],
+        "roles": {
+          "crm": "salesrep"
+        }
       }
     ]
   }

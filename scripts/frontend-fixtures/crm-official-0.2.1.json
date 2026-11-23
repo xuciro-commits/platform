@@ -1,6 +1,6 @@
 {
   "id": "crm",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "title": "CRM",
   "namespace": "crm",
   "description": "Leads with response times and qualification, a stage-based pipeline where every open deal has a next step, accounts and contacts with roles on each deal, products, activities, win and loss analysis, and a sales dashboard.",
@@ -9356,6 +9356,432 @@
             },
             "format": "platform.page.web.v1"
           }
+        }
+      }
+    ],
+    "seed": [
+      {
+        "type": "crm.competitor",
+        "id": "demo-competitor-1",
+        "values": {
+          "title": "LegacySuite CRM",
+          "website": "https://legacysuite.example",
+          "strengths": "Broad partner network and familiar reporting templates.",
+          "weaknesses": "Slow customization cycle and high per-seat licensing cost.",
+          "howtowin": "Highlight fast object modeling, transparent pricing, and unified workflow automation."
+        }
+      },
+      {
+        "type": "crm.account",
+        "id": "demo-account-1",
+        "values": {
+          "name": "Northwind Precision Manufacturing",
+          "website": "https://northwind-mfg.example",
+          "phone": "+1-555-0141",
+          "industry": "manufacturing",
+          "territory": "apac",
+          "employees": "201-500",
+          "revenue": {
+            "amount": 4800000000,
+            "currency": "CNY"
+          },
+          "relationship": "customer",
+          "description": "Precision CNC and industrial automation supplier modernizing regional sales operations."
+        }
+      },
+      {
+        "type": "crm.account",
+        "id": "demo-account-2",
+        "values": {
+          "name": "Harborline Logistics Group",
+          "website": "https://harborline.example",
+          "phone": "+1-555-0142",
+          "industry": "logistics",
+          "territory": "emea",
+          "employees": "501-1000",
+          "revenue": {
+            "amount": 12000000000,
+            "currency": "CNY"
+          },
+          "relationship": "prospect",
+          "description": "Multi-hub freight operator evaluating a unified pipeline across three regional branches."
+        }
+      },
+      {
+        "type": "crm.account",
+        "id": "demo-account-3",
+        "values": {
+          "name": "Clearview Cloud Labs",
+          "website": "https://clearview-labs.example",
+          "phone": "+1-555-0143",
+          "industry": "software",
+          "territory": "americas",
+          "employees": "51-200",
+          "revenue": {
+            "amount": 1800000000,
+            "currency": "CNY"
+          },
+          "relationship": "partner",
+          "description": "Independent software vendor co-selling vertical workflow solutions."
+        }
+      },
+      {
+        "type": "crm.contact",
+        "id": "demo-contact-1",
+        "values": {
+          "fullname": "Lin Hao",
+          "account": "demo-account-1",
+          "jobtitle": "VP of Sales Operations",
+          "email": "lin.hao@northwind-mfg.example",
+          "mobile": "+1-555-0191",
+          "notes": "Primary executive sponsor for the Q4 commercial rollout."
+        }
+      },
+      {
+        "type": "crm.contact",
+        "id": "demo-contact-2",
+        "values": {
+          "fullname": "Maya Patel",
+          "account": "demo-account-2",
+          "jobtitle": "Head of Commercial Systems",
+          "email": "maya.patel@harborline.example",
+          "mobile": "+1-555-0192",
+          "notes": "Leading technical evaluation and security review."
+        }
+      },
+      {
+        "type": "crm.contact",
+        "id": "demo-contact-3",
+        "values": {
+          "fullname": "Daniel Brooks",
+          "account": "demo-account-2",
+          "jobtitle": "Finance Director",
+          "email": "daniel.brooks@harborline.example",
+          "mobile": "+1-555-0193",
+          "notes": "Approves multi-year commercial contracts and procurement terms."
+        }
+      },
+      {
+        "type": "crm.contact",
+        "id": "demo-contact-4",
+        "values": {
+          "fullname": "Sofia Alvarez",
+          "account": "demo-account-3",
+          "jobtitle": "Alliances Manager",
+          "email": "sofia.alvarez@clearview-labs.example",
+          "mobile": "+1-555-0194",
+          "notes": "Coordinates joint customer demos and referral deals."
+        }
+      },
+      {
+        "type": "crm.product",
+        "id": "demo-product-1",
+        "values": {
+          "title": "Enterprise Workspace Subscription",
+          "code": "ENT-ANNUAL",
+          "category": "subscription",
+          "price": {
+            "amount": 18000000,
+            "currency": "CNY"
+          },
+          "description": "Annual platform workspace subscription for up to 100 active seats.",
+          "active": true
+        }
+      },
+      {
+        "type": "crm.product",
+        "id": "demo-product-2",
+        "values": {
+          "title": "Implementation & Data Migration",
+          "code": "SVC-ONBOARD",
+          "category": "service",
+          "price": {
+            "amount": 6500000,
+            "currency": "CNY"
+          },
+          "description": "Fixed-scope onboarding, role setup, and historical pipeline migration.",
+          "active": true
+        }
+      },
+      {
+        "type": "crm.product",
+        "id": "demo-product-3",
+        "values": {
+          "title": "Premium Support Add-on",
+          "code": "SUP-PREM",
+          "category": "subscription",
+          "price": {
+            "amount": 3600000,
+            "currency": "CNY"
+          },
+          "description": "Dedicated response SLA and quarterly architecture review.",
+          "active": true
+        }
+      },
+      {
+        "type": "crm.lead",
+        "id": "demo-lead-1",
+        "values": {
+          "fullname": "Zhao Ming",
+          "company": "Eastbridge Instruments",
+          "jobtitle": "Sales Director",
+          "email": "zhao.ming@eastbridge.example",
+          "mobile": "+1-555-0171",
+          "source": "website",
+          "industry": "manufacturing",
+          "territory": "apac",
+          "employees": "51-200",
+          "need": "Replace scattered spreadsheets with a shared sales pipeline and weekly forecast.",
+          "budget": {
+            "amount": 22000000,
+            "currency": "CNY"
+          },
+          "timeframe": "quarter",
+          "authority": "decisionmaker"
+        }
+      },
+      {
+        "type": "crm.lead",
+        "id": "demo-lead-2",
+        "values": {
+          "fullname": "Claire Bennett",
+          "company": "Summit Retail Collective",
+          "jobtitle": "Operations Lead",
+          "email": "claire.bennett@summitretail.example",
+          "mobile": "+1-555-0172",
+          "source": "referral",
+          "industry": "retail",
+          "territory": "americas",
+          "employees": "201-500",
+          "need": "Track wholesale partner accounts and quarterly renewal commitments.",
+          "budget": {
+            "amount": 31000000,
+            "currency": "CNY"
+          },
+          "timeframe": "month",
+          "authority": "influencer"
+        }
+      },
+      {
+        "type": "crm.lead",
+        "id": "demo-lead-3",
+        "values": {
+          "fullname": "Kenji Sato",
+          "company": "Pacific Energy Systems",
+          "jobtitle": "Business Systems Manager",
+          "email": "kenji.sato@pacific-energy.example",
+          "mobile": "+1-555-0173",
+          "source": "event",
+          "industry": "energy",
+          "territory": "apac",
+          "employees": "501-1000",
+          "need": "Standardize regional deal approvals and multi-stakeholder account tracking.",
+          "budget": {
+            "amount": 45000000,
+            "currency": "CNY"
+          },
+          "timeframe": "half",
+          "authority": "decisionmaker"
+        }
+      },
+      {
+        "type": "crm.deal",
+        "id": "demo-deal-1",
+        "values": {
+          "title": "Northwind Regional CRM Expansion",
+          "account": "demo-account-1",
+          "contact": "demo-contact-1",
+          "amount": {
+            "amount": 24500000,
+            "currency": "CNY"
+          },
+          "expectedclose": "2026-12-20",
+          "source": "customer",
+          "competitor": "demo-competitor-1",
+          "stage": "negotiation",
+          "nextstep": "Finalize redlines on annual renewal schedule",
+          "nextstepdue": "2026-11-28"
+        }
+      },
+      {
+        "type": "crm.deal",
+        "id": "demo-deal-2",
+        "values": {
+          "title": "Harborline Multi-Branch Pipeline Rollout",
+          "account": "demo-account-2",
+          "contact": "demo-contact-2",
+          "amount": {
+            "amount": 42000000,
+            "currency": "CNY"
+          },
+          "expectedclose": "2027-01-15",
+          "source": "outbound",
+          "competitor": "demo-competitor-1",
+          "stage": "proposal",
+          "nextstep": "Present pricing breakdown to finance director",
+          "nextstepdue": "2026-12-02"
+        }
+      },
+      {
+        "type": "crm.deal",
+        "id": "demo-deal-3",
+        "values": {
+          "title": "Clearview Partner Enablement Bundle",
+          "account": "demo-account-3",
+          "contact": "demo-contact-4",
+          "amount": {
+            "amount": 14500000,
+            "currency": "CNY"
+          },
+          "expectedclose": "2026-12-10",
+          "source": "partner",
+          "stage": "commit",
+          "nextstep": "Collect signed order form and schedule kickoff",
+          "nextstepdue": "2026-11-26"
+        }
+      },
+      {
+        "type": "crm.deal",
+        "id": "demo-deal-4",
+        "values": {
+          "title": "Harborline APAC Field Sales Pilot",
+          "account": "demo-account-2",
+          "contact": "demo-contact-2",
+          "amount": {
+            "amount": 16000000,
+            "currency": "CNY"
+          },
+          "expectedclose": "2027-02-10",
+          "source": "referral",
+          "stage": "discovery",
+          "nextstep": "Run discovery workshop with regional managers",
+          "nextstepdue": "2026-12-05"
+        }
+      },
+      {
+        "type": "crm.dealcontact",
+        "id": "demo-dealcontact-1",
+        "values": {
+          "deal": "demo-deal-1",
+          "contact": "demo-contact-1",
+          "role": "decisionmaker",
+          "notes": "Confirmed budget allocation for Q4 expansion."
+        }
+      },
+      {
+        "type": "crm.dealcontact",
+        "id": "demo-dealcontact-2",
+        "values": {
+          "deal": "demo-deal-2",
+          "contact": "demo-contact-2",
+          "role": "champion",
+          "notes": "Completed sandbox evaluation with positive feedback."
+        }
+      },
+      {
+        "type": "crm.dealcontact",
+        "id": "demo-dealcontact-3",
+        "values": {
+          "deal": "demo-deal-2",
+          "contact": "demo-contact-3",
+          "role": "decisionmaker",
+          "notes": "Reviewing three-year total cost comparison."
+        }
+      },
+      {
+        "type": "crm.dealline",
+        "id": "demo-dealline-1",
+        "values": {
+          "deal": "demo-deal-1",
+          "product": "demo-product-1",
+          "quantity": 1,
+          "discount": 0
+        }
+      },
+      {
+        "type": "crm.dealline",
+        "id": "demo-dealline-2",
+        "values": {
+          "deal": "demo-deal-1",
+          "product": "demo-product-2",
+          "quantity": 1,
+          "discount": 0
+        }
+      },
+      {
+        "type": "crm.dealline",
+        "id": "demo-dealline-3",
+        "values": {
+          "deal": "demo-deal-2",
+          "product": "demo-product-1",
+          "quantity": 2,
+          "discount": 5
+        }
+      },
+      {
+        "type": "crm.dealline",
+        "id": "demo-dealline-4",
+        "values": {
+          "deal": "demo-deal-2",
+          "product": "demo-product-3",
+          "quantity": 2,
+          "discount": 0
+        }
+      },
+      {
+        "type": "crm.activity",
+        "id": "demo-activity-1",
+        "values": {
+          "subject": "Contract review call with Lin Hao",
+          "kind": "call",
+          "deal": "demo-deal-1",
+          "due": "2026-11-26",
+          "priority": "high",
+          "details": "Walk through final SLA addendum and invoicing milestones."
+        }
+      },
+      {
+        "type": "crm.activity",
+        "id": "demo-activity-2",
+        "values": {
+          "subject": "Executive proposal walkthrough",
+          "kind": "demo",
+          "deal": "demo-deal-2",
+          "due": "2026-11-29",
+          "priority": "high",
+          "details": "Demonstrate pipeline forecasting, role scoping, and deal line quoting."
+        }
+      },
+      {
+        "type": "crm.activity",
+        "id": "demo-activity-3",
+        "values": {
+          "subject": "Qualification discovery call with Eastbridge",
+          "kind": "meeting",
+          "lead": "demo-lead-1",
+          "due": "2026-11-25",
+          "priority": "normal",
+          "details": "Confirm seat count, migration timeline, and approval stakeholders."
+        }
+      },
+      {
+        "type": "crm.note",
+        "id": "demo-note-1",
+        "values": {
+          "title": "Harborline security & procurement checklist",
+          "deal": "demo-deal-2",
+          "pinned": true,
+          "content": "Customer confirmed SSO support and audit trail requirements are satisfied. Procurement requires final quote by early December."
+        }
+      },
+      {
+        "type": "crm.note",
+        "id": "demo-note-2",
+        "values": {
+          "title": "Northwind rollout feedback",
+          "account": "demo-account-1",
+          "pinned": false,
+          "content": "Phase 1 team adopted the Kanban pipeline within one week and requested additional seats for APAC distributors."
         }
       }
     ]

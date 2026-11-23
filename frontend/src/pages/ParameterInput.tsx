@@ -225,7 +225,7 @@ function AttachmentInput({ parameter, value, onChange, label, description }: { p
   );
 }
 
-function MoneyInput({ parameter, value, label, description, status, onChange, labelHidden, control, focused }: ParameterInputProps & {
+function MoneyInput({ parameter, value, label, description, status, onChange, onEnter, labelHidden, control, focused }: ParameterInputProps & {
   label: string;
   description?: string;
   control?: ComponentProps<typeof NumberInput>["controlXstyle"];
@@ -246,6 +246,7 @@ function MoneyInput({ parameter, value, label, description, status, onChange, la
       formatValue={(number) => number.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
       controlXstyle={control}
       onChange={(number) => onChange(Number.isFinite(number) ? { amount: Math.round(number * 100), currency } : "")}
+      onEnter={onEnter}
       hasAutoFocus={focused}
     />
   );
@@ -341,7 +342,7 @@ export function ParameterInput({ parameter, described, value, form, status, onCh
   }
   if (parameter.type === "money") {
     return <MoneyInput parameter={parameter} value={value} label={label} description={description} status={status} onChange={onChange}
-      labelHidden={labelHidden} control={control} focused={focused} />;
+      onEnter={onEnter} labelHidden={labelHidden} control={control} focused={focused} />;
   }
   if (numeric.has(parameter.type)) {
     return (
@@ -356,6 +357,7 @@ export function ParameterInput({ parameter, described, value, form, status, onCh
         formatValue={(number) => number.toLocaleString()}
         controlXstyle={control}
         onChange={onChange}
+        onEnter={onEnter}
         hasAutoFocus={focused}
       />
     );
