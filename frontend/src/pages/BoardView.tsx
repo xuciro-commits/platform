@@ -9,7 +9,7 @@ import { IconButton } from "@astryxdesign/core/IconButton";
 import { PlusIcon } from "@heroicons/react/24/outline";
 import { Timestamp } from "@astryxdesign/core/Timestamp";
 import * as stylex from "@stylexjs/stylex";
-import { type PointerEvent as ReactPointerEvent, type ReactNode, useEffect, useMemo, useState } from "react";
+import { Fragment, type PointerEvent as ReactPointerEvent, type ReactNode, useEffect, useMemo, useRef, useState } from "react";
 import { t } from "../i18n";
 import { dragStyles, useDrag } from "./drag";
 import { useGutter } from "./frame";
@@ -81,6 +81,7 @@ function CardBody({ card }: { card: BoardCard }) {
 
 export function BoardView({ columns, cards, onMove, accepts, onCreate, page, total }: BoardProps) {
   const gutter = useGutter();
+  const columnsScroll = useRef<HTMLDivElement | null>(null);
   const [optimistic, setOptimistic] = useState<Record<string, string>>({});
 
   useEffect(() => {
@@ -112,7 +113,7 @@ export function BoardView({ columns, cards, onMove, accepts, onCreate, page, tot
     () => (Object.keys(optimistic).length === 0 ? cards : cards.map((card) => (card.id in optimistic ? { ...card, column: optimistic[card.id] } : card))),
     [cards, optimistic],
   );
-  const { drag, press, floating, target, item } = useDrag(handleMove, accepts);
+  const { drag, press, floating, landing, target, item } = useDrag(handleMove, accepts, columnsScroll);
 
   const lifted = drag ? shownCards.find((card) => card.id === drag.id) : undefined;
 
@@ -121,6 +122,8 @@ export function BoardView({ columns, cards, onMove, accepts, onCreate, page, tot
   const column = ({ key, label, dot }: BoardProps["columns"][number]): ReactNode => {
     const own = key ? shownCards.filter((card) => card.column === key) : missing;
     const resting = drag ? own.filter((card) => card.id !== drag.id) : own;
+    const liftedIndex = drag ? own.findIndex((card) => card.id === drag.id) : -1;
+    const ghostIndex = drag?.target === key ? (liftedIndex >= 0 ? liftedIndex : resting.length) : -1;
     const sums = new Map<string, number>();
     for (const card of own) {
       if (card.amount === undefined) continue;
@@ -160,21 +163,24 @@ export function BoardView({ columns, cards, onMove, accepts, onCreate, page, tot
               role="region"
               label={label}
               padding={2}
+              xstyle={[dragStyles.target, drag?.target === key && dragStyles.targetOver]}
               ref={target(key)}>
               <VStack gap={2}>
-                {own.length === 0 && !drag && <Text type="supporting" color="secondary">{t("Nothing in this column yet")}</Text>}
-                {resting.map((card) => (
-                  <Card
-                    key={card.id}
-                    padding={3}
-                    xstyle={[dragStyles.item, !onMove && dragStyles.fixed]}
-                    ref={item(card.id)}
-                    onPointerDown={(event: ReactPointerEvent) => press(event, card.id, card.column)}>
-                    <CardBody card={card} />
-                  </Card>
+                {own.length === 0 && ghostIndex < 0 && <Text type="supporting" color="secondary">{t("Nothing in this column yet")}</Text>}
+                {resting.map((card, index) => (
+                  <Fragment key={card.id}>
+                    {drag && ghostIndex === index && <VStack ref={landing} xstyle={dragStyles.ghost(drag.height)} />}
+                    <Card
+                      padding={3}
+                      xstyle={[dragStyles.item, !onMove && dragStyles.fixed]}
+                      ref={item(card.id, key)}
+                      onPointerDown={(event: ReactPointerEvent) => press(event, card.id, card.column)}>
+                      <CardBody card={card} />
+                    </Card>
+                  </Fragment>
                 ))}
+                {drag && ghostIndex === resting.length && <VStack ref={landing} xstyle={dragStyles.ghost(drag.height)} />}
                 {page?.hasMore && <Button label={t("Load more")} variant="secondary" size="sm" isLoading={page.loading} onClick={page.loadMore} />}
-                {drag && drag.target === key && <VStack xstyle={dragStyles.ghost(drag.height)} />}
               </VStack>
             </LayoutContent>
           }
@@ -185,7 +191,7 @@ export function BoardView({ columns, cards, onMove, accepts, onCreate, page, tot
 
   return (
     <>
-      <HStack gap={4} paddingInline={gutter} paddingBlockEnd={gutter} xstyle={styles.columns}>
+      <HStack gap={4} paddingInline={gutter} paddingBlockEnd={gutter} ref={columnsScroll} xstyle={styles.columns}>
         {columns.map(column)}
         {missing.length > 0 && column({ key: "", label: t("None") })}
       </HStack>
