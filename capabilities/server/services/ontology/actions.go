@@ -9,7 +9,7 @@ import (
 	"platformserver/services/resources/publication"
 )
 
-var ValueInputTypes = map[string]string{"text": "string", "longtext": "string", "integer": "integer", "decimal": "number", "date": "date", "datetime": "datetime", "boolean": "boolean", "choice": "string", "reference": "string", "attachment": "attachment"}
+var ValueInputTypes = map[string]string{"text": "string", "longtext": "string", "integer": "integer", "decimal": "number", "date": "date", "datetime": "datetime", "boolean": "boolean", "choice": "string", "reference": "string", "attachment": "attachment", "money": "money"}
 
 func CheckProcess(o Object, app, objectType, builderRole, userRole, functionCallType string, lookup func(string) (platform.RecordTypeInfo, bool)) error {
 	if len(o.States) == 0 && len(o.Actions) > 0 {

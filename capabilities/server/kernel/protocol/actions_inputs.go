@@ -70,6 +70,8 @@ func InputIssues(fields []platform.Field, values map[string]any) []platform.Fiel
 		case "boolean":
 			_, yes := v.(bool)
 			bad = !yes
+		case "money":
+			bad = !validMoney(v, f.Default != nil)
 		}
 		if bad {
 			valid[f.Name] = false
@@ -161,4 +163,20 @@ func InputIssues(fields []platform.Field, values map[string]any) []platform.Fiel
 		}
 	}
 	return issues
+}
+
+func validMoney(v any, currencyOptional bool) bool {
+	fields, ok := v.(map[string]any)
+	if !ok {
+		return false
+	}
+	amount, ok := fields["amount"].(float64)
+	if !ok || math.Trunc(amount) != amount || math.Abs(amount) > 9007199254740991 {
+		return false
+	}
+	currency, ok := fields["currency"].(string)
+	if !ok || currency == "" {
+		return currencyOptional && fields["currency"] == nil
+	}
+	return len(currency) == 3 && strings.ToUpper(currency) == currency
 }

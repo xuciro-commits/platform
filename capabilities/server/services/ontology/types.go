@@ -137,7 +137,7 @@ type Input struct {
 	Name        string                     `json:"name" field:"required" example:"to"`
 	Title       string                     `json:"title" field:"required" title:"Label" example:"Handed to"`
 	Help        string                     `json:"help,omitempty" help:"What to give, shown under the input" example:"Leave empty to create one from the lead"`
-	Type        string                     `json:"type" field:"required" choices:"text,longtext,integer,decimal,date,datetime,boolean,choice,reference,attachment"`
+	Type        string                     `json:"type" field:"required" choices:"text,longtext,integer,decimal,date,datetime,boolean,choice,reference,attachment,money"`
 	Choices     string                     `json:"choices,omitempty" help:"For a choice: the values, comma-separated; value:Label gives one a display name"`
 	Required    bool                       `json:"required,omitempty"`
 }

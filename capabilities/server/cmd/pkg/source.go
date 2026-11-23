@@ -511,6 +511,9 @@ func build(dir string, previous *platform.PackageDescriptor) (built, error) {
 			}
 		}
 		if r.ref.Kind == platform.AssetObject {
+			if err := checkObjectActions(body); err != nil {
+				return built{}, fmt.Errorf("%s: %w", r.path, err)
+			}
 			if _, generated := body.get("schemaVersions"); generated {
 				return built{}, fmt.Errorf("%s: schemaVersions is generated into %s; remove it", r.path, lockFile)
 			}
