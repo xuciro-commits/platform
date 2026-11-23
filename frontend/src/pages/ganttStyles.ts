@@ -67,7 +67,7 @@ export const ganttStyles = stylex.create({
     width,
     flexShrink: 0,
     height: 24,
-    paddingInline: 4,
+    paddingInline: 2,
     whiteSpace: "nowrap",
     overflow: "hidden",
     justifyContent: "center",
@@ -215,6 +215,14 @@ export const ganttStyles = stylex.create({
     zIndex: 3,
     overflow: "hidden",
   }),
+  depGroup: {
+    position: "absolute",
+    insetBlockStart: 0,
+    insetBlockEnd: 0,
+    insetInlineStart: 0,
+    insetInlineEnd: 0,
+    pointerEvents: "none",
+  },
   depSegment: (left: number, top: number, width: number, height: number) => ({
     position: "absolute",
     insetInlineStart: left,

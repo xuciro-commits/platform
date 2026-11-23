@@ -414,7 +414,7 @@ export function GanttView({
               {dependencies.length > 0 && (
                 <VStack xstyle={styles.depLayer(timeline.totalWidth)}>
                   {dependencies.map((dep) => (
-                    <VStack key={dep.key} role="img" aria-label={`${t("Dependency")}: ${dep.fromTitle} → ${dep.toTitle}`}>
+                    <VStack key={dep.key} role="img" aria-label={`${t("Dependency")}: ${dep.fromTitle} → ${dep.toTitle}`} xstyle={styles.depGroup}>
                       {dep.segments.map((seg) => (
                         <VStack key={seg.key} xstyle={styles.depSegment(seg.left, seg.top, seg.width, seg.height)} />
                       ))}

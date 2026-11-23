@@ -97,7 +97,7 @@ test.describe.serial("gantt layout", () => {
     const moved = page.waitForResponse((response) => response.url().endsWith("/v1/submissions") && response.status() === 200);
     await page.mouse.move(boxA.x + boxA.width / 2, boxA.y + boxA.height / 2);
     await page.mouse.down();
-    await page.mouse.move(boxA.x + boxA.width / 2 + 72, boxA.y + boxA.height / 2, { steps: 6 });
+    await page.mouse.move(boxA.x + boxA.width / 2 + 96, boxA.y + boxA.height / 2, { steps: 6 });
     await page.mouse.up();
     await moved;
 

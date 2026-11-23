@@ -41,8 +41,8 @@ export const rowHeight = 36;
 export const nameColumnWidth = 240;
 
 export const dayWidthOf: Record<GanttScale, number> = {
-  day: 36,
-  week: 16,
+  day: 48,
+  week: 18,
   month: 6,
 };
 
