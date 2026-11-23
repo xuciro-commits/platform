@@ -218,6 +218,7 @@ type ApplicationPage struct {
 
 type ApplicationMenuGroup struct {
 	Title   string            `json:"title,omitempty"`
+	Layout  string            `json:"layout,omitempty"`
 	Entries []ApplicationPage `json:"entries"`
 }
 

@@ -3,15 +3,16 @@ import { Divider } from "@astryxdesign/core/Divider";
 import { EmptyState } from "@astryxdesign/core/EmptyState";
 import { useHotkeys } from "@astryxdesign/core/hooks";
 import { HStack } from "@astryxdesign/core/HStack";
-import { ChartPieIcon, RectangleGroupIcon } from "@heroicons/react/24/outline";
+import { ChartPieIcon, Cog6ToothIcon, RectangleGroupIcon } from "@heroicons/react/24/outline";
 import { MobileNav } from "@astryxdesign/core/MobileNav";
 import { useToast } from "@astryxdesign/core/Toast";
 import { Suspense, useEffect, useMemo, useState } from "react";
-import { type App, apps, locate, type NavItem } from "../apps";
+import { type App, apps, locate, type NavItem, type NavSection } from "../apps";
 import { entries, recordHref } from "../apps/entries";
 import { type Api, useRead, useSession } from "../host";
 import { AppDashboard } from "../pages/AppDashboard";
 import { Records } from "../pages/RecordList";
+import { SettingsTables } from "../pages/SettingsTables";
 import { setLanguage, t } from "../i18n";
 import { navigate, useHash, usePath, useSearch } from "../router";
 import { AppRail } from "./AppRail";
@@ -22,9 +23,15 @@ import { legacyTarget } from "./legacy";
 import { SignIn } from "./SignIn";
 import { iconOf } from "../pages/icons";
 
+const slug = (text: string) => text.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "") || "settings";
+
 function installedApps(views: Api.ApplicationView[], entities: Api.EntityInfo[]): App[] {
   return views.flatMap((view) => {
-    const sections = (view.menu ?? []).flatMap((group) => {
+    const sections = (view.menu ?? []).flatMap((group): NavSection[] => {
+      if (group.layout === "settings") {
+        const types = group.entries.flatMap((page) => (page.object ? [page.object] : []));
+        return types.length ? [{ title: "", items: [{ id: `settings-${slug(group.title || "settings")}`, label: group.title || "Settings", icon: Cog6ToothIcon, settings: types }] }] : [];
+      }
       const items = group.entries.flatMap((page): NavItem[] => page.object ? [{
         id: page.name,
         label: page.title,
@@ -93,6 +100,7 @@ export function Shell() {
   const content = retiredLink ? <RetainedRecord key={path} path={path} />
     : Entry ? <Entry key={`${app.id}/${item.id}`} />
     : app.dashboard && item.id === "dashboard" ? <AppDashboard key={app.id} title={app.label} blocks={app.dashboard} listOf={(type) => listOf(app, type)} />
+    : app.group === "installed" && item.settings ? <SettingsTables key={`${app.id}/${item.id}`} title={item.label} types={item.settings} />
     : app.group === "installed" && item.object && listPath ? <Records key={`${app.id}/${item.id}`} declared={{ title: item.label, about: item.description ?? "", type: item.object }} listPath={listPath} id={segments[3]} />
     : null;
   return (

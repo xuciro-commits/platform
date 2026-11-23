@@ -59,7 +59,7 @@ import {
   WrenchScrewdriverIcon,
 } from "@heroicons/react/24/outline";
 
-export type NavItem = { id: string; label: string; icon: IconType; object?: string; description?: string };
+export type NavItem = { id: string; label: string; icon: IconType; object?: string; description?: string; settings?: string[] };
 export type NavSection = { title: string; items: NavItem[] };
 export type RailGroup = "start" | "installed" | "build" | "run" | "manage";
 export type App = { id: string; label: string; icon: IconType; group: RailGroup; sections: NavSection[]; dashboard?: Api.DashboardBlock[] };

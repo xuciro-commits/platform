@@ -372,6 +372,7 @@ export type AppGroup = {
   title: string;
   roles?: string[];
   pages: string[];
+  layout?: string;
 };
 
 export type AppInfo = {
@@ -531,6 +532,7 @@ export type ApplicationMaintenance = {
 
 export type ApplicationMenuGroup = {
   title?: string;
+  layout?: string;
   entries: ApplicationPage[];
 };
 

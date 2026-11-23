@@ -104,21 +104,15 @@ type ApplicationPageReplacement struct {
 	Page string `json:"page"`
 }
 type AppGroup struct {
-	Title string   `json:"title"`
-	Roles []string `json:"roles,omitempty"`
-	Pages []string `json:"pages"`
+	Title  string   `json:"title"`
+	Roles  []string `json:"roles,omitempty"`
+	Pages  []string `json:"pages"`
+	Layout string   `json:"layout,omitempty"`
 }
 
 func IconName(s string) bool {
-	if s == "" || len(s) > 32 || s[0] == '-' || s[len(s)-1] == '-' {
-		return false
-	}
-	for _, r := range s {
-		if r != '-' && (r < 'a' || r > 'z') && (r < '0' || r > '9') {
-			return false
-		}
-	}
-	return !strings.Contains(s, "--")
+	return s != "" && len(s) <= 32 && s[0] != '-' && s[len(s)-1] != '-' && !strings.Contains(s, "--") &&
+		strings.IndexFunc(s, func(r rune) bool { return r != '-' && (r < 'a' || r > 'z') && (r < '0' || r > '9') }) < 0
 }
 
 type Definition struct {

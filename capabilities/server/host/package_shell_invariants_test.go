@@ -41,6 +41,15 @@ func TestInvariantK24InstalledPackageContributesOnlyActiveAuthorizedNavigationAn
 			object["access"] = platform.Raw([]ontology.Access{{Role: ontology.UserRole, Read: "none"}})
 			offer.Blueprint.Assets[i].Body = platform.Raw(object)
 		}
+		if asset.Ref.Kind == platform.AssetApp && asset.Ref.Name == name {
+			var body map[string]json.RawMessage
+			var pages []string
+			if json.Unmarshal(asset.Body, &body) != nil || json.Unmarshal(body["pages"], &pages) != nil {
+				t.Fatal("application body")
+			}
+			body["groups"] = platform.Raw([]platform.AppGroup{{Title: "Orders", Layout: "settings", Pages: pages}})
+			offer.Blueprint.Assets[i].Body = platform.Raw(body)
+		}
 	}
 	preview, err := live.inspectPackage(t.Context(), protocol.PackageInspectRequest{Content: platform.Raw(offer)})
 	if err != nil {
@@ -89,6 +98,9 @@ func TestInvariantK24InstalledPackageContributesOnlyActiveAuthorizedNavigationAn
 			return page.Name == "batchproviderorder" && page.Object == typ
 		}) {
 			t.Fatalf("%s application navigation: %+v", role, view)
+		}
+		if view.Menu[0].Title != "Orders" || view.Menu[0].Layout != "settings" {
+			t.Fatalf("%s menu group keeps its title and layout: %+v", role, view.Menu[0])
 		}
 		hasReceipt := slices.ContainsFunc(view.Menu[0].Entries, func(page protocol.ApplicationPage) bool { return page.Name == "stockreceipt" })
 		if hasReceipt != (role == "builder") {

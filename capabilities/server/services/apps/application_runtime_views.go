@@ -133,7 +133,7 @@ func applicationMenu(groups []platform.AppGroup, pages []protocol.ApplicationPag
 	var menu []protocol.ApplicationMenuGroup
 	used := make(map[string]bool, len(pages))
 	for _, group := range groups {
-		projected := protocol.ApplicationMenuGroup{Title: group.Title}
+		projected := protocol.ApplicationMenuGroup{Title: group.Title, Layout: group.Layout}
 		for _, name := range group.Pages {
 			if page, ok := visible[name]; ok {
 				projected.Entries = append(projected.Entries, page)
