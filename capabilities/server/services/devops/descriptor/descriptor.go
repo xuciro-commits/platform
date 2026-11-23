@@ -99,13 +99,31 @@ func Validate(p platform.PackageDescriptor, withDependencies func(platform.Relea
 		objects[required+".*"] = true
 	}
 	seeded := map[string]bool{}
+	rows := 0
 	for _, raw := range b.Seed {
 		var seed struct {
-			Type   string         `json:"type"`
-			ID     string         `json:"id"`
-			Values map[string]any `json:"values"`
+			Kind   string           `json:"kind"`
+			Type   string           `json:"type"`
+			ID     string           `json:"id"`
+			Values map[string]any   `json:"values"`
+			Rows   []map[string]any `json:"rows"`
 		}
-		if len(raw) > 64<<10 || json.Unmarshal(raw, &seed) != nil || seed.Type == "" || seed.ID == "" || !objects[seed.Type] && !objects[strings.SplitN(seed.Type, ".", 2)[0]+".*"] || seed.Values == nil {
+		known := json.Unmarshal(raw, &seed) == nil && (objects[seed.Type] || objects[strings.SplitN(seed.Type, ".", 2)[0]+".*"])
+		if seed.Kind == "data" {
+			rows += len(seed.Rows)
+			if len(raw) > 64<<10 || !known || len(seed.Rows) == 0 || seed.ID != "" || seed.Values != nil || rows > 20000 {
+				return fmt.Errorf("package data comes in chunks of at most 64 KiB for one object type, with at most 20000 rows in all")
+			}
+			for _, row := range seed.Rows {
+				id, _ := row["id"].(string)
+				if id == "" || seeded[seed.Type+"/"+id] {
+					return fmt.Errorf("package data rows need unique ids")
+				}
+				seeded[seed.Type+"/"+id] = true
+			}
+			continue
+		}
+		if len(raw) > 64<<10 || !known || seed.Kind != "" || seed.ID == "" || seed.Values == nil {
 			return fmt.Errorf("seed records need unique object type and id pairs with bounded JSON object values")
 		}
 		key := seed.Type + "/" + seed.ID

@@ -223,6 +223,7 @@ func (d *Owner) PackageSeed(id string) ([]json.RawMessage, bool) {
 	if held == nil || held.Artifact == "" {
 		return nil, false
 	}
+	descriptor, err := d.sealedPackageDescriptor(held.ID, held.Version, held.Artifact)
 	if held.DemoCleared {
 		seeds := make([]json.RawMessage, 0, len(held.DemoRecords))
 		for _, ref := range held.DemoRecords {
@@ -231,9 +232,14 @@ func (d *Owner) PackageSeed(id string) ([]json.RawMessage, bool) {
 				seeds = append(seeds, platform.Raw(map[string]string{"type": typ, "id": id}))
 			}
 		}
+		if err == nil && descriptor.Blueprint != nil {
+			seeds = append(seeds, slices.DeleteFunc(slices.Clone(descriptor.Blueprint.Seed), func(raw json.RawMessage) bool {
+				var seed struct{ Kind string }
+				return json.Unmarshal(raw, &seed) != nil || seed.Kind != "data"
+			})...)
+		}
 		return seeds, len(seeds) > 0
 	}
-	descriptor, err := d.sealedPackageDescriptor(held.ID, held.Version, held.Artifact)
 	if err != nil || descriptor.Blueprint == nil || len(descriptor.Blueprint.Seed) == 0 {
 		return nil, false
 	}

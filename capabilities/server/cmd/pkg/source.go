@@ -27,6 +27,8 @@ const (
 	lockFile     = "package.lock.json"
 	setupFile    = "setup.yaml"
 	seedFile     = "seed.yaml"
+	dataDir      = "data"
+	dataChunk    = 24 << 10
 	guideFile    = "docs/guide.md"
 	lockFormat   = 2
 )
@@ -335,10 +337,37 @@ func split(artifactPath, dir string) error {
 		}
 	}
 	if seed, ok := blueprint.get("seed"); ok {
-		doc := &object{}
-		doc.set("records", seed)
-		if err := writeYAML(filepath.Join(dir, seedFile), doc); err != nil {
-			return err
+		items, _ := seed.([]any)
+		demo, data := []any{}, map[string][]any{}
+		var types []string
+		for _, item := range items {
+			entry := asObject(item)
+			if entry == nil || text(entry, "kind") != "data" {
+				demo = append(demo, item)
+				continue
+			}
+			typ := text(entry, "type")
+			if _, seen := data[typ]; !seen {
+				types = append(types, typ)
+			}
+			rows, _ := entry.get("rows")
+			list, _ := rows.([]any)
+			data[typ] = append(data[typ], list...)
+		}
+		if len(demo) > 0 {
+			doc := &object{}
+			doc.set("records", demo)
+			if err := writeYAML(filepath.Join(dir, seedFile), doc); err != nil {
+				return err
+			}
+		}
+		for _, typ := range types {
+			doc := &object{}
+			doc.set("type", typ)
+			doc.set("records", data[typ])
+			if err := writeYAML(filepath.Join(dir, dataDir, fileName(typ[strings.LastIndex(typ, ".")+1:])+".yaml"), doc); err != nil {
+				return err
+			}
 		}
 	}
 	if err := writeYAML(filepath.Join(dir, manifestFile), manifest); err != nil {
@@ -365,6 +394,52 @@ func readLock(dir string) (lock, error) {
 	}
 	if out.Assets == nil {
 		out.Assets = map[string]lockedAsset{}
+	}
+	return out, nil
+}
+
+func readData(dir string) ([]any, error) {
+	paths, err := filepath.Glob(filepath.Join(dir, dataDir, "*.yaml"))
+	if err != nil {
+		return nil, err
+	}
+	slices.Sort(paths)
+	var out []any
+	for _, path := range paths {
+		value, err := readYAML(path)
+		if err != nil {
+			return nil, err
+		}
+		doc := asObject(value)
+		if doc == nil {
+			return nil, fmt.Errorf("%s: needs a type and a list of records", path)
+		}
+		list, _ := doc.get("records")
+		rows, ok := list.([]any)
+		typ := text(doc, "type")
+		if typ == "" || !ok || len(rows) == 0 {
+			return nil, fmt.Errorf("%s: needs a type and a list of records", path)
+		}
+		chunk, size := []any{}, 0
+		flush := func() {
+			entry := &object{}
+			entry.set("kind", "data")
+			entry.set("type", typ)
+			entry.set("rows", chunk)
+			out = append(out, entry)
+			chunk, size = []any{}, 0
+		}
+		for _, row := range rows {
+			if asObject(row) == nil || text(asObject(row), "id") == "" {
+				return nil, fmt.Errorf("%s: every record is an object with its own id", path)
+			}
+			n := len(stringify(row)) + 1
+			if size+n > dataChunk && len(chunk) > 0 {
+				flush()
+			}
+			chunk, size = append(chunk, row), size+n
+		}
+		flush()
 	}
 	return out, nil
 }
@@ -397,7 +472,7 @@ func readResources(dir string) ([]resource, error) {
 			return err
 		}
 		rel, _ := filepath.Rel(dir, path)
-		if rel == manifestFile || rel == setupFile || rel == seedFile || rel == tryFile || strings.HasPrefix(filepath.ToSlash(rel), localesDir+"/") {
+		if rel == manifestFile || rel == setupFile || rel == seedFile || rel == tryFile || strings.HasPrefix(filepath.ToSlash(rel), localesDir+"/") || strings.HasPrefix(filepath.ToSlash(rel), dataDir+"/") {
 			return nil
 		}
 		kind, ok := classify(rel)
@@ -603,6 +678,15 @@ func build(dir string, previous *platform.PackageDescriptor) (built, error) {
 			return built{}, fmt.Errorf("%s: records is a list", seedFile)
 		}
 		blueprint.set("seed", records)
+	}
+	data, err := readData(dir)
+	if err != nil {
+		return built{}, err
+	}
+	if len(data) > 0 {
+		list, _ := blueprint.get("seed")
+		items, _ := list.([]any)
+		blueprint.set("seed", append(items, data...))
 	}
 	manifest.set("blueprint", blueprint)
 	artifact := stringify(manifest)

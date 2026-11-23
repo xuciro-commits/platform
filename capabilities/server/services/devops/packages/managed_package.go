@@ -116,8 +116,12 @@ func (p ManagedPreparation) Prepare() (func(*pb.ChangeRecord), *platform.Error) 
 	if !p.Upgrade && !p.Downgrade {
 		for _, raw := range p.Descriptor.Blueprint.Seed {
 			var seed struct {
+				Kind string `json:"kind"`
 				Type string `json:"type"`
 				ID   string `json:"id"`
+			}
+			if json.Unmarshal(raw, &seed) == nil && seed.Kind == "data" {
+				continue
 			}
 			if json.Unmarshal(raw, &seed) != nil || seed.Type == "" || seed.ID == "" {
 				return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "Invalid demo seed record")

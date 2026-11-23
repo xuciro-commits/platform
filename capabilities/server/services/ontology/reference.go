@@ -4,17 +4,25 @@ import (
 	"encoding/json"
 	"reflect"
 	"slices"
+	"strings"
 
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
 	"platformserver/kernel/protocol"
 	"platformserver/platform"
 )
 
-const referenceLimit = 200
+const referenceLimit = 500
 
 var referenceEvents = []string{SchemaPublish, "platform.package.install", "platform.package.upgrade", "platform.package.downgrade", "platform.package.rollback"}
 
 var packageDemoEvents = []string{"platform.package.install", "platform.package.clear-demo"}
+
+func DataContinues(e platform.Event) (string, bool) {
+	key := e.Record.GetSubmission().GetIdempotencyKey()
+	rest, data := strings.CutPrefix(key, "data:")
+	pkg, _, found := strings.Cut(rest, ":")
+	return pkg, data && found && protocol.Continues(key)
+}
 
 func FillsReference(names []string) bool {
 	return slices.ContainsFunc(names, func(name string) bool { return slices.Contains(referenceEvents, name) })
@@ -93,14 +101,30 @@ func FillReference(c platform.Caller, lang string, model func(string) (reflect.T
 	return nil
 }
 
-func FillSeed(c platform.Caller, pkgID string, seeds []json.RawMessage, model func(string) (reflect.Type, bool), submit func(*pb.Submission) *platform.Error) *platform.Error {
+func FillSeed(c platform.Caller, pkgID string, seeds []json.RawMessage, demo bool, model func(string) (reflect.Type, bool), submit func(*pb.Submission) *platform.Error) *platform.Error {
+	filled := false
 	for _, raw := range seeds {
 		var seed struct {
-			Type   string          `json:"type"`
-			ID     string          `json:"id"`
-			Values json.RawMessage `json:"values"`
+			Kind   string                       `json:"kind"`
+			Type   string                       `json:"type"`
+			ID     string                       `json:"id"`
+			Values json.RawMessage              `json:"values"`
+			Rows   []map[string]json.RawMessage `json:"rows"`
 		}
-		if json.Unmarshal(raw, &seed) != nil || seed.Type == "" || seed.ID == "" {
+		if json.Unmarshal(raw, &seed) != nil || seed.Type == "" {
+			continue
+		}
+		if seed.Kind == "data" {
+			if filled {
+				continue
+			}
+			var refusal *platform.Error
+			if filled, refusal = fillData(c, pkgID, seed.Type, seed.Rows, model, submit); refusal != nil {
+				return refusal
+			}
+			continue
+		}
+		if !demo || seed.ID == "" {
 			continue
 		}
 		target, installed := model(seed.Type)
@@ -116,6 +140,41 @@ func FillSeed(c platform.Caller, pkgID string, seeds []json.RawMessage, model fu
 		}
 	}
 	return nil
+}
+
+func fillData(c platform.Caller, pkgID, typ string, rows []map[string]json.RawMessage, model func(string) (reflect.Type, bool), submit func(*pb.Submission) *platform.Error) (bool, *platform.Error) {
+	target, installed := model(typ)
+	if !installed {
+		return false, nil
+	}
+	var pending []*pb.Submission
+	for _, row := range rows {
+		var id string
+		if json.Unmarshal(row["id"], &id) != nil || id == "" {
+			continue
+		}
+		if _, exists := c.RecordValue(target, id); exists {
+			continue
+		}
+		values := map[string]json.RawMessage{}
+		for name, value := range row {
+			if name != "id" {
+				values[name] = value
+			}
+		}
+		pending = append(pending, &pb.Submission{TenantId: c.Tenant, PrincipalId: c.ID, Authority: AppID, IdempotencyKey: "data:" + pkgID + ":" + typ + "/" + id,
+			Target: &pb.EntityRef{Type: typ, Id: id}, Schema: &pb.SchemaRef{Name: typ + ".create", Version: 1}, Payload: platform.Raw(values)})
+	}
+	if len(pending) == 0 {
+		return false, nil
+	}
+	pending[len(pending)-1].IdempotencyKey += protocol.ContinuationSuffix
+	for _, s := range pending {
+		if refusal := submit(s); refusal != nil {
+			return true, refusal
+		}
+	}
+	return true, nil
 }
 
 func ClearSeed(c platform.Caller, pkgID string, seeds []json.RawMessage, model func(string) (reflect.Type, bool), submit func(*pb.Submission) *platform.Error) *platform.Error {

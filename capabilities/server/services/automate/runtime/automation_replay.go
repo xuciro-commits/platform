@@ -70,7 +70,7 @@ func (r EventRoute) Route(e QueuedEvent, now time.Time) {
 		r.Deliver(a.Manifest().ID, e)
 	}
 	for _, id := range r.Listeners {
-		if id != e.App && r.Interested(id, names, e.Event) {
+		if (id != e.App || protocol.Continues(s.GetIdempotencyKey())) && r.Interested(id, names, e.Event) {
 			r.Deliver(id, e)
 		}
 	}

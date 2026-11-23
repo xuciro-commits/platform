@@ -270,8 +270,9 @@ func (b *Build) Manifest() platform.Manifest {
 	return platform.Manifest{ID: ID, Title: platform.BuiltinManifestTitle(ID), Version: ValueDefinitionVersion, Sequences: sequences, Actions: catalog, Entities: entities, Roles: roles, Settings: b.settings(), Jobs: buildManifestJobs, Provides: provisions, Consumes: b.consumedProtocols(), Reads: reads, ReadSources: readSources, Queries: b.queries.Declarations(), Functions: b.functions.Declarations(), Agents: b.agent.Declarations(), Operations: b.functions.OperationDeclarations(), Pages: pages, Subscribes: []string{ontology.SchemaPublish}}
 }
 
-func (b *Build) Interested(names []string, _ platform.Event) bool {
-	return ontology.FillsReference(names) || ontology.HandlesPackageDemo(names)
+func (b *Build) Interested(names []string, e platform.Event) bool {
+	_, continues := ontology.DataContinues(e)
+	return continues || ontology.FillsReference(names) || ontology.HandlesPackageDemo(names)
 }
 
 func (b *Build) Handle(c platform.Caller, e platform.Event) *platform.Error {
@@ -279,7 +280,8 @@ func (b *Build) Handle(c platform.Caller, e platform.Event) *platform.Error {
 }
 
 func (b *Build) Listen(c platform.Caller, e platform.Event, names []string, now time.Time) *platform.Error {
-	if !ontology.FillsReference(names) && !ontology.HandlesPackageDemo(names) {
+	continuing, continues := ontology.DataContinues(e)
+	if !continues && !ontology.FillsReference(names) && !ontology.HandlesPackageDemo(names) {
 		return nil
 	}
 	model := func(typ string) (reflect.Type, bool) {
@@ -298,6 +300,9 @@ func (b *Build) Listen(c platform.Caller, e platform.Event, names []string, now 
 		}
 	}
 	pkgID := e.Record.GetSubmission().GetTarget().GetId()
+	if continues {
+		pkgID = continuing
+	}
 	seedCaller := c
 	if member.ID != "" {
 		seedCaller.Member = member
@@ -312,9 +317,12 @@ func (b *Build) Listen(c platform.Caller, e platform.Event, names []string, now 
 		_, refusal := b.Submit(seedCaller, s, now)
 		return refusal
 	}
-	if slices.Contains(names, "platform.package.install") {
+	install := slices.Contains(names, "platform.package.install")
+	if install || continues || slices.ContainsFunc(names, func(name string) bool {
+		return slices.Contains([]string{"platform.package.upgrade", "platform.package.downgrade", "platform.package.rollback"}, name)
+	}) {
 		if seeds, ok := b.host.PackageSeed(pkgID); ok {
-			if refusal := ontology.FillSeed(seedCaller, pkgID, seeds, model, seedSubmit); refusal != nil {
+			if refusal := ontology.FillSeed(seedCaller, pkgID, seeds, install, model, seedSubmit); refusal != nil {
 				return refusal
 			}
 		}

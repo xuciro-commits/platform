@@ -27,7 +27,7 @@ func (p AcceptedEventPlanner) Plan(e platform.Event) (protocol.AcceptedEventPlan
 		}
 	}
 	for _, id := range p.Listeners {
-		if id != e.App && p.Listener(id).Interested(names, e) && !slices.Contains(plan.Subscribers, id) {
+		if (id != e.App || protocol.Continues(e.Record.GetSubmission().GetIdempotencyKey())) && p.Listener(id).Interested(names, e) && !slices.Contains(plan.Subscribers, id) {
 			plan.Subscribers = append(plan.Subscribers, id)
 		}
 	}
