@@ -109,7 +109,7 @@ export async function crmMainline(page: Page, go: (type: string, plural: string)
   await page.getByRole("radio", { name: "Next 30 days", exact: true }).click();
   await expect(page).toHaveURL(/expectedclose.*after.*expectedclose.*before/);
   await page.getByText("Clear all", { exact: true }).click();
-  await expect(page).not.toHaveURL(/expectedclose.*after/);
+  await expect.poll(() => JSON.parse(new URL(page.url()).searchParams.get("view") ?? "{}").filters).toEqual([]);
   await page.getByRole("radio", { name: "Board" }).click();
   const card = page.getByRole("region", { name: "Qualification", exact: true }).getByRole("heading", { level: 4, name: company, exact: true });
   await expect(card).toBeVisible();
