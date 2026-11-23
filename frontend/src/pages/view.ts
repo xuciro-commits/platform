@@ -15,6 +15,7 @@ export type ViewState = {
   lanes: string;
   dates: string;
   until: string;
+  after: string;
   scale: GanttScale;
   month: string;
   density: Density;
@@ -27,7 +28,7 @@ const edges: StickyEdge[] = ["none", "one", "two"];
 const scales: GanttScale[] = ["day", "week", "month"];
 
 export function newView(columns: string[], group = "none", lanes = ""): ViewState {
-  return { version: 1, layout: "table", columns: [...columns], sort: [], filters: [], search: "", group, lanes, dates: "", until: "", scale: "day", month: "", density: "balanced", stickyStart: "none", stickyEnd: "none" };
+  return { version: 1, layout: "table", columns: [...columns], sort: [], filters: [], search: "", group, lanes, dates: "", until: "", after: "", scale: "day", month: "", density: "balanced", stickyStart: "none", stickyEnd: "none" };
 }
 
 export function readView(raw: string | null, fallback: ViewState): ViewState {
@@ -46,6 +47,7 @@ export function readView(raw: string | null, fallback: ViewState): ViewState {
       lanes: typeof value.lanes === "string" ? value.lanes : fallback.lanes,
       dates: typeof value.dates === "string" ? value.dates : fallback.dates,
       until: typeof value.until === "string" ? value.until : fallback.until,
+      after: typeof value.after === "string" ? value.after : fallback.after,
       scale: scales.find((scale) => scale === value.scale) ?? fallback.scale,
       month: typeof value.month === "string" && /^\d{4}-\d{2}$/.test(value.month) ? value.month : "",
       density: densities.find((density) => density === value.density) ?? fallback.density,

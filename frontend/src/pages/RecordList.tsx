@@ -274,6 +274,7 @@ export function Records({ declared, listPath, id, back }: { declared: Declared; 
   const dateField = view.layout === "calendar" ? dateFields.find((field) => field.name === view.dates) ?? dateFields[0] : undefined;
   const ganttStartField = dateFields.length >= 2 ? dateFields.find((field) => field.name === view.dates) ?? dateFields[0] : undefined;
   const ganttEndField = ganttStartField ? dateFields.find((field) => field.name === view.until) ?? dateFields.find((field) => field.name !== ganttStartField.name) ?? dateFields[1] : undefined;
+  const ganttAfterField = view.after && described ? described.entity.fields.find((field) => field.name === view.after && field.type === "reference" && field.ref === described.type) : undefined;
   const span = monthSpan(shownMonth(view));
   const ganttWindow = ganttSpan(shownMonth(view), view.scale);
   const range = dateField
@@ -421,6 +422,7 @@ export function Records({ declared, listPath, id, back }: { declared: Declared; 
     endField: ganttEndField.name,
     startOf: (row) => dayOf(row[ganttStartField.name]),
     endOf: (row) => dayOf(row[ganttEndField.name]),
+    afterOf: ganttAfterField ? (row) => String(row[ganttAfterField.name] ?? "") : undefined,
     dotOf: (row) => laneDot(row),
     unscheduled: unscheduledItems,
     accepts: (id) => Boolean(editFor(id)),

@@ -13,7 +13,7 @@ import { t, useLocale } from "../i18n";
 import { DotMark } from "./DotMark";
 import { useGutter } from "./frame";
 import {
-  addDays, buildGanttRows, buildTimeline, diffDays, type GanttItem, type GanttUnscheduledItem,
+  addDays, buildDependencyArrows, buildGanttRows, buildTimeline, diffDays, type GanttItem, type GanttUnscheduledItem,
   laneAccentColor, nameColumnWidth, periodHeading, rowHeight, shiftMonth, stepMonthsFor, todayIso,
 } from "./gantt";
 import { ganttStyles as styles } from "./ganttStyles";
@@ -125,6 +125,10 @@ export function GanttView({
   const firstRow = Math.max(0, Math.floor(scrollTop / rowHeight) - overscan);
   const lastRow = Math.min(rows.length, firstRow + visibleCount + overscan * 2);
   const visibleRows = rows.slice(firstRow, lastRow);
+  const dependencies = useMemo(
+    () => buildDependencyArrows(rows, firstRow, lastRow, span.start, span.days, timeline.dayWidth),
+    [rows, firstRow, lastRow, span.start, span.days, timeline.dayWidth],
+  );
 
   const commitMove = (id: string, nextStart: string, nextEnd: string) => {
     if (!onMove) return;
@@ -407,6 +411,20 @@ export function GanttView({
                 );
               })}
               {lastRow < rows.length && <VStack xstyle={styles.spacer((rows.length - lastRow) * rowHeight)} />}
+              {dependencies.length > 0 && (
+                <VStack xstyle={styles.depLayer(timeline.totalWidth)}>
+                  {dependencies.map((dep) => (
+                    <VStack key={dep.key} role="img" aria-label={`${t("Dependency")}: ${dep.fromTitle} → ${dep.toTitle}`}>
+                      {dep.segments.map((seg) => (
+                        <VStack key={seg.key} xstyle={styles.depSegment(seg.left, seg.top, seg.width, seg.height)} />
+                      ))}
+                      <VStack xstyle={styles.depTip(dep.tipLeft, dep.tipTop)}>
+                        <Icon icon={ChevronRightIcon} size="sm" />
+                      </VStack>
+                    </VStack>
+                  ))}
+                </VStack>
+              )}
             </VStack>
           </VStack>
         </VStack>

@@ -47,6 +47,7 @@ export type ListGantt<Row> = {
   endField: string;
   startOf: (row: Row) => string;
   endOf: (row: Row) => string;
+  afterOf?: (row: Row) => string;
   dotOf?: (row: Row) => Dot | undefined;
   unscheduled: { id: string; title: string; group?: string; dot?: Dot; href: string }[];
   accepts?: (id: string) => boolean;

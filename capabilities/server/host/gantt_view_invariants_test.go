@@ -16,11 +16,15 @@ import (
 
 func TestInvariantK35GanttViewRequiresDateFieldsOnSaveAndPackage(t *testing.T) {
 	live := newInvariantTenant(t, "invariant-k35")
+	live.accept(t, "build.object.create", build.ObjectType, "OTHER", invariantObject("other", "Other"))
+	live.accept(t, "build.object.publish", build.ObjectType, "OTHER", nil)
 	fields := []ontology.Field{
 		{Name: "title", Title: "Title", Type: "text", Required: true},
 		{Name: "start", Title: "Start", Type: "date"},
 		{Name: "end", Title: "End", Type: "datetime"},
 		{Name: "status", Title: "Status", Type: "choice", Choices: "todo,doing,done"},
+		{Name: "depends", Title: "Depends on", Type: "reference", Ref: "invariantproject.task"},
+		{Name: "other", Title: "Other", Type: "reference", Ref: "invariantproject.other"},
 	}
 	live.accept(t, "build.object.create", build.ObjectType, "TASK", map[string]any{
 		"name": "task", "title": "Task", "display": "title", "fields": fields,
@@ -34,6 +38,9 @@ func TestInvariantK35GanttViewRequiresDateFieldsOnSaveAndPackage(t *testing.T) {
 		{"missing until", `{"version":1,"layout":"gantt","dates":"start"}`, "until"},
 		{"unknown dates", `{"version":1,"layout":"gantt","dates":"missing","until":"end"}`, "missing"},
 		{"non-date until", `{"version":1,"layout":"gantt","dates":"start","until":"title"}`, "title"},
+		{"unknown after", `{"version":1,"layout":"gantt","dates":"start","until":"end","after":"nope"}`, "nope"},
+		{"non-reference after", `{"version":1,"layout":"gantt","dates":"start","until":"end","after":"title"}`, "title"},
+		{"cross-type after", `{"version":1,"layout":"gantt","dates":"start","until":"end","after":"other"}`, "other"},
 	}
 	for _, tc := range cases {
 		sub := live.submission("build.object.edit", build.ObjectType, "TASK", map[string]any{"view": json.RawMessage(tc.view)})
@@ -51,7 +58,7 @@ func TestInvariantK35GanttViewRequiresDateFieldsOnSaveAndPackage(t *testing.T) {
 			t.Fatalf("%s on package: got err %v, want error naming %q", tc.name, err, tc.want)
 		}
 	}
-	validView := json.RawMessage(`{"version":1,"layout":"gantt","dates":"start","until":"end","group":"status","lanes":"status"}`)
+	validView := json.RawMessage(`{"version":1,"layout":"gantt","dates":"start","until":"end","group":"status","lanes":"status","after":"depends"}`)
 	live.accept(t, "build.object.edit", build.ObjectType, "TASK", map[string]any{"view": validView})
 	live.accept(t, "build.object.publish", build.ObjectType, "TASK", nil)
 	_, handler := observationHost(live.Tenant)

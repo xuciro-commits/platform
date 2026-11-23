@@ -363,5 +363,6 @@
   "Ungrouped": "未分组",
   "No scheduled records in this period": "该时段内没有已排期的记录",
   "Resize end date": "调整结束日期",
-  "All records have dates": "所有记录都已排期"
+  "All records have dates": "所有记录都已排期",
+  "Dependency": "依赖"
 }

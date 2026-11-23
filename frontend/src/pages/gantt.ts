@@ -6,6 +6,7 @@ export type GanttItem = {
   title: string;
   start: string;
   end: string;
+  after?: string;
   group?: string;
   dot?: Dot;
   href: string;
@@ -17,6 +18,16 @@ export type GanttUnscheduledItem = {
   group?: string;
   dot?: Dot;
   href: string;
+};
+
+export type GanttDependencySegment = { key: string; left: number; top: number; width: number; height: number };
+export type GanttDependency = {
+  key: string;
+  fromTitle: string;
+  toTitle: string;
+  segments: GanttDependencySegment[];
+  tipLeft: number;
+  tipTop: number;
 };
 
 export type GanttBand = { key: string; label: string; width: number };
@@ -199,4 +210,59 @@ export function laneAccentColor(dot?: Dot) {
   if (dot === "error") return "var(--color-status-error)";
   if (dot === "accent") return "var(--color-accent)";
   return "var(--color-border-emphasized)";
+}
+
+export function buildDependencyArrows(
+  rows: GanttRow[], firstRow: number, lastRow: number, spanStart: string, spanDays: number, dayWidth: number,
+): GanttDependency[] {
+  const byId = new Map<string, { index: number; startX: number; endX: number; midY: number; title: string }>();
+  rows.forEach((row, index) => {
+    if (row.kind !== "item") return;
+    const startOffset = diffDays(spanStart, row.item.start);
+    const durationDays = Math.max(1, diffDays(row.item.start, row.item.end) + 1);
+    const clippedStart = Math.max(0, startOffset);
+    const clippedEnd = Math.min(spanDays, startOffset + durationDays);
+    if (clippedEnd <= clippedStart) return;
+    const left = clippedStart * dayWidth;
+    const width = Math.max(24, (clippedEnd - clippedStart) * dayWidth - 2);
+    byId.set(row.item.id, { index, startX: left, endX: left + width, midY: index * rowHeight + Math.floor(rowHeight / 2), title: row.item.title || row.item.id });
+  });
+  const out: GanttDependency[] = [];
+  const line = 2;
+  const stub = 10;
+  for (const row of rows) {
+    if (row.kind !== "item" || !row.item.after || row.item.after === row.item.id) continue;
+    const from = byId.get(row.item.after);
+    const to = byId.get(row.item.id);
+    if (!from || !to) continue;
+    if (Math.max(from.index, to.index) < firstRow || Math.min(from.index, to.index) >= lastRow) continue;
+    const key = `${row.item.after}->${row.item.id}`;
+    const segments: GanttDependencySegment[] = [];
+    const addH = (id: string, x1: number, x2: number, y: number) => {
+      const left = Math.min(x1, x2);
+      segments.push({ key: `${key}:${id}`, left, top: y - 1, width: Math.max(line, Math.abs(x2 - x1)), height: line });
+    };
+    const addV = (id: string, x: number, y1: number, y2: number) => {
+      const top = Math.min(y1, y2);
+      segments.push({ key: `${key}:${id}`, left: x - 1, top, width: line, height: Math.max(line, Math.abs(y2 - y1)) });
+    };
+    const targetX = Math.max(0, to.startX - 4);
+    if (targetX >= from.endX + stub) {
+      const midX = from.endX + stub;
+      addH("h1", from.endX, midX, from.midY);
+      addV("v1", midX, from.midY, to.midY);
+      addH("h2", midX, targetX, to.midY);
+    } else {
+      const exitX = from.endX + stub;
+      const entryX = Math.max(2, to.startX - stub);
+      const turnY = from.midY + (to.midY >= from.midY ? Math.floor(rowHeight / 2) : -Math.floor(rowHeight / 2));
+      addH("h1", from.endX, exitX, from.midY);
+      addV("v1", exitX, from.midY, turnY);
+      addH("h2", exitX, entryX, turnY);
+      addV("v2", entryX, turnY, to.midY);
+      addH("h3", entryX, targetX, to.midY);
+    }
+    out.push({ key, fromTitle: from.title, toTitle: to.title, segments, tipLeft: Math.max(0, to.startX - 12), tipTop: to.midY - 7 });
+  }
+  return out;
 }

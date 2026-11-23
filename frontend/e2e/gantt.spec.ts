@@ -52,9 +52,10 @@ test.describe.serial("gantt layout", () => {
         { name: "start", title: "Start date", type: "date" },
         { name: "end", title: "End date", type: "date" },
         { name: "status", title: "Status", type: "choice", choices: "todo:Todo,doing:Doing,done:Done" },
+        { name: "depends", title: "Depends on", type: "reference", ref: "sales.gantttask" },
       ],
       access: [{ role: "user", read: "all" }],
-      view: { version: 1, layout: "gantt", dates: "start", until: "end", group: "status", lanes: "status" },
+      view: { version: 1, layout: "gantt", dates: "start", until: "end", group: "status", lanes: "status", after: "depends" },
     });
     await submit(page, "build.object.publish", "build.object", "GANTT-TASK", {});
     await submit(page, "sales.gantttask.create", "sales.gantttask", "GT-1", {
@@ -68,6 +69,7 @@ test.describe.serial("gantt layout", () => {
       start: day(10),
       end: day(14),
       status: "todo",
+      depends: "GT-1",
     });
     await submit(page, "sales.gantttask.create", "sales.gantttask", "GT-3", {
       title: "Backlog item",
@@ -83,6 +85,7 @@ test.describe.serial("gantt layout", () => {
     const barB = page.getByRole("button", { name: `API integration (${day(10)} – ${day(14)})`, exact: true });
     await expect(barA).toBeVisible();
     await expect(barB).toBeVisible();
+    await expect(page.getByRole("img", { name: "Dependency: Design review → API integration", exact: true })).toBeVisible();
     const boxA = (await barA.boundingBox())!;
     const boxB = (await barB.boundingBox())!;
     expect(boxB.x).toBeGreaterThan(boxA.x);
@@ -100,8 +103,10 @@ test.describe.serial("gantt layout", () => {
 
     const movedBarA = page.getByRole("button", { name: `Design review (${day(7)} – ${day(11)})`, exact: true });
     await expect(movedBarA).toBeVisible();
+    await expect(barB).toBeVisible();
     await page.reload();
     await expect(movedBarA).toBeVisible();
+    await expect(barB).toBeVisible();
 
     await movedBarA.click();
     const details = page.getByRole("dialog", { name: "Details" });

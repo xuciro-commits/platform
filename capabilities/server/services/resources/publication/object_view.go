@@ -15,6 +15,7 @@ type defaultViewSpec struct {
 	Layout string `json:"layout"`
 	Dates  string `json:"dates"`
 	Until  string `json:"until"`
+	After  string `json:"after"`
 }
 
 func CheckObjectView(objectType string, fields []ViewField, view json.RawMessage) error {
@@ -45,7 +46,19 @@ func CheckObjectView(objectType string, fields []ViewField, view json.RawMessage
 	if err := checkDate("start (dates)", spec.Dates); err != nil {
 		return err
 	}
-	return checkDate("end (until)", spec.Until)
+	if err := checkDate("end (until)", spec.Until); err != nil {
+		return err
+	}
+	if spec.After != "" {
+		field, ok := byName[spec.After]
+		if !ok {
+			return fmt.Errorf("Gantt view on %s references unknown dependency field %q in after", objectType, spec.After)
+		}
+		if field.Type != "reference" || field.Ref != objectType {
+			return fmt.Errorf("Gantt view on %s requires after field %q to reference %s", objectType, spec.After, objectType)
+		}
+	}
+	return nil
 }
 
 func CheckObjectAssetView(body json.RawMessage) error {

@@ -172,7 +172,7 @@ export function ListView<Answer, Row>({ definition, read, primary, back, exportR
       const href = definition.link?.(row) ?? "";
       const params = new URLSearchParams(currentSearch);
       if (definition.carryView) params.set("view", JSON.stringify(view));
-      const cells: Cells = { [idKey]: definition.id(row), __group: group ? group.of(row) : "", __lane: board ? board.of(row) : "", __day: calendar ? calendar.of(row, dateField) : "", __start: gantt ? gantt.startOf(row) : "", __end: gantt ? gantt.endOf(row) : "", __ganttDot: gantt?.dotOf?.(row) ?? "", __href: href && definition.carryView ? href + "?" + params : href };
+      const cells: Cells = { [idKey]: definition.id(row), __group: group ? group.of(row) : "", __lane: board ? board.of(row) : "", __day: calendar ? calendar.of(row, dateField) : "", __start: gantt ? gantt.startOf(row) : "", __end: gantt ? gantt.endOf(row) : "", __after: gantt?.afterOf ? gantt.afterOf(row) : "", __ganttDot: gantt?.dotOf?.(row) ?? "", __href: href && definition.carryView ? href + "?" + params : href };
       const raw: Raw = { [idKey]: cells[idKey] };
       for (const column of definition.columns) {
         cells[column.key] = column.text(row);
@@ -513,7 +513,7 @@ export function ListView<Answer, Row>({ definition, read, primary, back, exportR
                 month={shownMonth(view)} scale={view.scale} startField={gantt.startField} endField={gantt.endField} fields={gantt.fields}
                 grouped={Boolean(group)} groupOrder={group?.order} activeId={active} page={definition.page} unscheduled={gantt.unscheduled}
                 onMonth={(month) => update({ month })} onScale={(scale: GanttScale) => update({ scale })} onStartField={(dates) => update({ dates })} onEndField={(until) => update({ until })} onSelect={setActive}
-                items={shown.filter((cells) => Boolean(cells.__start && cells.__end)).map((cells) => ({ id: cells[idKey], title: cells[orderedColumns[0].key], start: cells.__start, end: cells.__end, group: cells.__group || undefined, dot: (cells.__ganttDot || undefined) as Dot | undefined, href: cells.__href }))}
+                items={shown.filter((cells) => Boolean(cells.__start && cells.__end)).map((cells) => ({ id: cells[idKey], title: cells[orderedColumns[0].key], start: cells.__start, end: cells.__end, after: cells.__after || undefined, group: cells.__group || undefined, dot: (cells.__ganttDot || undefined) as Dot | undefined, href: cells.__href }))}
                 accepts={gantt.accepts}
                 onMove={gantt.move && ((id, start, end) => { setFailure(""); return gantt.move?.(id, gantt.startField, gantt.endField, start, end).catch((err: Error) => { moveFailed(err); throw err; }); })}
               />
