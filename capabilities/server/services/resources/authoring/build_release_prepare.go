@@ -26,7 +26,11 @@ func (b *Build) ReleaseDrafts(assets []platform.ReleaseAsset, ctx protocol.Asset
 		if err != nil {
 			return nil, err
 		}
-		out = append(out, protocol.AssetDraft{Ref: ref, Type: draft.Type, Name: draft.Name, Schema: draft.Type + ".create", Image: draft.Image})
+		name := draft.Name
+		if draft.Type == ObjectType {
+			name = b.objectDraftID(ctx.Member.Tenant, ref, qualified(namespaceOf(draft.Image), draft.Name))
+		}
+		out = append(out, protocol.AssetDraft{Ref: ref, Type: draft.Type, Name: name, Schema: draft.Type + ".create", Image: draft.Image})
 	}
 	integrations, err := b.data.IntegrationDrafts(assets, ctx)
 	if err != nil {
@@ -116,4 +120,16 @@ func (b *Build) AssetEnvironmentRequirements(asset platform.ReleaseAsset) ([]pro
 		return b.data.EnvironmentRequirements(asset)
 	}
 	return nil, nil
+}
+
+func (b *Build) objectDraftID(tenant string, ref platform.AssetRef, name string) string {
+	if b.host != nil {
+		if record, ok := b.host.Record(ResourceType + "/" + protocol.ResourceID(tenant, ref)); ok {
+			var resource struct{ Draft string }
+			if json.Unmarshal(platform.Raw(record), &resource) == nil && resource.Draft != "" {
+				return resource.Draft
+			}
+		}
+	}
+	return name
 }
