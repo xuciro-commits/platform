@@ -9651,6 +9651,57 @@
         }
       },
       {
+        "type": "crm.deal",
+        "id": "demo-deal-5",
+        "values": {
+          "title": "Northwind Service Desk Add-on",
+          "account": "demo-account-1",
+          "contact": "demo-contact-1",
+          "amount": {
+            "amount": 6800000
+          },
+          "expectedclose": "2026-11-15",
+          "source": "customer",
+          "stage": "commit",
+          "nextstep": "Hand over to onboarding",
+          "nextstepdue": "2026-11-20"
+        },
+        "then": [
+          {
+            "action": "win",
+            "with": {
+              "notes": "Expanded from the existing regional rollout."
+            }
+          }
+        ]
+      },
+      {
+        "type": "crm.deal",
+        "id": "demo-deal-6",
+        "values": {
+          "title": "Clearview Field Inspection App",
+          "account": "demo-account-3",
+          "amount": {
+            "amount": 9500000
+          },
+          "expectedclose": "2026-11-10",
+          "source": "event",
+          "stage": "proposal",
+          "nextstep": "Send revised quote",
+          "nextstepdue": "2026-11-08"
+        },
+        "then": [
+          {
+            "action": "lose",
+            "with": {
+              "reason": "competitor",
+              "competitor": "demo-competitor-1",
+              "notes": "Chose the incumbent bundle on price."
+            }
+          }
+        ]
+      },
+      {
         "type": "crm.dealcontact",
         "id": "demo-dealcontact-1",
         "values": {

@@ -296,8 +296,10 @@ test("dashboard: the CRM home shows its pipeline numbers and charts, and each bl
   await expect(page).toHaveURL(/\/crm\/crm\.deal\?domain=.*open/);
   await expect(page.getByText("Clear all", { exact: true })).toBeVisible();
   await page.goBack();
+  await expect(home.getByRole("link", { name: "Won revenue", exact: true }).locator("..")).toHaveText(/[1-9][\d,]*(\.\d+)? USD$/);
   await home.getByText("Won revenue", { exact: true }).click();
   await expect(page).toHaveURL(/\/crm\/crm\.deal\?domain=.*won/);
+  await expect(page.getByRole("link", { name: "Northwind Service Desk Add-on", exact: true })).toBeVisible();
 });
 
 test("calendar: activities sit on their due dates, the month pages, a drag reschedules and an activity opens its record", async ({ page }) => {
