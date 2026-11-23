@@ -430,20 +430,27 @@ func schemaHistory(body *object, history []platform.SchemaVersion, previous *ont
 	if err != nil {
 		return nil, err
 	}
+	var released []platform.SchemaVersion
+	if previous != nil {
+		released = previous.SchemaVersions
+	}
+	if len(history) < len(released) || !slices.Equal(history[:len(released)], released) {
+		return nil, errors.New("the schema history in the lock does not continue the released one; download the released artifact and run pkg lock again")
+	}
 	if len(history) > 0 && history[len(history)-1].Version == version {
 		return history, nil
 	}
-	family := uint32(1)
-	if len(history) > 0 {
-		family = history[len(history)-1].Family
-		if previous == nil {
-			return nil, errors.New("its schema changed and the previous release is not available to decide compatibility")
-		}
-		if !ontology.CompatibleObjectSchema(*previous, current) {
-			family++
-		}
+	if len(released) > 0 && released[len(released)-1].Version == version {
+		return slices.Clone(released), nil
 	}
-	return append(slices.Clone(history), platform.SchemaVersion{Version: version, Family: family}), nil
+	family := uint32(1)
+	if len(released) > 0 {
+		family = released[len(released)-1].Family
+	}
+	if previous != nil && !ontology.CompatibleObjectSchema(*previous, current) {
+		family++
+	}
+	return append(slices.Clone(released), platform.SchemaVersion{Version: version, Family: family}), nil
 }
 
 func build(dir string, previous *platform.PackageDescriptor) (built, error) {
