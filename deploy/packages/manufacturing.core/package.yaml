@@ -1,5 +1,5 @@
 id: manufacturing.core
-version: 1.0.0
+version: 1.0.1
 namespace: manufacturing.core
 title: Manufacturing Foundation
 description: Shared manufacturing contracts and supplier inquiry service.

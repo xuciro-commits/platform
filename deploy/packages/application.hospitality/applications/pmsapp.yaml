@@ -1,6 +1,6 @@
 name: pmsapp
 title: Reservations
-icon: hotel
+icon: building-office
 pages:
   - pmsreservation
   - pmsroomtype

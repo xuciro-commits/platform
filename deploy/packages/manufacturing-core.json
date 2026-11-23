@@ -1,6 +1,6 @@
 {
   "id": "manufacturing.core",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "namespace": "manufacturing.core",
   "title": "Manufacturing Foundation",
   "description": "Shared manufacturing contracts and supplier inquiry service.",
@@ -16,11 +16,138 @@
       {
         "ref": {
           "app": "build",
+          "kind": "app",
+          "name": "manufacturingfoundation"
+        },
+        "contractVersion": 1,
+        "sourceVersion": "1",
+        "requires": [
+          {
+            "app": "build",
+            "kind": "connection",
+            "name": "supplieragent"
+          },
+          {
+            "app": "build",
+            "kind": "object",
+            "name": "build.mesleadtime"
+          },
+          {
+            "app": "build",
+            "kind": "page",
+            "name": "mesleadtime"
+          },
+          {
+            "app": "build",
+            "kind": "query",
+            "name": "supplieranswers"
+          },
+          {
+            "app": "build",
+            "kind": "writeback",
+            "name": "supplierinquiry"
+          }
+        ],
+        "body": {
+          "name": "manufacturingfoundation",
+          "title": "Manufacturing Foundation",
+          "icon": "cube",
+          "pages": [
+            "mesleadtime"
+          ],
+          "resources": [
+            {
+              "app": "build",
+              "kind": "object",
+              "name": "build.mesleadtime"
+            },
+            {
+              "app": "build",
+              "kind": "connection",
+              "name": "supplieragent"
+            },
+            {
+              "app": "build",
+              "kind": "writeback",
+              "name": "supplierinquiry"
+            },
+            {
+              "app": "build",
+              "kind": "query",
+              "name": "supplieranswers"
+            }
+          ],
+          "languages": {
+            "zh-CN": {
+              "An authorized supplier inquiry and the original external answer; delivery alone is not a promised lead time.": "已获授权的供应商询问及原始外部答复；仅送达询问不代表已承诺交期。",
+              "Current readable inquiries and original supplier answers, without invented delivery dates.": "当前可读的询问与供应商原始答复，不编造交付日期。",
+              "Manufacturing Foundation": "制造基础"
+            }
+          }
+        }
+      },
+      {
+        "ref": {
+          "app": "build",
+          "kind": "connection",
+          "name": "supplieragent"
+        },
+        "contractVersion": 1,
+        "sourceVersion": "1.connection-1",
+        "requires": [],
+        "body": {
+          "name": "supplieragent",
+          "title": "Supplier agent",
+          "kind": "http"
+        }
+      },
+      {
+        "ref": {
+          "app": "build",
           "kind": "object",
           "name": "build.mesleadtime"
         },
         "contractVersion": 1,
         "sourceVersion": "1",
+        "requires": [],
+        "provides": [
+          {
+            "kind": "interface",
+            "name": "build.mesleadtime",
+            "inputs": {
+              "type": ""
+            },
+            "outputs": {
+              "type": "object",
+              "properties": {
+                "answer": {
+                  "type": "string"
+                },
+                "archived": {
+                  "type": "boolean"
+                },
+                "id": {
+                  "type": "string"
+                },
+                "product": {
+                  "type": "string"
+                },
+                "question": {
+                  "type": "string"
+                },
+                "revision": {
+                  "type": "integer"
+                }
+              },
+              "required": [
+                "id",
+                "revision"
+              ]
+            },
+            "roles": null,
+            "side": "pure"
+          }
+        ],
         "body": {
           "name": "mesleadtime",
           "type": "build.mesleadtime",
@@ -75,83 +202,23 @@
       {
         "ref": {
           "app": "build",
-          "kind": "connection",
-          "name": "supplieragent"
-        },
-        "contractVersion": 1,
-        "sourceVersion": "1.connection-1",
-        "body": {
-          "name": "supplieragent",
-          "title": "Supplier agent",
-          "kind": "http"
-        }
-      },
-      {
-        "ref": {
-          "app": "build",
-          "kind": "writeback",
-          "name": "supplierinquiry"
-        },
-        "contractVersion": 1,
-        "sourceVersion": "1.writeback-1",
-        "body": {
-          "name": "supplierinquiry",
-          "title": "Ask the supplier agent",
-          "connection": "supplieragent",
-          "object": "build.mesleadtime",
-          "on": "create",
-          "transport": "a2a",
-          "method": "POST",
-          "path": "rpc",
-          "mapping": [
-            {
-              "from": "product",
-              "to": "product"
-            },
-            {
-              "from": "question",
-              "to": "message"
-            }
-          ],
-          "result": [
-            {
-              "from": "artifacts.0.parts.0.text",
-              "to": "answer"
-            },
-            {
-              "from": "parts.0.text",
-              "to": "answer"
-            }
-          ]
-        }
-      },
-      {
-        "ref": {
-          "app": "build",
-          "kind": "query",
-          "name": "supplieranswers"
-        },
-        "contractVersion": 1,
-        "sourceVersion": "1.query-1",
-        "body": {
-          "name": "supplieranswers",
-          "title": "Supplier inquiry answers",
-          "description": "Current readable inquiries and original supplier answers, without invented delivery dates.",
-          "object": "build.mesleadtime",
-          "sort": [
-            "id"
-          ],
-          "limit": 50
-        }
-      },
-      {
-        "ref": {
-          "app": "build",
           "kind": "page",
           "name": "mesleadtime"
         },
         "contractVersion": 1,
         "sourceVersion": "1",
+        "requires": [
+          {
+            "app": "build",
+            "kind": "action",
+            "name": "build.mesleadtime.create"
+          },
+          {
+            "app": "build",
+            "kind": "object",
+            "name": "build.mesleadtime"
+          }
+        ],
         "body": {
           "format": 4,
           "name": "mesleadtime",
@@ -319,47 +386,111 @@
       {
         "ref": {
           "app": "build",
-          "kind": "app",
-          "name": "manufacturingfoundation"
+          "kind": "query",
+          "name": "supplieranswers"
         },
         "contractVersion": 1,
-        "sourceVersion": "1",
-        "body": {
-          "name": "manufacturingfoundation",
-          "title": "Manufacturing Foundation",
-          "icon": "boxes",
-          "pages": [
-            "mesleadtime"
-          ],
-          "resources": [
-            {
-              "app": "build",
-              "kind": "object",
-              "name": "build.mesleadtime"
-            },
-            {
-              "app": "build",
-              "kind": "connection",
-              "name": "supplieragent"
-            },
-            {
-              "app": "build",
-              "kind": "writeback",
-              "name": "supplierinquiry"
-            },
-            {
-              "app": "build",
-              "kind": "query",
-              "name": "supplieranswers"
-            }
-          ],
-          "languages": {
-            "zh-CN": {
-              "An authorized supplier inquiry and the original external answer; delivery alone is not a promised lead time.": "已获授权的供应商询问及原始外部答复；仅送达询问不代表已承诺交期。",
-              "Current readable inquiries and original supplier answers, without invented delivery dates.": "当前可读的询问与供应商原始答复，不编造交付日期。",
-              "Manufacturing Foundation": "制造基础"
-            }
+        "sourceVersion": "1.query-1",
+        "requires": [
+          {
+            "app": "build",
+            "kind": "object",
+            "name": "build.mesleadtime"
           }
+        ],
+        "provides": [
+          {
+            "kind": "query",
+            "name": "supplieranswers",
+            "inputs": {
+              "type": "object"
+            },
+            "outputs": {
+              "type": ""
+            },
+            "roles": null,
+            "side": "pure"
+          }
+        ],
+        "body": {
+          "name": "supplieranswers",
+          "title": "Supplier inquiry answers",
+          "description": "Current readable inquiries and original supplier answers, without invented delivery dates.",
+          "object": "build.mesleadtime",
+          "sort": [
+            "id"
+          ],
+          "limit": 50
+        }
+      },
+      {
+        "ref": {
+          "app": "build",
+          "kind": "writeback",
+          "name": "supplierinquiry"
+        },
+        "contractVersion": 1,
+        "sourceVersion": "1.writeback-1",
+        "requires": [
+          {
+            "app": "build",
+            "kind": "action",
+            "name": "build.mesleadtime.create"
+          },
+          {
+            "app": "build",
+            "kind": "connection",
+            "name": "supplieragent"
+          },
+          {
+            "app": "build",
+            "kind": "object",
+            "name": "build.mesleadtime"
+          }
+        ],
+        "provides": [
+          {
+            "kind": "operation",
+            "name": "supplierinquiry",
+            "inputs": {
+              "type": ""
+            },
+            "outputs": {
+              "type": ""
+            },
+            "roles": null,
+            "side": "effect"
+          }
+        ],
+        "body": {
+          "name": "supplierinquiry",
+          "title": "Ask the supplier agent",
+          "connection": "supplieragent",
+          "object": "build.mesleadtime",
+          "on": "create",
+          "transport": "a2a",
+          "method": "POST",
+          "path": "rpc",
+          "mapping": [
+            {
+              "from": "product",
+              "to": "product"
+            },
+            {
+              "from": "question",
+              "to": "message"
+            }
+          ],
+          "result": [
+            {
+              "from": "artifacts.0.parts.0.text",
+              "to": "answer"
+            },
+            {
+              "from": "parts.0.text",
+              "to": "answer"
+            }
+          ]
         }
       }
     ],

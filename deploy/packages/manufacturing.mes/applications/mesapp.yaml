@@ -1,6 +1,6 @@
 name: mesapp
 title: Manufacturing execution
-icon: factory
+icon: cpu-chip
 pages:
   - mesorder
   - mesbatch

@@ -1,12 +1,12 @@
 {
   "format": 2,
   "package": "application.heating",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "requires": [],
-  "artifact": "sha256:5ba9a227a1186253fc4dafc84591eaaeb2f0a7bc5361294eb57e47851abcb5c7",
+  "artifact": "sha256:e0398ac8a709ae2f0a4bfc61b9e6dc8bbad1df5970c0be1073b14e022cc8935b",
   "assets": {
     "app/heatingops": {
-      "digest": "sha256:8a9886497c2c2a979fce922f1fcc7529d01c05586fb277e15c694d5ffe592289",
+      "digest": "sha256:07a54933726c2b37d46d1b8dc743687776b67acfe7d1151f430832b37ae9a50c",
       "contractVersion": 1,
       "sourceVersion": "1"
     },

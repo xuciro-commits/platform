@@ -1,11 +1,11 @@
 {
   "format": 2,
   "package": "manufacturing.erp",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "requires": [
-    "manufacturing.core@1.0.0"
+    "manufacturing.core@^1.0.0"
   ],
-  "artifact": "sha256:e5d9e034208fddee7914e9fde61248d1fc3e24f64f7d8cdb781d39507a07c67f",
+  "artifact": "sha256:39c5e75aef066f5b8f7a0a3dfedb83ee2c35252716ef8364fb09a7f32b972602",
   "assets": {
     "app/erpapp": {
       "digest": "sha256:74a83284289c8b392c05f0db15d9979646d8504d1a802c542928f6718d9f571f",

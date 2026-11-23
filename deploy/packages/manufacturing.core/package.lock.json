@@ -1,12 +1,12 @@
 {
   "format": 2,
   "package": "manufacturing.core",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "requires": [],
-  "artifact": "sha256:b49413c585a2329c2819f54f259c25a61f4ea049df649e1dc5422aeb45300a04",
+  "artifact": "sha256:88c2f8a203ca73a9f179743caf53406ff24008c91dafc5a1bc44c53fa0c59982",
   "assets": {
     "app/manufacturingfoundation": {
-      "digest": "sha256:a8833b8131d2f4c6c71061c2cff44c9c4b19542691716fbb881eb98b37b13e69",
+      "digest": "sha256:e625a9094096b511e9584c2db339e0e7922898aa6ae953d09ceb99b378f61d64",
       "contractVersion": 1,
       "sourceVersion": "1"
     },

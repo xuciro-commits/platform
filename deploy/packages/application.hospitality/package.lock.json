@@ -1,9 +1,9 @@
 {
   "format": 2,
   "package": "application.hospitality",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "requires": [],
-  "artifact": "sha256:8d8627b9e6b88e93874a56b73c40e1b70bc881bcaf48492e22f01987b96354c6",
+  "artifact": "sha256:2b25cf7173e934ae17cbff77423348a7d5db7d3490792499812d85423d36a662",
   "assets": {
     "agent/salesassistant": {
       "digest": "sha256:de78e65b5fa609a5d28854df96212ee257192fdc9bb08c7c8f5b46c9d5c816a7",
@@ -16,7 +16,7 @@
       "sourceVersion": "1"
     },
     "app/pmsapp": {
-      "digest": "sha256:f3547a6cb381d937bc1c5819a39f86627249d6df0d191db779d03f43d588ab64",
+      "digest": "sha256:0964d162e701278762b17840bfd36301e2bb0a0373e7b51d04103b525c2a3277",
       "contractVersion": 1,
       "sourceVersion": "1"
     },

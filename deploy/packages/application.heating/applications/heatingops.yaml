@@ -1,7 +1,7 @@
 name: heatingops
 title: Heating operations
 description: 'Declarative heating operations for a fictional teaching site: buildings and zones, accepted device health, exception handling, approved valve requests and time-limited physical access permissions. Thresholds and city data are examples, not engineering standards.'
-icon: thermometer
+icon: fire
 pages:
   - heatingoverview
   - heatingdevices

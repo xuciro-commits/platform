@@ -1,11 +1,11 @@
 {
   "format": 2,
   "package": "manufacturing.mes",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "requires": [
-    "manufacturing.core@1.0.0"
+    "manufacturing.core@^1.0.0"
   ],
-  "artifact": "sha256:b3d5afee6b92dfb0edcf6617210f492e31b5c6fad807130fa178f76ad9612a02",
+  "artifact": "sha256:d2b6db65f082baab91032ced3358c15cc0977725bd9240a954bd0d5702197136",
   "assets": {
     "agent/erpcorrection": {
       "digest": "sha256:4ecb0fc663abba85c7b679d5a0c83bdc100e56ee91e31134a5a0ee7090e447da",
@@ -18,7 +18,7 @@
       "sourceVersion": "1.agent-1"
     },
     "app/mesapp": {
-      "digest": "sha256:921c47907f4cfba59a4bea7b7f42731040d654be22e9c6d7cc46df14434ca8d2",
+      "digest": "sha256:a944bda1970e3794193bba9f4213de5942311ab17aa61c84fe1f79532d8198b8",
       "contractVersion": 1,
       "sourceVersion": "1"
     },
