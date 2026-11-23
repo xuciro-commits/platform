@@ -11,8 +11,8 @@ import { Skeleton } from "@astryxdesign/core/Skeleton";
 import { Spinner } from "@astryxdesign/core/Spinner";
 import { Text } from "@astryxdesign/core/Text";
 import { TextInput } from "@astryxdesign/core/TextInput";
-import { spacingVars } from "@astryxdesign/core/theme/tokens.stylex";
-import { CheckCircleIcon, CubeIcon } from "@heroicons/react/24/outline";
+import { radiusVars, spacingVars } from "@astryxdesign/core/theme/tokens.stylex";
+import { CubeIcon } from "@heroicons/react/24/outline";
 import * as stylex from "@stylexjs/stylex";
 import { useEffect, useRef, useState } from "react";
 import {
@@ -21,18 +21,26 @@ import {
 import { t } from "../i18n";
 import { navigate } from "../router";
 
-const stacked = "@container (max-width: 511px)";
+const stacked = "@container (max-width: 700px)";
 
 const styles = stylex.create({
-  grid: { containerType: "inline-size", padding: { default: spacingVars["--spacing-8"], [stacked]: spacingVars["--spacing-4"] } },
-  form: { order: { default: 0, [stacked]: -1 } },
+  grid: {
+    containerType: "inline-size",
+    padding: { default: spacingVars["--spacing-8"], [stacked]: spacingVars["--spacing-4"] },
+  },
+  form: { order: 0, minHeight: { default: 620, [stacked]: "auto" } },
+  photo: {
+    order: 1,
+    overflow: "hidden",
+    minHeight: 620,
+    height: "min(76dvh, 720px)",
+    borderRadius: radiusVars["--radius-container"],
+    backgroundImage: "url(/media/sign-in.avif)",
+    backgroundSize: "cover",
+    backgroundPosition: "center",
+    display: { default: "block", [stacked]: "none" },
+  },
 });
-
-const points = [
-  "Lists, records and boards are generated from each type.",
-  "Industry knowledge ships as packages you install and upgrade.",
-  "Every change goes through rules, roles and an audit trail.",
-];
 
 function reasonOf(problem: unknown) {
   if (problem instanceof HostRefusal && (problem.status === 400 || problem.status === 401) && problem.code !== "state") {
@@ -98,54 +106,43 @@ export function SignIn() {
   const sign = options.status === "ready" ? options.data : undefined;
   return (
     <Center axis="both" padding={6} minHeight="100dvh">
-      <Card padding={0} width="100%" maxWidth={1000}>
-        <Grid columns={{ minWidth: 240, repeat: "fit" }} gap={8} align="stretch" xstyle={styles.grid}>
-          <Card variant="muted" padding={8} height="100%">
-            <VStack gap={6} height="100%">
+      <Card padding={0} width="100%" maxWidth={1200}>
+        <Grid columns={{ minWidth: 260, repeat: "fit" }} gap={8} align="stretch" xstyle={styles.grid}>
+          <Section variant="transparent" padding={0} height="100%" xstyle={styles.form}>
+            <VStack gap={5} height="100%" hAlign="stretch">
               <HStack gap={2} vAlign="center">
                 <Icon icon={CubeIcon} />
                 <Text type="body" weight="bold">{t("Platform")}</Text>
               </HStack>
               <StackItem size="fill">
                 <Center axis="vertical" height="100%">
-                  <VStack gap={4}>
-                    <Text type="display-2" as="p">{t("Declare business objects, get working applications")}</Text>
-                    {points.map((point) => (
-                      <HStack key={point} gap={2} vAlign="start">
-                        <Icon icon={CheckCircleIcon} color="secondary" />
-                        <Text type="body" color="secondary">{t(point)}</Text>
-                      </HStack>
-                    ))}
+                  <VStack gap={5} hAlign="stretch" width="100%">
+                    <VStack gap={1}>
+                      <Text type="display-1" as="h1">{t("Welcome back")}</Text>
+                      <Text type="body" color="secondary" size="sm">
+                        {sign?.issuer ? t("Sign in to your Platform workspace") : t("Choose how to continue")}
+                      </Text>
+                    </VStack>
+                    {options.status === "loading" && <Skeleton height={44} />}
+                    {(options.status === "error" || options.status === "refused") && (
+                      <Banner status="error" title={t("The platform could not be reached")} description={options.reason} />
+                    )}
+                    {sign?.issuer && (returning ? <Returning sign={sign} /> : <Credentials sign={sign} />)}
+                    {sign && !sign.issuer && (
+                      <VStack gap={3} hAlign="stretch">
+                        {(sign.identities ?? []).map((identity) => (
+                          <Button key={identity.tenant + "/" + identity.token} label={identity.member + " · " + identity.tenant}
+                            variant="secondary" size="lg" onClick={() => startSession({ token: identity.token, tenant: identity.tenant })} />
+                        ))}
+                      </VStack>
+                    )}
                   </VStack>
                 </Center>
               </StackItem>
+              <Text type="supporting" color="secondary">{t("Your workspace, your data, your control.")}</Text>
             </VStack>
-          </Card>
-          <Section variant="transparent" padding={0} height="100%" xstyle={styles.form}>
-            <Center axis="vertical" height="100%">
-              <VStack gap={4} hAlign="stretch" width="100%">
-                <VStack gap={1}>
-                  <Text type="display-1" as="h1">{t("Sign in")}</Text>
-                  <Text type="body" color="secondary" size="sm">
-                    {sign?.issuer ? t("Use your work account") : t("Choose how to continue")}
-                  </Text>
-                </VStack>
-                {options.status === "loading" && <Skeleton height={44} />}
-                {(options.status === "error" || options.status === "refused") && (
-                  <Banner status="error" title={t("The platform could not be reached")} description={options.reason} />
-                )}
-                {sign?.issuer && (returning ? <Returning sign={sign} /> : <Credentials sign={sign} />)}
-                {sign && !sign.issuer && (
-                  <VStack gap={3} hAlign="stretch">
-                    {(sign.identities ?? []).map((identity) => (
-                      <Button key={`${identity.tenant}/${identity.token}`} label={`${identity.member} · ${identity.tenant}`}
-                        variant="secondary" size="lg" onClick={() => startSession({ token: identity.token, tenant: identity.tenant })} />
-                    ))}
-                  </VStack>
-                )}
-              </VStack>
-            </Center>
           </Section>
+          <Card variant="transparent" padding={0} xstyle={styles.photo} />
         </Grid>
       </Card>
     </Center>

@@ -382,5 +382,13 @@
   "This person is not in the organization": "组织里没有这个人",
   "Not placed in any unit.": "还没有放进任何单元。",
   "Named in": "出现在",
-  "Sign-in account": "登录账号"
+  "Sign-in account": "登录账号",
+  "Preview": "预览",
+  "State": "状态",
+  "Status": "状态",
+  "Archived": "已归档",
+  "Installed": "已安装",
+  "Done": "已完成",
+  "Updated": "更新时间",
+  "Created": "创建时间"
 }

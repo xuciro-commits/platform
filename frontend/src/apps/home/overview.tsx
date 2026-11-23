@@ -1,4 +1,6 @@
 import type { Api } from "../../host";
+import { useRead } from "../../host";
+import { WorkspaceWelcome } from "../../pages/WorkspaceWelcome";
 import { dashboardPage } from "../../pages/DashboardPage";
 
 type Directory = { resources: Api.ResourceEntry[] };
@@ -20,7 +22,7 @@ const columns = [
   { key: "changed", header: "Updated", width: 180 },
 ];
 
-export default dashboardPage<Directory>({
+const Dashboard = dashboardPage<Directory>({
   title: "Overview",
   read: "/v1/resources",
   metrics: [
@@ -34,3 +36,14 @@ export default dashboardPage<Directory>({
     { title: "Recently updated modules", label: "All modules", href: "/apps/modules", columns, rows: (answer) => latest(answer, "app") },
   ],
 });
+
+function HomeOverview() {
+  const resources = useRead<Directory>("/v1/resources");
+  const installed = useRead<Api.ApplicationView[]>("/v1/applications");
+  if (resources.status === "ready" && installed.status === "ready" && resources.data.resources.length === 0 && installed.data.length === 0) {
+    return <WorkspaceWelcome />;
+  }
+  return <Dashboard />;
+}
+
+export default HomeOverview;

@@ -1,5 +1,6 @@
 import { Button } from "@astryxdesign/core/Button";
 import { ClickableCard } from "@astryxdesign/core/ClickableCard";
+import { Card } from "@astryxdesign/core/Card";
 import { Icon } from "@astryxdesign/core/Icon";
 import { HStack, StackItem, VStack } from "@astryxdesign/core/Layout";
 import { StatusDot } from "@astryxdesign/core/StatusDot";
@@ -26,6 +27,14 @@ import { t } from "../i18n";
 
 const styles = stylex.create({
   action: { flexShrink: 0 },
+  cover: (src: string) => ({
+    width: "100%",
+    aspectRatio: "8 / 5",
+    backgroundImage: "url(" + src + ")",
+    backgroundSize: "cover",
+    backgroundPosition: "center",
+    borderRadius: radiusVars["--radius-element"],
+  }),
   iconBox: {
     width: 36,
     height: 36,
@@ -46,6 +55,11 @@ const listingLabels: Record<string, string> = {
   projects: "Project management", assets: "Assets", maintenance: "Maintenance", quality: "Quality", learning: "Learning",
   knowledge: "Knowledge management", lending: "Lending", operations: "Business operations", "master-data": "Master data",
 };
+
+const officialCovers = new Set(["crm", "helpdesk"]);
+const coverFor = (id: string) => officialCovers.has(id)
+  ? "https://raw.githubusercontent.com/xuciro-commits/platform-packages/main/packages/" + id + "/assets/cover.avif"
+  : undefined;
 
 export function listingLabel(value: string) {
   return t(listingLabels[value] ?? value);
@@ -122,6 +136,7 @@ export function PackageCard({
     <VStack role="listitem" height="100%">
       <ClickableCard label={display} elevation="none" padding={4} height="100%" onClick={onInspect}>
         <VStack gap={3} height="100%">
+          {coverFor(id) && <Card variant="transparent" padding={0} xstyle={styles.cover(coverFor(id) ?? "")} />}
           <HStack gap={3} vAlign="start">
             <VStack xstyle={styles.iconBox}>
               <Icon icon={icon} size="md" color="secondary" />
@@ -201,6 +216,7 @@ export function CatalogEntryCard({
     <VStack role="listitem" height="100%">
       <ClickableCard label={display} elevation="none" padding={4} height="100%" onClick={onSelect}>
         <VStack gap={3} height="100%">
+          {official && coverFor(entry.id) && <Card variant="transparent" padding={0} xstyle={styles.cover(coverFor(entry.id) ?? "")} />}
           <HStack gap={3} vAlign="start">
             <VStack xstyle={styles.iconBox}>
               <Icon icon={icon} size="md" color="secondary" />
