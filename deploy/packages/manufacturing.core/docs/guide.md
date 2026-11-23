@@ -1,1 +1,0 @@
-Configure supplieragent after installation. Installation grants no roles and creates no business data. / 安装后配置 supplieragent。安装不授予角色，也不创建业务数据。

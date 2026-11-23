@@ -1,4 +1,0 @@
-name: batchconsumerupstream
-title: Upstream production provider
-kind: http
-credential: true
