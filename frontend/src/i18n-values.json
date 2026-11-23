@@ -349,5 +349,19 @@
   "No dependents": "无依赖包",
   "test-plan": "测试计划",
   "sample-set": "样本集",
-  "evaluation": "评估"
+  "evaluation": "评估",
+  "Gantt": "甘特图",
+  "Previous period": "上一时段",
+  "Next period": "下一时段",
+  "Time scale": "时间粒度",
+  "Day": "日",
+  "Week": "周",
+  "Month": "月",
+  "Start date field": "开始日期字段",
+  "End date field": "结束日期字段",
+  "Unscheduled": "未排期",
+  "Ungrouped": "未分组",
+  "No scheduled records in this period": "该时段内没有已排期的记录",
+  "Resize end date": "调整结束日期",
+  "All records have dates": "所有记录都已排期"
 }

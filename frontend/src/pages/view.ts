@@ -3,9 +3,10 @@ import type { PowerSearchFilter } from "@astryxdesign/core/PowerSearch";
 export type ViewSort = { sortKey: string; direction: "ascending" | "descending" };
 export type Density = "compact" | "balanced" | "spacious";
 export type StickyEdge = "none" | "one" | "two";
+export type GanttScale = "day" | "week" | "month";
 export type ViewState = {
   version: 1;
-  layout: "table" | "board" | "calendar";
+  layout: "table" | "board" | "calendar" | "gantt";
   columns: string[];
   sort: ViewSort[];
   filters: PowerSearchFilter[];
@@ -13,6 +14,8 @@ export type ViewState = {
   group: string;
   lanes: string;
   dates: string;
+  until: string;
+  scale: GanttScale;
   month: string;
   density: Density;
   stickyStart: StickyEdge;
@@ -21,9 +24,10 @@ export type ViewState = {
 
 const densities: Density[] = ["compact", "balanced", "spacious"];
 const edges: StickyEdge[] = ["none", "one", "two"];
+const scales: GanttScale[] = ["day", "week", "month"];
 
 export function newView(columns: string[], group = "none", lanes = ""): ViewState {
-  return { version: 1, layout: "table", columns: [...columns], sort: [], filters: [], search: "", group, lanes, dates: "", month: "", density: "balanced", stickyStart: "none", stickyEnd: "none" };
+  return { version: 1, layout: "table", columns: [...columns], sort: [], filters: [], search: "", group, lanes, dates: "", until: "", scale: "day", month: "", density: "balanced", stickyStart: "none", stickyEnd: "none" };
 }
 
 export function readView(raw: string | null, fallback: ViewState): ViewState {
@@ -33,7 +37,7 @@ export function readView(raw: string | null, fallback: ViewState): ViewState {
     if (value.version !== 1) return fallback;
     return {
       version: 1,
-      layout: value.layout === "board" || value.layout === "calendar" ? value.layout : "table",
+      layout: value.layout === "board" || value.layout === "calendar" || value.layout === "gantt" ? value.layout : "table",
       columns: Array.isArray(value.columns) ? value.columns.filter((column): column is string => typeof column === "string") : fallback.columns,
       sort: Array.isArray(value.sort) ? value.sort.filter((sort): sort is ViewSort => Boolean(sort && typeof sort.sortKey === "string" && (sort.direction === "ascending" || sort.direction === "descending"))) : [],
       filters: Array.isArray(value.filters) ? value.filters.filter((filter): filter is PowerSearchFilter => Boolean(filter && typeof filter.field === "string" && typeof filter.operator === "string" && filter.value)) : [],
@@ -41,6 +45,8 @@ export function readView(raw: string | null, fallback: ViewState): ViewState {
       group: typeof value.group === "string" ? value.group : fallback.group,
       lanes: typeof value.lanes === "string" ? value.lanes : fallback.lanes,
       dates: typeof value.dates === "string" ? value.dates : fallback.dates,
+      until: typeof value.until === "string" ? value.until : fallback.until,
+      scale: scales.find((scale) => scale === value.scale) ?? fallback.scale,
       month: typeof value.month === "string" && /^\d{4}-\d{2}$/.test(value.month) ? value.month : "",
       density: densities.find((density) => density === value.density) ?? fallback.density,
       stickyStart: edges.find((edge) => edge === value.stickyStart) ?? fallback.stickyStart,
@@ -110,9 +116,8 @@ export function domainOf(filters: PowerSearchFilter[], choiceValue: (field: stri
       case "before":
         return [[field, "<", scalar]];
       case "greater_than_or_equal":
-        return [[field, ">=", scalar]];
       case "less_than_or_equal":
-        return [[field, "<=", scalar]];
+        return [[field, filter.operator === "greater_than_or_equal" ? ">=" : "<=", scalar]];
       case "is_any_of":
         return [[field, "in", scalar]];
       case "is_none_of":
@@ -133,4 +138,20 @@ export function monthSpan(month: string) {
   const start = new Date(first.getTime() - ((first.getUTCDay() + 6) % 7) * 86400000);
   const end = new Date(start.getTime() + 42 * 86400000);
   return { year, month: number, start: start.toISOString().slice(0, 10), end: end.toISOString().slice(0, 10) };
+}
+
+export function ganttSpan(month: string, scale: GanttScale) {
+  const [year, number] = month.split("-").map(Number);
+  const first = new Date(Date.UTC(year, number - 1, 1));
+  if (scale === "month") {
+    const start = first;
+    const end = new Date(Date.UTC(year + 1, number - 1, 1));
+    const days = Math.round((end.getTime() - start.getTime()) / 86400000);
+    return { start: start.toISOString().slice(0, 10), end: end.toISOString().slice(0, 10), days };
+  }
+  const mondayOffset = (first.getUTCDay() + 6) % 7;
+  const start = new Date(first.getTime() - mondayOffset * 86400000);
+  const days = scale === "day" ? 49 : 112;
+  const end = new Date(start.getTime() + days * 86400000);
+  return { start: start.toISOString().slice(0, 10), end: end.toISOString().slice(0, 10), days };
 }

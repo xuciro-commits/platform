@@ -12,6 +12,7 @@ import (
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
 	"platformserver/platform"
 	ontology "platformserver/services/ontology"
+	"platformserver/services/resources/publication"
 )
 
 func computeRulesOf(o ontology.Object, lookup func(string) (platform.RecordTypeInfo, bool)) func(platform.Caller, any, any, time.Time) *platform.Error {
@@ -290,6 +291,13 @@ func assign(f reflect.Value, x any) error {
 }
 
 func (b *Build) normalizeObjectRules(o *ontology.Object) error {
+	viewFields := make([]publication.ViewField, len(o.Fields))
+	for i, f := range o.Fields {
+		viewFields[i] = publication.ViewField{Name: f.Name, Type: f.Type, Ref: f.Ref}
+	}
+	if err := publication.CheckObjectView(o.Type(), viewFields, o.View); err != nil {
+		return err
+	}
 	lookup := ruleLookup(*o, b.conditionLookup)
 	for i := range o.Fields {
 		f := &o.Fields[i]

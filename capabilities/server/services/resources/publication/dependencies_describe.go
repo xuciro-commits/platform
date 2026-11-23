@@ -110,6 +110,11 @@ func (resolver Resolver) describeAsset(asset platform.ReleaseAsset, historical b
 		}
 		out.Requires = append(out.Requires, resolver.ApplicationDependencies(app, asset.Ref.App)...)
 	case platform.AssetObject:
+		if !historical {
+			if err := CheckObjectAssetView(asset.Body); err != nil {
+				return out, err
+			}
+		}
 		requires, provides, err := resolver.ObjectDependencies(asset, historical)
 		if err != nil {
 			return out, err

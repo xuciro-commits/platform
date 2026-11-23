@@ -15,7 +15,7 @@ import type { TableColumn, TablePlugin } from "@astryxdesign/core/Table";
 import { ToggleButton } from "@astryxdesign/core/ToggleButton";
 import { useMediaQuery } from "@astryxdesign/core/hooks";
 import { colorVars } from "@astryxdesign/core/theme/tokens.stylex";
-import { AdjustmentsHorizontalIcon, ArrowPathIcon, CalendarDaysIcon, MagnifyingGlassIcon, TableCellsIcon, ViewColumnsIcon } from "@heroicons/react/24/outline";
+import { AdjustmentsHorizontalIcon, ArrowPathIcon, Bars3BottomLeftIcon, CalendarDaysIcon, MagnifyingGlassIcon, TableCellsIcon, ViewColumnsIcon } from "@heroicons/react/24/outline";
 import { AdjustmentsHorizontalIcon as AdjustmentsHorizontalSolidIcon } from "@heroicons/react/24/solid";
 import * as stylex from "@stylexjs/stylex";
 import { type ReactNode, useEffect, useMemo, useState } from "react";
@@ -25,6 +25,7 @@ import { navigate, usePath, useSearch } from "../router";
 import { PageTitle, useGutter } from "./frame";
 import { BoardView } from "./BoardView";
 import { CalendarView } from "./CalendarView";
+import { GanttView } from "./GanttView";
 import { useListWindow } from "./ListWindow";
 import { type CellEdit, CellProperty } from "./PropertyField";
 import { type Chip, FilterBar } from "./ListFilters";
@@ -32,63 +33,10 @@ import { ListOptions } from "./ListOptions";
 import { type Cells, dotOf, idKey, ListCell, ListDetail, targetOf, typeOf } from "./ListDetail";
 import { useSavedViews } from "./SavedViews";
 import type { Dot } from "./Transitions";
-import { type Density, newView, readView, hasFilters, shownMonth, type StickyEdge, type ViewSort, type ViewState } from "./view";
+import { type Density, type GanttScale, newView, readView, hasFilters, shownMonth, type StickyEdge, type ViewSort, type ViewState } from "./view";
 
-export type ListColumn<Row> = {
-  key: string;
-  header: string;
-  width?: number;
-  text: (row: Row) => string;
-  kind?: "string" | "enum" | "number" | "time" | "code" | "member" | "person" | "email" | "phone";
-  choices?: string[];
-  options?: { value: string; label: string }[];
-  boolean?: boolean;
-  dot?: (row: Row) => Dot | undefined;
-  value?: (row: Row) => unknown;
-  hiddenByDefault?: boolean;
-  chip?: boolean;
-  reference?: (row: Row) => { type: string; id: string } | undefined;
-  edit?: CellEdit<Row>;
-};
-type Done = Promise<unknown>;
-export type ListGroup<Row> = { key: string; label: string; of: (row: Row) => string; order?: string[] };
-export type Move = (id: string, to: string) => Done;
-type ListBoard<Row> = {
-  key: string;
-  lanes: { key: string; label: string; dot?: Dot }[];
-  of: (row: Row) => string;
-  accepts?: (id: string, to: string) => boolean;
-  move?: Move;
-  total?: { label: string; value: (row: Row) => { amount: number; currency?: string } | undefined };
-  related?: (row: Row) => string | undefined;
-  create?: (lane: string) => void;
-};
-type ListCalendar<Row> = {
-  fields: { key: string; label: string }[];
-  of: (row: Row, field: string) => string;
-  accepts?: (id: string) => boolean;
-  move?: (id: string, field: string, day: string) => Done;
-};
-export type ListShape<Answer, Row> = {
-  title: string;
-  about: string;
-  rows: (answer: Answer) => Row[];
-  id: (row: Row) => string;
-  link?: (row: Row) => string;
-  columns: ListColumn<Row>[];
-  groups?: ListGroup<Row>[];
-  board?: ListBoard<Row>;
-  calendar?: ListCalendar<Row>;
-  bulk?: (ids: string[], clear: () => void) => ReactNode;
-  detail?: (id: string) => ReactNode;
-  peekType?: string;
-  defaultView?: unknown;
-  carryView?: boolean;
-  page?: { total: number; loaded: number; hasMore: boolean; loading: boolean; loadMore: () => void };
-  unfiltered?: number;
-  savedViews?: string;
-  remote?: "all" | "search";
-};
+import type { ListShape } from "./listShape";
+export type { ListColumn, ListGroup, ListShape, Move } from "./listShape";
 
 type Raw = Record<string, unknown>;
 const compare = (left: unknown, right: unknown) =>
@@ -165,6 +113,7 @@ export function ListView<Answer, Row>({ definition, read, primary, back, exportR
   const lanes = definition.board;
   const board = view.layout === "board" ? lanes : undefined;
   const calendar = view.layout === "calendar" && definition.calendar?.fields.length ? definition.calendar : undefined;
+  const gantt = view.layout === "gantt" && definition.gantt ? definition.gantt : undefined;
   const dateField = calendar ? (calendar.fields.find((field) => field.key === view.dates) ?? calendar.fields[0]).key : "";
   const orderedColumns = useMemo(() => {
     const ordered = view.columns.flatMap((key) => definition.columns.find((column) => column.key === key) ?? []);
@@ -223,7 +172,7 @@ export function ListView<Answer, Row>({ definition, read, primary, back, exportR
       const href = definition.link?.(row) ?? "";
       const params = new URLSearchParams(currentSearch);
       if (definition.carryView) params.set("view", JSON.stringify(view));
-      const cells: Cells = { [idKey]: definition.id(row), __group: group ? group.of(row) : "", __lane: board ? board.of(row) : "", __day: calendar ? calendar.of(row, dateField) : "", __href: href && definition.carryView ? href + "?" + params : href };
+      const cells: Cells = { [idKey]: definition.id(row), __group: group ? group.of(row) : "", __lane: board ? board.of(row) : "", __day: calendar ? calendar.of(row, dateField) : "", __start: gantt ? gantt.startOf(row) : "", __end: gantt ? gantt.endOf(row) : "", __ganttDot: gantt?.dotOf?.(row) ?? "", __href: href && definition.carryView ? href + "?" + params : href };
       const raw: Raw = { [idKey]: cells[idKey] };
       for (const column of definition.columns) {
         cells[column.key] = column.text(row);
@@ -244,7 +193,7 @@ export function ListView<Answer, Row>({ definition, read, primary, back, exportR
       }
       return { cells, raw, row };
     });
-  }, [read, definition, group, board, calendar, dateField, currentSearch, view]);
+  }, [read, definition, group, board, calendar, gantt, dateField, currentSearch, view]);
   const rowOf = useMemo(() => new Map(all.map((entry) => [entry.cells[idKey], entry.row])), [all]);
 
   const shown = useMemo(() => {
@@ -404,9 +353,10 @@ export function ListView<Answer, Row>({ definition, read, primary, back, exportR
   const toolbar = definition.columns.length > 0 && read.status !== "error" && read.status !== "refused";
 
   const activeCells = active ? shown.find((cells) => cells[idKey] === active) : undefined;
+  const activeUnscheduled = Boolean(active && gantt?.unscheduled.some((item) => item.id === active));
   useEffect(() => {
-    if (active && ready && !activeCells) setActive(null);
-  }, [active, ready, activeCells]);
+    if (active && ready && !activeCells && !activeUnscheduled) setActive(null);
+  }, [active, ready, activeCells, activeUnscheduled]);
 
 
   return (
@@ -438,11 +388,12 @@ export function ListView<Answer, Row>({ definition, read, primary, back, exportR
                         {powerToggle}
                         <Divider orientation="vertical" />
                         <HStack gap={1} vAlign="center" role="group" aria-label={t("View options")}>
-                          {(lanes || Boolean(definition.calendar?.fields.length)) && (
+                          {(lanes || Boolean(definition.calendar?.fields.length) || Boolean(definition.gantt)) && (
                             <SegmentedControl size="sm" label={t("Layout")} value={view.layout} onChange={(layout) => update({ layout: layout as ViewState["layout"], lanes: lanes?.key ?? view.lanes })}>
                               <SegmentedControlItem value="table" label={t("Table")} icon={<Icon icon={TableCellsIcon} size="sm" />} />
                               {lanes && <SegmentedControlItem value="board" label={t("Board")} icon={<Icon icon={ViewColumnsIcon} size="sm" />} />}
                               {Boolean(definition.calendar?.fields.length) && <SegmentedControlItem value="calendar" label={t("Calendar")} icon={<Icon icon={CalendarDaysIcon} size="sm" />} />}
+                              {Boolean(definition.gantt) && <SegmentedControlItem value="gantt" label={t("Gantt")} icon={<Icon icon={Bars3BottomLeftIcon} size="sm" />} />}
                             </SegmentedControl>
                           )}
                           <ListOptions view={view} update={update} columns={definition.columns} locked={orderedColumns[0]?.key ?? ""} defaults={fallback.columns}
@@ -498,8 +449,8 @@ export function ListView<Answer, Row>({ definition, read, primary, back, exportR
               </VStack>
             )}
             {read.status === "refused" && <EmptyState headingLevel={2} title={t("You cannot see this list")} description={read.reason || t("Ask an administrator of this workspace for access.")} />}
-            {ready && shown.length === 0 && !dirty && !calendar && !board && <EmptyState headingLevel={2} title={t("Nothing here yet")} description={t(definition.about)} actions={primary} />}
-            {ready && shown.length === 0 && dirty && !calendar && !board && (
+            {ready && shown.length === 0 && !dirty && !calendar && !board && !gantt && <EmptyState headingLevel={2} title={t("Nothing here yet")} description={t(definition.about)} actions={primary} />}
+            {ready && shown.length === 0 && dirty && !calendar && !board && !gantt && (
               <EmptyState
                 headingLevel={2}
                 icon={<Icon icon={MagnifyingGlassIcon} size="lg" />}
@@ -557,7 +508,17 @@ export function ListView<Answer, Row>({ definition, read, primary, back, exportR
                 onMove={calendar.move && ((id, day) => { setFailure(""); calendar.move?.(id, dateField, day).catch(moveFailed); })}
               />
             )}
-            {ready && shown.length > 0 && !board && !calendar && (
+            {ready && gantt && (
+              <GanttView
+                month={shownMonth(view)} scale={view.scale} startField={gantt.startField} endField={gantt.endField} fields={gantt.fields}
+                grouped={Boolean(group)} groupOrder={group?.order} activeId={active} page={definition.page} unscheduled={gantt.unscheduled}
+                onMonth={(month) => update({ month })} onScale={(scale: GanttScale) => update({ scale })} onStartField={(dates) => update({ dates })} onEndField={(until) => update({ until })} onSelect={setActive}
+                items={shown.filter((cells) => Boolean(cells.__start && cells.__end)).map((cells) => ({ id: cells[idKey], title: cells[orderedColumns[0].key], start: cells.__start, end: cells.__end, group: cells.__group || undefined, dot: (cells.__ganttDot || undefined) as Dot | undefined, href: cells.__href }))}
+                accepts={gantt.accepts}
+                onMove={gantt.move && ((id, start, end) => { setFailure(""); return gantt.move?.(id, gantt.startField, gantt.endField, start, end).catch((err: Error) => { moveFailed(err); throw err; }); })}
+              />
+            )}
+            {ready && shown.length > 0 && !board && !calendar && !gantt && (
               <VStack height="100%" paddingInline={gutter}>
                 <Table
                   data={rows.slice(first, last)}

@@ -94,6 +94,9 @@ func (b *Build) ForkReleaseExecution(assets []platform.ReleaseAsset) (platform.S
 		if problem := ontology.CheckObjectSchemas(object); problem != nil {
 			return nil, problem
 		}
+		if problem := publication.CheckObjectAssetView(asset.Body); problem != nil {
+			return nil, problem
+		}
 		if err != nil {
 			return nil, err
 		}
