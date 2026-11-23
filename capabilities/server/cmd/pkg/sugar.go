@@ -482,9 +482,23 @@ func expand(dir string, resources []resource, released bool) ([]resource, error)
 			names = append(names, name)
 		}
 		slices.Sort(names)
+		wanted := map[string]bool{}
+		for _, r := range out {
+			wording(r.body, "", "", wanted)
+		}
 		for _, name := range names {
 			if languages.has(name) {
 				return nil, fmt.Errorf("%s/%s.yaml and the application both translate %s", localesDir, name, name)
+			}
+			var missing []string
+			for text := range wanted {
+				if !locales[name].has(text) {
+					missing = append(missing, text)
+				}
+			}
+			if len(missing) > 0 {
+				slices.Sort(missing)
+				return nil, fmt.Errorf("%s/%s.yaml has no translation for %d texts: %q", localesDir, name, len(missing), missing)
 			}
 			languages.set(name, locales[name])
 		}
@@ -513,4 +527,30 @@ func assetRef(kind, name string) platform.AssetRef {
 
 func sortResources(list []resource) {
 	slices.SortFunc(list, func(a, b resource) int { return publication.CompareAssetRef(a.ref, b.ref) })
+}
+
+var worded = map[string]bool{"title": true, "plural": true, "description": true, "help": true, "oneOf": true, "message": true, "body": true, "exit": true}
+
+func wording(value any, key, within string, into map[string]bool) {
+	switch v := value.(type) {
+	case *object:
+		for _, k := range v.order() {
+			wording(v.values[k], k, within, into)
+		}
+	case []any:
+		for _, item := range v {
+			wording(item, key, key, into)
+		}
+	case string:
+		switch {
+		case (worded[key] || key == "group" && within == "fields") && strings.TrimSpace(v) != "":
+			into[v] = true
+		case key == "choices":
+			for _, choice := range strings.Split(v, ",") {
+				if _, label, ok := strings.Cut(choice, ":"); ok && label != "" {
+					into[label] = true
+				}
+			}
+		}
+	}
 }
