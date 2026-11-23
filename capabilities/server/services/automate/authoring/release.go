@@ -133,7 +133,7 @@ func (o *Owner) ProcessFromAsset(asset platform.ReleaseAsset) (runtimeprotocol.P
 		return p, err
 	}
 	var got, want any
-	if json.Unmarshal(asset.Body, &got) != nil || json.Unmarshal(expected.Body, &want) != nil || expected.Ref != asset.Ref || !reflect.DeepEqual(got, want) {
+	if json.Unmarshal(asset.Body, &got) != nil || json.Unmarshal(expected.Body, &want) != nil || expected.Ref != asset.Ref || !reflect.DeepEqual(withoutEmptyActions(got), withoutEmptyActions(want)) {
 		return p, fmt.Errorf("process %s definition and compiled bindings differ", asset.Ref)
 	}
 	p.ID, p.Version, p.State = asset.Ref.Name, 1, "published"
@@ -143,7 +143,15 @@ func (o *Owner) ProcessFromAsset(asset platform.ReleaseAsset) (runtimeprotocol.P
 }
 
 func (o *Owner) processReleaseAsset(saved runtimeprotocol.Process, sourceVersion string) (platform.ReleaseAsset, error) {
-	ref := platform.AssetRef{App: o.env.AppID(), Kind: platform.AssetFlow, Name: o.QualifiedName(saved.Name)}
+	asset, err := FlowReleaseAsset(o.env.AppID(), saved, sourceVersion)
+	if err != nil {
+		return platform.ReleaseAsset{}, err
+	}
+	return o.resolver.WithDependencies(asset)
+}
+
+func FlowReleaseAsset(app string, saved runtimeprotocol.Process, sourceVersion string) (platform.ReleaseAsset, error) {
+	ref := platform.AssetRef{App: app, Kind: platform.AssetFlow, Name: app + "." + saved.Name}
 	var subject platform.AssetRef
 	if saved.Object != "" {
 		owner := platform.OwnerOfType(saved.Object)
@@ -173,10 +181,10 @@ func (o *Owner) processReleaseAsset(saved runtimeprotocol.Process, sourceVersion
 		if step.Function != nil {
 			owner := step.Function.App
 			if owner == "" {
-				owner = o.env.AppID()
+				owner = app
 			}
 			ref := platform.AssetRef{App: owner, Kind: platform.AssetFunction, Name: step.Function.Name}
-			if owner != o.env.AppID() || step.Function.Version == 0 {
+			if owner != app || step.Function.Version == 0 {
 				dependencies = append(dependencies, ref)
 				continue
 			}
@@ -188,10 +196,10 @@ func (o *Owner) processReleaseAsset(saved runtimeprotocol.Process, sourceVersion
 		if step.Operation != nil {
 			owner := step.Operation.App
 			if owner == "" {
-				owner = o.env.AppID()
+				owner = app
 			}
 			ref := platform.AssetRef{App: owner, Kind: platform.AssetCompute, Name: step.Operation.Name}
-			if owner == o.env.AppID() && step.Operation.Version > 0 {
+			if owner == app && step.Operation.Version > 0 {
 				operations = append(operations, platform.AssetBinding{Ref: ref, SourceVersion: sourceVersion + ".compute-" + strconv.Itoa(step.Operation.Version)})
 			} else {
 				dependencies = append(dependencies, ref)
@@ -199,7 +207,7 @@ func (o *Owner) processReleaseAsset(saved runtimeprotocol.Process, sourceVersion
 		}
 		if step.Query != "" {
 			ref := platform.AssetRef{App: step.App, Kind: platform.AssetQuery, Name: step.Query}
-			if step.App == o.env.AppID() && step.QueryVersion > 0 {
+			if step.App == app && step.QueryVersion > 0 {
 				queries = append(queries, platform.AssetBinding{Ref: ref, SourceVersion: sourceVersion + ".query-" + strconv.Itoa(step.QueryVersion)})
 			} else {
 				dependencies = append(dependencies, ref)
@@ -207,10 +215,10 @@ func (o *Owner) processReleaseAsset(saved runtimeprotocol.Process, sourceVersion
 		}
 		if step.Flow != "" {
 			name := step.Flow
-			if !strings.HasPrefix(name, o.env.AppID()+".") {
-				name = o.QualifiedName(name)
+			if !strings.HasPrefix(name, app+".") {
+				name = app + "." + name
 			}
-			dependencies = append(dependencies, platform.AssetRef{App: o.env.AppID(), Kind: platform.AssetFlow, Name: name})
+			dependencies = append(dependencies, platform.AssetRef{App: app, Kind: platform.AssetFlow, Name: name})
 		}
 	}
 	slices.SortFunc(operations, func(a, b platform.AssetBinding) int { return strings.Compare(a.Ref.String(), b.Ref.String()) })
@@ -240,7 +248,7 @@ func (o *Owner) processReleaseAsset(saved runtimeprotocol.Process, sourceVersion
 	if err != nil {
 		return platform.ReleaseAsset{}, err
 	}
-	return o.resolver.WithDependencies(platform.ReleaseAsset{Ref: ref, ContractVersion: 1, SourceVersion: sourceVersion, Body: body})
+	return platform.ReleaseAsset{Ref: ref, ContractVersion: 1, SourceVersion: sourceVersion, Body: body}, nil
 }
 
 func (o *Owner) Draft(asset platform.ReleaseAsset) (string, any, bool, error) {
@@ -316,4 +324,13 @@ func (o *Owner) ApplyImage(schema string, image []byte) error {
 
 func (o *Owner) HandlesPublication(schema string) bool {
 	return schema == runtimeprotocol.SchemaProcess
+}
+
+func withoutEmptyActions(body any) any {
+	if fields, ok := body.(map[string]any); ok {
+		if actions, listed := fields["actions"].([]any); fields["actions"] == nil || listed && len(actions) == 0 {
+			delete(fields, "actions")
+		}
+	}
+	return body
 }

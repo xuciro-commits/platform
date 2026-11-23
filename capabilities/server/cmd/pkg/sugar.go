@@ -304,9 +304,6 @@ func stepTarget(step *object, s exprScope) (string, error) {
 }
 
 func expandFlow(body *object, types map[string]map[string]exprField, at string) error {
-	if !body.has("actions") {
-		body.set("actions", nil)
-	}
 	definition := asObject(body.values["definition"])
 	if definition == nil {
 		return nil

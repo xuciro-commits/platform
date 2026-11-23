@@ -505,6 +505,11 @@ func build(dir string, previous *platform.PackageDescriptor) (built, error) {
 			entry = lockedAsset{ContractVersion: max(1, defaultContract[string(r.ref.Kind)]), SourceVersion: firstSourceVersion(string(r.ref.Kind))}
 		}
 		body := asObject(r.body)
+		if r.ref.Kind == platform.AssetFlow {
+			if err := flowBindings(body, entry.SourceVersion); err != nil {
+				return built{}, fmt.Errorf("%s: %w", r.path, err)
+			}
+		}
 		if r.ref.Kind == platform.AssetObject {
 			if _, generated := body.get("schemaVersions"); generated {
 				return built{}, fmt.Errorf("%s: schemaVersions is generated into %s; remove it", r.path, lockFile)
