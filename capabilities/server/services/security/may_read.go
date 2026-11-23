@@ -42,6 +42,10 @@ func (r DerivationReach) MayRead(store *records.Store, m platform.Member, now ti
 		if et != nil {
 			app = et.Info().App
 		}
+		if app != "" && m.ID == "app:"+app {
+			seen[ref] = true
+			return true
+		}
 		fields := []string{}
 		if field != "" {
 			fields = append(fields, field)
