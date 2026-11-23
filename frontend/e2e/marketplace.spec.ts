@@ -306,11 +306,14 @@ test("library tenant: a remote catalog lists its package beside the built-in ind
     await page.getByRole("button", { name: "More actions", exact: true }).click();
     await page.getByRole("menuitem", { name: "Manage library", exact: true }).click();
     const manager = page.getByRole("dialog", { name: "Manage library" });
-    await expect(manager.getByRole("button", { name: "Add official library", exact: true })).toBeVisible();
+    await expect(manager.getByText("Official", { exact: true })).toBeVisible();
+    await expect(manager.getByRole("button", { name: "Add official library", exact: true })).toHaveCount(0);
+    await expect(manager.getByRole("button", { name: "Remove", exact: true })).toHaveCount(0);
     await manager.getByRole("textbox", { name: /Library URL/ }).fill(address);
     await manager.getByRole("textbox", { name: /Library name/ }).fill("Acme packages");
     await manager.getByRole("button", { name: "Add library", exact: true }).click();
-    await expect(manager.getByText("Ready", { exact: true })).toBeVisible({ timeout: 20_000 });
+    await expect(manager.getByText("2 packages", { exact: true })).toBeVisible({ timeout: 20_000 });
+    await expect(manager.getByRole("button", { name: "Remove", exact: true })).toHaveCount(1);
     await manager.getByRole("button", { name: "Close", exact: true }).last().click();
 
     const remote = page.getByRole("listitem").filter({ hasText: "Acme CRM" });
