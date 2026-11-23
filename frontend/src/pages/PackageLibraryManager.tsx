@@ -1,6 +1,7 @@
 import { Banner } from "@astryxdesign/core/Banner";
 import { Card } from "@astryxdesign/core/Card";
 import { Button } from "@astryxdesign/core/Button";
+import { IconButton } from "@astryxdesign/core/IconButton";
 import { Dialog } from "@astryxdesign/core/Dialog";
 import { Divider } from "@astryxdesign/core/Divider";
 import { EmptyState } from "@astryxdesign/core/EmptyState";
@@ -18,6 +19,7 @@ import { reasonOf, send } from "./act";
 
 const styles = stylex.create({
   shell: {
+    width: "min(680px, calc(100vw - 2rem))",
     height: "min(640px, calc(100dvh - 4rem))",
     maxWidth: "100%",
     overflow: "hidden",
@@ -110,7 +112,7 @@ export function PackageLibraryManager({ onClose }: { onClose: () => void }) {
                 <Text type="supporting" color="secondary">{t("Add a catalog.json address or a GitHub/Gitee repository to list verified packages in Marketplace.")}</Text>
               </VStack>
               <StackItem size="fill" />
-              <Button
+              <IconButton
                 variant="ghost"
                 size="sm"
                 label={t("Close")}
