@@ -33,6 +33,7 @@ func (b Binding) EntityType() string {
 type Bindings struct {
 	mu        sync.Mutex
 	providers map[string]string
+	epoch     uint64
 }
 
 func NewBindings(providers map[string]string) *Bindings {
@@ -45,7 +46,17 @@ func (b *Bindings) All() map[string]string {
 	return maps.Clone(b.providers)
 }
 
-func (b *Bindings) Clone() *Bindings { return NewBindings(b.All()) }
+func (b *Bindings) Clone() *Bindings {
+	clone := NewBindings(b.All())
+	clone.epoch = b.Epoch()
+	return clone
+}
+
+func (b *Bindings) Epoch() uint64 {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	return b.epoch
+}
 
 func (b *Bindings) get(protocol string) (string, bool) {
 	b.mu.Lock()
@@ -61,6 +72,14 @@ func (b *Bindings) set(protocol, provider string) {
 		b.providers = map[string]string{}
 	}
 	b.providers[protocol] = provider
+	b.epoch++
+}
+
+func (b *Bindings) unset(protocol string) {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	delete(b.providers, protocol)
+	b.epoch++
 }
 
 func (b *Bindings) Bind(prior []platform.Service, a platform.Service) error {
@@ -104,6 +123,9 @@ func (r Router) DecideBinding(_ platform.Caller, s *pb.Submission, _ time.Time) 
 	id := s.GetTarget().GetId()
 	var p struct{ Provider string }
 	json.Unmarshal(s.GetPayload(), &p)
+	if p.Provider == "" {
+		return func(*pb.ChangeRecord) { r.Bindings.unset(id) }, nil
+	}
 	if !slices.ContainsFunc(r.Providers(id), func(b Binding) bool { return b.ID() == p.Provider }) {
 		return nil, &platform.Error{Code: pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT}
 	}
@@ -142,9 +164,30 @@ func (r Router) Providers(protocol string) []Binding {
 	return out
 }
 
+func (r Router) Declared(protocol string) bool {
+	for _, a := range r.Host.LiveApps() {
+		if declared, ok := a.(interface {
+			ProtocolContracts() []runtimeprotocol.ProtocolContract
+		}); ok && slices.ContainsFunc(declared.ProtocolContracts(), func(c runtimeprotocol.ProtocolContract) bool { return c.ID() == protocol }) {
+			return true
+		}
+	}
+	return false
+}
+
+func (r Router) Unavailable(protocol string) *platform.Error {
+	if r.Declared(protocol) {
+		return platform.Refuse(pb.ErrorCode_ERROR_CODE_NOT_FOUND, "Capability {protocol} has no bound implementation here", protocol)
+	}
+	return &platform.Error{Code: pb.ErrorCode_ERROR_CODE_NOT_FOUND}
+}
+
 func (r Router) Resolve(protocol string) (Binding, bool) {
 	if b, ok := r.Bound(protocol); ok {
 		return b, true
+	}
+	if r.Declared(protocol) {
+		return Binding{}, false
 	}
 	if all := r.Providers(protocol); len(all) > 0 {
 		return all[0], true
@@ -202,6 +245,9 @@ func (r Router) Invoke(c platform.Caller, protocol, action, id string, payload [
 				break
 			}
 		}
+	}
+	if !ok && r.Declared(protocol) {
+		return nil, nil, r.Unavailable(protocol)
 	}
 	if _, mapped := b.Provision.Actions[action]; !ok || !mapped {
 		return nil, nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_NOT_FOUND, "No app provides {protocol} here", protocol)

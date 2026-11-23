@@ -107,5 +107,15 @@ func objectActions(object ontology.Object, entity platform.RecordType) []platfor
 			actions[index].SchemaVersion = &version
 		}
 	}
+	for _, declared := range object.Actions {
+		if len(declared.Uses) == 0 {
+			continue
+		}
+		for index := range actions {
+			if actions[index].Schema == entity.Type+"."+declared.Name {
+				actions[index].Uses = slices.Clone(declared.Uses)
+			}
+		}
+	}
 	return actions
 }

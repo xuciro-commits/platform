@@ -109,7 +109,7 @@ func (b *Build) bindPublications() {
 			b.installed[entity.Type] = entity
 			b.invalidateManifest()
 		},
-		Contracts: b.checkImplementedContracts,
+		Contracts: b.checkContracts,
 	})
 	b.publications = append([]publication.Hooks{object}, b.publicationBase...)
 	queries := b.queries

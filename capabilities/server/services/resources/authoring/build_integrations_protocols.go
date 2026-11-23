@@ -16,6 +16,9 @@ func (b *Build) objectProvisions(object ontology.Object, entity platform.RecordT
 }
 
 func (b *Build) checkObjectProtocols(object ontology.Object) error {
+	if err := b.checkUses(object); err != nil {
+		return err
+	}
 	return ontology.CheckObjectProtocols(object, ontology.ProtocolEnvironment{
 		Actions: actioncatalog.EntityActions,
 		Installed: func() []platform.RecordType {
@@ -64,6 +67,16 @@ func (b *Build) consumedProtocols() []platform.Consumption {
 					if party.Protocol != "" && !slices.ContainsFunc(out, func(c platform.Consumption) bool { return c.Protocol == party.Protocol }) {
 						out = append(out, platform.Consumption{Protocol: party.Protocol, Optional: true})
 					}
+				}
+			}
+		}
+	}
+	if b.authority != nil {
+		for _, action := range b.authority.Catalog().All() {
+			for _, used := range action.Uses {
+				protocol, _, _ := strings.Cut(used, "#")
+				if !slices.ContainsFunc(out, func(c platform.Consumption) bool { return c.Protocol == protocol }) {
+					out = append(out, platform.Consumption{Protocol: protocol, Optional: true})
 				}
 			}
 		}

@@ -753,8 +753,8 @@ func operationsActions() []platform.Action {
 		{Schema: SchemaWorkRetry, Target: WorkType, Capability: "automation", Title: "Retry work",
 			Description: "Queue a failed event delivery again, or run a scheduled job now.", Payload: []platform.Field{}, Roles: admin},
 		{Schema: SchemaProtocolBind, Target: ProtocolType, Capability: "apps", Title: "Choose protocol provider",
-			Description: "Send the tenant's new calls of a protocol (target <name>/<version>) to another app that provides it; what every provider holds stays readable.",
-			Payload:     []platform.Field{{Name: "provider", Type: "string", Required: true, Description: "App ID of a provider"}}, Roles: admin},
+			Description: "Send the tenant's new calls of a protocol (target <name>/<version>) to another app that provides it; what every provider holds stays readable. An empty provider unbinds it: a declared capability contract then has no implementation until one is chosen.",
+			Payload:     []platform.Field{{Name: "provider", Type: "string", Description: "App ID of a provider; empty unbinds"}}, Roles: admin},
 		{Schema: SchemaNotificationRead, Target: NotificationType, Capability: "notifications", Title: "Mark notification read",
 			Description: "Mark one of your notifications as read.", Payload: []platform.Field{}, Roles: []string{platform.AnyMember}},
 	}

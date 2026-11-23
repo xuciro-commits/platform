@@ -3,6 +3,7 @@ package releases
 import (
 	"encoding/json"
 	"fmt"
+	runtimeprotocol "platformserver/kernel/protocol"
 	releasepub "platformserver/services/resources/publication"
 	"slices"
 	"strings"
@@ -199,7 +200,11 @@ func (ds Describer) DescribeOwnedAsset(asset platform.ReleaseAsset) (platform.Re
 		protocol, _, _ := strings.Cut(use, "#")
 		name, _, _ := strings.Cut(protocol, "/")
 		ref := platform.AssetRef{App: asset.Ref.App, Kind: platform.AssetProtocol, Name: name}
-		if provider, ok := ds.host.ProtocolProvider(protocol); ok {
+		if owner, ok := ds.host.App(asset.Ref.App).(interface {
+			ProtocolContracts() []runtimeprotocol.ProtocolContract
+		}); ok && slices.ContainsFunc(owner.ProtocolContracts(), func(c runtimeprotocol.ProtocolContract) bool { return c.ID() == protocol }) {
+			ref.Kind = runtimeprotocol.AssetContract
+		} else if provider, ok := ds.host.ProtocolProvider(protocol); ok {
 			ref.App = provider
 		}
 		protocols[protocol] = ref

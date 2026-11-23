@@ -2940,5 +2940,10 @@
   "A capability contract needs 1–64 actions or reads and at most 64 events": "能力契约需要 1–64 个动作或读取，事件至多 64 个",
   "Capability contract actions need unique lowercase names and titles": "能力契约的动作需要唯一的小写名字和标题",
   "Capability contract reads need unique lowercase names": "能力契约的读取需要唯一的小写名字",
-  "Capability contract events need unique lowercase names and titles": "能力契约的事件需要唯一的小写名字和标题"
+  "Capability contract events need unique lowercase names and titles": "能力契约的事件需要唯一的小写名字和标题",
+  "Capability {protocol} has no bound implementation here": "能力 {protocol} 在这里还没有绑定实现",
+  "Uses capabilities": "使用的能力",
+  "Capability contract actions this action needs, as name/major#action; it appears only while the tenant has bound an implementation": "这个动作需要的能力契约动作，写作 名字/主版本#动作；只有租户绑定了实现时才出现",
+  "App ID of a provider; empty unbinds": "提供方的应用 ID；留空即解除绑定",
+  "Send the tenant's new calls of a protocol (target <name>/<version>) to another app that provides it; what every provider holds stays readable. An empty provider unbinds it: a declared capability contract then has no implementation until one is chosen.": "把租户对某协议的新调用（目标 <name>/<version>）发给另一个提供该协议的应用；各提供方已有的数据仍可读取。留空即解除绑定：已声明的能力契约在选定新的实现之前没有实现可用。"
 }

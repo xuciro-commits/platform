@@ -141,8 +141,8 @@ func readDefinitionInventoryOf(c platform.Caller, typ reflect.Type) ([]any, erro
 }
 
 func (b *Build) validateObjectInstallation(c platform.Caller, record ontology.Object) error {
-	if len(record.Protocols) > 0 {
-		if err := b.checkImplementedContracts(b.entity(record)); err != nil {
+	if len(record.Protocols) > 0 || slices.ContainsFunc(record.Actions, func(a ontology.Action) bool { return len(a.Uses) > 0 }) {
+		if err := b.checkContracts(record, b.entity(record)); err != nil {
 			return err
 		}
 	}

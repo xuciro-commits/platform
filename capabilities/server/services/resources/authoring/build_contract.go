@@ -1,6 +1,7 @@
 package authoring
 
 import (
+	"fmt"
 	"slices"
 	"strings"
 
@@ -67,6 +68,26 @@ func (b *Build) installedContract(id string) (protocol.ProtocolContract, bool) {
 		}
 	}
 	return protocol.ProtocolContract{}, false
+}
+
+func (b *Build) checkContracts(object ontology.Object, entity platform.RecordType) error {
+	if err := b.checkUses(object); err != nil {
+		return err
+	}
+	return b.checkImplementedContracts(entity)
+}
+
+func (b *Build) checkUses(object ontology.Object) error {
+	for _, action := range object.Actions {
+		for _, used := range action.Uses {
+			id, verb, found := strings.Cut(used, "#")
+			contract, declared := b.installedContract(id)
+			if !found || !declared || !slices.ContainsFunc(contract.Actions, func(a protocol.ContractAction) bool { return a.Name == verb }) {
+				return fmt.Errorf("Action %s uses %s, which is not an action of an installed capability contract", action.Name, used)
+			}
+		}
+	}
+	return nil
 }
 
 func (b *Build) checkImplementedContracts(entity platform.RecordType) error {

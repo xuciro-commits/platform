@@ -30,7 +30,7 @@ func (t *Tenant) Invoke(m platform.Member, protocol, action, id string, payload 
 func (t *Tenant) invokeDiagnosed(m platform.Member, protocol, action, id string, payload []byte, key string, now time.Time) (*pb.EntityRef, *pb.ChangeRecord, *platform.Error, []platform.FieldIssue) {
 	provider, schema, ok := t.router().Provider(runtimeprotocol.ProtocolAction(protocol, action))
 	if !ok {
-		return nil, nil, &platform.Error{Code: pb.ErrorCode_ERROR_CODE_NOT_FOUND}, nil
+		return nil, nil, t.router().Unavailable(protocol), nil
 	}
 	declared, _ := provider.Manifest().Actions.Action(schema)
 	target := &pb.EntityRef{Type: declared.Target, Id: id}

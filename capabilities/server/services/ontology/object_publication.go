@@ -472,7 +472,7 @@ type ObjectPublicationEnvironment struct {
 	Pages     func(Object) ([]platform.Page, string, error)
 	Validate  func(platform.Caller, Object) error
 	Installed func(platform.RecordType)
-	Contracts func(platform.RecordType) error
+	Contracts func(Object, platform.RecordType) error
 }
 
 func ObjectPublication(env ObjectPublicationEnvironment) publication.Hooks {
@@ -508,7 +508,7 @@ func ObjectPublication(env ObjectPublicationEnvironment) publication.Hooks {
 				if err != nil {
 					return err
 				}
-				if err := env.Contracts(entity); err != nil {
+				if err := env.Contracts(published, entity); err != nil {
 					return err
 				}
 				pages, _, err = env.Pages(published)

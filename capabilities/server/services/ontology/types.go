@@ -112,6 +112,7 @@ type Action struct {
 	Open             string                     `json:"open,omitempty" title:"Opens" help:"A reference field of this object; after the action people land on the record it names, such as the one the action created"`
 	Roles            []string                   `json:"roles,omitempty" title:"Taken by"`
 	Approval         *ActionApproval            `json:"approval,omitempty" title:"Approval"`
+	Uses             []string                   `json:"uses,omitempty" title:"Uses capabilities" help:"Capability contract actions this action needs, as name/major#action; it appears only while the tenant has bound an implementation"`
 }
 
 type ActionApproval struct {
