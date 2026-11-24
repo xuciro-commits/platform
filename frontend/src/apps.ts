@@ -67,7 +67,7 @@ export type NavSection = { title: string; items: NavItem[] };
 export type RailGroup = "start" | "installed" | "build" | "run" | "manage";
 
 const slug = (text: string) => text.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "") || "settings";
-export const settingsItemId = (title: string) => `settings-${slug(title || "settings")}`;
+export const settingsItemId = (title?: string) => `settings-${slug(title || "settings")}`;
 export type App = { id: string; label: string; icon: IconType; badge?: boolean; group: RailGroup; sections: NavSection[]; dashboard?: Api.DashboardBlock[]; packageId?: string; hasDemo?: boolean; surface?: string };
 
 export const apps: App[] = [
