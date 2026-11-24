@@ -313,7 +313,8 @@
           "manager"
         ],
         "roles": {
-          "crm": "salesmanager"
+          "crm": "salesmanager",
+          "party": "user"
         }
       },
       {
@@ -322,7 +323,8 @@
           "rep"
         ],
         "roles": {
-          "crm": "salesrep"
+          "crm": "salesrep",
+          "party": "user"
         }
       },
       {
@@ -331,7 +333,8 @@
           "rep2"
         ],
         "roles": {
-          "crm": "salesrep"
+          "crm": "salesrep",
+          "party": "user"
         }
       }
     ]

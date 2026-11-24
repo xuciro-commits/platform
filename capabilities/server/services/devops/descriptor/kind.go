@@ -86,18 +86,6 @@ func CheckKinds(packages []platform.PackageDescriptor, kinds map[string]string) 
 	return nil
 }
 
-func MasterDataSurface(p platform.PackageDescriptor) bool {
-	if p.Blueprint == nil || hasApplication(p) || providesContract(p) {
-		return false
-	}
-	for _, root := range p.Blueprint.Roots {
-		if root.Kind == platform.AssetApp {
-			return true
-		}
-	}
-	return false
-}
-
 func hasApplication(p platform.PackageDescriptor) bool {
 	if p.Blueprint == nil {
 		return false

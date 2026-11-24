@@ -11,9 +11,10 @@ import (
 	"platformserver/services/devops/packages"
 	"platformserver/services/ontology"
 	build "platformserver/services/resources/authoring"
+	"platformserver/services/security/control"
 )
 
-func TestInvariantK44EveryMemberUsesMasterDataWithoutARoleInIt(t *testing.T) {
+func TestInvariantK44MasterDataRequiresExplicitGrantAndRevokes(t *testing.T) {
 	admin := protocol.Seat{Subjects: []string{"admin"}, Member: platform.Member{ID: "admin", Roles: map[string]string{"platform": "admin", build.ID: ontology.BuilderRole}}}
 	rep := protocol.Seat{Subjects: []string{"rep"}, Member: platform.Member{ID: "rep", Roles: map[string]string{"crm": "salesrep"}}}
 	live := newInvariantTenant(t, "invariant-k44", admin, rep)
@@ -49,26 +50,53 @@ func TestInvariantK44EveryMemberUsesMasterDataWithoutARoleInIt(t *testing.T) {
 	}
 	install("../../../scripts/frontend-fixtures/geo-0.1.1.json")
 	install("../../../scripts/frontend-fixtures/party-0.2.1.json")
-	install("../../../deploy/packages/production-provider.json")
 
 	member, _ := live.Member("rep")
+	if roles := member.RolesIn("party.organization"); len(roles) != 0 {
+		t.Fatalf("installing master data must not inject any implicit role, got %v", roles)
+	}
+	create := live.submission("party.organization.create", "party.organization", "ORG-K44", map[string]any{"name": "Xihe Precision"})
+	create.Authority, create.PrincipalId = build.ID, member.ID
+	if _, refusal := live.Submit(member, create, invariantClock); refusal == nil {
+		t.Fatal("a member without an explicit party role must not create a business partner")
+	}
+
+	adminMember, _ := live.Member("admin")
+	grant := live.submission(control.SchemaGrant, control.MemberType, "rep", map[string]any{"app": "party", "role": "user"})
+	grant.Authority, grant.PrincipalId = "platform", adminMember.ID
+	if _, refusal := live.Submit(adminMember, grant, invariantClock); refusal != nil {
+		t.Fatalf("grant party user: %s", refusal.Message)
+	}
+
+	member, _ = live.Member("rep")
 	if !slices.Contains(member.RolesIn("party.organization"), "user") {
-		t.Fatalf("a member with a role only in crm uses master data as user, got %v", member.RolesIn("party.organization"))
+		t.Fatalf("expected explicit party user role, got %v", member.RolesIn("party.organization"))
 	}
-	if slices.Contains(member.RolesIn("build.batchproviderorder"), "user") {
-		t.Fatal("an application package's user role is still granted only to its own members")
-	}
-	sub := live.submission("party.organization.create", "party.organization", "ORG-K44", map[string]any{"name": "Xihe Precision"})
-	sub.Authority, sub.PrincipalId = build.ID, member.ID
-	if _, refusal := live.Submit(member, sub, invariantClock); refusal != nil {
-		t.Fatalf("the member creates a business partner while converting a lead: %s", refusal.Message)
+	create2 := live.submission("party.organization.create", "party.organization", "ORG-K44", map[string]any{"name": "Xihe Precision"})
+	create2.Authority, create2.PrincipalId = build.ID, member.ID
+	if _, refusal := live.Submit(member, create2, invariantClock); refusal != nil {
+		t.Fatalf("explicitly granted member creates a business partner: %s", refusal.Message)
 	}
 	if _, refusal := live.RecordOf(t.Context(), member, "party.organization", "ORG-K44", invariantClock); refusal != nil {
-		t.Fatalf("the member reads it back: %s", refusal.Message)
+		t.Fatalf("explicitly granted member reads it back: %s", refusal.Message)
 	}
 	archive := live.submission("party.organization.archive", "party.organization", "ORG-K44", map[string]any{})
 	archive.Authority, archive.PrincipalId = build.ID, member.ID
 	if _, refusal := live.Submit(member, archive, invariantClock); refusal == nil {
 		t.Fatal("archiving stays with the steward")
+	}
+
+	revoke := live.submission(control.SchemaRevoke, control.MemberType, "rep", map[string]any{"app": "party", "role": "user"})
+	revoke.Authority, revoke.PrincipalId = "platform", adminMember.ID
+	if _, refusal := live.Submit(adminMember, revoke, invariantClock); refusal != nil {
+		t.Fatalf("revoke party user: %s", refusal.Message)
+	}
+
+	member, _ = live.Member("rep")
+	if roles := member.RolesIn("party.organization"); len(roles) != 0 {
+		t.Fatalf("revoking party user must remove access immediately, got %v", roles)
+	}
+	if _, refusal := live.RecordOf(t.Context(), member, "party.organization", "ORG-K44", invariantClock); refusal == nil {
+		t.Fatal("revoked member must not read the business partner")
 	}
 }

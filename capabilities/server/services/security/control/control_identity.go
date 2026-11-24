@@ -14,8 +14,6 @@ import (
 	"time"
 )
 
-const MasterDataReader = "user"
-
 func (d *Console) currentMember(m *platform.Member) platform.Member {
 	out := clone(m)
 	if p := d.profiles[m.ID]; p != nil {
@@ -35,11 +33,6 @@ func (d *Console) currentMember(m *platform.Member) platform.Member {
 	d.migrateGrants(&out)
 	out.Grants = append(slices.Clone(out.Grants), d.ConsolePolicies.TeamGrants(out.ID)...)
 	out.Grants = append(out.Grants, d.ConsolePolicies.ProjectGrants(out.ID, out.Agent)...)
-	if d.ConsolePackages != nil {
-		for _, space := range d.ConsolePackages.MasterDataSpaces() {
-			out.Grants = append(out.Grants, platform.Grant{App: space, Role: MasterDataReader, By: "master-data"})
-		}
-	}
 	out.Markings, out.Declassifications = d.ConsolePolicies.MarkingClearances(out.ID)
 	for _, level := range platform.Markings[1:] {
 		if platform.MarkingCleared(out, level) && !slices.Contains(out.Markings, level) {
