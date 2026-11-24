@@ -516,7 +516,7 @@ test("capabilities: binding a capability contract makes dependent entries appear
   const main = page.getByRole("main");
   await open(page, "Admin", "Capabilities");
   const row = main.getByRole("row").filter({ hasText: `Trunk Call ${suffix}` });
-  await expect(row).toContainText("Unbound");
+  await expect(row).toContainText("Not enabled");
 
   await page.goto(`/ontology/objects/${encodeURIComponent(callerType)}/CALL-1`);
   await expect(page.getByRole("heading", { level: 1, name: `Lead ${suffix}` })).toBeVisible();
@@ -525,19 +525,19 @@ test("capabilities: binding a capability contract makes dependent entries appear
   await open(page, "Admin", "Capabilities");
   await main.getByRole("link", { name: `Trunk Call ${suffix}`, exact: true }).click();
   await expect(page.getByRole("heading", { level: 1, name: `Trunk Call ${suffix}`, exact: true })).toBeVisible();
-  await expect(main.getByText("This capability is unbound", { exact: true })).toBeVisible();
-  await main.getByRole("button", { name: "Bind", exact: true }).click();
-  await expect(main.getByText(/Currently bound to Build/)).toBeVisible();
+  await expect(main.getByText("This capability is not enabled yet", { exact: true })).toBeVisible();
+  await main.getByRole("button", { name: "Enable Build", exact: true }).click();
+  await expect(main.getByText(/Currently provided by Build/)).toBeVisible();
 
   await page.goto(`/ontology/objects/${encodeURIComponent(callerType)}/CALL-1`);
   await expect(page.getByRole("button", { name: "Place call", exact: true })).toBeVisible();
 
   await page.goto(`/admin/capabilities/${encodeURIComponent(contractId)}`);
-  await main.getByRole("button", { name: "Unbind", exact: true }).click();
+  await main.getByRole("button", { name: "Disable", exact: true }).click();
   const confirm = page.getByRole("alertdialog");
   await expect(confirm).toBeVisible();
-  await confirm.getByRole("button", { name: "Unbind", exact: true }).click();
-  await expect(main.getByText("This capability is unbound", { exact: true })).toBeVisible();
+  await confirm.getByRole("button", { name: "Disable", exact: true }).click();
+  await expect(main.getByText("This capability is not enabled yet", { exact: true })).toBeVisible();
 
   await page.goto(`/ontology/objects/${encodeURIComponent(callerType)}/CALL-1`);
   await expect(page.getByRole("heading", { level: 1, name: `Lead ${suffix}` })).toBeVisible();

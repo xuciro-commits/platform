@@ -266,9 +266,22 @@ export function ListView<Answer, Row>({ definition, read, primary, back, exportR
             }
           },
         },
-        xstyle: open ? [...props.xstyle, styles.clickable, styles.activeRow] : [...props.xstyle, styles.clickable],
+        xstyle: open ? [...props.xstyle, styles.clickable, motionStyles.pressableRow, styles.activeRow] : [...props.xstyle, styles.clickable, motionStyles.pressableRow],
       };
     },
+  };
+
+  const editableKeys = orderedColumns.slice(1).filter((column) => Boolean(column.edit)).map((column) => column.key);
+  const advanceCell = (rowId: string, key: string, shift: boolean) => {
+    const colIdx = editableKeys.indexOf(key);
+    const rowIds = shown.map((cells) => cells[idKey]);
+    const rowIdx = rowIds.indexOf(rowId);
+    if (colIdx < 0 || rowIdx < 0) return;
+    const step = shift ? -1 : 1;
+    const nextCol = colIdx + step;
+    if (nextCol >= 0 && nextCol < editableKeys.length) { setActive(rowId); setEditing({ id: rowId, key: editableKeys[nextCol] }); return; }
+    const targetId = rowIds[rowIdx + step];
+    if (targetId) { setActive(targetId); setEditing({ id: targetId, key: shift ? editableKeys[editableKeys.length - 1] : editableKeys[0] }); }
   };
 
   const columns: TableColumn<Cells>[] = [
@@ -282,7 +295,7 @@ export function ListView<Answer, Row>({ definition, read, primary, back, exportR
         if (group && isHeader(cells)) return null;
         const row = rowOf.get(cells[idKey]);
         return column.edit && row && editing?.id === cells[idKey] && editing.key === column.key
-          ? <CellProperty edit={column.edit} row={row} close={() => setEditing(null)} />
+          ? <CellProperty edit={column.edit} row={row} close={() => setEditing(null)} onTab={(shift) => advanceCell(cells[idKey], column.key, shift)} />
           : <ListCell column={column} cells={cells} first={position === 0} />;
       },
     })),

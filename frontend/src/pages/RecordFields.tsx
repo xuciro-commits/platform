@@ -2,9 +2,11 @@ import { Button } from "@astryxdesign/core/Button";
 import { Dialog, DialogHeader } from "@astryxdesign/core/Dialog";
 import { Field } from "@astryxdesign/core/Field";
 import { FormLayout } from "@astryxdesign/core/FormLayout";
+import { Icon } from "@astryxdesign/core/Icon";
 import { HStack, Layout, LayoutContent, LayoutFooter, StackItem, VStack } from "@astryxdesign/core/Layout";
 import { MetadataList, MetadataListItem } from "@astryxdesign/core/MetadataList";
 import { Heading, Text } from "@astryxdesign/core/Text";
+import { ChevronDownIcon } from "@heroicons/react/24/outline";
 import * as stylex from "@stylexjs/stylex";
 import { useEffect, useRef, useState } from "react";
 import { type Api, HostRefusal, request, reread } from "../host";
@@ -358,7 +360,13 @@ export function FieldGroup({ described, editor, sections, direction, focusEmpty,
       })}
       {folded.size > 0 && (
         <HStack hAlign="start">
-          <Button variant="ghost" size="sm" label={more ? t("Hide empty fields") : `${t("Show empty fields")} · ${hidden}`} onClick={() => setMore(!more)} />
+          <Button
+            variant="ghost"
+            size="sm"
+            icon={<HStack xstyle={[motionStyles.chevron, more && motionStyles.chevronOpen]}><Icon icon={ChevronDownIcon} size="sm" /></HStack>}
+            label={more ? t("Hide empty fields") : `${t("Show empty fields")} · ${hidden}`}
+            onClick={() => setMore(!more)}
+          />
         </HStack>
       )}
     </VStack>

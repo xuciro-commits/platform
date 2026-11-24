@@ -3,6 +3,7 @@ import { Banner } from "@astryxdesign/core/Banner";
 import { Button } from "@astryxdesign/core/Button";
 import { Card } from "@astryxdesign/core/Card";
 import { EmptyState } from "@astryxdesign/core/EmptyState";
+import { Icon } from "@astryxdesign/core/Icon";
 import { HStack, Layout, LayoutContent, LayoutHeader, VStack } from "@astryxdesign/core/Layout";
 import { Link } from "@astryxdesign/core/Link";
 import { MetadataList, MetadataListItem } from "@astryxdesign/core/MetadataList";
@@ -11,6 +12,7 @@ import { Skeleton } from "@astryxdesign/core/Skeleton";
 import { Heading, Text } from "@astryxdesign/core/Text";
 import { useToast } from "@astryxdesign/core/Toast";
 import { Token } from "@astryxdesign/core/Token";
+import { ChevronDownIcon } from "@heroicons/react/24/outline";
 import { useEffect, useMemo, useState } from "react";
 import { apps, pathOf } from "../apps";
 import { type Api, reread, useRead } from "../host";
@@ -289,6 +291,7 @@ export function CapabilityPage({ id }: { id: string }) {
               <VStack gap={3}>
                 <HStack hAlign="start">
                   <Button
+                    icon={<HStack xstyle={[motionStyles.chevron, showTechnical && motionStyles.chevronOpen]}><Icon icon={ChevronDownIcon} size="sm" /></HStack>}
                     label={showTechnical ? t("Hide technical details") : t("Show technical details")}
                     variant="ghost"
                     size="sm"

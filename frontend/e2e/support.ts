@@ -39,6 +39,22 @@ export async function open(page: Page, app: string, entry: string) {
 
 export const property = (scope: Page | Locator, name: string) => scope.getByRole("group", { name, exact: true });
 export const metadata = (scope: Page | Locator, name: string) => scope.getByRole("term").filter({ hasText: new RegExp(`^${name}$`) }).locator("xpath=following-sibling::*[1]");
+export async function expectRevision(page: Page, expected: number) {
+  await expect.poll(async () => page.evaluate(async () => {
+    const raw = sessionStorage.getItem("platform:session");
+    if (!raw) return -1;
+    const session = JSON.parse(raw) as { token: string; tenant: string };
+    const parts = location.pathname.split("/").filter(Boolean);
+    const [type, id] = parts[0] === "ontology" && parts[1] === "objects" ? [parts[2], parts[3]] : [parts[1], parts[2]];
+    if (!type || !id) return -1;
+    const response = await fetch(`/v1/records/${encodeURIComponent(decodeURIComponent(type))}/${encodeURIComponent(decodeURIComponent(id))}`, {
+      headers: { Authorization: `Bearer ${session.token}`, "Platform-Tenant": session.tenant },
+    });
+    if (!response.ok) return -1;
+    const data = await response.json() as { record?: { revision?: number } };
+    return data.record?.revision ?? -1;
+  })).toBe(expected);
+}
 
 export async function edit(scope: Page | Locator, name: string) {
   const button = scope.getByRole("button", { name: `Edit ${name}`, exact: true });
@@ -65,12 +81,12 @@ export async function crmMainline(page: Page, go: (type: string, plural: string)
   const organization = page.getByRole("textbox", { name: "Organization", exact: true });
   await organization.fill(company);
   await organization.press("Enter");
-  await expect(page.getByRole("complementary").getByText("2", { exact: true })).toBeVisible();
+  await expectRevision(page, 2);
   await edit(page, "Annual revenue");
   const revenue = page.getByRole("spinbutton", { name: "Annual revenue", exact: true });
   await revenue.fill("250000");
   await revenue.press("Enter");
-  await expect(page.getByRole("complementary").getByText("3", { exact: true })).toBeVisible();
+  await expectRevision(page, 3);
   await page.reload();
   await expect(property(page, "Annual revenue")).toContainText("250,000.00");
 
@@ -90,7 +106,7 @@ export async function crmMainline(page: Page, go: (type: string, plural: string)
     await expect(page.getByRole("dialog")).toBeHidden();
     await page.getByRole("combobox", { name: "Lead", exact: true }).fill(person.split(" ")[0]);
     await page.getByRole("option", { name: new RegExp(person) }).click();
-    await expect(page.getByRole("complementary").getByText("2", { exact: true })).toBeVisible();
+    await expectRevision(page, 2);
   }
 
   await page.goto(leadPage);
@@ -204,7 +220,7 @@ export async function crmMainline(page: Page, go: (type: string, plural: string)
   const same = page.getByRole("textbox", { name: "Organization", exact: true });
   await same.fill(` ${company.toUpperCase()}  `);
   await same.press("Enter");
-  await expect(page.getByRole("complementary").getByText("2", { exact: true })).toBeVisible();
+  await expectRevision(page, 2);
   await page.getByRole("button", { name: "Convert to deal", exact: true }).click();
   const relink = page.getByRole("dialog", { name: "Convert to deal", exact: true });
   await expect(relink.getByText(company, { exact: true }).filter({ visible: true })).toBeVisible();

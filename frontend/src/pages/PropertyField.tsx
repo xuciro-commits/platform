@@ -107,12 +107,12 @@ export type CellEdit<Row> = {
   save(row: Row, value: unknown): Promise<unknown>;
 };
 
-export function CellProperty<Row>({ edit, row, close }: { edit: CellEdit<Row>; row: Row; close: () => void }) {
+export function CellProperty<Row>({ edit, row, close, onTab }: { edit: CellEdit<Row>; row: Row; close: () => void; onTab?: (shift: boolean) => void }) {
   const value = edit.value(row);
   const field = edit.described?.fields.find((candidate) => candidate.name === edit.parameter.name) ??
     { name: edit.parameter.name, title: edit.parameter.label ?? edit.parameter.name, type: "text" as const };
   return <PropertyField field={field} parameter={edit.parameter} described={edit.described} value={value} name={edit.name?.(row)} labelHidden open
-    onCommit={(next) => (blank(next) && blank(value)) || next === value ? undefined : edit.save(row, next)} onClose={close} />;
+    onCommit={(next) => (blank(next) && blank(value)) || next === value ? undefined : edit.save(row, next)} onClose={close} onTab={onTab} />;
 }
 
 type PropertyFieldProps = {
@@ -131,6 +131,7 @@ type PropertyFieldProps = {
   onChange?: (value: unknown) => void;
   onCommit?(value: unknown): Promise<unknown> | void;
   onClose?: () => void;
+  onTab?: (shift: boolean) => void;
 };
 
 export function PropertyField(props: PropertyFieldProps) {
@@ -203,6 +204,13 @@ export function PropertyField(props: PropertyFieldProps) {
     });
   };
   const keys = (event: KeyboardEvent<HTMLElement>) => {
+    if (event.key === "Tab" && props.onTab) {
+      event.preventDefault();
+      event.stopPropagation();
+      const shift = event.shiftKey;
+      void leave(latest.current).then(() => props.onTab?.(shift));
+      return;
+    }
     if (event.key !== "Escape") return;
     event.stopPropagation();
     latest.current = initial.current;

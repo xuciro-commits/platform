@@ -1,5 +1,5 @@
 import { type Page, expect, test } from "@playwright/test";
-import { signIn, open, property, metadata, edit } from "./support";
+import { signIn, open, property, metadata, edit, expectRevision } from "./support";
 
 test.describe.serial("opportunities and records", () => {
 test("records: open a list, open a record, change a field in place", async ({ page }) => {
@@ -30,7 +30,7 @@ test("records: open a list, open a record, change a field in place", async ({ pa
   const next = page.getByRole("textbox", { name: "Next step" });
   await next.fill("Call the plant manager");
   await next.press("Enter");
-  await expect(page.getByRole("complementary").getByText("2", { exact: true })).toBeVisible();
+  await expectRevision(page, 2);
 
   await page.reload();
   await expect(property(page, "Next step")).toHaveText("Call the plant manager");
@@ -38,7 +38,7 @@ test("records: open a list, open a record, change a field in place", async ({ pa
   await edit(page, "Owner");
   await page.getByRole("combobox", { name: "Owner", exact: true }).fill("韩奥");
   await page.getByRole("option", { name: /韩奥/ }).click();
-  await expect(page.getByRole("complementary").getByText("3", { exact: true })).toBeVisible();
+  await expectRevision(page, 3);
   await page.reload();
   await expect(property(page, "Owner")).toContainText("韩奥");
 });
@@ -88,7 +88,7 @@ test("submit: an answer lost on the way is retried and accepted once", async ({ 
   await open(page, "Ontology", "Objects");
   await page.getByRole("link", { name: "Opportunities" }).click();
   await page.getByRole("link", { name: "仓库扫码枪" }).click();
-  await expect(page.getByRole("complementary").getByText("1", { exact: true })).toBeVisible();
+  await expectRevision(page, 1);
 
   let dropped = false;
   await page.route("**/v1/submissions", async (route) => {
@@ -101,13 +101,13 @@ test("submit: an answer lost on the way is retried and accepted once", async ({ 
   const next = page.getByRole("textbox", { name: "Next step" });
   await next.fill("Book the site visit");
   await next.press("Enter");
-  await expect(page.getByRole("complementary").getByText("2", { exact: true })).toBeVisible();
+  await expectRevision(page, 2);
   expect(dropped).toBe(true);
 
   await page.unroute("**/v1/submissions");
   await page.reload();
   await expect(property(page, "Next step")).toHaveText("Book the site visit");
-  await expect(page.getByRole("complementary").getByText("2", { exact: true })).toBeVisible();
+  await expectRevision(page, 2);
 });
 
 
@@ -145,12 +145,12 @@ test("conflict: the second writer sees both values and chooses", async ({ browse
   await edit(first, "Next step");
   await first.getByRole("textbox", { name: "Next step" }).fill("Pilot in four stores");
   await first.getByRole("textbox", { name: "Next step" }).press("Enter");
-  await expect(first.getByRole("complementary").getByText("2", { exact: true })).toBeVisible();
+  await expectRevision(first, 2);
 
   await edit(second, "Owner");
   await second.getByRole("combobox", { name: "Owner", exact: true }).fill("韩奥");
   await second.getByRole("option", { name: /韩奥/ }).click();
-  await expect(second.getByRole("complementary").getByText("3", { exact: true })).toBeVisible();
+  await expectRevision(second, 3);
   await expect(second.getByRole("dialog")).toHaveCount(0);
 
   await edit(second, "Next step");
@@ -158,7 +158,7 @@ test("conflict: the second writer sees both values and chooses", async ({ browse
   await edit(first, "Next step");
   await first.getByRole("textbox", { name: "Next step" }).fill("Pilot in six stores");
   await first.getByRole("textbox", { name: "Next step" }).press("Enter");
-  await expect(first.getByRole("complementary").getByText("4", { exact: true })).toBeVisible();
+  await expectRevision(first, 4);
   await expect(second.getByText("This record has new changes", { exact: true })).toBeVisible();
   await expect(second.getByRole("textbox", { name: "Next step" })).toHaveValue("Pilot in two stores");
   await second.getByRole("textbox", { name: "Next step" }).press("Enter");
@@ -166,7 +166,7 @@ test("conflict: the second writer sees both values and chooses", async ({ browse
   await expect(choice).toContainText("Pilot in six stores");
   await expect(choice).toContainText("Pilot in two stores");
   await choice.getByRole("button", { name: "Use mine" }).click();
-  await expect(second.getByRole("complementary").getByText("5", { exact: true })).toBeVisible();
+  await expectRevision(second, 5);
 
   await expect(property(first, "Next step")).toHaveText("Pilot in two stores");
   await Promise.all(pages.map((page) => page.close()));
@@ -226,7 +226,7 @@ test("batch: retries a stale row without submitting a successful row again", asy
   const next = editing.getByRole("textbox", { name: "Next step" });
   await next.fill("Check seasonal targets");
   await next.press("Enter");
-  await expect(editing.getByRole("complementary").getByText("2", { exact: true })).toBeVisible();
+  await expectRevision(editing, 2);
   await editing.close();
 
   const archived: string[] = [];
@@ -412,7 +412,7 @@ test("keyboard: create and edit an opportunity without using a pointer", async (
   await expect(page.getByRole("textbox", { name: "Next step" })).toBeFocused();
   await page.keyboard.insertText("Confirm renewal scope");
   await page.keyboard.press("Enter");
-  await expect(page.getByRole("complementary").getByText("3", { exact: true })).toBeVisible();
+  await expectRevision(page, 3);
   await tabTo(page.getByRole("link", { name: "Details", exact: true }));
   await page.keyboard.press("?");
   const keys = page.getByRole("dialog", { name: "Keyboard shortcuts" });
@@ -759,12 +759,11 @@ test("members: an opportunity owner is shown by name and can be reassigned", asy
   await expect(ownerCell.getByText("王丹", { exact: true })).toBeVisible();
 
   await row.getByRole("link", { name: "熔炉监测" }).click();
-  const properties = page.getByRole("complementary");
   await expect(property(page, "Owner")).toContainText("王丹");
   await edit(page, "Owner");
   await page.getByRole("combobox", { name: "Owner", exact: true }).fill("韩奥");
   await page.getByRole("option", { name: /韩奥/ }).click();
-  await expect(properties.getByText("2", { exact: true })).toBeVisible();
+  await expectRevision(page, 2);
   await page.reload();
   await expect(property(page, "Owner")).toContainText("韩奥");
 });

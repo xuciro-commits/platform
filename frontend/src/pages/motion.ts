@@ -1,5 +1,5 @@
 import * as stylex from "@stylexjs/stylex";
-import { useEffect, useState } from "react";
+import { type RefObject, useEffect, useLayoutEffect, useRef, useState } from "react";
 
 export const motionTimings = {
   instant: 80,
@@ -18,6 +18,33 @@ export const motionEases = {
 
 export function prefersReducedMotion() {
   return typeof window !== "undefined" && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+}
+
+export function useListFlip(containerRef: RefObject<HTMLElement | null>, orderKey: string, attr = "data-flip-id") {
+  const tops = useRef<Map<string, number>>(new Map());
+  useLayoutEffect(() => {
+    const root = containerRef.current;
+    if (!root) return;
+    const nodes = [...root.querySelectorAll<HTMLElement>(`[${attr}]`)];
+    const nextTops = new Map<string, number>();
+    for (const node of nodes) {
+      const id = node.getAttribute(attr);
+      if (!id) continue;
+      const top = node.getBoundingClientRect().top;
+      nextTops.set(id, top);
+      const previous = tops.current.get(id);
+      if (previous !== undefined && !prefersReducedMotion()) {
+        const delta = previous - top;
+        if (Math.abs(delta) > 1 && Math.abs(delta) < 400) {
+          node.animate(
+            [{ transform: `translate3d(0, ${delta}px, 0)` }, { transform: "none" }],
+            { duration: motionTimings.slot, easing: motionEases.slot },
+          );
+        }
+      }
+    }
+    tops.current = nextTops;
+  }, [containerRef, orderKey, attr]);
 }
 
 export function usePresence(open: boolean, duration: number) {
@@ -217,6 +244,31 @@ export const motionStyles = stylex.create({
   collapseInner: {
     overflow: "hidden",
     minHeight: 0,
+  },
+  chevron: {
+    display: "inline-flex",
+    transform: "rotate(0deg)",
+    transitionProperty: "transform",
+    transitionDuration: "var(--motion-snappy)",
+    transitionTimingFunction: "var(--ease-apple)",
+    "@media (prefers-reduced-motion: reduce)": { transitionDuration: "0.01ms" },
+  },
+  chevronOpen: {
+    transform: "rotate(180deg)",
+  },
+  pressable: {
+    transitionProperty: "transform",
+    transitionDuration: "var(--motion-instant)",
+    transitionTimingFunction: "var(--ease-apple)",
+    transform: { default: "none", ":active": "scale(0.985)" },
+    "@media (prefers-reduced-motion: reduce)": { transform: "none" },
+  },
+  pressableRow: {
+    transitionProperty: "transform, background-color",
+    transitionDuration: "var(--motion-instant)",
+    transitionTimingFunction: "var(--ease-apple)",
+    transform: { default: "none", ":active": "scale(0.996)" },
+    "@media (prefers-reduced-motion: reduce)": { transform: "none" },
   },
   overlayBadge: {
     position: "relative",

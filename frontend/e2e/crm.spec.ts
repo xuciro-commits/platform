@@ -1,7 +1,7 @@
 import { readFileSync } from "node:fs";
 import { crc32 } from "node:zlib";
 import { type Page, expect, test } from "@playwright/test";
-import { signIn, open, property, edit, crmMainline, submit } from "./support";
+import { signIn, open, property, edit, expectRevision, crmMainline, submit } from "./support";
 
 test.describe.serial("crm and peek", () => {
 const dragCard = async (page: Page, fromColumn: string, cardName: string, toColumn: string) => {
@@ -120,7 +120,7 @@ for (const entry of cases) {
       const field = page.getByRole("textbox", { name: entry.editField, exact: true });
       await field.fill(entry.editValue);
       await field.press("Enter");
-      await expect(page.getByRole("complementary").getByText("2", { exact: true })).toBeVisible();
+      await expectRevision(page, 2);
   });
 }
 

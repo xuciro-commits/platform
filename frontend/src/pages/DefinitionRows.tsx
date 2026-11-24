@@ -16,6 +16,7 @@ import { type Api, request, reread, useRead } from "../host";
 import { t } from "../i18n";
 import { reasonOf, send } from "./act";
 import type { Described, Values } from "./describe";
+import { useListFlip } from "./motion";
 import { ParameterInput, enterable } from "./ParameterInput";
 import { present, shown } from "./values";
 
@@ -99,6 +100,8 @@ function DefinitionTable({ slot, field, rows, states, entities, subject, bound, 
   const busy = saving || refreshing;
   const [creatingTransition, setCreatingTransition] = useState(false);
   const dragged = useRef<number | undefined>(undefined);
+  const tableWrap = useRef<HTMLDivElement>(null);
+  useListFlip(tableWrap, rows.map((row, index) => String(row.name ?? index)).join(","));
   const fields = field.fields?.length ? field.fields : slot === "actions" ? [
     { name: "name", title: "Name", type: "text", required: true },
     { name: "title", title: "What people call it", type: "text", required: true },
@@ -145,6 +148,7 @@ function DefinitionTable({ slot, field, rows, states, entities, subject, bound, 
       {bound && <Text type="supporting">{t("Transitions use the linked action types.")}</Text>}
       {failure && !editing && removing === undefined && <Banner status="error" title={t("Not saved")} description={failure} />}
       {rows.length > 0 && (
+        <VStack ref={tableWrap}>
         <Table aria-label={title} density="compact">
           <TableHeader><TableRow>
             {schema.show.map((name) => <TableHeaderCell key={name}>{label(name)}</TableHeaderCell>)}
@@ -152,7 +156,7 @@ function DefinitionTable({ slot, field, rows, states, entities, subject, bound, 
           </TableRow></TableHeader>
           <TableBody>
             {rows.map((row, index) => (
-              <TableRow key={row.name ?? index} draggable={canMove}
+              <TableRow key={row.name ?? index} data-flip-id={String(row.name ?? index)} draggable={canMove}
                 onDragStart={(event) => { if (canMove) { dragged.current = index; event.dataTransfer.setData("text/plain", String(index)); } }}
                 onDragEnd={() => { dragged.current = undefined; }}
                 onDragOver={(event) => { if (canMove && dragged.current !== undefined) event.preventDefault(); }}
@@ -177,6 +181,7 @@ function DefinitionTable({ slot, field, rows, states, entities, subject, bound, 
             ))}
           </TableBody>
         </Table>
+        </VStack>
       )}
       {editing && (
         <DefinitionForm slot={slot} row={editing.row} field={field} states={states} entities={entities} subject={subject}
