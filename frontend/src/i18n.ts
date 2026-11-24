@@ -6,7 +6,7 @@ export const zhCN: Record<string, string> = {
   "Your workspace, your data, your control.": "你的工作区，你的数据，由你掌控。",
   "Your workspace is ready": "工作区已准备就绪",
   "Install your first application to bring your workspace to life.": "安装第一个应用，开始搭建你的工作区。",
-  "Explore marketplace": "浏览应用市场",
+  "Explore marketplace": "浏览市场",
   Search: "搜索",
   Columns: "列",
   Description: "描述",
