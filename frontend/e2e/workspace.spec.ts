@@ -1,5 +1,5 @@
 import { readFileSync } from "node:fs";
-import { expect, test } from "@playwright/test";
+import { type Locator, expect, test } from "@playwright/test";
 import type { Api } from "../src/host";
 import { signIn, open, submit } from "./support";
 
@@ -63,26 +63,42 @@ test("restricted fields: a reader sees the field label and no amount", async ({ 
 });
 
 
-test("member menu: language and appearance live in the profile, sign out returns to sign-in", async ({ page }) => {
+test("member menu: language and appearance live in settings, sign out returns to sign-in", async ({ page }) => {
   await signIn(page, "builder-1 · acceptance");
-  const choose = async (menu: string, item: string, option: string | RegExp) => {
+  const settings = async (menu: string, item: string) => {
     await page.getByRole("button", { name: menu, exact: true }).click();
     await page.getByRole("menuitem", { name: item, exact: true }).click();
-    await page.getByRole("menuitemradio", { name: option }).click();
+    const dialog = page.getByRole("dialog");
+    await expect(dialog).toBeVisible();
+    return dialog;
+  };
+  const close = async (dialog: Locator) => {
+    await dialog.getByRole("button", { name: /^(Close|关闭)$/ }).first().click();
+    await expect(dialog).toBeHidden();
   };
 
-  await choose("Account", "Language", /中文/);
+  let dialog = await settings("Account", "Settings");
+  await dialog.getByRole("combobox", { name: "Language", exact: true }).click();
+  await page.getByRole("option", { name: /中文/ }).click();
+  await close(dialog);
   await expect(page.getByRole("button", { name: "搜索", exact: true }).first()).toBeVisible();
   await page.reload();
   await expect(page.getByRole("button", { name: "账户", exact: true })).toBeVisible();
 
-  await choose("账户", "外观", "深色");
+  dialog = await settings("账户", "偏好");
+  await dialog.getByRole("checkbox", { name: "深色", exact: true }).click();
   await expect(page.locator("html")).toHaveAttribute("data-theme", "dark");
+  await close(dialog);
   await page.reload();
   await expect(page.locator("html")).toHaveAttribute("data-theme", "dark");
 
-  await choose("账户", "外观", "跟随系统");
-  await choose("账户", "语言", "自动");
+  dialog = await settings("账户", "偏好");
+  await dialog.getByRole("checkbox", { name: "跟随系统", exact: true }).click();
+  await close(dialog);
+  dialog = await settings("账户", "设置");
+  await dialog.getByRole("combobox", { name: "语言", exact: true }).click();
+  await page.getByRole("option", { name: "租户默认", exact: true }).click();
+  await close(dialog);
   await expect(page.getByRole("button", { name: "Account", exact: true })).toBeVisible();
 
   await page.getByRole("button", { name: "Account", exact: true }).click();
@@ -410,10 +426,10 @@ test("people: a person gets a sign-in account and shows what an application atta
   await expect(main.getByText("Welding", { exact: true })).toBeVisible();
 
   await main.getByRole("combobox", { name: "Account that signs in as this person" }).click();
-  await page.getByRole("option", { name: /田雪/ }).click();
+  await page.getByRole("option", { name: /系统管理员/ }).click();
   await main.getByRole("button", { name: "Link account", exact: true }).click();
   await expect(main.getByRole("button", { name: "Unlink account", exact: true })).toBeVisible();
 
   await open(page, "Admin", "People");
-  await expect(main.getByRole("row").filter({ hasText: person })).toContainText("田雪");
+  await expect(main.getByRole("row").filter({ hasText: person })).toContainText("系统管理员");
 });

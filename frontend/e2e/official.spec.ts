@@ -86,9 +86,9 @@ test("official tenant: a sales rep qualifies a lead and converts it into an acco
 test("official tenant: a rep sees only their own leads and deals while the sales manager sees everyone's", async () => {
   await as("rep-2");
   await crm("Leads");
-  await expect(page.getByRole("main").getByText("周宁", { exact: true })).toHaveCount(0);
+  await expect(page.getByRole("main", { name: "Leads", exact: true }).getByText("周宁", { exact: true })).toHaveCount(0);
   await crm("Deals");
-  await expect(page.getByRole("main").getByText("曦和精密", { exact: true })).toHaveCount(0);
+  await expect(page.getByRole("main", { name: "Deals", exact: true }).getByText("曦和精密", { exact: true })).toHaveCount(0);
   await expect(page.getByRole("navigation", { name: "Primary navigation" }).getByRole("link", { name: "Settings", exact: true })).toHaveCount(0);
 
   await as("manager-1");
