@@ -82,7 +82,7 @@ export function ActionDialog({ action, described, heading, confirm, id, revision
       return next;
     });
   };
-  const shownParameters = action.payload.filter((parameter) => !(parameter.name in fixed) && enterable(parameter) && (!quick || parameter.required || parameter.name === described?.display))
+  const shownParameters = action.payload.filter((parameter) => !(parameter.name in fixed) && enterable(parameter) && (!quick || parameter.required || parameter.name === described?.display || initial[parameter.name] !== undefined))
     .flatMap((parameter) => (!only ? [parameter] : only.includes(parameter.name) ? [{ ...parameter, required: true }] : []));
   const blocked = action.payload.filter((parameter) => parameter.required && !(parameter.name in fixed) && !enterable(parameter)).map((parameter) => parameter.name);
   const missing = shownParameters.some((parameter) => missingValue(parameter, values[parameter.name]));
