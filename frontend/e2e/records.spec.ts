@@ -857,8 +857,7 @@ test("record fields: the date label aligns with the other commercial fields", as
 
 test("inbox: a comment mention opens the referenced record from the Mentions tab", async ({ page, browser, baseURL }) => {
   const author = await browser.newPage({ baseURL });
-  await author.goto("/");
-  await author.getByRole("button", { name: "user-1", exact: true }).click();
+  await signIn(author, "user-1 · acceptance");
   const record = "/ontology/objects/sales.opportunity/OPP-002";
   await author.goto(`${record}/activity`);
   const message = "@admin-1 Please review the spare parts agreement.";

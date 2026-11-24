@@ -98,9 +98,7 @@ test.describe.serial("gantt layout", () => {
     const readerContext = await browser.newContext();
     const reader = await readerContext.newPage();
     await reader.setViewportSize({ width: 1440, height: 900 });
-    await reader.goto("/");
-    await reader.getByRole("button", { name: "user-1 · acceptance" }).click();
-    await expect(reader.getByRole("button", { name: "Account", exact: true })).toBeVisible();
+    await signIn(reader, "user-1 · acceptance");
     await reader.goto("/ontology/objects/sales.gantttask");
     const readerBarA = reader.getByRole("button", { name: `Design review (${day(7)} – ${day(11)})`, exact: true });
     await expect(readerBarA).toBeVisible();

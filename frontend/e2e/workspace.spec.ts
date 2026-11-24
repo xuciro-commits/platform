@@ -172,7 +172,7 @@ test("tenants: switching keeps the entry and replaces what the page shows", asyn
 
   await tenant("acceptance", "publisher");
   await expect(page).toHaveURL(/\/ontology\/object-types$/);
-  await expect(page.getByRole("heading", { level: 2, name: "Nothing here yet", exact: true })).toBeVisible();
+  await expect(page.getByRole("navigation", { name: "Primary navigation" }).getByRole("button", { name: "publisher", exact: true })).toBeVisible();
   await expect(opportunity).toHaveCount(0);
 
   await tenant("publisher", "acceptance");

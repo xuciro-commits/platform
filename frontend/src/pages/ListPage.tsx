@@ -374,7 +374,7 @@ export function ListView<Answer, Row>({ definition, read, primary, back, exportR
   const bulk = definition.bulk?.(chosen, () => setSelected(new Set()));
   const ready = read.status === "ready";
   const empty = ready && shown.length === 0;
-  const toolbar = definition.columns.length > 0 && read.status !== "error" && read.status !== "refused" && (!empty || dirty || Boolean(board) || Boolean(calendar) || Boolean(gantt));
+  const toolbar = definition.columns.length > 0 && read.status !== "error" && read.status !== "refused" && (!empty || dirty || Boolean(lanes) || Boolean(definition.calendar?.fields.length) || Boolean(definition.gantt));
 
   const activeCells = active ? shown.find((cells) => cells[idKey] === active) : undefined;
   const activeUnscheduled = Boolean(active && gantt?.unscheduled.some((item) => item.id === active));

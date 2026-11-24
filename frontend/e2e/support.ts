@@ -190,6 +190,7 @@ export async function crmMainline(page: Page, go: (type: string, plural: string)
   await expect(property(page, "Probability %")).toHaveText("0");
   await expect(page.getByRole("button", { name: "About Probability %", exact: true })).toBeVisible();
   await page.getByRole("button", { name: "Reopen", exact: true }).click();
+  await page.getByRole("alertdialog").getByRole("button", { name: "Reopen", exact: true }).click();
   await expect(property(page, "Probability %")).toHaveText("10");
   await edit(page, "Status");
   await page.getByRole("combobox", { name: "Status" }).fill("Negotiation");

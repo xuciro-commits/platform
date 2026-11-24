@@ -366,8 +366,7 @@ test("applications: shared records respect roles and keep their history after re
   const recordURL = `/ontology/objects/build.batchproviderorder/${appRecord.pathname.split("/").at(-1)}`;
   const schema = "build.batchproviderorder.setshoporder";
   const member = await browser.newPage();
-  await member.goto("/");
-  await member.getByRole("button", { name: "builder-1", exact: true }).click();
+  await signIn(member, "builder-1 · acceptance");
   await member.goto(appRecord.href);
   await expect(member.getByRole("heading", { name: "PO-1042", exact: true })).toBeVisible();
   await member.getByRole("button", { name: "More actions" }).click();
