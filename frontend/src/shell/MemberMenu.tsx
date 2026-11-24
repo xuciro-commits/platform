@@ -17,7 +17,7 @@ import {
   PlusIcon,
   UserCircleIcon,
 } from "@heroicons/react/24/outline";
-import { useState } from "react";
+import { useState, useSyncExternalStore } from "react";
 import { endSession, switchAccount, useAccounts, useSession } from "../host";
 import { t } from "../i18n";
 import { PersonAvatar } from "../pages/MemberField";
@@ -25,10 +25,26 @@ import { useAccount } from "./account";
 import { AddAccountDialog } from "./AddAccountDialog";
 import { SettingsDialog, type SettingsPanelId } from "./settings/SettingsDialog";
 
+let openPanel: SettingsPanelId | null = null;
+const panelListeners = new Set<() => void>();
+
+function setOpenPanel(next: SettingsPanelId | null) {
+  openPanel = next;
+  panelListeners.forEach((notify) => notify());
+}
+
+function subscribePanel(notify: () => void) {
+  panelListeners.add(notify);
+  return () => {
+    panelListeners.delete(notify);
+  };
+}
+
 export function MemberMenu({ compact }: { compact?: boolean }) {
   const session = useSession();
   const accounts = useAccounts();
-  const [settingsPanel, setSettingsPanel] = useState<SettingsPanelId | null>(null);
+  const settingsPanel = useSyncExternalStore(subscribePanel, () => openPanel);
+  const setSettingsPanel = setOpenPanel;
   const [adding, setAdding] = useState(false);
   const { me: data, name } = useAccount();
   const email = data?.account.effective.email || data?.account.email || data?.principalId || "";
@@ -94,7 +110,7 @@ export function MemberMenu({ compact }: { compact?: boolean }) {
         <DropdownMenuDivider />
         <DropdownMenuItem icon={ArrowRightStartOnRectangleIcon} label={t("Sign out")} onClick={endSession} />
       </DropdownMenu>
-      {settingsPanel && <SettingsDialog initialPanel={settingsPanel} onClose={() => setSettingsPanel(null)} />}
+      {settingsPanel && <SettingsDialog initialPanel={settingsPanel} onPanel={setSettingsPanel} onClose={() => setSettingsPanel(null)} />}
       {adding && <AddAccountDialog onClose={() => setAdding(false)} />}
     </>
   );

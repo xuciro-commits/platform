@@ -15,6 +15,7 @@ test.afterAll(async () => {
 });
 
 async function as(seat: string) {
+  await page.goto("/");
   if (await page.getByRole("button", { name: "Account", exact: true }).count()) {
     await page.getByRole("button", { name: "Account", exact: true }).click();
     await page.getByRole("menuitem", { name: "Sign out", exact: true }).click();

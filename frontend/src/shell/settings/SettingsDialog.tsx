@@ -63,8 +63,12 @@ function Close({ onClose }: { onClose: () => void }) {
 
 export type SettingsPanelId = PanelId;
 
-export function SettingsDialog({ onClose, initialPanel = "profile" }: { onClose: () => void; initialPanel?: PanelId }) {
-  const [active, setActive] = useState<PanelId>(initialPanel);
+export function SettingsDialog({ onClose, onPanel, initialPanel = "profile" }: { onClose: () => void; onPanel?: (panel: PanelId) => void; initialPanel?: PanelId }) {
+  const [active, choose] = useState<PanelId>(initialPanel);
+  const setActive = (next: PanelId) => {
+    choose(next);
+    onPanel?.(next);
+  };
   const titleId = useId();
   const isNarrow = useMediaQuery("(max-width: 640px)");
   const account = useAccount();

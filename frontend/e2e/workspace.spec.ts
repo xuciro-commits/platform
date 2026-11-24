@@ -217,7 +217,7 @@ test("settings: the profile is edited in place and the member menu follows", asy
   await signIn(page, "user-1 · acceptance");
   const openSettings = async () => {
     await page.getByRole("button", { name: "Account", exact: true }).click();
-    await page.getByRole("menuitem", { name: "Settings", exact: true }).click();
+    await page.getByRole("menuitem", { name: "Profile", exact: true }).click();
     return page.getByRole("dialog", { name: "Settings" });
   };
   let settings = await openSettings();
