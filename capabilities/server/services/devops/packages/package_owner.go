@@ -33,6 +33,7 @@ type Owner struct {
 	packageLibraries map[string]protocol.PackageLibrary
 	index            *protocol.PackageIndex
 	host             protocol.PackageHost
+	masterData       sync.Map
 }
 
 func New(tenant string, resolver publication.Resolver) *Owner {
@@ -190,6 +191,37 @@ func (d *Owner) sealedPackageDescriptor(id, version, artifact string) (platform.
 		return platform.PackageDescriptor{}, fmt.Errorf("the retained package descriptor is unavailable")
 	}
 	return descriptor, nil
+}
+
+func (d *Owner) MasterDataSpaces() []string {
+	if d.host == nil {
+		return nil
+	}
+	d.mu.Lock()
+	held := make([]protocol.InstalledPackage, 0, len(d.packages))
+	for _, p := range d.packages {
+		if p.State == "active" && p.Artifact != "" {
+			held = append(held, *p)
+		}
+	}
+	d.mu.Unlock()
+	var out []string
+	for _, p := range held {
+		known, cached := d.masterData.Load(p.Artifact)
+		if !cached {
+			descriptor, err := d.sealedPackageDescriptor(p.ID, p.Version, p.Artifact)
+			if err != nil {
+				continue
+			}
+			known = packagedesc.MasterDataSurface(descriptor)
+			d.masterData.Store(p.Artifact, known)
+		}
+		if known.(bool) {
+			out = append(out, cmp.Or(p.Space, p.Namespace))
+		}
+	}
+	slices.Sort(out)
+	return slices.Compact(out)
 }
 
 func (d *Owner) BlueprintViews() []protocol.PackageView {

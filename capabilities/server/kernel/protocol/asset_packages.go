@@ -228,6 +228,7 @@ type ConsolePackages interface {
 	PackagePrerequisites(string, string) ([]platform.ReleaseAsset, error)
 	InstalledPackages() map[string]*InstalledPackage
 	PackageSeed(string) ([]json.RawMessage, bool)
+	MasterDataSpaces() []string
 }
 
 const PackageType = "platform.package"
