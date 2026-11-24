@@ -113,7 +113,7 @@ func checkCredentialDefinition(w protocol.CredentialWrite) error {
 	}
 	for _, binding := range w.Bindings {
 		kind, id, ok := strings.Cut(binding.Consumer, "/")
-		if !ok || strings.TrimSpace(id) == "" || !slices.Contains([]string{"ai", "connection", "endpoint", "listener"}, kind) || CredentialOrigin(binding.Origin) == "" || CredentialOrigin(binding.Origin) != binding.Origin {
+		if !ok || strings.TrimSpace(id) == "" || !slices.Contains([]string{"ai", "connection", "endpoint", "implementation", "listener"}, kind) || CredentialOrigin(binding.Origin) == "" || CredentialOrigin(binding.Origin) != binding.Origin {
 			return fmt.Errorf("Each use needs a consumer and an exact network origin without credentials")
 		}
 	}

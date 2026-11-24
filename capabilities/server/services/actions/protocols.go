@@ -126,9 +126,23 @@ func (r Router) DecideBinding(_ platform.Caller, s *pb.Submission, _ time.Time) 
 	if p.Provider == "" {
 		return func(*pb.ChangeRecord) { r.Bindings.unset(id) }, nil
 	}
-	if app, name, named := runtimeprotocol.SplitImplementationIdentity(p.Provider); named {
-		if _, found := r.implementation(id, app, name); found {
-			return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "Connector {implementation} can be bound only after it passes the conformance tests of {protocol}", p.Provider, id)
+	if app, _, named := runtimeprotocol.SplitImplementationIdentity(p.Provider); named {
+		for _, a := range r.Host.LiveApps() {
+			gate, ok := a.(interface {
+				ConnectorBindable(string, string) (bool, error)
+			})
+			if !ok || a.Manifest().ID != app {
+				continue
+			}
+			known, err := gate.ConnectorBindable(id, p.Provider)
+			if !known {
+				break
+			}
+			if err != nil {
+				return nil, &platform.Error{Code: pb.ErrorCode_ERROR_CODE_CONFLICT, Message: err.Error()}
+			}
+			provider := p.Provider
+			return func(*pb.ChangeRecord) { r.Bindings.set(id, provider) }, nil
 		}
 		return nil, &platform.Error{Code: pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT}
 	}
@@ -223,7 +237,11 @@ func (r Router) ProtocolProvider(protocol string) (string, bool) {
 }
 
 func (r Router) Rebind(protocol, provider string) bool {
-	if !slices.ContainsFunc(r.Providers(protocol), func(b Binding) bool { return b.ID() == provider }) {
+	if app, name, named := runtimeprotocol.SplitImplementationIdentity(provider); named {
+		if !slices.ContainsFunc(r.implementations()[app], func(i runtimeprotocol.ProtocolImplementation) bool { return i.Name == name && i.Contract == protocol }) {
+			return false
+		}
+	} else if !slices.ContainsFunc(r.Providers(protocol), func(b Binding) bool { return b.ID() == provider }) {
 		return false
 	}
 	r.Bindings.set(protocol, provider)
@@ -419,15 +437,6 @@ func (r Router) implementations() map[string][]runtimeprotocol.ProtocolImplement
 	return out
 }
 
-func (r Router) implementation(protocol, app, name string) (runtimeprotocol.ProtocolImplementation, bool) {
-	for _, i := range r.implementations()[app] {
-		if i.Name == name && i.Contract == protocol {
-			return i, true
-		}
-	}
-	return runtimeprotocol.ProtocolImplementation{}, false
-}
-
 func (r Router) Protocols() []ProtocolInfo {
 	byID := map[string]*ProtocolInfo{}
 	var order []string
@@ -490,6 +499,10 @@ func (r Router) Protocols() []ProtocolInfo {
 		slices.SortFunc(byID[id].Implementations, func(x, y ImplementationInfo) int { return strings.Compare(x.ID, y.ID) })
 		if b, ok := r.Bound(id); ok {
 			byID[id].Bound = b.ID()
+		} else if provider, ok := r.Bindings.get(id); ok {
+			if _, _, named := runtimeprotocol.SplitImplementationIdentity(provider); named {
+				byID[id].Bound = provider
+			}
 		}
 		out = append(out, *byID[id])
 	}

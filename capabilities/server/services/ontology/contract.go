@@ -16,6 +16,7 @@ type ContractRecord struct {
 	Actions     []runtimeprotocol.ContractAction `json:"actions,omitempty" type:"json"`
 	Reads       []string                         `json:"reads,omitempty"`
 	Events      []platform.ProtocolEvent         `json:"events,omitempty" type:"json"`
+	Tests       []runtimeprotocol.ContractTest   `json:"tests,omitempty" type:"json" title:"Conformance tests"`
 	State       string                           `json:"state" field:"readonly" choices:"draft,published"`
 	Version     int                              `json:"version,omitempty" field:"readonly"`
 	Published   string                           `json:"published,omitempty" field:"readonly,internal" type:"longtext" title:"Installed" help:"What is installed"`
@@ -27,11 +28,11 @@ type ContractDefinition runtimeprotocol.ProtocolContract
 func (d ContractDefinition) Check() error { return runtimeprotocol.ProtocolContract(d).Check() }
 
 func (r ContractRecord) Definition() ContractDefinition {
-	return ContractDefinition{Name: r.Name, Major: r.Major, Title: r.Title, Description: r.Description, Actions: slices.Clone(r.Actions), Reads: slices.Clone(r.Reads), Events: slices.Clone(r.Events)}
+	return ContractDefinition{Name: r.Name, Major: r.Major, Title: r.Title, Description: r.Description, Actions: slices.Clone(r.Actions), Reads: slices.Clone(r.Reads), Events: slices.Clone(r.Events), Tests: slices.Clone(r.Tests)}
 }
 
 func ContractRecordFromDeclaration(d ContractDefinition) ContractRecord {
-	return ContractRecord{Name: d.Name, Major: d.Major, Title: d.Title, Description: d.Description, Actions: slices.Clone(d.Actions), Reads: slices.Clone(d.Reads), Events: slices.Clone(d.Events)}
+	return ContractRecord{Name: d.Name, Major: d.Major, Title: d.Title, Description: d.Description, Actions: slices.Clone(d.Actions), Reads: slices.Clone(d.Reads), Events: slices.Clone(d.Events), Tests: slices.Clone(d.Tests)}
 }
 
 func (r ContractRecord) KeepsShape(next ContractRecord) bool {

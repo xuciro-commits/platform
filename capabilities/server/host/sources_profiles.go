@@ -2,9 +2,7 @@ package host
 
 import (
 	"context"
-	"encoding/json"
 	"log"
-	dataowner "platformserver/services/data"
 	"time"
 
 	"platformserver/platform"
@@ -15,16 +13,13 @@ func (t *Tenant) CheckConnections(now time.Time) {
 	if t.businessStopped() || !t.OwnerActive(build.ID) {
 		return
 	}
-	conns, _ := recordRead(t, context.Background(), func(t *Tenant) ([]dataowner.Connection, *platform.Error) {
-		rows, _, refusal := platform.Find[dataowner.Connection](t.automation(build.ID, false), platform.Query{Domain: json.RawMessage(`[["requested","=",true]]`), Sort: []string{"id"}, Limit: 50})
-		return rows, refusal
+	checks, _ := recordRead(t, context.Background(), func(t *Tenant) ([]build.PendingCheck, *platform.Error) {
+		return t.App(build.ID).(*build.Build).PendingChecks(t.automation(build.ID, false))
 	})
-	for _, c := range conns {
-		detail, err := t.dataClient().Check(c)
-		caller := t.automation(build.ID, false)
-		sub := dataowner.ConnectionCheckSubmission(t.ID, build.ID, caller.Member, c, detail, err, now)
-		if _, err := t.submitBackground(caller.Member, sub, now); err != nil {
-			log.Printf("tenant %s: connection check result refused: %v", t.ID, err)
+	caller, env := t.automation(build.ID, false), build.CheckEnvironment{Connection: t.dataClient().Check, Credential: t.CredentialHeader, Send: t.sender()}
+	for _, check := range checks {
+		if _, err := t.submitBackground(caller.Member, check.Run(t.ID, caller.Member, env, now), now); err != nil {
+			log.Printf("tenant %s: check result refused: %v", t.ID, err)
 		}
 	}
 }

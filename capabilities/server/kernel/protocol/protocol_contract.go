@@ -22,6 +22,15 @@ type ProtocolContract struct {
 	Actions     []ContractAction         `json:"actions,omitempty"`
 	Reads       []string                 `json:"reads,omitempty"`
 	Events      []platform.ProtocolEvent `json:"events,omitempty"`
+	Tests       []ContractTest           `json:"tests,omitempty"`
+}
+
+type ContractTest struct {
+	Name    string         `json:"name"`
+	Title   string         `json:"title,omitempty"`
+	Action  string         `json:"action"`
+	Payload map[string]any `json:"payload,omitempty"`
+	Expect  []string       `json:"expect,omitempty"`
 }
 
 type ContractAction struct {
@@ -69,6 +78,20 @@ func (c ProtocolContract) Check() error {
 			return fmt.Errorf("Capability contract events need unique lowercase names and titles")
 		}
 		seen["event:"+event.Name] = true
+	}
+	if len(c.Tests) > 32 {
+		return fmt.Errorf("A capability contract has at most 32 conformance tests")
+	}
+	for _, test := range c.Tests {
+		if !values.Identifier.MatchString(test.Name) || seen["test:"+test.Name] || !seen["action:"+test.Action] || len(test.Title) > 200 || len(test.Expect) > 32 {
+			return fmt.Errorf("Conformance test %q needs a unique lowercase name and one of the contract's actions", test.Name)
+		}
+		for _, field := range test.Expect {
+			if strings.TrimSpace(field) == "" || len(field) > 64 {
+				return fmt.Errorf("Conformance test %s expects answer fields by name", test.Name)
+			}
+		}
+		seen["test:"+test.Name] = true
 	}
 	return nil
 }

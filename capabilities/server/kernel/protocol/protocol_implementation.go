@@ -1,12 +1,16 @@
 package protocol
 
 import (
+	"crypto/sha256"
+	"encoding/hex"
+	"encoding/json"
 	"fmt"
 	"net/url"
 	"regexp"
 	"slices"
 	"strconv"
 	"strings"
+	"time"
 
 	"platformserver/kernel/values"
 	"platformserver/platform"
@@ -34,6 +38,46 @@ type ImplementationRequest struct {
 	Action string `json:"action"`
 	Method string `json:"method"`
 	Path   string `json:"path"`
+}
+
+type ConformanceCase struct {
+	Name   string `json:"name"`
+	OK     bool   `json:"ok"`
+	Detail string `json:"detail,omitempty"`
+}
+
+type ConformanceRun struct {
+	At          time.Time         `json:"at"`
+	Passed      bool              `json:"passed"`
+	Fingerprint string            `json:"fingerprint"`
+	Cases       []ConformanceCase `json:"cases"`
+}
+
+func ConnectorFingerprint(c ProtocolContract, i ProtocolImplementation, address, secret string) string {
+	raw, _ := json.Marshal(struct {
+		Contract       ProtocolContract       `json:"contract"`
+		Implementation ProtocolImplementation `json:"implementation"`
+		Address        string                 `json:"address"`
+		Secret         string                 `json:"secret"`
+	}{c, i, address, secret})
+	sum := sha256.Sum256(raw)
+	return hex.EncodeToString(sum[:])
+}
+
+func ConnectorPath(path string, payload map[string]any) (string, error) {
+	missing := ""
+	out := implementationPlaceholder.ReplaceAllStringFunc(path, func(match string) string {
+		value, found := payload[match[1:len(match)-1]]
+		if !found || value == nil {
+			missing = match[1 : len(match)-1]
+			return ""
+		}
+		return url.PathEscape(fmt.Sprint(value))
+	})
+	if missing != "" {
+		return "", fmt.Errorf("the path needs %s, which the test does not give", missing)
+	}
+	return out, nil
 }
 
 func ImplementationIdentity(app, name string) string { return app + ":" + name }

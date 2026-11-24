@@ -184,6 +184,8 @@ func New(tenant string, authorities platform.Authorities, publications []publica
 	actions = append(actions, actioncatalog.EntityActions(interfaceKind.entity(b))...)
 	actions = append(actions, actioncatalog.EntityActions(contractKind.entity(b))...)
 	actions = append(actions, actioncatalog.EntityActions(implementationKind.entity(b))...)
+	actions = append(actions, actioncatalog.EntityActions(b.connectorSetupEntity())...)
+	actions = append(actions, connectorSetupActions()...)
 	actions = append(actions, b.evaluations.Actions()...)
 	actions = append(actions, actioncatalog.EntityActions(b.functions.CodeEntity())...)
 	actions = append(actions, b.data.Actions()...)
@@ -202,7 +204,7 @@ func New(tenant string, authorities platform.Authorities, publications []publica
 	actions = append(actions, devopsmodel.ProductVersionActions()...)
 	actions = append(actions, platform.Action{Schema: SchemaEvaluationSetPublish, Target: TestPlanType, Title: "Publish test plan", Description: "Freeze a portable business scenario or the evaluation cases for one function version.", Capability: "objects", Roles: []string{Builder}, Payload: []platform.Field{}})
 	actions = resourceActions(actions)
-	classes := []string{ObjectType, ActionTypeType, runtimeprotocol.PageType, runtimeprotocol.AppType, TestPlanType, runtimeprotocol.ProcessType, runtimeprotocol.FunctionType, PropertyTypeType, ValueTypeType, ObjectTypeGroupType, LinkTypeType, b.queries.Entity().Type, InterfaceType, ContractType, ImplementationType, runtimeprotocol.FunctionCallType, b.evaluations.Entity().Type, runtimeprotocol.CodeType, runtimeprotocol.TableType, AgentType, SampleSetType, BranchType, ResourceType, FolderType, WorkingStateType, ProductType, ProductVersionType, runtimeprotocol.OwnedRelationType(ID), runtimeprotocol.ConfirmationType, runtimeprotocol.DispatchType}
+	classes := []string{ObjectType, ActionTypeType, runtimeprotocol.PageType, runtimeprotocol.AppType, TestPlanType, runtimeprotocol.ProcessType, runtimeprotocol.FunctionType, PropertyTypeType, ValueTypeType, ObjectTypeGroupType, LinkTypeType, b.queries.Entity().Type, InterfaceType, ContractType, ImplementationType, ConnectorSetupType, runtimeprotocol.FunctionCallType, b.evaluations.Entity().Type, runtimeprotocol.CodeType, runtimeprotocol.TableType, AgentType, SampleSetType, BranchType, ResourceType, FolderType, WorkingStateType, ProductType, ProductVersionType, runtimeprotocol.OwnedRelationType(ID), runtimeprotocol.ConfirmationType, runtimeprotocol.DispatchType}
 	classes = append(classes, b.data.Types()...)
 	b.authorities = authorities
 	b.authority = authorities(tenant, ID, platform.NewCatalog(actions...), classes...)
@@ -467,6 +469,9 @@ func (b *Build) Submit(c platform.Caller, s *pb.Submission, now time.Time) (*pb.
 	}
 	if record, err, handled := b.functions.DecideCodeBuild(c, s, now); handled {
 		return record, err
+	}
+	if s.GetSchema().GetName() == SchemaConnectorSetupTested {
+		return b.submitConnectorTested(c, s, now)
 	}
 	if record, err, handled := b.data.Decide(b.authority, c, s, now); handled {
 		return record, err
