@@ -28,7 +28,7 @@
 
 - 业务对照只读 `idea/from-frappe-crm/matrix.md`；`idea/**/captures/` 与 `idea/**/evidence/` 只为核对某个具体细节时定向看一张。
 
-顺序：2.9 的 A5 与 B1c → A4 收尾（crm 0.3.0）→ 2.8 的 projects；B2 起与 projects 并行。原始设计稿在负责人的 Agent Files（`artifacts/platform/extensibility-design.md`）。
+顺序：2.9 的 A5 收尾 → A4 收尾（crm 0.3.0）→ 2.8 的 projects；B2 起与 projects 并行。原始设计稿在负责人的 Agent Files（`artifacts/platform/extensibility-design.md`）。
 
 ## 2.8 开放应用接入
 
@@ -71,8 +71,9 @@
   - B1b 已做（K41）：对象动作写 `uses`（`名字/主版本#动作`），发布时按已装契约核对；用到的契约进构建应用的消费清单（可选）。
     契约资源的绑定必须由管理员显式选（`platform.protocol.bind`，留空即解除）；未绑定时用到它的入口不出现、调用答“能力未绑定”，绑定后出现。
     `provides`/`uses` 写在 `package.yaml` 的那层留到有真契约包时再做；现在使用方声明就是动作的 `uses`。
-  - **B1c 绑定界面。** 管理 → 能力：契约（动作、读取、事件）、实现、使用方（必需或可选）、当前绑定；选实现、解除绑定（新增 `platform.protocol.unbind`）。
-    验收：workspace 的 trunk 走一遍装契约 → 入口不在 → 绑定 → 入口出现。同一契约的多个声明式实现（都在构建应用里）要等 B2 给实现独立身份。
+  - B1c 已做：管理 → 能力（`apps/admin/capabilities.ts`、`pages/Capabilities.tsx`），展示契约（动作、读取、事件）、实现、使用方与当前绑定，
+    经 `platform.protocol.bind`（provider 留空即解除）选实现与解绑；workspace 的 trunk 已覆盖未绑定 → 绑定 → 解绑全链路。
+    同一契约的多个声明式实现（都在构建应用里）要等 B2 给实现独立身份。
 - **B2 连接器实现。** 凭据引用、出站白名单、一致性测试门禁。验收：测试不过不能绑定的不变量。
 - **B3 第一个探针 `call/1`。** 云通话连接器与测试实现；crm 联系人“拨打”与通话记录。验收：crm 的 trunk。
 - **B4 受管服务。** 注册、证书、探活、预留与结算；第二个探针 `document.render/1`：把单据渲染成 PDF（无头浏览器或 Typst）。
