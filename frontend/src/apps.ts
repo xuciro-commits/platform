@@ -2,6 +2,7 @@ import type { Api } from "./host";
 import type { IconType } from "@astryxdesign/core/Icon";
 import {
   AdjustmentsHorizontalIcon,
+  ArchiveBoxIcon,
   ArrowUpTrayIcon,
   ArrowsRightLeftIcon,
   BeakerIcon,
@@ -50,6 +51,7 @@ import {
   SparklesIcon,
   Square3Stack3DIcon,
   Squares2X2Icon,
+  SquaresPlusIcon,
   SwatchIcon,
   TagIcon,
   TruckIcon,
@@ -63,7 +65,7 @@ import {
 export type NavItem = { id: string; label: string; icon: IconType; object?: string; description?: string; settings?: string[] };
 export type NavSection = { title: string; items: NavItem[] };
 export type RailGroup = "start" | "installed" | "build" | "run" | "manage";
-export type App = { id: string; label: string; icon: IconType; badge?: boolean; group: RailGroup; sections: NavSection[]; dashboard?: Api.DashboardBlock[]; packageId?: string; hasDemo?: boolean };
+export type App = { id: string; label: string; icon: IconType; badge?: boolean; group: RailGroup; sections: NavSection[]; dashboard?: Api.DashboardBlock[]; packageId?: string; hasDemo?: boolean; surface?: string };
 
 export const apps: App[] = [
   {
@@ -250,6 +252,10 @@ export const apps: App[] = [
         ],
       },
       {
+        title: "Data",
+        items: [{ id: "master-data", label: "Master data", icon: ArchiveBoxIcon }],
+      },
+      {
         title: "Access",
         items: [
           { id: "roles", label: "Business roles", icon: KeyIcon },
@@ -260,6 +266,7 @@ export const apps: App[] = [
       {
         title: "Workspace",
         items: [
+          { id: "capabilities", label: "Capabilities", icon: SquaresPlusIcon },
           { id: "models", label: "Models", icon: CpuChipIcon },
           { id: "vocabulary", label: "Language and vocabulary", icon: LanguageIcon },
           { id: "credentials", label: "Credentials", icon: LockClosedIcon },

@@ -433,3 +433,112 @@ test("people: a person gets a sign-in account and shows what an application atta
   await open(page, "Admin", "People");
   await expect(main.getByRole("row").filter({ hasText: person })).toContainText("系统管理员");
 });
+
+
+test("capabilities: binding a capability contract makes dependent entries appear and unbinding hides them", async ({ page }) => {
+  await signIn(page);
+  const suffix = Date.now().toString(36);
+  const contractName = `trunkcall.${suffix}`;
+  const contractId = `${contractName}/1`;
+  const providerObj = `phone${suffix}`;
+  const callerObj = `caller${suffix}`;
+  const callerType = `sales.${callerObj}`;
+
+  await submit(page, "build.object.create", "build.object", `PHONE-${suffix}`, {
+    project: "sales",
+    name: providerObj,
+    title: "Trunk Phone",
+    plural: "Trunk Phones",
+    display: "number",
+    fields: [{ name: "number", title: "Number", type: "text", required: true }],
+    protocols: [{ name: contractName, version: 1, actions: { dial: "edit" } }],
+    access: [{ role: "builder", read: "all", create: true, edit: true }],
+  });
+  await submit(page, "build.object.publish", "build.object", `PHONE-${suffix}`, {});
+
+  const session = await page.evaluate(() => JSON.parse(sessionStorage.getItem("platform:session")!) as { token: string; tenant: string });
+  const headers = { authorization: `Bearer ${session.token}`, "platform-tenant": session.tenant };
+  const protoResp = await page.request.get("/v1/protocols", { headers });
+  expect(protoResp.ok()).toBeTruthy();
+  const protoList = (await protoResp.json()) as Api.ProtocolInfo[];
+  const seeded = protoList.find((entry) => entry.id === contractId);
+  const dialPayload = seeded?.contract?.Actions?.[0]?.payload ?? [];
+
+  await submit(page, "build.contract.create", "build.contract", `CONTRACT-${suffix}`, {
+    project: "sales",
+    name: contractName,
+    major: 1,
+    title: `Trunk Call ${suffix}`,
+    description: "Capability contract created by trunk verification.",
+    actions: [{ name: "dial", title: "Dial", payload: dialPayload }],
+  });
+  await submit(page, "build.contract.publish", "build.contract", `CONTRACT-${suffix}`, {});
+
+  await submit(page, "build.object.create", "build.object", `CALLER-${suffix}`, {
+    project: "sales",
+    name: callerObj,
+    title: "Trunk Caller",
+    plural: "Trunk Callers",
+    display: "title",
+    fields: [
+      { name: "title", title: "Title", type: "text", required: true, search: true },
+      { name: "note", title: "Note", type: "text" },
+    ],
+    states: [{ name: "open", title: "Open", tone: "info" }],
+    access: [{ role: "builder", read: "all", create: true, edit: true }],
+  });
+  await submit(page, "build.actiontype.create", "build.actiontype", `DIAL-${suffix}`, {
+    project: "sales",
+    name: `${callerType}.placecall`,
+    object: callerType,
+    definition: {
+      name: "placecall",
+      title: "Place call",
+      from: ["open"],
+      roles: ["builder"],
+      uses: [`${contractId}#dial`],
+      transaction: {
+        subject: callerType,
+        steps: [
+          {
+            name: "mark",
+            kind: "update",
+            target: { type: callerType, id: "$subject" },
+            changes: [{ field: "note", expr: { kind: "text", lit: { value: "dialed" } } }],
+          },
+        ],
+      },
+    },
+  });
+  await submit(page, "build.actiontype.publish", "build.actiontype", `DIAL-${suffix}`, {});
+  await submit(page, "build.object.publish", "build.object", `CALLER-${suffix}`, {});
+  await submit(page, `${callerType}.create`, callerType, "CALL-1", { title: `Lead ${suffix}` });
+
+  const main = page.getByRole("main");
+  await open(page, "Admin", "Capabilities");
+  const row = main.getByRole("row").filter({ hasText: `Trunk Call ${suffix}` });
+  await expect(row).toContainText("Unbound");
+
+  await page.goto(`/ontology/objects/${encodeURIComponent(callerType)}/CALL-1`);
+  await expect(page.getByRole("heading", { level: 1, name: `Lead ${suffix}` })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Place call", exact: true })).toHaveCount(0);
+
+  await open(page, "Admin", "Capabilities");
+  await main.getByRole("link", { name: `Trunk Call ${suffix}`, exact: true }).click();
+  await expect(page.getByRole("heading", { level: 1, name: `Trunk Call ${suffix}`, exact: true })).toBeVisible();
+  await expect(main.getByText("This capability is unbound", { exact: true })).toBeVisible();
+  await main.getByRole("button", { name: "Bind", exact: true }).click();
+  await expect(main.getByText(/Currently bound to/)).toBeVisible();
+
+  await page.goto(`/ontology/objects/${encodeURIComponent(callerType)}/CALL-1`);
+  await expect(page.getByRole("button", { name: "Place call", exact: true })).toBeVisible();
+
+  await page.goto(`/admin/capabilities/${encodeURIComponent(contractId)}`);
+  await main.getByRole("button", { name: "Unbind", exact: true }).click();
+  await page.getByRole("alertdialog").getByRole("button", { name: "Unbind", exact: true }).click();
+  await expect(main.getByText("This capability is unbound", { exact: true })).toBeVisible();
+
+  await page.goto(`/ontology/objects/${encodeURIComponent(callerType)}/CALL-1`);
+  await expect(page.getByRole("heading", { level: 1, name: `Lead ${suffix}` })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Place call", exact: true })).toHaveCount(0);
+});
