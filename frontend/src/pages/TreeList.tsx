@@ -18,7 +18,7 @@ import { ArrowPathIcon, MagnifyingGlassIcon } from "@heroicons/react/24/outline"
 import * as stylex from "@stylexjs/stylex";
 import { type KeyboardEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { reread, useRead } from "../host";
-import { t } from "../i18n";
+import { dayText, t } from "../i18n";
 import { PageTitle, useGutter } from "./frame";
 import type { Dot } from "./Transitions";
 import { DotMark } from "./DotMark";
@@ -27,7 +27,7 @@ export type TreeColumn<Row> = {
   key: string;
   header: string;
   width?: number;
-  kind?: "number" | "time" | "code";
+  kind?: "number" | "date" | "time" | "code";
   text: (row: Row) => string;
   value?: (row: Row) => number | string;
   dot?: (row: Row) => Dot | undefined;
@@ -162,6 +162,7 @@ function useTreeKeyboardNav<Row>({ rows, parents, focused, onFocus, expanded, on
 function Cell<Row>({ column, row }: { column: TreeColumn<Row>; row: Row }) {
   const text = column.text(row);
   const dot = column.dot?.(row);
+  if (column.kind === "date" && text) return <Text color="secondary" hasTabularNumbers maxLines={1}>{dayText(text)}</Text>;
   if (column.kind === "time" && text) return <Text color="secondary"><Timestamp value={text} format="relative" /></Text>;
   if (dot) {
     return (

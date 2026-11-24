@@ -7,7 +7,7 @@ import { Text } from "@astryxdesign/core/Text";
 import { Timestamp } from "@astryxdesign/core/Timestamp";
 import { Tooltip } from "@astryxdesign/core/Tooltip";
 import { type ReactNode, useState } from "react";
-import { t } from "../i18n";
+import { dayText, t } from "../i18n";
 import { PersonLabel } from "./MemberField";
 import { PeekDrawer, type PeekSurfaceMode, RecordPeek } from "./RecordPeek";
 import { ReferenceLink } from "./ReferenceField";
@@ -65,6 +65,13 @@ export function ListCell({ column, cells, first }: { column: Column; cells: Cell
   }
   if (column.boolean && value === t("Yes")) {
     return <Icon icon="check" size="sm" label={t("Yes")} />;
+  }
+  if (column.kind === "date" && value) {
+    return (
+      <Text type="body" color="secondary" hasTabularNumbers maxLines={1}>
+        {dayText(value)}
+      </Text>
+    );
   }
   if (column.kind === "time" && value) {
     return (

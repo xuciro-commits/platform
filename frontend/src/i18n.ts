@@ -1,5 +1,5 @@
 import values from "./i18n-values.json";
-export { dateText, setLanguage, setTimeZone, t, useLocale } from "./language";
+export { dateText, dayText, setDateFormat, setLanguage, setTimeZone, t, useLocale } from "./language";
 export const zhCN: Record<string, string> = {
   "Welcome back": "欢迎回来",
   "Sign in to your Platform workspace": "登录你的 Platform 工作区",

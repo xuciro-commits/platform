@@ -190,7 +190,8 @@ function shape(described: Described, declared: Declared, listPath: string, extra
   const kindOf = (field: Api.FieldInfo) =>
     field.type === "choice" ? ("enum" as const)
     : numeric.has(field.type) ? ("number" as const)
-    : field.type === "date" || field.type === "datetime" ? ("time" as const)
+    : field.type === "date" ? ("date" as const)
+    : field.type === "datetime" ? ("time" as const)
     : field.type === "member" ? ("member" as const)
     : field.type === "text" && hasContact && field.name === described.entity.display ? ("person" as const)
     : field.type === "text" && /email/i.test(field.name) ? ("email" as const)

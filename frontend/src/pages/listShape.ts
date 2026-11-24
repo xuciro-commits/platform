@@ -7,7 +7,7 @@ export type ListColumn<Row> = {
   header: string;
   width?: number;
   text: (row: Row) => string;
-  kind?: "string" | "enum" | "number" | "time" | "code" | "member" | "person" | "email" | "phone";
+  kind?: "string" | "enum" | "number" | "date" | "time" | "code" | "member" | "person" | "email" | "phone";
   choices?: string[];
   options?: { value: string; label: string }[];
   boolean?: boolean;

@@ -12,7 +12,7 @@ import { type App, apps, locate, type NavItem, type NavSection, pathOf } from ".
 import { entries, recordHref } from "../apps/entries";
 import { type Api, useRead, useSession } from "../host";
 import { Records } from "../pages/RecordList";
-import { setLanguage, setTimeZone, t } from "../i18n";
+import { setDateFormat, setLanguage, setTimeZone, t } from "../i18n";
 import { navigate, useHash, usePath, useSearch } from "../router";
 import { AppRail } from "./AppRail";
 import { setAppearance } from "./appearance";
@@ -50,7 +50,7 @@ function installedApps(views: Api.ApplicationView[], entities: Api.EntityInfo[])
     sections[0].items = [...overview, ...sections[0].items];
     const id = view.name || view.app;
     const builtinIcon = id === "build" ? WrenchScrewdriverIcon : undefined;
-    return [{ id, label: view.title, icon: view.icon ? iconOf(view.icon, RectangleGroupIcon) : (builtinIcon ?? RectangleGroupIcon), badge: !view.icon && !builtinIcon, group: "installed", sections, dashboard, packageId: view.package, hasDemo: view.hasDemo }];
+    return [{ id, label: view.title, icon: view.icon ? iconOf(view.icon, RectangleGroupIcon) : (builtinIcon ?? RectangleGroupIcon), badge: !view.icon && !builtinIcon, group: "installed", sections, dashboard, packageId: view.package, hasDemo: view.hasDemo, surface: view.surface }];
   });
 }
 
@@ -68,6 +68,7 @@ export function Shell() {
     if (me.status !== "ready") return;
     setLanguage(me.data.language);
     setTimeZone(me.data.account.effective.timezone);
+    setDateFormat(me.data.account.effective.dateFormat);
     setAppearance(me.data.account.theme);
   }, [me]);
   const signedIn = session && me.status !== "loading";

@@ -20,7 +20,7 @@ import { AdjustmentsHorizontalIcon as AdjustmentsHorizontalSolidIcon } from "@he
 import * as stylex from "@stylexjs/stylex";
 import { lazy, type ReactNode, Suspense, useEffect, useMemo, useState } from "react";
 import { HostRefusal, type Read, reread } from "../host";
-import { t } from "../i18n";
+import { dayText, t } from "../i18n";
 import { navigate, usePath, useSearch } from "../router";
 import { PageTitle, useGutter } from "./frame";
 import { useListWindow } from "./ListWindow";
@@ -46,7 +46,11 @@ const compare = (left: unknown, right: unknown) =>
   : String(left ?? "").localeCompare(String(right ?? ""));
 const textKey = "__text";
 const fillKey = "__fill";
-const widthOf: Record<string, number> = { string: 148, person: 140, email: 212, phone: 144, code: 150, enum: 112, member: 116, number: 148, time: 116, boolean: 96 };
+const parseDay = (value: string) => {
+  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(value.trim());
+  return match ? new Date(Number(match[1]), Number(match[2]) - 1, Number(match[3])) : new Date(value);
+};
+const widthOf: Record<string, number> = { string: 148, person: 140, email: 212, phone: 144, code: 150, enum: 112, member: 116, number: 148, date: 116, time: 116, boolean: 96 };
 const headerWidth = (text: string) => [...text].reduce((sum, letter) => sum + (letter.charCodeAt(0) > 0x2e7f ? 14 : 8), 48);
 const groupPrefix = "__group_";
 const compactQuery = "(max-width: 768px), (max-width: 1024px) and (pointer: coarse) and (hover: none)";
@@ -131,7 +135,7 @@ export function ListView<Answer, Row>({ definition, read, primary, back, exportR
         if (column.boolean) return [{ ...base, kind: "boolean", options: [] }];
         if (column.kind === "enum" && column.choices?.length) return [{ ...base, kind: "many", options: column.choices.map((choice) => ({ value: choice, label: t(choice) })) }];
         if (column.kind === "number") return [{ ...base, kind: "range", options: [] }];
-        if (column.kind === "time") return [{ ...base, kind: "date", options: [] }];
+        if (column.kind === "time" || column.kind === "date") return [{ ...base, kind: "date", options: [] }];
         return [];
       }),
     [orderedColumns],
@@ -143,7 +147,7 @@ export function ListView<Answer, Row>({ definition, read, primary, back, exportR
         .map((column) => ({
           key: column.key,
           label: t(column.header),
-          type: column.options ? "enum" : column.boolean ? "boolean" : column.kind === "time" ? "date" : column.kind === "enum" || column.kind === "number" ? column.kind : "string",
+          type: column.options ? "enum" : column.boolean ? "boolean" : column.kind === "time" || column.kind === "date" ? "date" : column.kind === "enum" || column.kind === "number" ? column.kind : "string",
           enumValues: column.options ?? column.choices?.map((choice) => ({ value: choice, label: t(choice) })),
         }))
         .concat({ key: textKey, label: t("Any text"), type: "string", enumValues: undefined }),
@@ -182,7 +186,7 @@ export function ListView<Answer, Row>({ definition, read, primary, back, exportR
         const reference = cells[column.key] ? column.reference?.(row) : undefined;
         if (reference) [cells[typeOf(column.key)], cells[targetOf(column.key)]] = [reference.type, reference.id];
         const value = column.value ? column.value(row) : column.boolean ? cells[column.key] === t("Yes") : cells[column.key];
-        raw[column.key] = column.kind === "time" ? (value ? new Date(String(value)) : undefined) : value;
+        raw[column.key] = column.kind === "date" ? (value ? parseDay(String(value)) : undefined) : column.kind === "time" ? (value ? new Date(String(value)) : undefined) : value;
       }
       if (board?.related) cells.__related = board.related(row) ?? "";
       if (board?.total) {
@@ -272,7 +276,7 @@ export function ListView<Answer, Row>({ definition, read, primary, back, exportR
       header: t(column.header),
       width: pixel(Math.max(column.width ?? (position === 0 ? (compactSurface ? 132 : widthOf[column.kind ?? "string"]) : widthOf[column.boolean ? "boolean" : column.kind ?? "string"]), headerWidth(t(column.header)))),
       sortable: true,
-      align: column.kind === "number" || column.kind === "time" ? "end" : undefined,
+      align: column.kind === "number" || column.kind === "time" || column.kind === "date" ? "end" : undefined,
       renderCell: (cells) => {
         if (group && isHeader(cells)) return null;
         const row = rowOf.get(cells[idKey]);
@@ -484,7 +488,7 @@ export function ListView<Answer, Row>({ definition, read, primary, back, exportR
                       column: cells.__lane,
                       title: cells[orderedColumns[0].key],
                       href: cells.__href,
-                      lines: orderedColumns.slice(1, 5).filter((column) => column.key !== board.key && column.kind !== "time" && column.key !== ownerCol?.key && cells[column.key]).map((column) => ({ label: t(column.header), value: cells[column.key], kind: column.kind })),
+                      lines: orderedColumns.slice(1, 5).filter((column) => column.key !== board.key && column.kind !== "time" && column.key !== ownerCol?.key && cells[column.key]).map((column) => ({ label: t(column.header), value: column.kind === "date" ? dayText(cells[column.key]) : cells[column.key], kind: column.kind })),
                       amount: cells.__amount === undefined ? undefined : Number(cells.__amount),
                       currency: cells.__currency,
                       owner: ownerCol ? cells[ownerCol.key] : undefined,
