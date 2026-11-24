@@ -413,12 +413,16 @@ func (c Client) Writeback(x platform.Effect) (out platform.Outcome) {
 		r.Header.Set("Idempotency-Key", req.DispatchKey)
 	}
 	if req.Secret != "" {
-		v, ok := c.Credentials.CredentialHeader(req.Secret, "connection/"+req.Connection, req.URL)
+		v, ok := c.Credentials.CredentialHeader(req.Secret, req.CredentialConsumer(), req.URL)
 		if !ok {
 			out.Result, out.Detail = "retry", "secret "+req.Secret+" missing"
 			return out
 		}
-		r.Header.Set("Authorization", strings.TrimSpace(string(v)))
+		header := "Authorization"
+		if req.Header != "" {
+			header = req.Header
+		}
+		r.Header.Set(header, strings.TrimSpace(string(v)))
 	}
 	resp, err := c.Send(r, req.AllowPrivate)
 	switch {

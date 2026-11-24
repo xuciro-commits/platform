@@ -80,6 +80,17 @@ func ConnectorPath(path string, payload map[string]any) (string, error) {
 	return out, nil
 }
 
+const (
+	CapabilityCallType       = "build.capabilitycall"
+	SchemaCapabilityCallSend = CapabilityCallType + ".send"
+	CapabilityCallEvent      = "capability/call"
+)
+
+func CapabilityCallID(protocol, action, key string) string {
+	sum := sha256.Sum256([]byte(protocol + "#" + action + "|" + key))
+	return "call-" + hex.EncodeToString(sum[:8])
+}
+
 func ImplementationIdentity(app, name string) string { return app + ":" + name }
 
 func SplitImplementationIdentity(id string) (string, string, bool) {

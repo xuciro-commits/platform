@@ -25,12 +25,12 @@ func (t *Tenant) writebackEffects(e platform.Event, preparing bool) ([]platform.
 	if t.App(build.ID) == nil || e.App != build.ID {
 		return nil, nil
 	}
-	return t.DataOwner().WritebackEffects(t.ID, t.automation(build.ID, false), e, preparing, t.checkWritebackCredential)
+	return t.App(build.ID).(*build.Build).EventEffects(t.ID, t.automation(build.ID, false), e, preparing, t.checkWritebackCredential)
 }
 
 func (t *Tenant) checkWritebackCredential(request dataowner.WritebackRequest) *platform.Error {
 	if request.Secret != "" {
-		if value, ok := t.CredentialValue(request.Secret, "connection/"+request.Connection, request.URL); !ok || strings.TrimSpace(string(value)) == "" {
+		if value, ok := t.CredentialValue(request.Secret, request.CredentialConsumer(), request.URL); !ok || strings.TrimSpace(string(value)) == "" {
 			return platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "The connection credential is not configured or permitted for this target")
 		}
 	}

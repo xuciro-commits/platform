@@ -1,7 +1,6 @@
 package host
 
 import (
-	runtimeprotocol "platformserver/kernel/protocol"
 	releaseowner "platformserver/services/devops/releases"
 	"time"
 
@@ -28,15 +27,12 @@ func (t *Tenant) Invoke(m platform.Member, protocol, action, id string, payload 
 }
 
 func (t *Tenant) invokeDiagnosed(m platform.Member, protocol, action, id string, payload []byte, key string, now time.Time) (*pb.EntityRef, *pb.ChangeRecord, *platform.Error, []platform.FieldIssue) {
-	provider, schema, ok := t.router().Provider(runtimeprotocol.ProtocolAction(protocol, action))
+	sub, ok := t.router().Submission(m.ID, protocol, action, id, payload, key)
 	if !ok {
 		return nil, nil, t.router().Unavailable(protocol), nil
 	}
-	declared, _ := provider.Manifest().Actions.Action(schema)
-	target := &pb.EntityRef{Type: declared.Target, Id: id}
-	record, err, issues := t.submitDiagnosed(m, &pb.Submission{TenantId: t.ID, PrincipalId: m.ID, Authority: t.AuthorityOf(declared.Target),
-		Target: target, Schema: &pb.SchemaRef{Name: schema, Version: 1}, IdempotencyKey: key, Payload: payload}, now)
-	return target, record, err, issues
+	record, err, issues := t.submitDiagnosed(m, sub, now)
+	return sub.GetTarget(), record, err, issues
 }
 
 func (t *Tenant) Query(m platform.Member, protocol, read string) (any, *platform.Error) {

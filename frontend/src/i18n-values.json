@@ -507,5 +507,18 @@
   "Re-checking target package…": "正在重新校验目标包…",
   "The reviewed package is unavailable; inspect it again": "已核验的包暂不可用，请重新读取并校验",
   "Remove file?": "移除附件？",
-  "Remove {name} from this record? It stays in the record's history.": "要从这条记录中移除“{name}”吗？它仍会保留在记录历史中。"
+  "Remove {name} from this record? It stays in the record's history.": "要从这条记录中移除“{name}”吗？它仍会保留在记录历史中。",
+  "Tests passed": "测试已通过",
+  "Not set up": "未配置",
+  "Changed since the last test": "上次测试后有改动",
+  "Not tested or failed": "未测试或未通过",
+  "Add its address and credential in Connector setups, then run the contract tests.": "到“连接器配置”里填地址和凭据，再跑契约测试。",
+  "Run the contract tests again in Connector setups before enabling it.": "启用前到“连接器配置”里重跑契约测试。",
+  "Run the contract tests in Connector setups; it can be enabled once they pass.": "到“连接器配置”里跑契约测试，通过后才能启用。",
+  "Connectors": "连接器",
+  "Connector setups": "连接器配置",
+  "Capability calls": "能力调用",
+  "Enable": "启用",
+  "A connector setup gives one capability implementation this workspace's address and credential and runs the contract's tests against it. A connector can be enabled for its capability only after its tests pass with the current setup.": "连接器配置给一个能力实现填上本工作区的地址和凭据，并按契约的测试跑一遍。只有用当前配置测试通过后，才能为该能力启用这个连接器。",
+  "Each call an application made through a capability that a connector serves: what was sent, and what the connector answered. A call without an answer is never resent automatically; settle it in Integrations.": "应用经由连接器提供的能力发出的每次调用：发了什么、连接器答了什么。没有答复的调用不会自动重发，请到“集成”里处置。"
 }

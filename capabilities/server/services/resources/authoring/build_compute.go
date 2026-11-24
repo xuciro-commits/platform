@@ -1,6 +1,7 @@
 package authoring
 
 import (
+	"platformserver/kernel/protocol"
 	"platformserver/platform"
 	dataowner "platformserver/services/data"
 	"strings"
@@ -8,6 +9,9 @@ import (
 )
 
 func (b *Build) Answer(c platform.Caller, effect platform.Effect, out platform.Outcome, now time.Time) *platform.Error {
+	if effect.Event == protocol.CapabilityCallEvent {
+		return b.answerCapabilityCall(c, effect, out, now)
+	}
 	if strings.HasPrefix(effect.Endpoint, dataowner.WritebackEndpoint) {
 		return b.data.Answer(c, effect, out, now)
 	}

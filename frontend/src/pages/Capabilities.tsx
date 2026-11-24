@@ -57,10 +57,18 @@ function useAppDirectory() {
 }
 
 function statusOf(protocol: Api.ProtocolInfo, nameOf: (id: string) => string): { label: string; dot: Dot } {
-  if (protocol.bound) return { label: `${t("Active")}: ${nameOf(protocol.bound)}`, dot: "success" };
+  const connector = protocol.implementations?.find((candidate) => candidate.id === protocol.bound);
+  if (protocol.bound) return { label: `${t("Active")}: ${connector?.title || nameOf(protocol.bound)}`, dot: "success" };
   if (protocol.providers.length === 0) return { label: t("No providers installed"), dot: "neutral" };
   if (protocol.declared) return { label: t("Not enabled — entries hidden"), dot: "warning" };
   return { label: t("Automatic"), dot: "accent" };
+}
+
+function connectorState(state?: string): { label: string; hint?: string } {
+  if (state === "passed") return { label: t("Tests passed") };
+  if (state === "unconfigured") return { label: t("Not set up"), hint: t("Add its address and credential in Connector setups, then run the contract tests.") };
+  if (state === "stale") return { label: t("Changed since the last test"), hint: t("Run the contract tests again in Connector setups before enabling it.") };
+  return { label: t("Not tested or failed"), hint: t("Run the contract tests in Connector setups; it can be enabled once they pass.") };
 }
 
 export function CapabilitiesList() {
@@ -140,6 +148,8 @@ export function CapabilityPage({ id }: { id: string }) {
   const singleProvider = protocol.providers.length === 1 ? protocol.providers[0] : undefined;
   const consumerNames = protocol.consumers.map(nameOf).join(", ");
   const title = protocol.title || protocol.id;
+  const connectors = protocol.implementations ?? [];
+  const labelOf = (id: string) => connectors.find((connector) => connector.id === id)?.title || nameOf(id);
 
   const runBind = async (provider: string) => {
     if (!bindAction) return;
@@ -151,7 +161,7 @@ export function CapabilityPage({ id }: { id: string }) {
       setConfirmUnbind(false);
       toast({
         body: provider
-          ? t("Enabled {provider} for {capability}").replace("{provider}", nameOf(provider)).replace("{capability}", title)
+          ? t("Enabled {provider} for {capability}").replace("{provider}", labelOf(provider)).replace("{capability}", title)
           : t("Disabled {capability}").replace("{capability}", title),
       });
     } catch (problem) {
@@ -207,11 +217,11 @@ export function CapabilityPage({ id }: { id: string }) {
                   )}
                 </HStack>
                 {protocol.bound ? (
-                  <Text type="body">{t("Currently provided by {provider}.").replace("{provider}", nameOf(protocol.bound))}</Text>
+                  <Text type="body">{t("Currently provided by {provider}.").replace("{provider}", labelOf(protocol.bound))}</Text>
                 ) : (
                   <Text type="supporting" color="secondary">{t("No provider is enabled yet.")}</Text>
                 )}
-                {protocol.providers.length === 0 ? (
+                {protocol.providers.length === 0 && connectors.length === 0 ? (
                   <VStack gap={2}>
                     <Text type="supporting" color="secondary">{t("No providers are installed for this capability yet.")}</Text>
                     <HStack>
@@ -269,6 +279,44 @@ export function CapabilityPage({ id }: { id: string }) {
                   </VStack>
                 ) : null}
               </VStack>
+
+              {connectors.length > 0 && (
+                <VStack gap={3}>
+                  <HStack gap={3} vAlign="center" hAlign="between" wrap="wrap">
+                    <Heading level={2}>{t("Connectors")}</Heading>
+                    <Link href="/ontology/connector-setups">{t("Connector setups")}</Link>
+                  </HStack>
+                  {connectors.map((connector) => {
+                    const state = connectorState(connector.state);
+                    const active = protocol.bound === connector.id;
+                    return (
+                      <Card key={connector.id} padding={4}>
+                        <VStack gap={2}>
+                          <HStack gap={3} vAlign="center" hAlign="between" wrap="wrap">
+                            <VStack gap={1}>
+                              <Text type="body">{connector.title || connector.id}</Text>
+                              <Text type="supporting" color="secondary">{connector.origins.join(", ")}</Text>
+                            </VStack>
+                            <HStack gap={2} vAlign="center">
+                              <Token label={active ? t("Active") : state.label} color={active || connector.state === "passed" ? "green" : connector.state === "stale" ? "orange" : "gray"} size="sm" />
+                              {bindAction && !active && (
+                                <Button
+                                  label={t("Enable")}
+                                  variant="secondary"
+                                  size="sm"
+                                  isDisabled={busy || connector.state !== "passed"}
+                                  onClick={() => void runBind(connector.id)}
+                                />
+                              )}
+                            </HStack>
+                          </HStack>
+                          {!active && state.hint && <Text type="supporting" color="secondary">{state.hint}</Text>}
+                        </VStack>
+                      </Card>
+                    );
+                  })}
+                </VStack>
+              )}
 
               <VStack gap={3}>
                 <Heading level={2}>{t("Used by")}</Heading>

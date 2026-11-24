@@ -220,6 +220,15 @@ func (r Router) Provider(used string) (platform.Service, string, bool) {
 	if !ok {
 		return nil, "", false
 	}
+	if provider, bound := r.Bindings.get(protocol); bound {
+		if app, name, named := runtimeprotocol.SplitImplementationIdentity(provider); named {
+			owner := r.Host.App(app)
+			served := slices.ContainsFunc(r.implementations()[app], func(i runtimeprotocol.ProtocolImplementation) bool {
+				return i.Name == name && i.Contract == protocol && slices.ContainsFunc(i.Requests, func(q runtimeprotocol.ImplementationRequest) bool { return q.Action == action })
+			})
+			return owner, runtimeprotocol.SchemaCapabilityCallSend, served && owner != nil
+		}
+	}
 	b, bound := r.Resolve(protocol)
 	if !bound {
 		return nil, "", false
@@ -259,6 +268,11 @@ func (r Router) Invoke(c platform.Caller, protocol, action, id string, payload [
 	if !r.consumes(c, protocol) {
 		return nil, nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_POLICY_DENIED, "{app} does not consume {protocol}", c.App, protocol)
 	}
+	if provider, bound := r.Bindings.get(protocol); bound {
+		if _, _, named := runtimeprotocol.SplitImplementationIdentity(provider); named {
+			return r.callConnector(c, protocol, action, payload, key, correlation, now)
+		}
+	}
 	b, ok := r.Resolve(protocol)
 	pinned := len(original) > 0 && original[0] != ""
 	if pinned {
@@ -296,6 +310,50 @@ func (r Router) Invoke(c platform.Caller, protocol, action, id string, payload [
 		b = r.holder(c, b, protocol, action, send)
 	}
 	return send(b, c)
+}
+
+func (r Router) ConnectorSubmission(principal, protocol, action string, payload []byte, key, correlation string) (*pb.Submission, platform.Service, bool) {
+	implementation, bound := r.Bindings.get(protocol)
+	app, _, named := runtimeprotocol.SplitImplementationIdentity(implementation)
+	owner, served, mapped := r.Provider(runtimeprotocol.ProtocolAction(protocol, action))
+	if !bound || !named || owner == nil || !mapped || owner.Manifest().ID != app {
+		return nil, nil, false
+	}
+	raw := json.RawMessage(payload)
+	if len(payload) == 0 || !json.Valid(payload) {
+		raw = json.RawMessage("{}")
+	}
+	body, _ := json.Marshal(map[string]any{"protocol": protocol, "action": action, "implementation": implementation, "payload": raw})
+	target := &pb.EntityRef{Type: runtimeprotocol.CapabilityCallType, Id: runtimeprotocol.CapabilityCallID(protocol, action, key)}
+	return &pb.Submission{TenantId: r.Tenant, PrincipalId: principal, Authority: r.Host.AuthorityOf(target.GetType()), Target: target,
+		Schema: &pb.SchemaRef{Name: served, Version: 1}, IdempotencyKey: key, CorrelationId: correlation, Payload: body}, owner, true
+}
+
+func (r Router) Submission(principal, protocol, action, id string, payload []byte, key string) (*pb.Submission, bool) {
+	if sub, _, ok := r.ConnectorSubmission(principal, protocol, action, payload, key, ""); ok {
+		return sub, true
+	}
+	provider, schema, ok := r.Provider(runtimeprotocol.ProtocolAction(protocol, action))
+	if !ok {
+		return nil, false
+	}
+	declared, _ := provider.Manifest().Actions.Action(schema)
+	return &pb.Submission{TenantId: r.Tenant, PrincipalId: principal, Authority: r.Host.AuthorityOf(declared.Target), Target: &pb.EntityRef{Type: declared.Target, Id: id},
+		Schema: &pb.SchemaRef{Name: schema, Version: 1}, IdempotencyKey: key, Payload: payload}, true
+}
+
+func (r Router) callConnector(c platform.Caller, protocol, action string, payload []byte, key, correlation string, now time.Time) (*pb.EntityRef, *pb.ChangeRecord, *platform.Error) {
+	sub, owner, ok := r.ConnectorSubmission(c.ID, protocol, action, payload, key, correlation)
+	if !ok {
+		return nil, nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_NOT_FOUND, "The bound connector does not serve {protocol}#{action}", protocol, action)
+	}
+	called := platform.RouteCaller(c, owner.Manifest().ID)
+	if c.Staging() {
+		record, err := r.Host.StageSubmission(called, sub, now)
+		return sub.GetTarget(), record, err
+	}
+	record, err := platform.Decide(called, owner, sub, now)
+	return sub.GetTarget(), record, err
 }
 
 func (r Router) holder(c platform.Caller, bound Binding, protocol, action string, send call) Binding {
@@ -423,6 +481,19 @@ type ImplementationInfo struct {
 	Kind       string   `json:"kind"`
 	Origins    []string `json:"origins"`
 	Credential string   `json:"credential,omitempty"`
+	State      string   `json:"state,omitempty"`
+}
+
+func (r Router) connectorState(protocol, identity string) string {
+	app, _, _ := runtimeprotocol.SplitImplementationIdentity(identity)
+	for _, a := range r.Host.LiveApps() {
+		if gate, ok := a.(interface {
+			ConnectorState(string, string) string
+		}); ok && a.Manifest().ID == app {
+			return gate.ConnectorState(protocol, identity)
+		}
+	}
+	return ""
 }
 
 func (r Router) implementations() map[string][]runtimeprotocol.ProtocolImplementation {
@@ -491,7 +562,8 @@ func (r Router) Protocols() []ProtocolInfo {
 				byID[i.Contract], order = &ProtocolInfo{ID: i.Contract, Providers: []string{}, Consumers: []string{}}, append(order, i.Contract)
 			}
 			byID[i.Contract].Implementations = append(byID[i.Contract].Implementations, ImplementationInfo{
-				ID: runtimeprotocol.ImplementationIdentity(app, i.Name), Title: i.Title, Kind: i.Kind, Origins: slices.Clone(i.Origins), Credential: i.Credential})
+				ID: runtimeprotocol.ImplementationIdentity(app, i.Name), Title: i.Title, Kind: i.Kind, Origins: slices.Clone(i.Origins), Credential: i.Credential,
+				State: r.connectorState(i.Contract, runtimeprotocol.ImplementationIdentity(app, i.Name))})
 		}
 	}
 	out := []ProtocolInfo{}

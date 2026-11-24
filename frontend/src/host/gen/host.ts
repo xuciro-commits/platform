@@ -2478,6 +2478,7 @@ export type ImplementationInfo = {
   kind: string;
   origins: string[];
   credential?: string;
+  state?: string;
 };
 
 export type ImportRow = {

@@ -140,6 +140,8 @@ export const apps: App[] = [
           { id: "object-type-groups", label: "Object type groups", icon: Square3Stack3DIcon },
           { id: "contracts", label: "Capability contracts", icon: ArrowsRightLeftIcon },
           { id: "implementations", label: "Capability implementations", icon: ArrowsRightLeftIcon },
+          { id: "connector-setups", label: "Connector setups", icon: ArrowsRightLeftIcon },
+          { id: "capability-calls", label: "Capability calls", icon: ArrowsRightLeftIcon },
         ],
       },
       {

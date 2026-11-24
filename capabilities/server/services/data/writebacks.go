@@ -274,6 +274,15 @@ type WritebackRequest struct {
 	Secret            string         `json:"secret,omitempty"`
 	AllowPrivate      bool           `json:"allowPrivate,omitempty"`
 	Body              map[string]any `json:"body"`
+	Consumer          string         `json:"consumer,omitempty"`
+	Header            string         `json:"header,omitempty"`
+}
+
+func (r WritebackRequest) CredentialConsumer() string {
+	if r.Consumer != "" {
+		return r.Consumer
+	}
+	return "connection/" + r.Connection
 }
 
 func (o *Owner) PrepareWritebackRequest(w Writeback, conn Connection, id string, payload json.RawMessage) (WritebackRequest, error) {
