@@ -403,7 +403,7 @@ test("applications: shared records respect roles and keep their history after re
 
   await member.getByRole("button", { name: "Account", exact: true }).click();
   await member.getByRole("menuitem", { name: "Sign out", exact: true }).click();
-  await member.getByRole("button", { name: "user-1", exact: true }).click();
+  await signIn(member, "user-1 · acceptance");
   await member.goto(recordURL);
   await expect(member.getByRole("heading", { name: "PO-1042", exact: true })).toBeVisible();
   await expect(member.getByText("WO-1043", { exact: true })).toBeVisible();

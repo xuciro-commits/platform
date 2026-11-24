@@ -2,18 +2,19 @@ import { type Locator, type Page, expect, test } from "@playwright/test";
 
 const sessions = new Map<string, string>();
 export async function signIn(page: Page, seat = "admin-1 · acceptance") {
+  const signedIn = page.getByRole("button", { name: /^(Account|Open navigation)$/ });
   const cached = sessions.get(seat);
   if (cached) {
-    await page.addInitScript((raw) => {
-      if (!sessionStorage.getItem("platform:session")) sessionStorage.setItem("platform:session", raw);
-    }, cached);
+    if (page.url() === "about:blank") await page.goto("/");
+    await page.evaluate((raw) => sessionStorage.setItem("platform:session", raw), cached);
     await page.goto("/home/overview");
+    await expect(signedIn).toBeVisible();
     return;
   }
   const [member, tenant] = seat.split(" · ");
   await page.goto("/");
   await page.getByRole("button", { name: member, exact: true }).click();
-  await expect(page.getByRole("button", { name: "Account", exact: true })).toBeVisible();
+  await expect(signedIn).toBeVisible();
   if (tenant) {
     const switched = await page.evaluate((target) => {
       const raw = sessionStorage.getItem("platform:session");
@@ -25,7 +26,7 @@ export async function signIn(page: Page, seat = "admin-1 · acceptance") {
     }, tenant);
     if (switched) {
       await page.goto("/home/overview");
-      await expect(page.getByRole("button", { name: "Account", exact: true })).toBeVisible();
+      await expect(signedIn).toBeVisible();
     }
   }
   const raw = await page.evaluate(() => sessionStorage.getItem("platform:session"));
@@ -33,8 +34,8 @@ export async function signIn(page: Page, seat = "admin-1 · acceptance") {
 }
 
 export async function open(page: Page, app: string, entry: string) {
-  await page.getByRole("link", { name: app }).click();
-  await page.getByRole("navigation", { name: "Primary navigation" }).getByRole("link", { name: entry }).click();
+  await page.getByRole("link", { name: app, exact: true }).click();
+  await page.getByRole("navigation", { name: "Primary navigation" }).getByRole("link", { name: entry, exact: true }).click();
 }
 
 export const property = (scope: Page | Locator, name: string) => scope.getByRole("group", { name, exact: true });
@@ -224,7 +225,8 @@ export async function crmMainline(page: Page, go: (type: string, plural: string)
   await expectRevision(page, 2);
   await page.getByRole("button", { name: "Convert to deal", exact: true }).click();
   const relink = page.getByRole("dialog", { name: "Convert to deal", exact: true });
-  await expect(relink.getByText(company, { exact: true }).filter({ visible: true })).toBeVisible();
+  await expect(relink.getByRole("button", { name: `Link to organization ${company}`, exact: true })).toBeVisible();
+  await relink.getByRole("heading", { name: "Convert to deal", exact: true }).click();
   await relink.getByRole("button", { name: "Convert to deal", exact: true }).click();
   await expect(relink).toBeHidden();
   await page.getByRole("main").getByRole("link", { name: company, exact: true }).last().click();

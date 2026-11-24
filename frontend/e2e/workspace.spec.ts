@@ -273,8 +273,12 @@ test("reads: each read list opens, the audit loads its next page, and a marking 
     await expect(main.getByRole("table").or(main.getByText("Nothing here yet")).first()).toBeVisible();
   }
 
-  await page.getByRole("textbox", { name: "Search this list" }).fill("retrofit");
-  await page.getByRole("textbox", { name: "Search this list" }).press("Enter");
+  const knowledgeSearch = main.getByRole("textbox", { name: "Search this list", exact: true });
+  await knowledgeSearch.fill("retrofit");
+  await Promise.all([
+    page.waitForResponse((response) => response.url().endsWith("/v1/knowledge?q=retrofit") && response.ok()),
+    knowledgeSearch.press("Enter"),
+  ]);
   await expect(main.getByRole("table").or(main.getByText("No matches")).first()).toBeVisible();
 
   await open(page, "Operations", "Audit");

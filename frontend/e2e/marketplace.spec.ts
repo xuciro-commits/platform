@@ -121,6 +121,7 @@ test("blank tenant: the sales rep runs a lead to Won and the sales manager sees 
   await expect(property(page, "First response")).toContainText("Fulfilled", { timeout: 20_000 });
   await page.getByRole("button", { name: "Convert to deal", exact: true }).click();
   const convert = page.getByRole("dialog", { name: "Convert to deal", exact: true });
+  await convert.getByRole("heading", { name: "Convert to deal", exact: true }).click();
   await convert.getByRole("button", { name: "Convert to deal", exact: true }).click();
   await expect(convert).toBeHidden();
   await expect(page.getByRole("heading", { level: 1, name: "星海制造", exact: true })).toBeVisible();
