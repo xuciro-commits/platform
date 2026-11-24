@@ -16,7 +16,7 @@ import { originOf, usePath, useSearch } from "../router";
 import { useCommandSearch } from "../shell/CommandSearch";
 import { PageTitle, useGutter } from "./frame";
 import { DefinitionRows, stateProblem } from "./DefinitionRows";
-import { describe, type Described, statusField, type Values, withRestrictedFields } from "./describe";
+import { describe, type Described, headerStatus, statusField, type Values, withRestrictedFields } from "./describe";
 import { KeyboardHelp } from "./KeyboardHelp";
 import { type Editor, FieldGroup, useEditor } from "./RecordFields";
 import { RecordFiles, RecordLinks, relatedGroups } from "./RecordAttachments";
@@ -29,7 +29,7 @@ import { PersonLabel } from "./MemberField";
 import { motionStyles } from "./motion";
 import { PropertyField } from "./PropertyField";
 import { dots, type Instances, Transitions } from "./Transitions";
-import { plain } from "./values";
+import { plain, present } from "./values";
 
 type Stamp = { by?: string; at?: string };
 type Kept = { id: string; revision: number; created: Stamp; changed: Stamp; archived?: boolean };
@@ -45,7 +45,27 @@ function Loading() {
   );
 }
 
+function formatChangeValue(described: Described, path: string, value: unknown, refs?: Api.RecordView["refs"]) {
+  if (value == null || value === "") return t("Empty");
+  const field = described.field(path);
+  if (field) {
+    const id = String(value);
+    if (field.type === "reference" && refs?.[field.name]?.[id]) return refs[field.name][id];
+    const formatted = present(field, plain(value));
+    if (formatted !== "") return formatted;
+  }
+  if (typeof value === "string" || typeof value === "number" || typeof value === "boolean") return String(value);
+  if (Array.isArray(value)) {
+    const items = value
+      .map((item) => (typeof item === "object" && item ? String((item as Record<string, unknown>).title ?? (item as Record<string, unknown>).name ?? "") : String(item)))
+      .filter(Boolean);
+    return items.join(", ") || t("Empty");
+  }
+  return t("Structured value");
+}
+
 function Rail({ described, editor, kept, refs, people, restricted, collaboration }: { described: Described; editor: Editor; kept: Kept; refs?: Api.RecordView["refs"]; people?: Api.RecordView["people"]; restricted: ReadonlySet<string>; collaboration?: ReactNode }) {
+  const technical = described.type.startsWith("build.") || described.type.startsWith("platform.");
   return (
     <VStack gap={6}>
       <FieldGroup described={described} editor={editor} sections={[{ title: "Properties", fields: described.aside }]} direction="vertical" refs={refs} restricted={restricted} />
@@ -53,17 +73,23 @@ function Rail({ described, editor, kept, refs, people, restricted, collaboration
       <VStack gap={4}>
         <Heading level={3} accessibilityLevel={2}>{t("Record")}</Heading>
         <MetadataList>
-          <MetadataListItem label={t("Created")}>{kept.created.at && <Timestamp value={kept.created.at} format="date_time" type="body" color="primary" />}</MetadataListItem>
-          <MetadataListItem label={t("Created by")}>
-            {kept.created.by ? <PersonLabel id={kept.created.by} name={people?.[kept.created.by] ?? t("Unnamed member")} /> : <Text type="body">{""}</Text>}
+          <MetadataListItem label={t("Created")}>
+            <VStack gap={0.5}>
+              {kept.created.at && <Timestamp value={kept.created.at} format="date_time" type="body" color="primary" />}
+              {kept.created.by && <PersonLabel id={kept.created.by} name={people?.[kept.created.by] ?? t("Unnamed member")} />}
+            </VStack>
           </MetadataListItem>
-          <MetadataListItem label={t("Updated")}>{kept.changed.at && <Timestamp value={kept.changed.at} format="date_time" type="body" color="primary" />}</MetadataListItem>
-          <MetadataListItem label={t("Updated by")}>
-            {kept.changed.by ? <PersonLabel id={kept.changed.by} name={people?.[kept.changed.by] ?? t("Unnamed member")} /> : <Text type="body">{""}</Text>}
+          <MetadataListItem label={t("Updated")}>
+            <VStack gap={0.5}>
+              {kept.changed.at && <Timestamp value={kept.changed.at} format="date_time" type="body" color="primary" />}
+              {kept.changed.by && <PersonLabel id={kept.changed.by} name={people?.[kept.changed.by] ?? t("Unnamed member")} />}
+            </VStack>
           </MetadataListItem>
-          <MetadataListItem label={t("Revision")}>
-            <Text type="body">{String(kept.revision)}</Text>
-          </MetadataListItem>
+          {technical && (
+            <MetadataListItem label={t("Revision")}>
+              <Text type="body" hasTabularNumbers>{String(kept.revision)}</Text>
+            </MetadataListItem>
+          )}
         </MetadataList>
       </VStack>
     </VStack>
@@ -103,7 +129,6 @@ export function RecordPage({ described, id, listPath, listTitle, instances, enti
   const restricted = new Set(read.status === "ready" ? read.data.restricted : undefined);
   const detail = useMemo(() => restrictedFields?.length ? describe(withRestrictedFields(described.entity, restrictedFields), catalog) : described, [catalog, described, restrictedFields]);
   const editor = useEditor(described, id, values, kept?.revision ?? 0);
-  const state = described.state(values);
   const laneField = statusField(described);
   const ownerField = described.entity.fields.find((field) => field.type === "member");
   const heading = kept ? [laneField, ownerField].flatMap((field) => field && !restricted.has(field.name) ? [field] : []) : [];
@@ -114,8 +139,7 @@ export function RecordPage({ described, id, listPath, listTitle, instances, enti
   }, [detail, headed]);
   const options = useOptions(described, laneField ? [laneField.name] : []);
   const parameters = new Map((described.edit?.payload ?? []).filter(enterable).map((parameter) => [parameter.name, parameter]));
-  const initial = described.lifecycle?.initial ?? described.lifecycle?.states?.[0]?.name;
-  const status = kept?.archived ? { tone: "neutral", title: "Archived" } : laneField && ((described.lifecycle?.states?.length ?? 0) <= 1 || state?.name === initial) ? undefined : state;
+  const status = headerStatus(described, values, kept?.archived);
   const name = described.name(values, id);
   const search = useCommandSearch();
   const loaded = read.status === "ready";
@@ -156,36 +180,36 @@ export function RecordPage({ described, id, listPath, listTitle, instances, enti
         <LayoutHeader padding={0} hasDivider>
           <VStack gap={4} padding={gutter} paddingBlockStart={3} paddingBlockEnd={0}>
             <PageTitle title={name} back={origin ? { href: origin.href, label: origin.title || t(listTitle) } : { href: listHref, label: t(listTitle) }} actions={!narrow && actions}>
-                  <HStack gap={4} vAlign="center" wrap="wrap">
-                    <Text type="code" color="secondary">
-                      {id}
-                    </Text>
-                    {status && (
-                      <HStack gap={2} vAlign="center">
-                        <StatusDot variant={dots[(status.tone ?? "neutral") as keyof typeof dots] ?? dots.neutral} label={t(status.title)} />
-                        <Text type="supporting">{t(status.title)}</Text>
-                      </HStack>
-                    )}
-                    {heading.map((field) => {
-                      const value = editor.values[field.name];
-                      const parameter = parameters.get(field.name);
-                      return (
-                        <PropertyField key={field.name} field={field} parameter={parameter} described={described.entity} value={value} form={editor.values}
-                          name={refs?.[field.name]?.[String(value ?? "")]} dot={options[field.name]?.find((option) => option.value === String(value ?? ""))?.dot}
-                          status={editor.status[field.name]} saving={editor.saving.has(field.name)} labelHidden hint={t(field.title)}
-                          onChange={parameter && ((next: unknown) => editor.change(parameter, next))} onCommit={() => editor.commit(field.name)} />
-                      );
-                    })}
-                    {changes.length > 0 && <Text type="supporting" color="secondary">{t("Unpublished changes")}</Text>}
-                    {kept?.changed.at && (
-                      <HStack gap={1} vAlign="center">
-                        <Text type="supporting" color="secondary">
-                          {t("Updated")}
-                        </Text>
-                        <Timestamp value={kept.changed.at} format="auto" />
-                      </HStack>
-                    )}
+              <HStack gap={4} vAlign="center" wrap="wrap">
+                <Text type="code" color="secondary">
+                  {id}
+                </Text>
+                {status && (
+                  <HStack gap={2} vAlign="center">
+                    <StatusDot variant={dots[(status.tone ?? "neutral") as keyof typeof dots] ?? dots.neutral} label={t(status.title)} />
+                    <Text type="supporting">{t(status.title)}</Text>
                   </HStack>
+                )}
+                {heading.map((field) => {
+                  const value = editor.values[field.name];
+                  const parameter = parameters.get(field.name);
+                  return (
+                    <PropertyField key={field.name} field={field} parameter={parameter} described={described.entity} value={value} form={editor.values}
+                      name={refs?.[field.name]?.[String(value ?? "")]} dot={options[field.name]?.find((option) => option.value === String(value ?? ""))?.dot}
+                      status={editor.status[field.name]} saving={editor.saving.has(field.name)} labelHidden hint={t(field.title)}
+                      onChange={parameter && ((next: unknown) => editor.change(parameter, next))} onCommit={() => editor.commit(field.name)} />
+                  );
+                })}
+                {changes.length > 0 && <Text type="supporting" color="secondary">{t("Unpublished changes")}</Text>}
+                {kept?.changed.at && (
+                  <HStack gap={1} vAlign="center">
+                    <Text type="supporting" color="secondary">
+                      {t("Updated")}
+                    </Text>
+                    <Timestamp value={kept.changed.at} format="auto" />
+                  </HStack>
+                )}
+              </HStack>
             </PageTitle>
             {narrow && actions}
             <TabList value={tab} onChange={() => undefined} size="lg" isFullBleed>
@@ -211,6 +235,7 @@ export function RecordPage({ described, id, listPath, listTitle, instances, enti
               description={t("The record could not be saved. Stay to correct the input or discard it and leave.")}
               cancelLabel={t("Stay")}
               actionLabel={t("Discard")}
+              actionVariant="destructive"
               onOpenChange={(open) => !open && editor.leave?.(false)}
               onAction={() => editor.leave?.(true)}
             />
@@ -227,7 +252,7 @@ export function RecordPage({ described, id, listPath, listTitle, instances, enti
             />
           )}
           {kept && (
-            <VStack key={tab} xstyle={motionStyles.contentEnter}>
+            <VStack key={tab} xstyle={motionStyles.tabEnter}>
               {tab === "details" && (
                 <VStack gap={6}>
                   {editor.stale && <VStack xstyle={motionStyles.bannerEnter}><Banner status="info" title={t("This record has new changes")} /></VStack>}
@@ -243,16 +268,25 @@ export function RecordPage({ described, id, listPath, listTitle, instances, enti
               )}
               {tab === "changes" && (
                 <VStack gap={4}>
-                  {changes.map((change) => (
-                    <VStack key={change.path} gap={1}>
-                      <HStack gap={2} vAlign="center">
-                        <Text type="code">{change.path}</Text>
-                        <Text type="supporting">{t(change.change === "added" ? "Added" : change.change === "removed" ? "Removed" : "Changed")}</Text>
-                      </HStack>
-                      {change.from !== undefined && <Text type="body">{t("Before")} · {JSON.stringify(change.from)}</Text>}
-                      {change.to !== undefined && <Text type="body">{t("After")} · {JSON.stringify(change.to)}</Text>}
-                    </VStack>
-                  ))}
+                  {changes.map((change) => {
+                    const changedField = described.field(change.path);
+                    const fieldLabel = changedField ? t(changedField.title) : change.path;
+                    const beforeText = change.from !== undefined ? formatChangeValue(described, change.path, change.from, refs) : undefined;
+                    const afterText = change.to !== undefined ? formatChangeValue(described, change.path, change.to, refs) : undefined;
+                    return (
+                      <VStack key={change.path} gap={1}>
+                        <HStack gap={2} vAlign="center">
+                          <Text type="body" weight="medium">{fieldLabel}</Text>
+                          <Text type="supporting" color="secondary">{t(change.change === "added" ? "Added" : change.change === "removed" ? "Removed" : "Changed")}</Text>
+                        </HStack>
+                        <HStack gap={2} vAlign="center" wrap="wrap">
+                          {beforeText !== undefined && <Text type="body" color="secondary">{beforeText}</Text>}
+                          {beforeText !== undefined && afterText !== undefined && <Text type="supporting" color="secondary">{"→"}</Text>}
+                          {afterText !== undefined && <Text type="body">{afterText}</Text>}
+                        </HStack>
+                      </VStack>
+                    );
+                  })}
                 </VStack>
               )}
               {tab === "links" && <RecordLinks read={links} id={id} entities={entities} />}

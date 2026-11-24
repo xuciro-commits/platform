@@ -7,13 +7,14 @@ import { Link } from "@astryxdesign/core/Link";
 import { Skeleton } from "@astryxdesign/core/Skeleton";
 import { Heading, Text } from "@astryxdesign/core/Text";
 import * as stylex from "@stylexjs/stylex";
-import { useMemo } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Bar, BarChart, CartesianGrid, Cell, Line, LineChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import { type Api, type Read, useRead } from "../host";
 import { t } from "../i18n";
 import { navigate } from "../router";
 import { describe } from "./describe";
 import { PageTitle, useGutter } from "./frame";
+import { motionStyles, motionTimings, prefersReducedMotion } from "./motion";
 import { useOptions } from "./options";
 import { present } from "./values";
 import { ErrorBoundary } from "../shell/ErrorBoundary";
@@ -113,7 +114,11 @@ function Block({ block, entity, list }: { block: Api.DashboardBlock; entity?: Ap
       <ClickableCard label={t(block.title)} href={href(base)} isDisabled={!list} height="100%">
         <VStack gap={1}>
           <Text type="label" color="secondary">{t(block.title)}</Text>
-          {shown ? <Text type="large" size="2xl" weight="semibold">{shown.points[0] ? shown.format(shown.points[0].amount) : "0"}</Text> : <Pending read={read} />}
+          {shown ? (
+            <VStack xstyle={motionStyles.fadeEnter}>
+              <Text type="large" size="2xl" weight="semibold" hasTabularNumbers>{shown.points[0] ? shown.format(shown.points[0].amount) : "0"}</Text>
+            </VStack>
+          ) : <Pending read={read} />}
         </VStack>
       </ClickableCard>
     );
@@ -151,7 +156,22 @@ function Swatch({ hue, label }: { hue: Hue; label: string }) {
   );
 }
 
+function useOnceAnimation() {
+  const [active, setActive] = useState(() => !prefersReducedMotion());
+  const settled = useRef(false);
+  useEffect(() => {
+    if (!active || settled.current) return;
+    const timer = window.setTimeout(() => {
+      settled.current = true;
+      setActive(false);
+    }, motionTimings.fluid + 60);
+    return () => window.clearTimeout(timer);
+  }, [active]);
+  return active;
+}
+
 function Share({ shown }: { shown: Shown }) {
+  const animate = useOnceAnimation();
   const total = shown.points.reduce((sum, point) => sum + point.amount, 0) || 1;
   const sorted = shown.points.length > 6 ? [...shown.points].sort((a, b) => b.amount - a.amount) : shown.points;
   const slices = sorted.length > 6
@@ -161,13 +181,13 @@ function Share({ shown }: { shown: Shown }) {
       ]
     : sorted;
   return (
-    <VStack gap={4}>
+    <VStack gap={4} xstyle={motionStyles.fadeEnter}>
       <ResponsiveContainer width="100%" height={24}>
         <BarChart data={[Object.fromEntries(slices.map((point) => [point.key, point.amount]))]} layout="vertical" margin={{ top: 0, right: 0, bottom: 0, left: 0 }} barCategoryGap={0}>
           <XAxis type="number" hide />
           <YAxis type="category" hide />
           {slices.map((point, index) => (
-            <Bar key={point.key} dataKey={point.key} name={point.label} stackId="share" fill={colour(point.hue)} isAnimationActive={false}
+            <Bar key={point.key} dataKey={point.key} name={point.label} stackId="share" fill={colour(point.hue)} isAnimationActive={animate} animationDuration={motionTimings.fluid} animationEasing="ease-out"
               radius={[index === 0 ? 4 : 0, index === slices.length - 1 ? 4 : 0, index === slices.length - 1 ? 4 : 0, index === 0 ? 4 : 0]}
               cursor={point.href ? "pointer" : undefined} onClick={() => point.href && void navigate(point.href)} />
           ))}
@@ -186,37 +206,42 @@ function Share({ shown }: { shown: Shown }) {
 }
 
 function Chart({ kind, shown }: { kind: string; shown: Shown }) {
+  const animate = useOnceAnimation();
   const compact = new Intl.NumberFormat(undefined, { notation: "compact" });
   const axis = (amount: number) => compact.format(shown.money ? amount / 100 : amount);
   const open = (point?: Point) => point?.href && void navigate(point.href);
   const tip = <Tooltip cursor={{ fill: grid, stroke: grid }} content={({ active, payload }) => (active && payload?.[0] ? <Tip point={payload[0].payload as Point} shown={shown} first={shown.points[0]?.amount} funnel={kind === "funnel"} /> : null)} />;
   if (kind === "line") {
     return (
-      <ResponsiveContainer width="100%" height={240}>
-        <LineChart data={shown.points} margin={{ top: 5, right: 10, left: 0, bottom: 5 }} onClick={(state) => open(shown.points[Number(state?.activeTooltipIndex)])}>
-          <CartesianGrid horizontal vertical={false} stroke={grid} />
-          <XAxis dataKey="label" tick={tick} axisLine={false} tickLine={false} />
-          <YAxis tick={tick} axisLine={false} tickLine={false} width={48} tickFormatter={axis} allowDecimals={shown.money} />
-          {tip}
-          <Line type="linear" dataKey="amount" stroke={colour("blue")} strokeWidth={2} dot={shown.points.length < 3} isAnimationActive={false} />
-        </LineChart>
-      </ResponsiveContainer>
+      <VStack xstyle={motionStyles.fadeEnter}>
+        <ResponsiveContainer width="100%" height={240}>
+          <LineChart data={shown.points} margin={{ top: 5, right: 10, left: 0, bottom: 5 }} onClick={(state) => open(shown.points[Number(state?.activeTooltipIndex)])}>
+            <CartesianGrid horizontal vertical={false} stroke={grid} />
+            <XAxis dataKey="label" tick={tick} axisLine={false} tickLine={false} />
+            <YAxis tick={tick} axisLine={false} tickLine={false} width={48} tickFormatter={axis} allowDecimals={shown.money} />
+            {tip}
+            <Line type="linear" dataKey="amount" stroke={colour("blue")} strokeWidth={2} dot={shown.points.length < 3} isAnimationActive={animate} animationDuration={motionTimings.fluid} animationEasing="ease-out" />
+          </LineChart>
+        </ResponsiveContainer>
+      </VStack>
     );
   }
   const funnel = kind === "funnel";
   const trimTick = (value: string) => (value.length > 12 ? `${value.slice(0, 11)}…` : value);
   return (
-    <ResponsiveContainer width="100%" height={funnel ? Math.max(160, shown.points.length * 40) : 240}>
-      <BarChart data={shown.points} layout={funnel ? "vertical" : "horizontal"} margin={{ top: 0, right: 24, left: 8, bottom: 0 }} barCategoryGap={funnel ? 10 : "20%"} >
-        <CartesianGrid horizontal={!funnel} vertical={funnel} stroke={grid} />
-        {funnel ? <XAxis type="number" tick={tick} axisLine={false} tickLine={false} tickFormatter={axis} allowDecimals={shown.money} /> : <XAxis dataKey="label" interval={0} tickFormatter={trimTick} tick={tick} axisLine={false} tickLine={false} />}
-        {funnel ? <YAxis type="category" dataKey="label" tick={tick} axisLine={false} tickLine={false} width={120} /> : <YAxis tick={tick} axisLine={false} tickLine={false} width={48} tickFormatter={axis} allowDecimals={shown.money} />}
-        {tip}
-        <Bar dataKey="amount" radius={4} isAnimationActive={false} cursor="pointer" onClick={(entry) => open(entry.payload as Point)}>
-          {shown.points.map((point) => <Cell key={point.key} fill={colour(point.hue)} />)}
-        </Bar>
-      </BarChart>
-    </ResponsiveContainer>
+    <VStack xstyle={motionStyles.fadeEnter}>
+      <ResponsiveContainer width="100%" height={funnel ? Math.max(160, shown.points.length * 40) : 240}>
+        <BarChart data={shown.points} layout={funnel ? "vertical" : "horizontal"} margin={{ top: 0, right: 24, left: 8, bottom: 0 }} barCategoryGap={funnel ? 10 : "20%"} >
+          <CartesianGrid horizontal={!funnel} vertical={funnel} stroke={grid} />
+          {funnel ? <XAxis type="number" tick={tick} axisLine={false} tickLine={false} tickFormatter={axis} allowDecimals={shown.money} /> : <XAxis dataKey="label" interval={0} tickFormatter={trimTick} tick={tick} axisLine={false} tickLine={false} />}
+          {funnel ? <YAxis type="category" dataKey="label" tick={tick} axisLine={false} tickLine={false} width={120} /> : <YAxis tick={tick} axisLine={false} tickLine={false} width={48} tickFormatter={axis} allowDecimals={shown.money} />}
+          {tip}
+          <Bar dataKey="amount" radius={4} isAnimationActive={animate} animationDuration={motionTimings.fluid} animationEasing="ease-out" cursor="pointer" onClick={(entry) => open(entry.payload as Point)}>
+            {shown.points.map((point) => <Cell key={point.key} fill={colour(point.hue)} />)}
+          </Bar>
+        </BarChart>
+      </ResponsiveContainer>
+    </VStack>
   );
 }
 

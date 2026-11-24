@@ -11,9 +11,9 @@ import { createContext, Fragment, type ReactNode, useContext, useEffect, useMemo
 import { useRecordHref } from "../apps/entries";
 import { type Api, useRead } from "../host";
 import { t } from "../i18n";
-import { describe, withRestrictedFields } from "./describe";
+import { describe, headerStatus, statusField, withRestrictedFields } from "./describe";
 import { useOptions } from "./options";
-import { motionStyles } from "./motion";
+import { motionStyles, motionTimings, usePresence } from "./motion";
 import { enterable } from "./ParameterInput";
 import { PropertyField } from "./PropertyField";
 import { FieldGroup, useEditor } from "./RecordFields";
@@ -97,10 +97,20 @@ export function PeekDrawer({ isOpen, onOpenChange, label, title, subtitle, endCo
     />
   );
 
+  const presence = usePresence(surface === "panel" && isOpen, motionTimings.fluid);
+
   if (surface === "panel") {
-    if (!isOpen) return null;
+    if (!presence.mounted) return null;
     return (
-      <LayoutPanel width={440} hasDivider padding={0} isScrollable={false} role="dialog" label={label} xstyle={motionStyles.panelEnter}>
+      <LayoutPanel
+        width={440}
+        hasDivider
+        padding={0}
+        isScrollable={false}
+        role="dialog"
+        label={label}
+        xstyle={[motionStyles.panelTransition, !presence.visible && motionStyles.panelHidden]}
+      >
         {inner}
       </LayoutPanel>
     );
@@ -217,9 +227,7 @@ export function RecordPeek({ type, id, name, isOpen, onOpenChange, hasScrim = tr
     () => (described && restrictedFields?.length ? describe(withRestrictedFields(described.entity, restrictedFields), actions.status === "ready" ? actions.data : []) : described),
     [actions, described, restrictedFields],
   );
-  const state = described?.state(values);
-  const laneKey = (described?.entity.view as { lanes?: string } | undefined)?.lanes;
-  const laneField = (laneKey ? described?.field(laneKey) : undefined) ?? described?.lanes[0];
+  const laneField = described ? statusField(described) : undefined;
   const ownerField = described?.entity.fields.find((field) => field.type === "member");
   const heading = kept ? [laneField, ownerField].flatMap((field) => field && !restricted.has(field.name) ? [field] : []) : [];
   const headed = heading.map((field) => field.name).join(",");
@@ -230,7 +238,7 @@ export function RecordPeek({ type, id, name, isOpen, onOpenChange, hasScrim = tr
   }, [detail, headed]);
   const options = useOptions(described, laneField ? [laneField.name] : []);
   const parameters = new Map((described?.edit?.payload ?? []).filter(enterable).map((parameter) => [parameter.name, parameter]));
-  const status = kept?.archived ? { tone: "neutral", title: "Archived" } : laneField && (described?.lifecycle?.states?.length ?? 0) <= 1 ? undefined : state;
+  const status = described ? headerStatus(described, values, kept?.archived) : undefined;
 
   if (!active) return null;
   const title = described && kept ? described.name(values, active.id) : active.name || active.id;

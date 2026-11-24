@@ -13,6 +13,12 @@ import { navigate } from "../router";
 import { plain } from "./values";
 
 const attempts = 3;
+const dangerPattern = /(?:delete|remove|void|cancel|lost|retire|discard|reject|revoke|terminate|unbind|clear|purge|destroy)/i;
+
+export function isDangerAction(action: Api.Action, stateTone?: string) {
+  if (stateTone === "danger") return true;
+  return !action.reverse && dangerPattern.test(`${action.schema} ${action.title}`);
+}
 
 export function reasonOf(problem: unknown) {
   return (problem instanceof Error && problem.message) || t("The platform did not accept this change.");
@@ -62,8 +68,11 @@ export type Intent = {
   label: string;
   name: string;
   consequence?: string;
+  targetState?: string;
+  danger?: boolean;
   publishProblem?: string;
   reversible: boolean;
+  undoAction?: Api.Action;
   onRefused: (reason: string) => void;
   onDone?: () => void;
   onCancel?: () => void;
@@ -79,12 +88,17 @@ export function stepIntent(
 ): Intent {
   const lifecycle = described.lifecycle;
   const state = lifecycle?.states.find((candidate) => candidate.name === to);
+  const reverseStep = to !== current ? described.step(to, current) : undefined;
+  const undoAction = action.reverse ? described.action(action.reverse) : reverseStep?.action;
   return {
     action,
     ...record,
     label: t(transition.title),
     consequence: state?.description ? t(state.description) : undefined,
-    reversible: to !== current && (lifecycle?.transitions ?? []).some((other) => other.from.includes(to) && other.to.includes(current)),
+    targetState: state?.title ? t(state.title) : undefined,
+    danger: isDangerAction(action, state?.tone),
+    reversible: Boolean(undoAction) && !(reverseStep?.action.payload.some(enterable)),
+    undoAction: undoAction && !undoAction.payload.some(enterable) ? undoAction : undefined,
     ...callbacks,
   };
 }
@@ -116,7 +130,7 @@ export function useAct(described?: Described) {
     setBusy(true);
     try {
       const kept = await send(intent.action, intent.id, intent.fixed ?? {}, intent.revision);
-      const back = intent.action.reverse ? described?.action(intent.action.reverse) : undefined;
+      const back = intent.undoAction ?? (intent.action.reverse ? described?.action(intent.action.reverse) : undefined);
       if (back) {
         const dismiss = toast({
           body: `${t("Done")}: ${intent.label} “${intent.name}”`,
@@ -135,6 +149,8 @@ export function useAct(described?: Described) {
             />
           ),
         });
+      } else {
+        toast({ body: `${t("Done")}: ${intent.label} “${intent.name}”` });
       }
       intent.onDone?.();
       await land(intent);
@@ -148,8 +164,14 @@ export function useAct(described?: Described) {
 
   const asked = (intent: Intent) => intent.action.payload.some((parameter) => enterable(parameter) && !(parameter.name in (intent.fixed ?? {})));
   const run = (intent: Intent) => {
-    if (intent.action.schema === "build.object.publish" || intent.action.needsApproval || asked(intent) || !(intent.reversible || intent.action.reverse)) setPending(intent);
+    if (intent.action.schema === "build.object.publish" || intent.action.needsApproval || asked(intent) || intent.danger || !(intent.reversible || intent.action.reverse)) setPending(intent);
     else fire(intent);
+  };
+
+  const consequenceOf = (intent: Intent) => {
+    if (intent.consequence) return intent.consequence;
+    if (intent.targetState) return t("This moves the record to {state} and cannot be undone directly.").replace("{state}", intent.targetState);
+    return t("This action takes effect immediately and cannot be undone directly.");
   };
 
   const element = !pending ? null : asked(pending) ? (
@@ -165,6 +187,7 @@ export function useAct(described?: Described) {
       only={pending.only}
       onClose={cancel}
       onDone={() => {
+        toast({ body: `${t("Done")}: ${pending.label} “${pending.name}”` });
         pending.onDone?.();
         setPending(undefined);
         void land(pending);
@@ -177,9 +200,10 @@ export function useAct(described?: Described) {
       isOpen
       onOpenChange={(open) => !open && !firing.current && cancel()}
       title={`${pending.label} “${pending.name}”?`}
-      description={pending.consequence || t("This cannot be undone here.")}
+      description={consequenceOf(pending)}
+      cancelLabel={t("Cancel")}
       actionLabel={pending.label}
-      actionVariant="primary"
+      actionVariant={pending.danger ? "destructive" : "primary"}
       isActionLoading={busy}
       onAction={() => fire(pending)}
     />

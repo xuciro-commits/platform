@@ -296,17 +296,22 @@ export function ListView<Answer, Row>({ definition, read, primary, back, exportR
   const frame: TablePlugin<Cells> = {
     transformBodyCell: (props, column, cells) => {
       if (column.key === orderedColumns[0]?.key || !definition.columns.find((candidate) => candidate.key === column.key)?.edit || (group && isHeader(cells))) return props;
-      if (active !== cells[idKey]) return props;
+      const isActive = active === cells[idKey];
       return {
         ...props,
         htmlProps: {
           ...props.htmlProps,
-          onClick: (event) => {
+          onClick: isActive ? (event) => {
             event.stopPropagation();
+            setEditing({ id: cells[idKey], key: column.key });
+          } : props.htmlProps.onClick,
+          onDoubleClick: (event) => {
+            event.stopPropagation();
+            setActive(cells[idKey]);
             setEditing({ id: cells[idKey], key: column.key });
           },
         },
-        xstyle: [...props.xstyle, styles.editable],
+        xstyle: isActive ? [...props.xstyle, styles.editable] : props.xstyle,
       };
     },
   };
@@ -356,14 +361,13 @@ export function ListView<Answer, Row>({ definition, read, primary, back, exportR
   const bulk = definition.bulk?.(chosen, () => setSelected(new Set()));
   const ready = read.status === "ready";
   const empty = ready && shown.length === 0;
-  const toolbar = definition.columns.length > 0 && read.status !== "error" && read.status !== "refused";
+  const toolbar = definition.columns.length > 0 && read.status !== "error" && read.status !== "refused" && (!empty || dirty || Boolean(board) || Boolean(calendar) || Boolean(gantt));
 
   const activeCells = active ? shown.find((cells) => cells[idKey] === active) : undefined;
   const activeUnscheduled = Boolean(active && gantt?.unscheduled.some((item) => item.id === active));
   useEffect(() => {
     if (active && ready && !activeCells && !activeUnscheduled) setActive(null);
   }, [active, ready, activeCells, activeUnscheduled]);
-
 
   return (
     <>

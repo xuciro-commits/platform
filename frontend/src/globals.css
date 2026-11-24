@@ -13,7 +13,7 @@
   --motion-spring: 215ms;
   --ease-apple: cubic-bezier(0.22, 1, 0.36, 1);
   --ease-apple-out: cubic-bezier(0.32, 0.72, 0, 1);
-  --ease-spring: cubic-bezier(0.22, 1.12, 0.36, 1);
+  --ease-spring: cubic-bezier(0.22, 1.04, 0.36, 1);
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
   text-rendering: optimizeLegibility;

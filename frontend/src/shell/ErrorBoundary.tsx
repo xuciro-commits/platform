@@ -5,7 +5,7 @@ import { Text } from "@astryxdesign/core/Text";
 import { Component, type ReactNode } from "react";
 import { t } from "../i18n";
 
-type Props = { children: ReactNode; compact?: boolean };
+type Props = { children: ReactNode; compact?: boolean; resetKey?: string };
 type State = { failed: boolean };
 
 export class ErrorBoundary extends Component<Props, State> {
@@ -13,6 +13,12 @@ export class ErrorBoundary extends Component<Props, State> {
 
   static getDerivedStateFromError(): State {
     return { failed: true };
+  }
+
+  componentDidUpdate(previous: Props) {
+    if (this.state.failed && previous.resetKey !== this.props.resetKey) {
+      this.setState({ failed: false });
+    }
   }
 
   retry = () => {

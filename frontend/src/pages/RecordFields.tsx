@@ -51,10 +51,16 @@ export function useEditor(described: Described, id: string, values: Values, revi
   const origins = useRef<Values>({});
   const queue = useRef(Promise.resolve());
   const sent = useRef<Values>({});
+  const clearTimers = useRef<Map<string, number>>(new Map());
   const hasDraft = Object.keys(drafts).length > 0;
   if (!hasDraft && !conflict) latest.current = Math.max(latest.current, revision);
   pending.current = drafts;
   const stale = hasDraft && revision > latest.current;
+
+  useEffect(() => () => {
+    for (const timer of clearTimers.current.values()) window.clearTimeout(timer);
+    clearTimers.current.clear();
+  }, []);
 
   useEffect(() => {
     setDrafts((previous) => {
@@ -62,7 +68,7 @@ export function useEditor(described: Described, id: string, values: Values, revi
       for (const name of Object.keys(origins.current)) if (!(name in next)) delete origins.current[name];
       return next;
     });
-    setStatus((previous) => Object.fromEntries(Object.entries(previous).filter(([, entry]) => entry.type === "error")));
+    setStatus((previous) => Object.fromEntries(Object.entries(previous).filter(([, entry]) => entry.type === "error" || entry.type === "success")));
   }, [values]);
 
   const write = async (name: string, value: unknown, before: unknown, together: Values = {}) => {
@@ -70,12 +76,19 @@ export function useEditor(described: Described, id: string, values: Values, revi
     try {
       const accepted = await send(edit, id, { ...together, [name]: value }, latest.current);
       latest.current = accepted.revision;
-      for (const field of [name, ...Object.keys(together)]) {
+      const savedFields = [name, ...Object.keys(together)];
+      for (const field of savedFields) {
         refused.current.delete(field);
         reasons.current.delete(field);
         delete origins.current[field];
+        const existing = clearTimers.current.get(field);
+        if (existing) window.clearTimeout(existing);
+        clearTimers.current.set(field, window.setTimeout(() => {
+          clearTimers.current.delete(field);
+          setStatus((previous) => (previous[field]?.type === "success" ? Object.fromEntries(Object.entries(previous).filter(([key]) => key !== field)) : previous));
+        }, 1050));
       }
-      setStatus((previous) => ({ ...previous, ...Object.fromEntries([name, ...Object.keys(together)].map((sent) => [sent, { type: "success" as const }])) }));
+      setStatus((previous) => ({ ...previous, ...Object.fromEntries(savedFields.map((sentField) => [sentField, { type: "success" as const }])) }));
     } catch (problem) {
       if (!(problem instanceof HostRefusal && problem.reasonCode === "stale_revision")) {
         if (same(pending.current[name], value)) {
@@ -104,12 +117,12 @@ export function useEditor(described: Described, id: string, values: Values, revi
     const field = described.field(name);
     if (field && !blank(value)) for (const sibling of described.members(field)) if (sibling.name !== name && !blank(values[sibling.name])) together[sibling.name] = "";
     const changedFields = [name, ...Object.keys(together)];
-    for (const field of described.entity.fields) {
-      if (field.when && changedFields.includes(field.when.field) && drafted(field.name) && described.shows(field, form)) together[field.name] = pending.current[field.name];
+    for (const candidate of described.entity.fields) {
+      if (candidate.when && changedFields.includes(candidate.when.field) && drafted(candidate.name) && described.shows(candidate, form)) together[candidate.name] = pending.current[candidate.name];
     }
-    const missing = described.needs(form, changedFields).filter((field) => field.name !== name && !(field.name in together));
+    const missing = described.needs(form, changedFields).filter((candidate) => candidate.name !== name && !(candidate.name in together));
     if (missing.length) {
-      const message = `${t("Also fill in")}: ${missing.map((field) => t(field.title)).join(", ")}`;
+      const message = `${t("Also fill in")}: ${missing.map((candidate) => t(candidate.title)).join(", ")}`;
       refused.current.add(name);
       reasons.current.set(name, message);
       setStatus((previous) => ({ ...previous, [name]: { type: "error", message } }));
@@ -258,52 +271,91 @@ export function FieldGroup({ described, editor, sections, direction, focusEmpty,
       return (field.type === "money" || typeof value !== "object") && present(field, value) !== "";
     });
   const hidden = more ? 0 : sections.flatMap((section) => visible(section.fields)).filter((field) => folded.has(field.name)).length;
-  const shownSections = sections.map((section) => ({ ...section, fields: visible(section.fields).filter((field) => more || !folded.has(field.name)) }))
-    .filter((section) => section.fields.length > 0);
-  if (shownSections.length === 0 && hidden === 0) return null;
+  const prepared = sections.map((section) => {
+    const shownFields = visible(section.fields);
+    const primary = shownFields.filter((field) => !folded.has(field.name));
+    const extra = shownFields.filter((field) => folded.has(field.name));
+    return { title: section.title, primary, extra };
+  }).filter((section) => section.primary.length > 0 || section.extra.length > 0);
+  if (prepared.length === 0 && hidden === 0) return null;
   const typed = (parameter?: Api.Field) => parameter && !parameter.choices && parameter.type !== "boolean" && parameter.type !== "attachment";
   const first = focusEmpty
-    ? shownSections.flatMap((section) => section.fields).find((field) => !restricted?.has(field.name) && typed(parameters.get(field.name)) && shown(editor.values[field.name]) === "")?.name
+    ? prepared.flatMap((section) => (more ? [...section.primary, ...section.extra] : section.primary)).find((field) => !restricted?.has(field.name) && typed(parameters.get(field.name)) && shown(editor.values[field.name]) === "")?.name
     : undefined;
+  const renderField = (field: Api.FieldInfo) => {
+    const parameter = parameters.get(field.name);
+    const value = editor.values[field.name];
+    const id = String(value ?? "");
+    const referenceName = refs?.[field.name]?.[id];
+    if (field.oneOf) {
+      const members = described.members(field);
+      const editable = members.flatMap((member) => parameters.get(member.name) ?? []);
+      const names = Object.fromEntries(members.map((member) => [member.name, refs?.[member.name]?.[String(editor.values[member.name] ?? "")]]));
+      if (editable.length === members.length) {
+        return <OneOfInput key={field.name} title={t(field.oneOf)} members={members} values={editor.values} names={names}
+          status={members.map((member) => editor.status[member.name]).find(Boolean)}
+          onChange={(name, next) => editor.change(editable.find((parameter) => parameter.name === name)!, next)} />;
+      }
+      const linked = members.find((member) => !blank(editor.values[member.name]));
+      return <Field key={field.name} label={t(field.oneOf)} inputID={`shown-${field.name}`}>
+        {linked && names[linked.name] ? <ReferenceLink type={String(linked.ref)} id={String(editor.values[linked.name])} name={String(names[linked.name])} /> : <Text type="body">{present(field, editor.values[linked?.name ?? field.name])}</Text>}
+      </Field>;
+    }
+    if (restricted?.has(field.name)) {
+      return <Field key={field.name} label={t(field.title)} inputID={`restricted-${field.name}`}>
+        <Text type="supporting" color="secondary">{t("Cannot view")}</Text>
+      </Field>;
+    }
+    return <PropertyField key={field.name} field={field} parameter={parameter} described={described.entity} value={value} form={editor.values}
+      name={referenceName} status={editor.status[field.name]} saving={editor.saving.has(field.name)} open={field.name === first}
+      onChange={parameter && ((next: unknown) => editor.change(parameter, next))} onCommit={() => editor.commit(field.name)} />;
+  };
+  const layoutStyle = direction === "horizontal-labels" ? styles.aligned : undefined;
   return (
     <VStack gap={6} onBlur={editor.settle}>
       {editor.conflict && sections.some((section) => section.fields.some((field) => field.name === editor.conflict?.name)) && <EditorConflict editor={editor} described={described} />}
-      {shownSections.map((section) => (
-        <VStack key={section.title} gap={3} xstyle={more ? motionStyles.fadeEnter : undefined}>
-          <Heading level={3} accessibilityLevel={2}>{t(section.title)}</Heading>
-          <FormLayout direction={direction} defaultOptionality="optional" xstyle={direction === "horizontal-labels" ? styles.aligned : undefined}>
-            {section.fields.map((field) => {
-              const parameter = parameters.get(field.name);
-              const value = editor.values[field.name];
-              const reference = field.type === "reference" && field.ref;
-              const id = String(value ?? "");
-              const referenceName = refs?.[field.name]?.[id];
-              if (field.oneOf) {
-                const members = described.members(field);
-                const editable = members.flatMap((member) => parameters.get(member.name) ?? []);
-                const names = Object.fromEntries(members.map((member) => [member.name, refs?.[member.name]?.[String(editor.values[member.name] ?? "")]]));
-                if (editable.length === members.length) {
-                  return <OneOfInput key={field.name} title={t(field.oneOf)} members={members} values={editor.values} names={names}
-                    status={members.map((member) => editor.status[member.name]).find(Boolean)}
-                    onChange={(name, next) => editor.change(editable.find((parameter) => parameter.name === name)!, next)} />;
-                }
-                const linked = members.find((member) => !blank(editor.values[member.name]));
-                return <Field key={field.name} label={t(field.oneOf)} inputID={`shown-${field.name}`}>
-                  {linked && names[linked.name] ? <ReferenceLink type={String(linked.ref)} id={String(editor.values[linked.name])} name={String(names[linked.name])} /> : <Text type="body">{present(field, editor.values[linked?.name ?? field.name])}</Text>}
-                </Field>;
-              }
-              if (restricted?.has(field.name)) {
-                return <Field key={field.name} label={t(field.title)} inputID={`restricted-${field.name}`}>
-                  <Text type="supporting" color="secondary">{t("Cannot view")}</Text>
-                </Field>;
-              }
-              return <PropertyField key={field.name} field={field} parameter={parameter} described={described.entity} value={value} form={editor.values}
-                name={referenceName} status={editor.status[field.name]} saving={editor.saving.has(field.name)} open={field.name === first}
-                onChange={parameter && ((next: unknown) => editor.change(parameter, next))} onCommit={() => editor.commit(field.name)} />;
-            })}
-          </FormLayout>
-        </VStack>
-      ))}
+      {prepared.map((section) => {
+        const onlyExtra = section.primary.length === 0;
+        const block = (
+          <VStack gap={3}>
+            <Heading level={3} accessibilityLevel={2}>{t(section.title)}</Heading>
+            {section.primary.length > 0 && (
+              <FormLayout direction={direction} defaultOptionality="optional" xstyle={layoutStyle}>
+                {section.primary.map(renderField)}
+              </FormLayout>
+            )}
+            {section.extra.length > 0 && !onlyExtra && (
+              <VStack
+                ref={(node) => { if (node) node.inert = !more; }}
+                aria-hidden={!more || undefined}
+                xstyle={[motionStyles.collapseGrid, more && motionStyles.collapseOpen]}
+              >
+                <VStack xstyle={motionStyles.collapseInner}>
+                  <FormLayout direction={direction} defaultOptionality="optional" xstyle={layoutStyle}>
+                    {section.extra.map(renderField)}
+                  </FormLayout>
+                </VStack>
+              </VStack>
+            )}
+            {onlyExtra && (
+              <FormLayout direction={direction} defaultOptionality="optional" xstyle={layoutStyle}>
+                {section.extra.map(renderField)}
+              </FormLayout>
+            )}
+          </VStack>
+        );
+        if (!onlyExtra) return <VStack key={section.title}>{block}</VStack>;
+        return (
+          <VStack
+            key={section.title}
+            ref={(node) => { if (node) node.inert = !more; }}
+            aria-hidden={!more || undefined}
+            xstyle={[motionStyles.collapseGrid, more && motionStyles.collapseOpen]}
+          >
+            <VStack xstyle={motionStyles.collapseInner}>{block}</VStack>
+          </VStack>
+        );
+      })}
       {folded.size > 0 && (
         <HStack hAlign="start">
           <Button variant="ghost" size="sm" label={more ? t("Hide empty fields") : `${t("Show empty fields")} · ${hidden}`} onClick={() => setMore(!more)} />

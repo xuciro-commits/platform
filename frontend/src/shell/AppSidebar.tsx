@@ -72,12 +72,12 @@ export function AppSidebar({ app, item, apps, object, listPath, onCollapse, inDr
     />
   );
   const footer = app.packageId && app.hasDemo && clearDemo ? (
-    <VStack gap={2} padding={2}>
+    <VStack gap={1} padding={2}>
       <Divider />
       <Button
         label={t("Clear demo data")}
         icon={<Icon icon={TrashIcon} size="sm" />}
-        variant="secondary"
+        variant="ghost"
         size="sm"
         width="100%"
         onClick={() => setConfirmClear(true)}
@@ -118,11 +118,11 @@ export function AppSidebar({ app, item, apps, object, listPath, onCollapse, inDr
         <AlertDialog
           isOpen
           onOpenChange={(open) => !open && !clearing && setConfirmClear(false)}
-          title={t("Clear demo data")}
+          title={t("Clear demo data for {app}?").replace("{app}", t(app.label))}
           description={t("This archives the sample records installed with this app. Your settings, reference data, and any records you created stay.")}
           cancelLabel={t("Cancel")}
           actionLabel={t("Clear demo data")}
-          actionVariant="primary"
+          actionVariant="destructive"
           isActionLoading={clearing}
           onAction={() => void runClearDemo()}
         />

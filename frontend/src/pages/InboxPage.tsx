@@ -16,10 +16,11 @@ import { Table, pixel, proportional, useTableRowStatus } from "@astryxdesign/cor
 import type { TableColumn, TablePlugin } from "@astryxdesign/core/Table";
 import { Heading, Text } from "@astryxdesign/core/Text";
 import { Timestamp } from "@astryxdesign/core/Timestamp";
+import { useToast } from "@astryxdesign/core/Toast";
 import { Token } from "@astryxdesign/core/Token";
 import { Toolbar } from "@astryxdesign/core/Toolbar";
 import { VisuallyHidden } from "@astryxdesign/core/VisuallyHidden";
-import { ArrowLeftIcon, ArrowPathIcon, CheckIcon, InboxIcon, XMarkIcon } from "@heroicons/react/24/outline";
+import { ArrowLeftIcon, ArrowPathIcon, CheckIcon, EnvelopeIcon, InboxIcon, XMarkIcon } from "@heroicons/react/24/outline";
 import * as stylex from "@stylexjs/stylex";
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { type Api, reread, useRead } from "../host";
@@ -28,6 +29,7 @@ import { PageTitle, useGutter } from "./frame";
 import { usePath } from "../router";
 import { reasonOf, send } from "./act";
 import { type InboxItem, type InboxTab, inTab, inboxTabs, useInbox } from "./inbox";
+import { motionEases, motionStyles, motionTimings, prefersReducedMotion } from "./motion";
 import { ReferenceLink } from "./ReferenceField";
 import { useRecordHref } from "../apps/entries";
 
@@ -67,28 +69,58 @@ function useSurfaceWidth() {
   return [ref, width] as const;
 }
 
-type Act = (item: InboxItem, schema: string, payload?: Record<string, unknown>) => void;
+type Act = (item: InboxItem, schema: string, payload?: Record<string, unknown>, silent?: boolean) => void;
 
 function useActions() {
   const catalog = useRead<Api.Action[]>("/v1/actions");
+  const toast = useToast();
   const [failure, setFailure] = useState("");
+  const hasUnreadAction = catalog.status === "ready" && catalog.data.some((candidate) => candidate.schema === "platform.notification.unread");
   const act: Act = useCallback(
-    async (item, schema, payload = {}) => {
+    async (item, schema, payload = {}, silent = false) => {
       const action = catalog.status === "ready" ? catalog.data.find((candidate) => candidate.schema === schema) : undefined;
       if (!action) return;
       setFailure("");
       try {
-        const target = schema === "platform.notification.read" ? item.note : item.task;
+        const isNote = schema === "platform.notification.read" || schema === "platform.notification.unread";
+        const target = isNote ? item.note : item.task;
         if (!target) return;
-        await send(action, target.id, payload, "revision" in target ? target.revision : undefined);
+        const kept = await send(action, target.id, payload, "revision" in target ? target.revision : undefined);
         reread();
+        if (!silent) {
+          const reverseSchema = action.reverse || (schema === "platform.notification.read" ? "platform.notification.unread" : schema === "work.task.complete" ? "work.task.reopen" : undefined);
+          const back = reverseSchema && catalog.status === "ready" ? catalog.data.find((candidate) => candidate.schema === reverseSchema) : undefined;
+          const label = schema === "platform.notification.read" ? t("Marked as read") : schema === "platform.notification.unread" ? t("Marked as unread") : t("Done");
+          if (back) {
+            const dismiss = toast({
+              body: `${label}: “${item.title}”`,
+              endContent: (
+                <Button
+                  label={t("Undo")}
+                  variant="ghost"
+                  onClick={async () => {
+                    dismiss();
+                    try {
+                      await send(back, target.id, {}, kept.revision);
+                      reread();
+                    } catch (problem) {
+                      toast({ body: reasonOf(problem), type: "error" });
+                    }
+                  }}
+                />
+              ),
+            });
+          } else {
+            toast({ body: `${label}: “${item.title}”` });
+          }
+        }
       } catch (problem) {
         setFailure(reasonOf(problem));
       }
     },
-    [catalog],
+    [catalog, toast],
   );
-  return { act, failure };
+  return { act, failure, hasUnreadAction };
 }
 
 function ReceivedCell({ item, reveal, act, isOverlaid }: { item: InboxItem; reveal: UseContainerRevealReturn; act: Act; isOverlaid: boolean }) {
@@ -132,20 +164,34 @@ function RelatedRecord({ reference }: { reference: string }) {
   return <ReferenceLink type={type} id={id} name={name} />;
 }
 
-function ItemPane({ item, act, onClose, isFullWidth }: { item: InboxItem; act: Act; onClose: () => void; isFullWidth: boolean }) {
+function ItemPane({ item, act, onClose, isFullWidth, canMarkUnread }: { item: InboxItem; act: Act; onClose: () => void; isFullWidth: boolean; canMarkUnread: boolean }) {
   const marked = useRef(new Set<string>());
   useEffect(() => {
     if (!item.unread || marked.current.has(item.id)) return;
     marked.current.add(item.id);
-    act(item, "platform.notification.read");
+    act(item, "platform.notification.read", {}, true);
   }, [item, act]);
   const task = item.task;
   const gutter = useGutter();
-  const close = <IconButton variant="ghost" label={t("Close")} tooltip={t("Close")} icon={<Icon icon={XMarkIcon} size="sm" />} onClick={onClose} />;
+  const unreadButton = canMarkUnread && item.kind === "notification" && !item.unread ? (
+    <IconButton
+      variant="ghost"
+      label={t("Mark as unread")}
+      tooltip={t("Mark as unread")}
+      icon={<Icon icon={EnvelopeIcon} size="sm" />}
+      onClick={() => act(item, "platform.notification.unread")}
+    />
+  ) : null;
+  const close = (
+    <HStack gap={1} vAlign="center">
+      {unreadButton}
+      <IconButton variant="ghost" label={t("Close")} tooltip={t("Close")} icon={<Icon icon={XMarkIcon} size="sm" />} onClick={onClose} />
+    </HStack>
+  );
   const record = item.ref && !item.ref.startsWith("work.task/") ? item.ref : undefined;
   const recordHref = useRecordHref();
   return (
-    <VStack height="100%">
+    <VStack key={item.id} height="100%" xstyle={motionStyles.tabEnter}>
       <VStack paddingBlockStart={gutter} paddingInline={isFullWidth ? 0 : gutter}>
         <Toolbar
           label={t("Item")}
@@ -158,7 +204,7 @@ function ItemPane({ item, act, onClose, isFullWidth }: { item: InboxItem; act: A
               </Heading>
             )
           }
-          endContent={isFullWidth ? undefined : close}
+          endContent={isFullWidth ? unreadButton : close}
         />
       </VStack>
       <StackItem size="fill">
@@ -235,13 +281,15 @@ export function InboxPage() {
   const tab = inboxTabs.some((candidate) => candidate.value === asked) ? asked : "all";
   const inbox = useInbox();
   const gutter = useGutter();
-  const { act, failure } = useActions();
+  const { act, failure, hasUnreadAction } = useActions();
   const [chosenId, setChosenId] = useState<string | null | undefined>(undefined);
   const visible = useMemo(() => inbox.items.filter((item) => inTab(item, tab)), [inbox.items, tab]);
   const unread = useMemo(() => Object.fromEntries(inboxTabs.map(({ value }) => [value, inbox.items.filter((item) => item.unread && inTab(item, value)).length])), [inbox.items]);
   const reveal = useContainerReveal();
   const [surfaceRef, surfaceWidth] = useSurfaceWidth();
   const [listRef, listWidth] = useSurfaceWidth();
+  const rowTops = useRef<Map<string, number>>(new Map());
+  const visibleOrder = visible.map((item) => item.id).join(",");
   const isSingleSurface = 0 < surfaceWidth && surfaceWidth < SINGLE_SURFACE_BELOW;
   const isStacked = 0 < listWidth && listWidth < STACK_ROWS_BELOW;
   const isTouch = useMediaQuery("(hover: none)");
@@ -267,6 +315,30 @@ export function InboxPage() {
     placing.current = false;
   }, [surfaceWidth, resize]);
 
+  useLayoutEffect(() => {
+    const root = listRef.current;
+    if (!root) return;
+    const nodes = [...root.querySelectorAll<HTMLElement>("[data-inbox-row]")];
+    const nextTops = new Map<string, number>();
+    for (const node of nodes) {
+      const id = node.dataset.inboxRow;
+      if (!id) continue;
+      const top = node.getBoundingClientRect().top;
+      nextTops.set(id, top);
+      const previous = rowTops.current.get(id);
+      if (previous !== undefined && !prefersReducedMotion()) {
+        const delta = previous - top;
+        if (Math.abs(delta) > 1 && Math.abs(delta) < 320) {
+          node.animate(
+            [{ transform: `translate3d(0, ${delta}px, 0)` }, { transform: "none" }],
+            { duration: motionTimings.slot, easing: motionEases.slot },
+          );
+        }
+      }
+    }
+    rowTops.current = nextTops;
+  }, [visibleOrder, listRef]);
+
   const rowStatus = useTableRowStatus<InboxItem>({
     getStatus: useCallback((item: InboxItem) => (item.unread ? { color: "accent" as const, label: t("Unread") } : null), []),
   });
@@ -278,6 +350,7 @@ export function InboxPage() {
           ...props,
           htmlProps: {
             ...props.htmlProps,
+            "data-inbox-row": item.id,
             className: [props.htmlProps.className, container.className].filter(Boolean).join(" "),
             style: { ...props.htmlProps.style, ...container.style },
             tabIndex: 0,
@@ -390,7 +463,7 @@ export function InboxPage() {
       }
       content={
         <LayoutContent role="main" ref={listRef} padding={gutter} isScrollable>
-          {failure && <Banner status="error" title={t("Not done")} description={failure} />}
+          {failure && <VStack xstyle={motionStyles.bannerEnter}><Banner status="error" title={t("Not done")} description={failure} /></VStack>}
           {inbox.status === "loading" && (
             <VStack gap={2}>
               {[0, 1, 2, 3].map((index) => <Skeleton key={index} height={36} index={index} />)}
@@ -399,7 +472,7 @@ export function InboxPage() {
           {(inbox.status === "error" || inbox.status === "refused") && <Banner status="error" title={t("The inbox could not be loaded")} description={inbox.reason || t("Reload the page to try again.")} />}
           {inbox.status === "ready" &&
             (isPaneFullWidth && opened ? (
-              <ItemPane item={opened} act={act} onClose={() => setChosenId(null)} isFullWidth />
+              <ItemPane item={opened} act={act} onClose={() => setChosenId(null)} isFullWidth canMarkUnread={hasUnreadAction} />
             ) : visible.length === 0 ? (
               <VStack padding={6}>
                 <EmptyState title={t("Nothing here")} description={t("Work assigned to you and notifications about your records arrive here.")} icon={<Icon icon={InboxIcon} size="lg" />} />
@@ -414,7 +487,7 @@ export function InboxPage() {
           <>
             <ResizeHandle direction="horizontal" isReversed hasDivider pillPlacement="end" resizable={pane.props} label={t("Resize the reading pane")} />
             <LayoutPanel resizable={pane.props} padding={0} role="complementary" label={t("Item")}>
-              <ItemPane item={opened} act={act} onClose={() => setChosenId(null)} isFullWidth={false} />
+              <ItemPane item={opened} act={act} onClose={() => setChosenId(null)} isFullWidth={false} canMarkUnread={hasUnreadAction} />
             </LayoutPanel>
           </>
         )

@@ -122,7 +122,7 @@ export function Shell() {
           </MobileNav>
         ) }}
       >
-        <ErrorBoundary key={path}>
+        <ErrorBoundary resetKey={path}>
           <VStack key={`${app.id}/${item.id}`} xstyle={[motionStyles.pageSlot, motionStyles.contentEnter]}>
             <Suspense fallback={null}>{content}</Suspense>
           </VStack>
@@ -180,10 +180,16 @@ function Navigation({ app, item, apps, object, listPath }: { app: App; item?: Na
     <HStack height="100%">
       <AppRail current={app} apps={apps} collapsed={collapsed} onExpand={() => collapse(false)} />
       <Divider orientation="vertical" />
-      <HStack xstyle={[motionStyles.sidebarShell, collapsed && motionStyles.sidebarCollapsed]} aria-hidden={collapsed || undefined}>
+      <HStack
+        ref={(node) => { if (node) node.inert = collapsed; }}
+        xstyle={[motionStyles.sidebarShell, collapsed && motionStyles.sidebarCollapsed]}
+        aria-hidden={collapsed || undefined}
+      >
         <HStack xstyle={motionStyles.sidebarInner}>
-          <AppSidebar app={app} item={item} apps={apps} object={object} listPath={listPath} onCollapse={() => collapse(true)} />
-          <Divider orientation="vertical" />
+          <HStack xstyle={motionStyles.sidebarContent}>
+            <AppSidebar app={app} item={item} apps={apps} object={object} listPath={listPath} onCollapse={() => collapse(true)} />
+            <Divider orientation="vertical" />
+          </HStack>
         </HStack>
       </HStack>
     </HStack>

@@ -52,6 +52,15 @@ export function statusField(described: Described) {
   return (laneKey ? described.field(laneKey) : undefined) ?? described.lanes[0];
 }
 
+export function headerStatus(described: Described, values: Values, archived?: boolean) {
+  if (archived) return { tone: "neutral", title: "Archived" };
+  const state = described.state(values);
+  const laneField = statusField(described);
+  const initial = described.lifecycle?.initial ?? described.lifecycle?.states?.[0]?.name;
+  if (laneField && ((described.lifecycle?.states?.length ?? 0) <= 1 || state?.name === initial)) return undefined;
+  return state;
+}
+
 export function grouped(fields: Api.FieldInfo[], field: Api.FieldInfo) {
   return field.oneOf ? fields.filter((other) => other.oneOf === field.oneOf) : [field];
 }

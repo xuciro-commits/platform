@@ -21,6 +21,7 @@ import { type InputStatus, ParameterInput } from "./ParameterInput";
 import { ReferenceLink } from "./ReferenceField";
 import type { Dot } from "./Transitions";
 import { iconField, icons } from "./icons";
+import { motionStyles } from "./motion";
 import { present } from "./values";
 import { DotMark } from "./DotMark";
 
@@ -59,8 +60,18 @@ function ContactActions({ kind, value }: { kind: "email" | "phone"; value: strin
   };
   return (
     <HStack gap={0} vAlign="center" onClick={(event) => event.stopPropagation()} onPointerDown={(event) => event.stopPropagation()}>
-      <IconButton label={copied ? t("Copied") : t("Copy")} tooltip={copied ? t("Copied") : t("Copy")} variant="ghost" size="sm"
-        icon={<Icon icon={copied ? CheckIcon : ClipboardDocumentIcon} size="sm" />} onClick={copy} />
+      <IconButton
+        label={copied ? t("Copied") : t("Copy")}
+        tooltip={copied ? t("Copied") : t("Copy")}
+        variant="ghost"
+        size="sm"
+        icon={
+          <HStack key={copied ? "copied" : "copy"} xstyle={motionStyles.popEnter}>
+            <Icon icon={copied ? CheckIcon : ClipboardDocumentIcon} color={copied ? "success" : undefined} size="sm" />
+          </HStack>
+        }
+        onClick={copy}
+      />
       <IconButton label={kind === "email" ? t("Send email") : t("Call")} tooltip={kind === "email" ? t("Send email") : t("Call")} variant="ghost" size="sm"
         icon={<Icon icon={kind === "email" ? EnvelopeIcon : PhoneIcon} size="sm" />} onClick={launch} />
     </HStack>
@@ -204,18 +215,24 @@ export function PropertyField(props: PropertyFieldProps) {
     return <ParameterInput parameter={parameter} described={described} value={value} form={form} status={shownStatus} labelHidden={labelHidden}
       onChange={(next) => { onChange?.(next); void leave(next); }} />;
   }
+  const savedCheck = !saving && shownStatus?.type === "success";
   const shown = open && parameter ? (
-    <VStack ref={box} onBlur={blur} onKeyDown={keys}>
+    <VStack ref={box} onBlur={blur} onKeyDown={keys} xstyle={shownStatus?.type === "error" ? motionStyles.shakeError : undefined}>
       <ParameterInput parameter={parameter} described={described} value={editing ? draft : value} form={form} referenceName={name} status={shownStatus}
         labelHidden onChange={change} onEnter={() => void leave(latest.current)} />
     </VStack>
   ) : (
-    <HStack ref={surface} id={id} gap={2} vAlign="center" xstyle={parameter ? [styles.surface, interactionOverlayStyles.backgroundColor, focusOutlineStyles.focusWithin] : styles.surface}
+    <HStack ref={surface} id={id} gap={2} vAlign="center" xstyle={parameter ? [styles.surface, motionStyles.overlayBadge, interactionOverlayStyles.backgroundColor, focusOutlineStyles.focusWithin] : [styles.surface, motionStyles.overlayBadge]}
       {...(parameter ? { ...pressable, onClick: clickable.onClick, onMouseUp: clickable.onMouseUp, onPointerDown: clickable.onPointerDown } : {})}>
       <StackItem size="fill" role="group" aria-label={label} xstyle={styles.value}>
         {props.hint && blank(value) ? <Text type="body" color="secondary">{props.hint}</Text> : <PropertyValue field={field} value={value} name={name} dot={props.dot} />}
       </StackItem>
       {saving && <Spinner size="sm" />}
+      {savedCheck && (
+        <HStack xstyle={[motionStyles.overlayCheck, motionStyles.popEnter]}>
+          <Icon icon={CheckIcon} color="success" size="sm" label={t("Saved")} />
+        </HStack>
+      )}
       {parameter && <VisuallyHidden><Button ref={control} label={`${t("Edit")} ${label}`} onClick={begin} /></VisuallyHidden>}
     </HStack>
   );
