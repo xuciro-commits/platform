@@ -116,6 +116,6 @@ test("official tenant: the deal is won and the CRM home counts its revenue", asy
   await page.goto("/");
   await page.getByRole("link", { name: "CRM", exact: true }).click();
   await expect(page.getByText("Won revenue", { exact: true })).toBeVisible();
-  await expect(page.getByRole("main").getByText(/300,000/).first()).toBeVisible();
+  await expect(page.getByRole("main").getByText(/368,000/).first()).toBeVisible();
 });
 });

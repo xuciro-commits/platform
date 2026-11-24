@@ -113,8 +113,8 @@ export function RecordPage({ described, id, listPath, listTitle, instances, enti
   }, [detail, headed]);
   const options = useOptions(described, laneField ? [laneField.name] : []);
   const parameters = new Map((described.edit?.payload ?? []).filter(enterable).map((parameter) => [parameter.name, parameter]));
-  const settled = Boolean(state) && !(described.lifecycle?.transitions ?? []).some((transition) => transition.from.includes(state?.name ?? ""));
-  const status = kept?.archived ? { tone: "neutral", title: "Archived" } : laneField && ((described.lifecycle?.states?.length ?? 0) <= 1 || !settled) ? undefined : state;
+  const initial = described.lifecycle?.initial ?? described.lifecycle?.states?.[0]?.name;
+  const status = kept?.archived ? { tone: "neutral", title: "Archived" } : laneField && ((described.lifecycle?.states?.length ?? 0) <= 1 || state?.name === initial) ? undefined : state;
   const name = described.name(values, id);
   const search = useCommandSearch();
   const loaded = read.status === "ready";
