@@ -1,15 +1,19 @@
 import { Banner } from "@astryxdesign/core/Banner";
+import { Button } from "@astryxdesign/core/Button";
 import { FileInput } from "@astryxdesign/core/FileInput";
-import { VStack } from "@astryxdesign/core/Layout";
+import { HStack, StackItem, VStack } from "@astryxdesign/core/Layout";
 import { MetadataList, MetadataListItem } from "@astryxdesign/core/MetadataList";
 import { SegmentedControl, SegmentedControlItem } from "@astryxdesign/core/SegmentedControl";
 import { Text } from "@astryxdesign/core/Text";
 import { TextInput } from "@astryxdesign/core/TextInput";
+import { colorVars, radiusVars } from "@astryxdesign/core/theme/tokens.stylex";
+import * as stylex from "@stylexjs/stylex";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { type Api, request, reread, useRead } from "../host";
 import { t } from "../i18n";
 import { reasonOf, send } from "./act";
 import { FormWizard, type WizardStep } from "./FormWizard";
+import { type DependencyResolution, type ResolvedDependency, resolvePackageDependencies } from "./packageDependencies";
 import { PackageReviewContent } from "./PackageReviewContent";
 
 type SourceMode = "file" | "url";
@@ -18,6 +22,19 @@ export type InitialPackageSource = {
   url: string;
   sha256?: string;
 };
+
+const emptyDependencies: DependencyResolution = { steps: [], unresolved: [] };
+
+const styles = stylex.create({
+  depRow: {
+    padding: "10px 12px",
+    borderRadius: radiusVars["--radius-element"],
+    borderWidth: 1,
+    borderStyle: "solid",
+    borderColor: colorVars["--color-border"],
+    backgroundColor: colorVars["--color-background-surface"],
+  },
+});
 
 export function PackageImportWizard({
   initialSource,
@@ -34,6 +51,8 @@ export function PackageImportWizard({
   const [url, setUrl] = useState(initialSource?.url ?? "");
   const [expectedSha256, setExpectedSha256] = useState(initialSource?.sha256 ?? "");
   const [preview, setPreview] = useState<Api.PackagePreview>();
+  const [dependencies, setDependencies] = useState<DependencyResolution>(emptyDependencies);
+  const [progress, setProgress] = useState("");
   const [imported, setImported] = useState(false);
   const [namespace, setNamespace] = useState("");
   const [busy, setBusy] = useState(false);
@@ -41,6 +60,7 @@ export function PackageImportWizard({
   const autoInspected = useRef(false);
 
   const packages = useRead<Api.PackageView[]>("/v1/packages");
+  const libraries = useRead<Api.PackageLibraryView[]>("/v1/packages/libraries");
   const catalog = useRead<Api.Action[]>("/v1/actions");
   const actions = catalog.status === "ready" ? catalog.data : [];
   const importAction = actions.find((action) => action.schema === "platform.package.import");
@@ -70,6 +90,10 @@ export function PackageImportWizard({
     ])]
     : [];
 
+  const hasAutoDeps = dependencies.steps.length > 0 && dependencies.unresolved.length === 0;
+  const hasBlockingPrecheck = (preview?.precheck.problems?.length ?? 0) > 0 && !hasAutoDeps;
+  const canInstallDeps = dependencies.steps.every((dep) => (dep.action === "upgrade" ? Boolean(upgradeAction) : Boolean(installAction)));
+
   const steps: WizardStep[] = [
     {
       id: "source",
@@ -90,7 +114,7 @@ export function PackageImportWizard({
         t("Adding to the library records the verified artifact without changing business data."),
         t("Existing package versions are immutable and cannot be overwritten."),
       ],
-      hasError: step === 1 && (Boolean(error) || (preview?.precheck.problems?.length ?? 0) > 0),
+      hasError: step === 1 && (Boolean(error) || hasBlockingPrecheck),
     },
     {
       id: "review",
@@ -114,21 +138,44 @@ export function PackageImportWizard({
     },
   ];
 
-  const inspectSource = async () => {
+  const buildInspectBody = async (override?: InitialPackageSource): Promise<Api.PackageInspectRequest> => {
+    const body: Api.PackageInspectRequest = {};
+    if (override) {
+      body.url = override.url.trim();
+      if (override.sha256?.trim()) body.expectedSha256 = override.sha256.trim();
+      return body;
+    }
+    if (sourceMode === "file") {
+      if (!file) throw new Error(t("Choose a package file first."));
+      body.contentBase64 = await base64Of(file);
+    } else {
+      if (!url.trim()) throw new Error(t("Enter an HTTPS package URL."));
+      body.url = url.trim();
+    }
+    if (expectedSha256.trim()) body.expectedSha256 = expectedSha256.trim();
+    return body;
+  };
+
+  const inspectSource = async (override?: InitialPackageSource) => {
     setBusy(true);
     setError("");
+    setProgress("");
+    if (override) {
+      setSourceMode("url");
+      setUrl(override.url);
+      setExpectedSha256(override.sha256 ?? "");
+    }
     try {
-      const body: Api.PackageInspectRequest = {};
-      if (sourceMode === "file") {
-        if (!file) throw new Error(t("Choose a package file first."));
-        body.contentBase64 = await base64Of(file);
-      } else {
-        if (!url.trim()) throw new Error(t("Enter an HTTPS package URL."));
-        body.url = url.trim();
-      }
-      if (expectedSha256.trim()) body.expectedSha256 = expectedSha256.trim();
+      const body = await buildInspectBody(override);
       const answer = await request<Api.PackagePreview>("/v1/packages/inspect", { body });
+      let resolved = emptyDependencies;
+      if ((answer.descriptor.requires?.length ?? 0) > 0) {
+        const localViews = packages.status === "ready" ? packages.data : await request<Api.PackageView[]>("/v1/packages");
+        const libViews = libraries.status === "ready" ? libraries.data : await request<Api.PackageLibraryView[]>("/v1/packages/libraries");
+        resolved = await resolvePackageDependencies(answer.descriptor, localViews, libViews, inspectPackage);
+      }
       setPreview(answer);
+      setDependencies(resolved);
       setNamespace(answer.descriptor.namespace);
       setImported(false);
       setStep(1);
@@ -142,22 +189,63 @@ export function PackageImportWizard({
   useEffect(() => {
     if (!initialSource?.url || autoInspected.current) return;
     autoInspected.current = true;
-    void inspectSource();
+    void inspectSource(initialSource);
   }, []);
+
+  const openDependency = (dep: ResolvedDependency) => {
+    if (!dep.url) return;
+    void inspectSource({ url: dep.url, sha256: dep.sha256 });
+  };
 
   const importCandidate = async () => {
     if (!preview || !importAction) return;
     setBusy(true);
     setError("");
+    setProgress("");
     try {
-      await send(importAction, preview.descriptor.id, { id: preview.descriptor.id, digest: preview.digest });
-      await listed(preview.descriptor.id, preview.descriptor.version);
+      let target = preview;
+      if (dependencies.steps.length > 0) {
+        for (let i = 0; i < dependencies.steps.length; i++) {
+          const dep = dependencies.steps[i];
+          const label = `${t(dep.title)} (${dep.id} · ${dep.version})`;
+          setProgress(t("Installing required package ({current}/{total}): {pkg}")
+            .replace("{current}", String(i + 1))
+            .replace("{total}", String(dependencies.steps.length))
+            .replace("{pkg}", label));
+          if (dep.source === "remote") {
+            if (!dep.digest) throw new Error(t("The reviewed package is unavailable; inspect it again"));
+            await send(importAction, dep.id, { id: dep.id, digest: dep.digest });
+            await listed(dep.id, dep.version);
+          }
+          const depAction = dep.action === "upgrade" ? upgradeAction : installAction;
+          if (!depAction) throw new Error(t("Install package"));
+          const payload = dep.action === "upgrade"
+            ? { id: dep.id, version: dep.version }
+            : { id: dep.id, version: dep.version, namespace: dep.namespace };
+          await send(depAction, dep.id, payload);
+          await installed(dep.id, dep.version);
+        }
+        reread();
+        setProgress(t("Re-checking target package…"));
+        const refreshed = await request<Api.PackagePreview>("/v1/packages/inspect", { body: await buildInspectBody() });
+        setPreview(refreshed);
+        setDependencies(emptyDependencies);
+        if ((refreshed.precheck.problems?.length ?? 0) > 0) {
+          setError(refreshed.precheck.problems!.join(" · "));
+          return;
+        }
+        target = refreshed;
+      }
+      setProgress("");
+      await send(importAction, target.descriptor.id, { id: target.descriptor.id, digest: target.digest });
+      await listed(target.descriptor.id, target.descriptor.version);
       setImported(true);
       reread();
       setStep(2);
     } catch (problem) {
       setError(reasonOf(problem));
     } finally {
+      setProgress("");
       setBusy(false);
     }
   };
@@ -188,13 +276,13 @@ export function PackageImportWizard({
 
   const canProceed =
     step === 0 ? (sourceMode === "file" ? Boolean(file) : Boolean(url.trim()))
-    : step === 1 ? Boolean(preview && importAction && (preview.precheck.problems?.length ?? 0) === 0)
+    : step === 1 ? Boolean(preview && importAction && !hasBlockingPrecheck && (!hasAutoDeps || canInstallDeps))
     : step === 2 ? Boolean(importedView && review.status === "ready" && preparation.status !== "loading" && reviewProblems.length === 0 && (importedView.installed || namespace.trim()))
     : Boolean(preview && (importedView?.update ? upgradeAction : installAction));
 
   const primaryLabel =
     step === 0 ? t("Inspect package")
-    : step === 1 ? t("Add to library")
+    : step === 1 ? (hasAutoDeps ? t("Install dependencies and continue") : t("Add to library"))
     : step === 2 ? t("Continue")
     : importedView?.update ? t("Upgrade package") : t("Install package");
 
@@ -248,7 +336,36 @@ export function PackageImportWizard({
       {step === 1 && preview && (
         <VStack gap={4}>
           <Banner status="warning" title={t("Local library")} description={t("Self-declared metadata from an external source")} />
-          {(preview.precheck.problems?.length ?? 0) > 0 && (
+          {progress && <Banner status="info" title={progress} />}
+          {hasAutoDeps && (
+            <VStack gap={3}>
+              <Banner
+                status="info"
+                title={t("Required packages will be installed first")}
+                description={t("The following prerequisite packages will be verified and installed in order before adding this package.")}
+              />
+              {dependencies.steps.map((dep, index) => (
+                <HStack key={`${dep.id}@${dep.version}`} gap={3} vAlign="center" xstyle={styles.depRow}>
+                  <StackItem size="fill">
+                    <VStack gap={0.5}>
+                      <Text type="body" weight="medium">{index + 1}. {t(dep.title)} ({dep.id} · {dep.version})</Text>
+                      {dep.sha256 && <Text type="code" color="secondary" maxLines={1}>{dep.sha256}</Text>}
+                    </VStack>
+                  </StackItem>
+                  {dep.url && (
+                    <Button
+                      label={t("Open dependency")}
+                      variant="secondary"
+                      size="sm"
+                      isDisabled={busy}
+                      onClick={() => openDependency(dep)}
+                    />
+                  )}
+                </HStack>
+              ))}
+            </VStack>
+          )}
+          {hasBlockingPrecheck && (
             <Banner status="error" title={t("This version cannot be used as it stands")} description={preview.precheck.problems!.join(" · ")} />
           )}
           <MetadataList columns="single" label={{ position: "start", width: 140 }}>
@@ -338,6 +455,18 @@ async function listed(id: string, version: string) {
   for (let attempt = 0; attempt < 20; attempt++) {
     const views = await request<Api.PackageView[]>("/v1/packages");
     if (views.some((view) => view.descriptor.id === id && view.descriptor.version === version)) return;
+    await new Promise((resolve) => setTimeout(resolve, 250));
+  }
+}
+
+async function inspectPackage(body: Api.PackageInspectRequest) {
+  return request<Api.PackagePreview>("/v1/packages/inspect", { body });
+}
+
+async function installed(id: string, version: string) {
+  for (let attempt = 0; attempt < 40; attempt++) {
+    const views = await request<Api.PackageView[]>("/v1/packages");
+    if (views.some((view) => view.descriptor.id === id && view.installed?.state === "active" && view.installed.version === version)) return;
     await new Promise((resolve) => setTimeout(resolve, 250));
   }
 }

@@ -436,7 +436,6 @@
   "Capabilities": "能力",
   "Capability": "能力",
   "Contract": "契约",
-  "Status": "状态",
   "Consumers": "使用方",
   "Bound": "已绑定",
   "No implementations available": "没有可用的实现",
@@ -499,5 +498,12 @@
   "Once published, this product version is immutable and cannot be overwritten.": "发布后，该产品版本不可更改，也无法被覆盖。",
   "Still needed: {fields}": "还需填写：{fields}",
   "Capability implementations": "能力实现",
-  "A capability implementation is a connector that serves a capability contract by calling a third-party service over https. It lists the addresses it may call and the credential it needs; the tenant binds it after it passes the contract's tests.": "能力实现是一个连接器：经 HTTPS 调用第三方服务来提供某个能力契约。它列出能访问的地址和需要的凭据；通过契约的测试后，租户才能绑定它。"
+  "A capability implementation is a connector that serves a capability contract by calling a third-party service over https. It lists the addresses it may call and the credential it needs; the tenant binds it after it passes the contract's tests.": "能力实现是一个连接器：经 HTTPS 调用第三方服务来提供某个能力契约。它列出能访问的地址和需要的凭据；通过契约的测试后，租户才能绑定它。",
+  "Required packages will be installed first": "需先安装前置依赖包",
+  "The following prerequisite packages will be verified and installed in order before adding this package.": "将按顺序先核验并安装以下前置包，再继续导入和安装当前包。",
+  "Install dependencies and continue": "安装依赖并继续",
+  "Open dependency": "查看依赖",
+  "Installing required package ({current}/{total}): {pkg}": "正在安装前置依赖（{current}/{total}）：{pkg}",
+  "Re-checking target package…": "正在重新校验目标包…",
+  "The reviewed package is unavailable; inspect it again": "已核验的包暂不可用，请重新读取并校验"
 }
