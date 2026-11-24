@@ -61,6 +61,16 @@ async function importPackage(session, path) {
   return content;
 }
 
+async function installPackage(session, path) {
+  session.packageRevision = 0;
+  const descriptor = await importPackage(session, path);
+  const installed = await session.submit("platform.package", descriptor.id, "install", { id: descriptor.id, version: descriptor.version }, "platform", session.packageRevision);
+  session.packageRevision = installed.revision;
+  return descriptor;
+}
+
+const partyPackages = ["./frontend-fixtures/geo-0.1.1.json", "./frontend-fixtures/party-0.2.1.json"];
+
 async function members(session, sample) {
   for (const [id, entry] of Object.entries(sample.members ?? {})) {
     await session.submit("platform.profile", id, "update", resolveMemberProfile(id, entry), "platform");
@@ -201,9 +211,8 @@ for (const file of files) {
 
   if (sample.install) {
     const tenant = await connect(sample.install.tenant);
-    const descriptor = await importPackage(tenant, sample.install.package);
-    const installed = await tenant.submit("platform.package", descriptor.id, "install", { id: descriptor.id, version: descriptor.version }, "platform", tenant.packageRevision);
-    tenant.packageRevision = installed.revision;
+    for (const path of sample.install.requires ?? []) await installPackage(tenant, path);
+    const descriptor = await installPackage(tenant, sample.install.package);
     await tenant.refresh();
     const kinds = new Set(descriptor.blueprint.assets.filter((asset) => asset.ref.kind === "object").map((asset) => asset.ref.name));
     await members(tenant, sample.install);
@@ -226,5 +235,9 @@ for (const name of ["blank", "upgrade", "publisher", "official"]) {
       const profile = resolveMemberProfile(entry.id, entry.profile?.displayName || undefined);
       if (profile.displayName) await empty.submit("platform.profile", entry.id, "update", profile, "platform");
     }
+  }
+  if (name === "official") {
+    for (const path of partyPackages) await installPackage(empty, path);
+    console.log("frontend-seed: installed geo and party in tenant official");
   }
 }

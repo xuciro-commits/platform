@@ -536,7 +536,7 @@ test("roles: sales reps see only business menu entries and actions, and see a le
   await expect(page.getByRole("link", { name: handed, exact: true })).toBeVisible();
 });
 
-test("peek: clicking a reference opens the record drawer without leaving the page, and a reference input creates a contact inline", async ({ page }) => {
+test("peek: clicking a reference opens the record drawer without leaving the page, and a reference input creates a competitor inline", async ({ page }) => {
   await as(page, "manager-1");
   const id = await deal(page, { title: `Peek ${unique()}` });
   await page.goto(`/crm/crm.deal/${id}`);
@@ -548,15 +548,15 @@ test("peek: clicking a reference opens the record drawer without leaving the pag
   await page.keyboard.press("Escape");
   await expect(drawer).toBeHidden();
 
-  await edit(page, "Primary contact");
-  await page.getByRole("combobox", { name: "Primary contact", exact: true }).click();
-  await page.getByRole("option", { name: /New Contact…/ }).click();
+  await edit(page, "Main competitor");
+  await page.getByRole("combobox", { name: "Main competitor", exact: true }).click();
+  await page.getByRole("option", { name: /New Competitor…/ }).click();
   const create = page.getByRole("dialog");
-  const person = `林小满 ${unique()}`;
-  await create.getByRole("textbox", { name: "Full name" }).fill(person);
+  const rival = `Rival ${unique()}`;
+  await create.getByRole("textbox", { name: "Competitor" }).fill(rival);
   await create.getByRole("button", { name: "Create", exact: true }).click();
   await expect(create).toBeHidden();
-  await expect(property(page, "Primary contact")).toContainText(person);
+  await expect(property(page, "Main competitor")).toContainText(rival);
 });
 
 test("crm board: stage lanes carry their own colours and the plus in a lane header opens the create dialog with that stage", async ({ page }) => {

@@ -1,25 +1,18 @@
 {
   "id": "crm",
-  "version": "0.2.2",
+  "version": "0.3.0",
   "title": "CRM",
   "namespace": "crm",
   "description": "Leads with response times and qualification, a stage-based pipeline where every open deal has a next step, accounts and contacts with roles on each deal, products, activities, win and loss analysis, and a sales dashboard.",
+  "requires": [
+    "party@^0.2.0"
+  ],
   "blueprint": {
     "roots": [
       {
         "app": "build",
         "kind": "app",
         "name": "crm"
-      },
-      {
-        "app": "build",
-        "kind": "matching",
-        "name": "crmaccountmatch"
-      },
-      {
-        "app": "build",
-        "kind": "matching",
-        "name": "crmcontactmatch"
       }
     ],
     "assets": [
@@ -85,11 +78,6 @@
           {
             "app": "build",
             "kind": "page",
-            "name": "crm.industry"
-          },
-          {
-            "app": "build",
-            "kind": "page",
             "name": "crm.lead"
           },
           {
@@ -138,7 +126,6 @@
             "crm.competitor",
             "crm.stage",
             "crm.source",
-            "crm.industry",
             "crm.territory",
             "crm.lostreason",
             "crm.disqualifyreason"
@@ -181,7 +168,6 @@
               "pages": [
                 "crm.stage",
                 "crm.source",
-                "crm.industry",
                 "crm.territory",
                 "crm.lostreason",
                 "crm.disqualifyreason"
@@ -423,7 +409,7 @@
               "Content": "内容",
               "Convert to deal": "转为商机",
               "Converted": "已转化",
-              "Create the account, contact and deal from this lead in one step; link existing ones instead when they already exist.": "一步按这条线索建好客户、联系人和商机；已经有的就关联现有的。",
+              "Create the account, contact and deal from this lead in one step; link existing ones instead when they already exist. A new account and contact also create their organization and person in Business partners.": "一步按这条线索建好客户、联系人和商机；已经有的就关联现有的。新客户、新联系人也会在往来单位里建好单位和人。",
               "Customer": "成交客户",
               "Customers": "客户",
               "Cyan": "青",
@@ -508,8 +494,6 @@
               "Mark lost": "丢单",
               "Mark this activity done and write what happened.": "把活动标为完成，并写下结果。",
               "Mark won": "赢单",
-              "Match accounts by name": "按名称匹配客户",
-              "Match contacts by email": "按邮箱匹配联系人",
               "Media": "媒体",
               "Meeting": "会议",
               "Met": "达成",
@@ -537,12 +521,14 @@
               "Open leads": "进行中的线索",
               "Open pipeline": "进行中的管道",
               "Orange": "橙",
+              "Organization": "往来单位",
               "Other": "其他",
               "Outbound": "主动开发",
               "Outcome": "结果",
               "Outcome notes": "结果说明",
               "Parent territory": "上级地区",
               "Partner": "合作伙伴",
+              "Person": "人",
               "Phone": "电话",
               "Pink": "粉",
               "Pinned": "置顶",
@@ -600,6 +586,8 @@
               "Territory manager": "地区经理",
               "The customer has the proposal and a date to decide.": "客户拿到方案，并定了决定的日期。",
               "The decision maker has committed verbally; the contract is being signed.": "决策人已口头承诺，合同在签。",
+              "The sales side of a business partner contact. Their name, organization, job title and ways to reach them are kept once in Business partners.": "往来单位里一个联系人在销售这边的信息。姓名、单位、职务和联系方式只在往来单位里存一份。",
+              "The sales side of a business partner organization. Its name, website, industry, size and address are kept once in Business partners.": "往来单位在销售这边的信息。名称、网站、行业、规模和地址只在往来单位里存一份。",
               "The next step on this deal is due. Do it, or set a new one.": "这个商机的下一步到期了。去做，或者定一个新的。",
               "The single next thing that moves this deal forward.": "推动这个商机往前走的下一件事。",
               "This activity is no longer needed.": "这项活动不再需要。",
@@ -1045,92 +1033,6 @@
       {
         "ref": {
           "app": "build",
-          "kind": "matching",
-          "name": "crmaccountmatch"
-        },
-        "contractVersion": 1,
-        "sourceVersion": "1.matching-1",
-        "requires": [
-          {
-            "app": "build",
-            "kind": "object",
-            "name": "crm.account"
-          }
-        ],
-        "provides": [
-          {
-            "kind": "operation",
-            "name": "crmaccountmatch",
-            "inputs": {
-              "type": ""
-            },
-            "outputs": {
-              "type": ""
-            },
-            "roles": null,
-            "side": "effect"
-          }
-        ],
-        "body": {
-          "name": "crmaccountmatch",
-          "object": "crm.account",
-          "title": "Match accounts by name",
-          "keys": [
-            {
-              "fields": [
-                "name"
-              ],
-              "normalize": "folded"
-            }
-          ]
-        }
-      },
-      {
-        "ref": {
-          "app": "build",
-          "kind": "matching",
-          "name": "crmcontactmatch"
-        },
-        "contractVersion": 1,
-        "sourceVersion": "1.matching-1",
-        "requires": [
-          {
-            "app": "build",
-            "kind": "object",
-            "name": "crm.contact"
-          }
-        ],
-        "provides": [
-          {
-            "kind": "operation",
-            "name": "crmcontactmatch",
-            "inputs": {
-              "type": ""
-            },
-            "outputs": {
-              "type": ""
-            },
-            "roles": null,
-            "side": "effect"
-          }
-        ],
-        "body": {
-          "name": "crmcontactmatch",
-          "object": "crm.contact",
-          "title": "Match contacts by email",
-          "keys": [
-            {
-              "fields": [
-                "email"
-              ],
-              "normalize": "folded"
-            }
-          ]
-        }
-      },
-      {
-        "ref": {
-          "app": "build",
           "kind": "object",
           "name": "crm.account"
         },
@@ -1145,12 +1047,12 @@
           {
             "app": "build",
             "kind": "object",
-            "name": "crm.industry"
+            "name": "crm.territory"
           },
           {
             "app": "build",
             "kind": "object",
-            "name": "crm.territory"
+            "name": "party.organization"
           }
         ],
         "provides": [
@@ -1163,39 +1065,16 @@
             "outputs": {
               "type": "object",
               "properties": {
-                "address": {
-                  "type": "string"
-                },
                 "archived": {
                   "type": "boolean"
                 },
-                "description": {
+                "base": {
                   "type": "string"
-                },
-                "employees": {
-                  "type": "string",
-                  "enum": [
-                    "1-10",
-                    "11-50",
-                    "51-200",
-                    "201-500",
-                    "501-1000",
-                    "1000+"
-                  ]
                 },
                 "id": {
                   "type": "string"
                 },
-                "industry": {
-                  "type": "string"
-                },
-                "name": {
-                  "type": "string"
-                },
                 "owner": {
-                  "type": "string"
-                },
-                "phone": {
                   "type": "string"
                 },
                 "pipeline": {
@@ -1243,7 +1122,7 @@
                 "territory": {
                   "type": "string"
                 },
-                "website": {
+                "title": {
                   "type": "string"
                 },
                 "wonrevenue": {
@@ -1277,8 +1156,10 @@
           "title": "Account",
           "plural": "Accounts",
           "icon": "building-office-2",
-          "display": "name",
+          "display": "title",
           "naming": "ACC-{n:5}",
+          "extends": "party.organization",
+          "description": "The sales side of a business partner organization. Its name, website, industry, size and address are kept once in Business partners.",
           "scope": {
             "owner": "owner"
           },
@@ -1302,31 +1183,33 @@
           ],
           "fields": [
             {
-              "name": "name",
-              "title": "Account",
-              "type": "text",
+              "name": "base",
+              "title": "Organization",
+              "type": "reference",
+              "ref": "party.organization",
               "required": true,
               "search": true,
               "group": "Account"
             },
             {
-              "name": "website",
-              "title": "Website",
+              "name": "title",
+              "title": "Account",
               "type": "text",
+              "from": {
+                "op": "path",
+                "kind": "text",
+                "args": [
+                  {
+                    "op": "",
+                    "kind": "reference",
+                    "ref": "base"
+                  }
+                ],
+                "path": [
+                  "name"
+                ]
+              },
               "search": true,
-              "group": "Account"
-            },
-            {
-              "name": "phone",
-              "title": "Phone",
-              "type": "text",
-              "group": "Account"
-            },
-            {
-              "name": "industry",
-              "title": "Industry",
-              "type": "reference",
-              "ref": "crm.industry",
               "group": "Account"
             },
             {
@@ -1337,29 +1220,10 @@
               "group": "Account"
             },
             {
-              "name": "employees",
-              "title": "Employees",
-              "type": "choice",
-              "group": "Account",
-              "choices": "1-10:1-10,11-50:11-50,51-200:51-200,201-500:201-500,501-1000:501-1000,1000+:1000+"
-            },
-            {
               "name": "revenue",
               "title": "Annual revenue",
               "type": "money",
               "default": "setting:currency",
-              "group": "Account"
-            },
-            {
-              "name": "address",
-              "title": "Address",
-              "type": "longtext",
-              "group": "Account"
-            },
-            {
-              "name": "description",
-              "title": "About",
-              "type": "longtext",
               "group": "Account"
             },
             {
@@ -1517,9 +1381,8 @@
             "version": 1,
             "layout": "table",
             "columns": [
-              "name",
+              "title",
               "relationship",
-              "industry",
               "territory",
               "pipeline",
               "wonrevenue",
@@ -1527,7 +1390,7 @@
             ],
             "sort": [
               {
-                "sortKey": "name",
+                "sortKey": "title",
                 "direction": "ascending"
               }
             ],
@@ -1553,6 +1416,10 @@
             {
               "version": "schema.sha256.775648d69a75498ba186a90c519fa430e80f3b9a45453ade2345b6617577946b",
               "family": 1
+            },
+            {
+              "version": "schema.sha256.e65cd6d3e19d36a1eb907d5f96951c21bd81d40a7a9e67d89e550f2828d402a4",
+              "family": 2
             }
           ]
         }
@@ -2100,6 +1967,11 @@
             "app": "build",
             "kind": "object",
             "name": "crm.account"
+          },
+          {
+            "app": "build",
+            "kind": "object",
+            "name": "party.contact"
           }
         ],
         "provides": [
@@ -2118,38 +1990,26 @@
                 "archived": {
                   "type": "boolean"
                 },
-                "donotcontact": {
-                  "type": "boolean"
-                },
-                "email": {
+                "background": {
                   "type": "string"
                 },
-                "fullname": {
+                "base": {
                   "type": "string"
                 },
                 "id": {
                   "type": "string"
                 },
-                "jobtitle": {
-                  "type": "string"
-                },
                 "linkedin": {
-                  "type": "string"
-                },
-                "mobile": {
-                  "type": "string"
-                },
-                "notes": {
                   "type": "string"
                 },
                 "owner": {
                   "type": "string"
                 },
-                "phone": {
-                  "type": "string"
-                },
                 "revision": {
                   "type": "integer"
+                },
+                "title": {
+                  "type": "string"
                 }
               },
               "required": [
@@ -2167,17 +2027,41 @@
           "title": "Contact",
           "plural": "Contacts",
           "icon": "identification",
-          "display": "fullname",
+          "display": "title",
           "naming": "CON-{n:5}",
+          "extends": "party.contact",
+          "description": "The sales side of a business partner contact. Their name, organization, job title and ways to reach them are kept once in Business partners.",
           "scope": {
             "owner": "owner"
           },
           "fields": [
             {
-              "name": "fullname",
+              "name": "base",
+              "title": "Person",
+              "type": "reference",
+              "ref": "party.contact",
+              "required": true,
+              "search": true,
+              "group": "Contact"
+            },
+            {
+              "name": "title",
               "title": "Full name",
               "type": "text",
-              "required": true,
+              "from": {
+                "op": "path",
+                "kind": "text",
+                "args": [
+                  {
+                    "op": "",
+                    "kind": "reference",
+                    "ref": "base"
+                  }
+                ],
+                "path": [
+                  "fullname"
+                ]
+              },
               "search": true,
               "group": "Contact"
             },
@@ -2191,39 +2075,13 @@
               "group": "Contact"
             },
             {
-              "name": "jobtitle",
-              "title": "Job title",
-              "type": "text",
-              "group": "Contact"
-            },
-            {
-              "name": "email",
-              "title": "Email",
-              "type": "text",
-              "search": true,
-              "group": "Contact"
-            },
-            {
-              "name": "mobile",
-              "title": "Mobile",
-              "type": "text",
-              "search": true,
-              "group": "Contact"
-            },
-            {
-              "name": "phone",
-              "title": "Phone",
-              "type": "text",
-              "group": "Contact"
-            },
-            {
               "name": "linkedin",
               "title": "LinkedIn",
               "type": "text",
               "group": "Contact"
             },
             {
-              "name": "notes",
+              "name": "background",
               "title": "Background",
               "type": "longtext",
               "group": "Contact"
@@ -2233,12 +2091,6 @@
               "title": "Contact owner",
               "type": "member",
               "default": "member",
-              "aside": true
-            },
-            {
-              "name": "donotcontact",
-              "title": "Do not contact",
-              "type": "boolean",
               "aside": true
             }
           ],
@@ -2261,16 +2113,13 @@
             "version": 1,
             "layout": "table",
             "columns": [
-              "fullname",
+              "title",
               "account",
-              "jobtitle",
-              "email",
-              "mobile",
               "owner"
             ],
             "sort": [
               {
-                "sortKey": "fullname",
+                "sortKey": "title",
                 "direction": "ascending"
               }
             ],
@@ -2284,6 +2133,10 @@
             {
               "version": "schema.sha256.729bb51629a3849c30a52cab3ac7341b141a847c57db92eba5b990dbcb6fe1e4",
               "family": 1
+            },
+            {
+              "version": "schema.sha256.3886f4eb13d705a3d9bcc24eaf8b20b76212bc0f611ea3b2d75d58a43f69f3ed",
+              "family": 2
             }
           ]
         }
@@ -3620,172 +3473,6 @@
         "ref": {
           "app": "build",
           "kind": "object",
-          "name": "crm.industry"
-        },
-        "contractVersion": 1,
-        "sourceVersion": "1",
-        "requires": [],
-        "provides": [
-          {
-            "kind": "interface",
-            "name": "crm.industry",
-            "inputs": {
-              "type": ""
-            },
-            "outputs": {
-              "type": "object",
-              "properties": {
-                "archived": {
-                  "type": "boolean"
-                },
-                "id": {
-                  "type": "string"
-                },
-                "revision": {
-                  "type": "integer"
-                },
-                "title": {
-                  "type": "string"
-                }
-              },
-              "required": [
-                "id",
-                "revision"
-              ]
-            },
-            "roles": null,
-            "side": "pure"
-          }
-        ],
-        "body": {
-          "name": "industry",
-          "namespace": "crm",
-          "title": "Industry",
-          "plural": "Industries",
-          "icon": "building-storefront",
-          "display": "title",
-          "fields": [
-            {
-              "name": "title",
-              "title": "Industry",
-              "type": "text",
-              "required": true,
-              "search": true
-            }
-          ],
-          "access": [
-            {
-              "role": "salesrep",
-              "read": "all"
-            },
-            {
-              "role": "salesmanager",
-              "read": "all",
-              "create": true,
-              "edit": true,
-              "archive": true
-            }
-          ],
-          "view": {
-            "version": 1,
-            "layout": "table",
-            "columns": [
-              "title"
-            ],
-            "sort": [
-              {
-                "sortKey": "title",
-                "direction": "ascending"
-              }
-            ],
-            "group": "none",
-            "lanes": "",
-            "filters": [],
-            "search": ""
-          },
-          "records": [
-            {
-              "id": "software",
-              "title": "Software"
-            },
-            {
-              "id": "manufacturing",
-              "title": "Manufacturing"
-            },
-            {
-              "id": "retail",
-              "title": "Retail"
-            },
-            {
-              "id": "wholesale",
-              "title": "Wholesale and distribution"
-            },
-            {
-              "id": "finance",
-              "title": "Financial services"
-            },
-            {
-              "id": "healthcare",
-              "title": "Healthcare"
-            },
-            {
-              "id": "education",
-              "title": "Education"
-            },
-            {
-              "id": "construction",
-              "title": "Construction"
-            },
-            {
-              "id": "realestate",
-              "title": "Real estate"
-            },
-            {
-              "id": "energy",
-              "title": "Energy and utilities"
-            },
-            {
-              "id": "logistics",
-              "title": "Transport and logistics"
-            },
-            {
-              "id": "hospitality",
-              "title": "Hospitality"
-            },
-            {
-              "id": "media",
-              "title": "Media"
-            },
-            {
-              "id": "professional",
-              "title": "Professional services"
-            },
-            {
-              "id": "public",
-              "title": "Public sector"
-            },
-            {
-              "id": "nonprofit",
-              "title": "Nonprofit"
-            },
-            {
-              "id": "other",
-              "title": "Other"
-            }
-          ],
-          "type": "crm.industry",
-          "schemaVersions": [
-            {
-              "version": "schema.sha256.6a9147e5528c282f737672f61311818ecb38f8a7a7bf258bcea0d0dde4b43d50",
-              "family": 1
-            }
-          ]
-        }
-      },
-      {
-        "ref": {
-          "app": "build",
-          "kind": "object",
           "name": "crm.lead"
         },
         "contractVersion": 1,
@@ -3819,17 +3506,27 @@
           {
             "app": "build",
             "kind": "object",
-            "name": "crm.industry"
-          },
-          {
-            "app": "build",
-            "kind": "object",
             "name": "crm.source"
           },
           {
             "app": "build",
             "kind": "object",
             "name": "crm.territory"
+          },
+          {
+            "app": "build",
+            "kind": "object",
+            "name": "party.contact"
+          },
+          {
+            "app": "build",
+            "kind": "object",
+            "name": "party.industry"
+          },
+          {
+            "app": "build",
+            "kind": "object",
+            "name": "party.organization"
           }
         ],
         "provides": [
@@ -4060,7 +3757,7 @@
               "name": "industry",
               "title": "Industry",
               "type": "reference",
-              "ref": "crm.industry",
+              "ref": "party.industry",
               "group": "Company"
             },
             {
@@ -4184,7 +3881,7 @@
           "actions": [
             {
               "title": "Convert to deal",
-              "description": "Create the account, contact and deal from this lead in one step; link existing ones instead when they already exist.",
+              "description": "Create the account, contact and deal from this lead in one step; link existing ones instead when they already exist. A new account and contact also create their organization and person in Business partners.",
               "from": [
                 "open"
               ],
@@ -4250,9 +3947,9 @@
                 "message": "Fill in the budget before converting; it becomes the deal amount.",
                 "steps": [
                   {
-                    "name": "account",
+                    "name": "organization",
                     "target": {
-                      "type": "crm.account"
+                      "type": "party.organization"
                     },
                     "when": {
                       "op": "empty",
@@ -4303,19 +4000,47 @@
                         }
                       },
                       {
+                        "field": "size",
+                        "expr": {
+                          "op": "",
+                          "kind": "choice",
+                          "ref": "employees"
+                        }
+                      }
+                    ]
+                  },
+                  {
+                    "name": "account",
+                    "target": {
+                      "type": "crm.account"
+                    },
+                    "when": {
+                      "op": "empty",
+                      "kind": "boolean",
+                      "args": [
+                        {
+                          "op": "",
+                          "kind": "reference",
+                          "ref": "input.account"
+                        }
+                      ]
+                    },
+                    "kind": "create",
+                    "changes": [
+                      {
+                        "field": "base",
+                        "expr": {
+                          "op": "",
+                          "kind": "reference",
+                          "ref": "step.organization"
+                        }
+                      },
+                      {
                         "field": "territory",
                         "expr": {
                           "op": "",
                           "kind": "reference",
                           "ref": "territory"
-                        }
-                      },
-                      {
-                        "field": "employees",
-                        "expr": {
-                          "op": "",
-                          "kind": "choice",
-                          "ref": "employees"
                         }
                       },
                       {
@@ -4329,9 +4054,9 @@
                     ]
                   },
                   {
-                    "name": "contact",
+                    "name": "person",
                     "target": {
-                      "type": "crm.contact"
+                      "type": "party.contact"
                     },
                     "when": {
                       "op": "empty",
@@ -4355,22 +4080,11 @@
                         }
                       },
                       {
-                        "field": "account",
+                        "field": "organization",
                         "expr": {
-                          "op": "coalesce",
+                          "op": "",
                           "kind": "reference",
-                          "args": [
-                            {
-                              "op": "",
-                              "kind": "reference",
-                              "ref": "input.account"
-                            },
-                            {
-                              "op": "",
-                              "kind": "reference",
-                              "ref": "step.account"
-                            }
-                          ]
+                          "ref": "step.organization"
                         }
                       },
                       {
@@ -4403,6 +4117,53 @@
                           "op": "",
                           "kind": "text",
                           "ref": "phone"
+                        }
+                      }
+                    ]
+                  },
+                  {
+                    "name": "contact",
+                    "target": {
+                      "type": "crm.contact"
+                    },
+                    "when": {
+                      "op": "empty",
+                      "kind": "boolean",
+                      "args": [
+                        {
+                          "op": "",
+                          "kind": "reference",
+                          "ref": "input.contact"
+                        }
+                      ]
+                    },
+                    "kind": "create",
+                    "changes": [
+                      {
+                        "field": "base",
+                        "expr": {
+                          "op": "",
+                          "kind": "reference",
+                          "ref": "step.person"
+                        }
+                      },
+                      {
+                        "field": "account",
+                        "expr": {
+                          "op": "coalesce",
+                          "kind": "reference",
+                          "args": [
+                            {
+                              "op": "",
+                              "kind": "reference",
+                              "ref": "input.account"
+                            },
+                            {
+                              "op": "",
+                              "kind": "reference",
+                              "ref": "step.account"
+                            }
+                          ]
                         }
                       },
                       {
@@ -4819,6 +4580,10 @@
             {
               "version": "schema.sha256.5866bf402e14a8678e42448793a7a2c66f62177af0a0fd087f0d277cb574d480",
               "family": 2
+            },
+            {
+              "version": "schema.sha256.553ed6e5dfbbc03af5ca49090b32632eeb8bad21a8e3851d8fe8fc8f3d651266",
+              "family": 3
             }
           ]
         }
@@ -5877,31 +5642,16 @@
             {
               "fields": [
                 {
-                  "name": "name"
+                  "name": "base"
                 },
                 {
-                  "name": "website"
-                },
-                {
-                  "name": "phone"
-                },
-                {
-                  "name": "industry"
+                  "name": "title"
                 },
                 {
                   "name": "territory"
                 },
                 {
-                  "name": "employees"
-                },
-                {
                   "name": "revenue"
-                },
-                {
-                  "name": "address"
-                },
-                {
-                  "name": "description"
                 },
                 {
                   "name": "pipeline"
@@ -5921,31 +5671,16 @@
               "model": {
                 "fields": [
                   {
-                    "name": "name"
+                    "name": "base"
                   },
                   {
-                    "name": "website"
-                  },
-                  {
-                    "name": "phone"
-                  },
-                  {
-                    "name": "industry"
+                    "name": "title"
                   },
                   {
                     "name": "territory"
                   },
                   {
-                    "name": "employees"
-                  },
-                  {
                     "name": "revenue"
-                  },
-                  {
-                    "name": "address"
-                  },
-                  {
-                    "name": "description"
                   },
                   {
                     "name": "pipeline"
@@ -5977,31 +5712,16 @@
             {
               "fields": [
                 {
-                  "name": "name"
+                  "name": "base"
                 },
                 {
-                  "name": "website"
-                },
-                {
-                  "name": "phone"
-                },
-                {
-                  "name": "industry"
+                  "name": "title"
                 },
                 {
                   "name": "territory"
                 },
                 {
-                  "name": "employees"
-                },
-                {
                   "name": "revenue"
-                },
-                {
-                  "name": "address"
-                },
-                {
-                  "name": "description"
                 },
                 {
                   "name": "pipeline"
@@ -6021,31 +5741,16 @@
               "model": {
                 "fields": [
                   {
-                    "name": "name"
+                    "name": "base"
                   },
                   {
-                    "name": "website"
-                  },
-                  {
-                    "name": "phone"
-                  },
-                  {
-                    "name": "industry"
+                    "name": "title"
                   },
                   {
                     "name": "territory"
                   },
                   {
-                    "name": "employees"
-                  },
-                  {
                     "name": "revenue"
-                  },
-                  {
-                    "name": "address"
-                  },
-                  {
-                    "name": "description"
                   },
                   {
                     "name": "pipeline"
@@ -6699,34 +6404,22 @@
             {
               "fields": [
                 {
-                  "name": "fullname"
+                  "name": "base"
+                },
+                {
+                  "name": "title"
                 },
                 {
                   "name": "account"
                 },
                 {
-                  "name": "jobtitle"
-                },
-                {
-                  "name": "email"
-                },
-                {
-                  "name": "mobile"
-                },
-                {
-                  "name": "phone"
-                },
-                {
                   "name": "linkedin"
                 },
                 {
-                  "name": "notes"
+                  "name": "background"
                 },
                 {
                   "name": "owner"
-                },
-                {
-                  "name": "donotcontact"
                 }
               ],
               "id": "list",
@@ -6734,34 +6427,22 @@
               "model": {
                 "fields": [
                   {
-                    "name": "fullname"
+                    "name": "base"
+                  },
+                  {
+                    "name": "title"
                   },
                   {
                     "name": "account"
                   },
                   {
-                    "name": "jobtitle"
-                  },
-                  {
-                    "name": "email"
-                  },
-                  {
-                    "name": "mobile"
-                  },
-                  {
-                    "name": "phone"
-                  },
-                  {
                     "name": "linkedin"
                   },
                   {
-                    "name": "notes"
+                    "name": "background"
                   },
                   {
                     "name": "owner"
-                  },
-                  {
-                    "name": "donotcontact"
                   }
                 ],
                 "type": "crm.contact"
@@ -6781,34 +6462,22 @@
             {
               "fields": [
                 {
-                  "name": "fullname"
+                  "name": "base"
+                },
+                {
+                  "name": "title"
                 },
                 {
                   "name": "account"
                 },
                 {
-                  "name": "jobtitle"
-                },
-                {
-                  "name": "email"
-                },
-                {
-                  "name": "mobile"
-                },
-                {
-                  "name": "phone"
-                },
-                {
                   "name": "linkedin"
                 },
                 {
-                  "name": "notes"
+                  "name": "background"
                 },
                 {
                   "name": "owner"
-                },
-                {
-                  "name": "donotcontact"
                 }
               ],
               "id": "detail",
@@ -6816,34 +6485,22 @@
               "model": {
                 "fields": [
                   {
-                    "name": "fullname"
+                    "name": "base"
+                  },
+                  {
+                    "name": "title"
                   },
                   {
                     "name": "account"
                   },
                   {
-                    "name": "jobtitle"
-                  },
-                  {
-                    "name": "email"
-                  },
-                  {
-                    "name": "mobile"
-                  },
-                  {
-                    "name": "phone"
-                  },
-                  {
                     "name": "linkedin"
                   },
                   {
-                    "name": "notes"
+                    "name": "background"
                   },
                   {
                     "name": "owner"
-                  },
-                  {
-                    "name": "donotcontact"
                   }
                 ],
                 "type": "crm.contact"
@@ -7462,176 +7119,6 @@
             ]
           },
           "title": "Disqualify reasons",
-          "widgetSpec": {
-            "body": {
-              "document": null,
-              "layout": "list-detail",
-              "sections": [
-                {
-                  "binding": "list",
-                  "id": "list",
-                  "triggers": [
-                    "list"
-                  ]
-                },
-                {
-                  "binding": "detail",
-                  "id": "detail",
-                  "triggers": [
-                    "detail"
-                  ]
-                }
-              ]
-            },
-            "format": "platform.page.web.v1"
-          }
-        }
-      },
-      {
-        "ref": {
-          "app": "build",
-          "kind": "page",
-          "name": "crm.industry"
-        },
-        "contractVersion": 1,
-        "sourceVersion": "1",
-        "requires": [
-          {
-            "app": "build",
-            "kind": "action",
-            "name": "crm.industry.create"
-          },
-          {
-            "app": "build",
-            "kind": "action",
-            "name": "crm.industry.edit"
-          },
-          {
-            "app": "build",
-            "kind": "object",
-            "name": "crm.industry"
-          }
-        ],
-        "body": {
-          "actionTriggers": [
-            {
-              "actions": [
-                {
-                  "app": "build",
-                  "kind": "action",
-                  "name": "crm.industry.create"
-                },
-                {
-                  "app": "build",
-                  "kind": "action",
-                  "name": "crm.industry.edit"
-                }
-              ],
-              "binding": "page",
-              "id": "page"
-            },
-            {
-              "binding": "list",
-              "id": "list",
-              "owner": "binding:list"
-            },
-            {
-              "binding": "detail",
-              "id": "detail",
-              "owner": "binding:detail"
-            }
-          ],
-          "dataBindings": [
-            {
-              "fields": [
-                {
-                  "name": "title"
-                }
-              ],
-              "id": "list",
-              "kind": "record",
-              "model": {
-                "fields": [
-                  {
-                    "name": "title"
-                  }
-                ],
-                "type": "crm.industry"
-              },
-              "object": {
-                "app": "build",
-                "kind": "object",
-                "name": "crm.industry"
-              },
-              "owner": "binding:list",
-              "ports": {
-                "selectionMode": "write",
-                "widget": "table",
-                "parentable": "true"
-              }
-            },
-            {
-              "fields": [
-                {
-                  "name": "title"
-                }
-              ],
-              "id": "detail",
-              "kind": "record",
-              "model": {
-                "fields": [
-                  {
-                    "name": "title"
-                  }
-                ],
-                "type": "crm.industry"
-              },
-              "object": {
-                "app": "build",
-                "kind": "object",
-                "name": "crm.industry"
-              },
-              "owner": "binding:detail",
-              "ports": {
-                "selectionMode": "read",
-                "widget": "detail"
-              }
-            }
-          ],
-          "format": 4,
-          "inputSchema": {},
-          "name": "crm.industry",
-          "object": {
-            "app": "build",
-            "kind": "object",
-            "name": "crm.industry"
-          },
-          "scopeVisibility": {
-            "owners": {
-              "detail": "binding:detail",
-              "list": "binding:list"
-            },
-            "root": "page",
-            "scopes": [
-              {
-                "id": "page",
-                "kind": "page"
-              },
-              {
-                "binding": "list",
-                "id": "binding:list",
-                "kind": "page",
-                "parent": "page"
-              },
-              {
-                "binding": "detail",
-                "id": "binding:detail",
-                "kind": "page",
-                "parent": "page"
-              }
-            ]
-          },
-          "title": "Industries",
           "widgetSpec": {
             "body": {
               "document": null,
@@ -9377,102 +8864,155 @@
         }
       },
       {
-        "type": "crm.account",
-        "id": "demo-account-1",
+        "type": "party.organization",
+        "id": "demo-crm-org-1",
         "values": {
           "name": "Northwind Precision Manufacturing",
           "website": "https://northwind-mfg.example",
           "phone": "+1-555-0141",
           "industry": "manufacturing",
+          "size": "201-500",
+          "description": "Precision CNC and industrial automation supplier modernizing regional sales operations."
+        }
+      },
+      {
+        "type": "crm.account",
+        "id": "demo-account-1",
+        "values": {
+          "base": "demo-crm-org-1",
           "territory": "apac",
-          "employees": "201-500",
           "revenue": {
             "amount": 4800000000
           },
-          "relationship": "customer",
-          "description": "Precision CNC and industrial automation supplier modernizing regional sales operations."
+          "relationship": "customer"
+        }
+      },
+      {
+        "type": "party.organization",
+        "id": "demo-crm-org-2",
+        "values": {
+          "name": "Harborline Logistics Group",
+          "website": "https://harborline.example",
+          "phone": "+1-555-0142",
+          "industry": "logistics",
+          "size": "501-1000",
+          "description": "Multi-hub freight operator evaluating a unified pipeline across three regional branches."
         }
       },
       {
         "type": "crm.account",
         "id": "demo-account-2",
         "values": {
-          "name": "Harborline Logistics Group",
-          "website": "https://harborline.example",
-          "phone": "+1-555-0142",
-          "industry": "logistics",
+          "base": "demo-crm-org-2",
           "territory": "emea",
-          "employees": "501-1000",
           "revenue": {
             "amount": 12000000000
           },
-          "relationship": "prospect",
-          "description": "Multi-hub freight operator evaluating a unified pipeline across three regional branches."
+          "relationship": "prospect"
+        }
+      },
+      {
+        "type": "party.organization",
+        "id": "demo-crm-org-3",
+        "values": {
+          "name": "Clearview Cloud Labs",
+          "website": "https://clearview-labs.example",
+          "phone": "+1-555-0143",
+          "industry": "technology",
+          "size": "51-200",
+          "description": "Independent software vendor co-selling vertical workflow solutions."
         }
       },
       {
         "type": "crm.account",
         "id": "demo-account-3",
         "values": {
-          "name": "Clearview Cloud Labs",
-          "website": "https://clearview-labs.example",
-          "phone": "+1-555-0143",
-          "industry": "software",
+          "base": "demo-crm-org-3",
           "territory": "americas",
-          "employees": "51-200",
           "revenue": {
             "amount": 1800000000
           },
-          "relationship": "partner",
-          "description": "Independent software vendor co-selling vertical workflow solutions."
+          "relationship": "partner"
+        }
+      },
+      {
+        "type": "party.contact",
+        "id": "demo-crm-person-1",
+        "values": {
+          "fullname": "Lin Hao",
+          "organization": "demo-crm-org-1",
+          "jobtitle": "VP of Sales Operations",
+          "email": "lin.hao@northwind-mfg.example",
+          "mobile": "+1-555-0191"
         }
       },
       {
         "type": "crm.contact",
         "id": "demo-contact-1",
         "values": {
-          "fullname": "Lin Hao",
+          "base": "demo-crm-person-1",
           "account": "demo-account-1",
-          "jobtitle": "VP of Sales Operations",
-          "email": "lin.hao@northwind-mfg.example",
-          "mobile": "+1-555-0191",
-          "notes": "Primary executive sponsor for the Q4 commercial rollout."
+          "background": "Primary executive sponsor for the Q4 commercial rollout."
+        }
+      },
+      {
+        "type": "party.contact",
+        "id": "demo-crm-person-2",
+        "values": {
+          "fullname": "Maya Patel",
+          "organization": "demo-crm-org-2",
+          "jobtitle": "Head of Commercial Systems",
+          "email": "maya.patel@harborline.example",
+          "mobile": "+1-555-0192"
         }
       },
       {
         "type": "crm.contact",
         "id": "demo-contact-2",
         "values": {
-          "fullname": "Maya Patel",
+          "base": "demo-crm-person-2",
           "account": "demo-account-2",
-          "jobtitle": "Head of Commercial Systems",
-          "email": "maya.patel@harborline.example",
-          "mobile": "+1-555-0192",
-          "notes": "Leading technical evaluation and security review."
+          "background": "Leading technical evaluation and security review."
+        }
+      },
+      {
+        "type": "party.contact",
+        "id": "demo-crm-person-3",
+        "values": {
+          "fullname": "Daniel Brooks",
+          "organization": "demo-crm-org-2",
+          "jobtitle": "Finance Director",
+          "email": "daniel.brooks@harborline.example",
+          "mobile": "+1-555-0193"
         }
       },
       {
         "type": "crm.contact",
         "id": "demo-contact-3",
         "values": {
-          "fullname": "Daniel Brooks",
+          "base": "demo-crm-person-3",
           "account": "demo-account-2",
-          "jobtitle": "Finance Director",
-          "email": "daniel.brooks@harborline.example",
-          "mobile": "+1-555-0193",
-          "notes": "Approves multi-year commercial contracts and procurement terms."
+          "background": "Approves multi-year commercial contracts and procurement terms."
+        }
+      },
+      {
+        "type": "party.contact",
+        "id": "demo-crm-person-4",
+        "values": {
+          "fullname": "Sofia Alvarez",
+          "organization": "demo-crm-org-3",
+          "jobtitle": "Alliances Manager",
+          "email": "sofia.alvarez@clearview-labs.example",
+          "mobile": "+1-555-0194"
         }
       },
       {
         "type": "crm.contact",
         "id": "demo-contact-4",
         "values": {
-          "fullname": "Sofia Alvarez",
+          "base": "demo-crm-person-4",
           "account": "demo-account-3",
-          "jobtitle": "Alliances Manager",
-          "email": "sofia.alvarez@clearview-labs.example",
-          "mobile": "+1-555-0194",
-          "notes": "Coordinates joint customer demos and referral deals."
+          "background": "Coordinates joint customer demos and referral deals."
         }
       },
       {

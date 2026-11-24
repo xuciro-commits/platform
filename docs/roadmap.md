@@ -28,7 +28,7 @@
 
 - 业务对照只读 `idea/from-frappe-crm/matrix.md`；`idea/**/captures/` 与 `idea/**/evidence/` 只为核对某个具体细节时定向看一张。
 
-顺序：2.9 的 A5 收尾 → A4 收尾（crm 0.3.0）→ 2.8 的 projects；B2 起与 projects 并行。原始设计稿在负责人的 Agent Files（`artifacts/platform/extensibility-design.md`）。
+顺序：发 v0.2.9 → 2.8 的 projects；B2 起与 projects 并行。原始设计稿在负责人的 Agent Files（`artifacts/platform/extensibility-design.md`）。
 
 ## 2.8 开放应用接入
 
@@ -42,8 +42,7 @@
 普查已做（2.8.1）：各家、各自的应用、许可与接入顺序在官方包库的 [sources](https://github.com/xuciro-commits/platform-packages/blob/main/docs/sources.md)。
 `idea/` 不入库，只在负责人的机器上：来源的截图、DOM 与能力矩阵放在那里，结论写进 sources 与各包的设计稿。
 
-- **2.8.3 第一个：重新设计 Frappe CRM。** official 与 crm 两个租户的 trunk 都装官方 `crm`（0.2.2 待发）；`deploy/packages/crm` 只留给 marketplace 的升级用例。
-  剩：平台发 v0.2.8 后，包库把 platform.lock 改回 tag，发 crm 0.2.2（PR #15，演示数据已带赢单与丢单）。
+- **2.8.3 第一个：重新设计 Frappe CRM。** 已做：crm 0.2.2 已发；official 与 crm 两个租户的 trunk 装官方 `crm`（夹具 0.3.0）；`deploy/packages/crm` 只留给 marketplace 的升级用例。
 - **2.8.6 起逐个接入。** 按 sources 的波次一个包一项：第一波 helpdesk、hr-core、assets、projects，第二波库存、购销、会计、制造与质量，
   每个能力参考多家取最好的设计。每接一个，官方包库的 Skill `open-app-intake` 补上新坑；与已有官方包重叠的能力，扩展已有的包，不另起一个。
 - 许可：借业务流程、模块划分、字段含义与交互思路，做出的是我们自己的设计（`redesign`），以 Apache-2.0 发布，不沿用来源的 GPL、AGPL；
@@ -57,14 +56,15 @@
 - A3b 已做：官方主数据包 `geo`（249 个国家和地区，中国 3209 个县以上区划；来源 CLDR 49 与民政部 2023 年代码，许可见包里的 NOTICE）。
   平台为它加了包数据：`data/*.yaml` 的行按批写入、接力，每批一个接受结果（K42）；参考记录上限 200 放宽到 500。
   剩下：party 的地址改为可选的结构化引用（国家、区划、街道），随 A4 的 party 0.2.0 做。
-- A4 迁移进行中：helpdesk 0.2.0（客户/联系人用 party）、hr-core 0.2.0（员工挂到人上）已做，走 preview 破坏性升级（有数据的旧版拒升级、需卸载重装）；平台为人补了 K43（按人判范围、从人带出、演示数据建人）。
-  剩 crm 0.3.0 改用 party（最后做）。
+- A4 迁移已做：helpdesk 0.2.0、hr-core 0.2.0、crm 0.3.0（客户、联系人挂在 party 的单位与人上，删 crm.industry），走 preview 破坏性升级（有数据的旧版拒升级、需卸载重装）；
+  平台为人补了 K43。trunk 的 crm 与 official 租户先装夹具 geo 0.1.1、party 0.2.1，再装 crm 0.3.0；三个包随平台 v0.2.9 发。
+  剩：转换步骤的 `set` 读引用记录的字段（如 `input.account.base`），crm 转换时选了已有客户、新建的人才能归到那个单位。验收：crm 包的 try。
 - **A5 包的种类与落点**（[architecture](architecture.md)“扩展”）。一项一次提交，在 crm 0.3.0 之前做：
   - 种类已由 `pkg` 推导进 `catalog.json` 的 `kind`，`pkg check` 指名拒绝反向依赖（`services/devops/descriptor/kind.go`）；
     领域已改名 `domains`，旧名 `capabilities` 再读一个版本。主数据已落进“管理 → 主数据”：应用写 `surface: master-data`，不去应用根，
     因为 `steward` 角色与设置菜单都归应用；party 0.2.1、geo 0.1.1、uom 0.1.1 已改，随平台 v0.2.9 发。
   - 扩展的落点：目标应用的记录页显示扩展包挂的附属对象（现在只有人员页显示），到第一个扩展包时做。
-  - 市场按种类分栏，详情写装上后在哪里看到；安装是否挪到“管理”，做时与负责人看过界面再定。验收：marketplace 的 trunk。
+  - 市场按种类筛选、卡片与详情写种类和装上后在哪里看到，已做（marketplace 的 publisher 用例）；安装是否挪到“管理”，待负责人看过界面再定。
 - **B1 能力契约成为资源。** 契约就是宿主已有的协议（`名字/主版本`）：路由、`platform.protocol.bind`、`GET /v1/protocols`、动作目录按 `uses` 隐藏都沿用，不另起一套。分三项：
   - B1a 已做：契约资源 `build.contract`（包目录 `contracts/`），存在构建应用里，不进宿主定义；实现装上与契约装上两头都核对（K40）。
     同名契约的两个主版本并存留到 B2；包安装时契约不符在准备阶段就拒并给出原因。
