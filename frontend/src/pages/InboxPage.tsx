@@ -1,4 +1,4 @@
-import { Avatar } from "@astryxdesign/core/Avatar";
+import { PersonLabel } from "./MemberField";
 import { Badge } from "@astryxdesign/core/Badge";
 import { Banner } from "@astryxdesign/core/Banner";
 import { Button } from "@astryxdesign/core/Button";
@@ -184,11 +184,11 @@ function ItemPane({ item, act, onClose, isFullWidth }: { item: InboxItem; act: A
               </MetadataListItem>
             )}
             <MetadataListItem label={t("From")}>
-              <Text type="body">{item.from}</Text>
+              <PersonLabel name={item.from} />
             </MetadataListItem>
             {task?.assignee && (
               <MetadataListItem label={t("Assignee")}>
-                <Text type="body">{task.assignee}</Text>
+                <PersonLabel name={task.assignee} />
               </MetadataListItem>
             )}
             {item.record?.due && (
@@ -323,12 +323,7 @@ export function InboxPage() {
           key: "from",
           header: t("From"),
           width: pixel(170),
-          renderCell: (item) => (
-            <HStack gap={2} vAlign="center">
-              <Avatar name={item.from} size="sm" tooltip={false} />
-              <Text maxLines={1} weight={item.unread ? "semibold" : "normal"}>{item.from}</Text>
-            </HStack>
-          ),
+          renderCell: (item) => <PersonLabel name={item.from} weight={item.unread ? "semibold" : "normal"} />,
         },
         {
           key: "title",

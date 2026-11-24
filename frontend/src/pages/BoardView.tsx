@@ -1,4 +1,3 @@
-import { Avatar } from "@astryxdesign/core/Avatar";
 import { Button } from "@astryxdesign/core/Button";
 import { Card } from "@astryxdesign/core/Card";
 import { HStack, Layout, LayoutContent, LayoutHeader, StackItem, VStack } from "@astryxdesign/core/Layout";
@@ -13,6 +12,7 @@ import { Fragment, type PointerEvent as ReactPointerEvent, type ReactNode, useEf
 import { t } from "../i18n";
 import { dragStyles, useDrag } from "./drag";
 import { useGutter } from "./frame";
+import { PersonLabel } from "./MemberField";
 import type { Dot } from "./Transitions";
 import { DotMark } from "./DotMark";
 
@@ -65,12 +65,7 @@ function CardBody({ card }: { card: BoardCard }) {
       </VStack>
       {(card.owner || card.updated) && (
         <HStack gap={2} vAlign="center">
-          {card.owner && (
-            <HStack gap={1} vAlign="center">
-              <Avatar name={card.owner} size="xsm" tooltip={false} />
-              <Text type="supporting" color="secondary" maxLines={1}>{card.owner}</Text>
-            </HStack>
-          )}
+          {card.owner && <PersonLabel name={card.owner} size="xsm" color="secondary" />}
           <StackItem size="fill" />
           {card.updated && <Timestamp value={card.updated} format="relative" type="supporting" color="secondary" />}
         </HStack>

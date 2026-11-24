@@ -68,7 +68,7 @@ function ContactActions({ kind, value }: { kind: "email" | "phone"; value: strin
 }
 
 export function PropertyValue({ field, value, name, dot }: { field: Api.FieldInfo; value: unknown; name?: string; dot?: Dot }) {
-  if (field.type === "member" && !blank(value)) return <MemberLabel name={name ?? t("Unnamed member")} />;
+  if (field.type === "member" && !blank(value)) return <MemberLabel id={String(value)} name={name ?? t("Unnamed member")} />;
   if (iconField(field.name, field.type) && icons[String(value)]) {
     return <HStack gap={2} vAlign="center"><Icon icon={icons[String(value)]} size="sm" /><Text type="body">{String(value)}</Text></HStack>;
   }

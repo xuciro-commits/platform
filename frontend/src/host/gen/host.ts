@@ -167,6 +167,7 @@ export type Account = {
   pronouns?: string;
   email?: string;
   phone?: string;
+  avatar?: string;
   language?: string;
   timezone?: string;
   dateFormat?: string;
@@ -189,6 +190,7 @@ export type Account = {
     weekStart: string;
     email: string;
     digest: string;
+    avatar: string;
   };
   subjects: string[];
 };
@@ -769,6 +771,12 @@ export type AuthzRequest = {
   fields?: string[];
   action?: string;
   from?: string;
+};
+
+export type AvatarUpload = {
+  avatar: string;
+  contentType: string;
+  size: number;
 };
 
 export type BalanceRule = {
@@ -1936,6 +1944,7 @@ export type Element = {
   stereotype: string;
   name: string;
   shortName?: string;
+  avatar?: string;
   kind?: string;
   legal?: boolean;
   external?: boolean;
@@ -2975,6 +2984,7 @@ export type Member = {
 export type MemberOption = {
   id: string;
   name: string;
+  avatar?: string;
 };
 
 export type MemberView = {
@@ -4439,6 +4449,7 @@ export type Profile = {
   pronouns?: string;
   email?: string;
   phone?: string;
+  avatar?: string;
   language?: string;
   timezone?: string;
   dateFormat?: string;
@@ -4479,6 +4490,7 @@ export type ProjectMember = {
 export type ProjectPerson = {
   id: string;
   name: string;
+  avatar?: string;
 };
 
 export type PromotionResult = {

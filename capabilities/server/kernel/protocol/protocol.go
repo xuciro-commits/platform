@@ -174,7 +174,7 @@ const (
 type RecordComment struct {
 	platform.Record
 	Target   string   `json:"target" field:"readonly" title:"On" source:"record"`
-	Text     string   `json:"text" field:"required,search" type:"longtext"`
+	Text     string   `json:"text" field:"required,search" type:"longtext" source:"user-input"`
 	By       string   `json:"by" field:"readonly" source:"record"`
 	Mentions []string `json:"mentions,omitempty" field:"readonly"`
 }

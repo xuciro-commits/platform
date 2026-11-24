@@ -41,6 +41,7 @@ type Element struct {
 	Stereotype string            `json:"stereotype"`
 	Name       string            `json:"name"`
 	ShortName  string            `json:"shortName,omitempty"`
+	Avatar     string            `json:"avatar,omitempty"`
 	Kind       string            `json:"kind,omitempty"`
 	Legal      bool              `json:"legal,omitempty"`
 	External   bool              `json:"external,omitempty"`

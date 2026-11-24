@@ -6,19 +6,71 @@ import { Typeahead, TypeaheadItem } from "@astryxdesign/core/Typeahead";
 import { type ComponentProps, useMemo, useState } from "react";
 import { type Api, request, useRead } from "../host";
 import { t } from "../i18n";
+import { useAvatarDirectory, useAvatarUrl } from "./avatars";
 
-export function PersonLabel({ name, agent }: { name: string; agent?: boolean }) {
+type AvatarSize = ComponentProps<typeof Avatar>["size"];
+
+export function PersonAvatar({
+  name,
+  id,
+  avatar,
+  size = "sm",
+  tooltip = false,
+}: {
+  name: string;
+  id?: string;
+  avatar?: string;
+  size?: AvatarSize;
+  tooltip?: boolean;
+}) {
+  const directory = useAvatarDirectory();
+  const resolved = avatar ?? directory.of(id, name);
+  const src = useAvatarUrl(resolved, id || name);
+  return <Avatar name={name} src={src} size={size} tooltip={tooltip} aria-hidden={!tooltip} />;
+}
+
+export function PersonLabel({
+  name,
+  id,
+  avatar,
+  agent,
+  size = "sm",
+  color,
+  weight,
+}: {
+  name: string;
+  id?: string;
+  avatar?: string;
+  agent?: boolean;
+  size?: "xsm" | "sm";
+  color?: "primary" | "secondary";
+  weight?: "normal" | "medium" | "semibold";
+}) {
   return (
-    <HStack gap={2} vAlign="center">
-      <Avatar name={name} size="sm" tooltip={false} aria-hidden />
-      <Text type="body" maxLines={1}>{name}</Text>
+    <HStack gap={size === "xsm" ? 1 : 2} vAlign="center">
+      <PersonAvatar name={name} id={id} avatar={avatar} size={size} />
+      <Text type={size === "xsm" ? "supporting" : "body"} color={color} weight={weight} maxLines={1}>{name}</Text>
       {agent && <Badge label={t("AI")} variant="neutral" />}
     </HStack>
   );
 }
 
-export function MemberLabel({ name }: { name: string }) {
-  return <PersonLabel name={name} />;
+export function MemberLabel({
+  name,
+  id,
+  avatar,
+  size,
+  color,
+  weight,
+}: {
+  name: string;
+  id?: string;
+  avatar?: string;
+  size?: "xsm" | "sm";
+  color?: "primary" | "secondary";
+  weight?: "normal" | "medium" | "semibold";
+}) {
+  return <PersonLabel name={name} id={id} avatar={avatar} size={size} color={color} weight={weight} />;
 }
 
 export function AvatarStack({ names, max = 3 }: { names: string[]; max?: number }) {
@@ -26,7 +78,7 @@ export function AvatarStack({ names, max = 3 }: { names: string[]; max?: number 
   const extra = names.length - shown.length;
   return (
     <HStack gap={1} vAlign="center">
-      {shown.map((name, index) => <Avatar key={`${name}-${index}`} name={name} size="xsm" />)}
+      {shown.map((name, index) => <PersonAvatar key={`${name}-${index}`} name={name} size="xsm" tooltip />)}
       {extra > 0 && <Text type="supporting" color="secondary">{`+${extra}`}</Text>}
     </HStack>
   );
@@ -55,12 +107,12 @@ export function MemberInput({ id, name, onChange, ...props }: MemberInputProps) 
   return <Typeahead
     {...props}
     value={selection}
-    startIcon={selection && <Avatar name={selection.label} size="xsm" tooltip={false} />}
+    startIcon={selection && <PersonAvatar name={selection.label} id={selection.id} size="xsm" />}
     placeholder={t("Find a member")}
     emptySearchText={directory.status === "loading" ? t("Loading…") : directory.status === "ready" ? t("No matching members") : t("Members could not be searched")}
     searchSource={source}
     hasEntriesOnFocus
-    renderItem={(item) => <TypeaheadItem item={item} icon={<Avatar name={item.label} size="sm" tooltip={false} />} />}
+    renderItem={(item) => <TypeaheadItem item={item} icon={<PersonAvatar name={item.label} id={item.id} size="sm" />} />}
     onChange={(next) => {
       setPicked(next ?? undefined);
       onChange(next?.id ?? "");

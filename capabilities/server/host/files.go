@@ -82,20 +82,10 @@ func (t *Tenant) downloadBytes(w http.ResponseWriter, hash, name, contentType st
 func (t *Tenant) downloadMediaItem(w http.ResponseWriter, r *http.Request, member platform.Member, now time.Time) {
 	id := r.PathValue("id")
 	view, refusal := t.recordOf(member, platform.MediaSetType, id, now)
+	if refusal == nil {
+		refusal = resources.StreamMediaItem(w, t.files(), t.ID, id, r.URL.Query().Get("version"), r.PathValue("hash"), view.Record.(platform.MediaSet), t.automation("build", false), transport.OutsideLane)
+	}
 	if refusal != nil {
 		Reply(w, nil, refusal)
-		return
 	}
-	set := view.Record.(platform.MediaSet)
-	versions, _, refusal := platform.Find[platform.MediaSetVersion](t.automation("build", false), platform.Query{Domain: platform.Raw([][]any{{"mediaSet", "=", id}}), Sort: []string{"version"}, Limit: 1000})
-	if refusal != nil {
-		Reply(w, nil, refusal)
-		return
-	}
-	item, refusal := resources.MediaItem(set, versions, r.URL.Query().Get("version"), r.PathValue("hash"))
-	if refusal != nil {
-		Reply(w, nil, refusal)
-		return
-	}
-	t.downloadBytes(w, item.Hash, item.Name, item.ContentType)
 }

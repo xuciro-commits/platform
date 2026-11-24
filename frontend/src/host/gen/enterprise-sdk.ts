@@ -33,6 +33,7 @@ export type EnterpriseElementAddPayload = {
 	name: string;
 	kind?: string;
 	shortName?: string;
+	avatar?: string;
 	legal?: boolean;
 	external?: boolean;
 	from?: string;
@@ -43,6 +44,7 @@ export type EnterpriseElementEditPayload = {
 	name?: string;
 	kind?: string;
 	shortName?: string;
+	avatar?: string;
 	calendar?: string;
 	published?: boolean;
 };

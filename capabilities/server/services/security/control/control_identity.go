@@ -1,7 +1,9 @@
 package control
 
 import (
+	"crypto/sha256"
 	"encoding/json"
+	"fmt"
 	"maps"
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
 
@@ -111,7 +113,11 @@ func (d *Console) memberDirectory() []runtimeprotocol.MemberOption {
 	options := []runtimeprotocol.MemberOption{}
 	for _, member := range d.members {
 		if profile := d.profiles[member.ID]; member.Active() && !member.Agent && profile != nil && profile.DisplayName != "" {
-			options = append(options, runtimeprotocol.MemberOption{ID: member.ID, Name: profile.DisplayName})
+			avatar := profile.Avatar
+			if avatar == "" {
+				avatar = defaultAvatar(member.ID)
+			}
+			options = append(options, runtimeprotocol.MemberOption{ID: member.ID, Name: profile.DisplayName, Avatar: avatar})
 		}
 	}
 	slices.SortFunc(options, func(a, b runtimeprotocol.MemberOption) int {
@@ -233,6 +239,7 @@ func profileActions() []platform.Action {
 				{Name: "displayName", Type: "string"}, {Name: "givenName", Type: "string"}, {Name: "familyName", Type: "string"},
 				{Name: "title", Type: "string", Description: "Job title"}, {Name: "pronouns", Type: "string"},
 				{Name: "email", Type: "string", Description: "Where notifications are mailed"}, {Name: "phone", Type: "string"},
+				{Name: "avatar", Type: "string", Description: "Avatar reference (default/01..12 or sha256:...)"},
 				{Name: "language", Type: "string", Description: "A language the tenant speaks, such as zh-CN"},
 				{Name: "timezone", Type: "string", Description: "IANA timezone, such as Asia/Shanghai"},
 				{Name: "dateFormat", Type: "string", Description: "ymd, dmy or mdy"}, {Name: "numberFormat", Type: "string", Description: "1,234.56 or 1.234,56 or 1 234,56"},
@@ -369,6 +376,10 @@ func (d *Console) account(member string, def defaults) runtimeprotocol.Account {
 	if out.Effective.Email == "" {
 		out.Effective.Email = d.addressLocked(member)
 	}
+	out.Effective.Avatar = out.Avatar
+	if out.Effective.Avatar == "" {
+		out.Effective.Avatar = defaultAvatar(member)
+	}
 	return out
 }
 
@@ -419,6 +430,8 @@ func (d *Console) decideProfile(c platform.Caller, s *pb.Submission) (func(*pb.C
 			return nil, invalid
 		case p.Email != "" && !strings.Contains(p.Email, "@"):
 			return nil, invalid
+		case !validAvatar(p.Avatar):
+			return nil, invalid
 		}
 	}
 	return func(*pb.ChangeRecord) {
@@ -439,6 +452,7 @@ func (d *Console) decideProfile(c platform.Caller, s *pb.Submission) (func(*pb.C
 		set("pronouns", &cur.Pronouns, p.Pronouns)
 		set("email", &cur.Email, p.Email)
 		set("phone", &cur.Phone, p.Phone)
+		set("avatar", &cur.Avatar, p.Avatar)
 		set("language", &cur.Language, p.Language)
 		set("timezone", &cur.Timezone, p.Timezone)
 		set("dateFormat", &cur.DateFormat, p.DateFormat)
@@ -558,7 +572,11 @@ func (d *Console) ProjectAccess(m platform.Member, project string) runtimeprotoc
 		if name == "" {
 			name = member.ID
 		}
-		out.People = append(out.People, runtimeprotocol.ProjectPerson{ID: member.ID, Name: name})
+		avatar := profile.Avatar
+		if avatar == "" {
+			avatar = defaultAvatar(member.ID)
+		}
+		out.People = append(out.People, runtimeprotocol.ProjectPerson{ID: member.ID, Name: name, Avatar: avatar})
 	}
 	slices.SortFunc(out.People, func(a, b runtimeprotocol.ProjectPerson) int { return strings.Compare(a.Name, b.Name) })
 	return out
@@ -573,4 +591,43 @@ func JoinSubmission(d runtimeprotocol.IdentitySessions, tenant, subject string, 
 	}
 	payload, _ := json.Marshal(map[string]string{"subject": subject})
 	return &pb.Submission{TenantId: tenant, PrincipalId: principal(), Authority: PlatformApp, IdempotencyKey: "join:" + subject, Target: &pb.EntityRef{Type: MemberType, Id: d.JoinID(subject)}, Schema: &pb.SchemaRef{Name: SchemaJoin, Version: 1}, Payload: payload}, nil
+}
+
+func defaultAvatar(seed string) string {
+	sum := sha256.Sum256([]byte(seed))
+	return fmt.Sprintf("default/global/gl-%03d", int(sum[0])%20+1)
+}
+
+func validAvatar(value string) bool {
+	if value == "" {
+		return true
+	}
+	if rest, ok := strings.CutPrefix(value, "default/"); ok {
+		if len(rest) == 2 && rest >= "01" && rest <= "20" {
+			return true
+		}
+		pack, item, found := strings.Cut(rest, "/")
+		if !found || pack == "" || item == "" || len(pack) > 24 || len(item) > 32 || strings.Contains(item, "/") {
+			return false
+		}
+		return isAvatarSlug(pack) && isAvatarSlug(item)
+	}
+	if hex, ok := strings.CutPrefix(value, "sha256:"); ok && len(hex) == 64 {
+		for _, c := range hex {
+			if !((c >= '0' && c <= '9') || (c >= 'a' && c <= 'f')) {
+				return false
+			}
+		}
+		return true
+	}
+	return false
+}
+
+func isAvatarSlug(s string) bool {
+	for _, c := range s {
+		if !((c >= 'a' && c <= 'z') || (c >= '0' && c <= '9') || c == '-') {
+			return false
+		}
+	}
+	return true
 }

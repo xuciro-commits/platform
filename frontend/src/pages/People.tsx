@@ -12,6 +12,7 @@ import { type Api, type Read, useRead } from "../host";
 import { t } from "../i18n";
 import { reasonOf, send } from "./act";
 import { ActionDialog } from "./ActionDialog";
+import { AvatarPicker } from "./AvatarPicker";
 import { elementHref, elementType, personStereotype } from "./enterprise";
 import { PageTitle, useGutter } from "./frame";
 import { ListView } from "./ListPage";
@@ -77,7 +78,7 @@ export function PeopleList() {
           id: (person) => person.id,
           link: (person) => elementHref(person.id),
           columns: [
-            { key: "name", header: "Name", text: (person) => person.name },
+            { key: "name", header: "Name", kind: "person", text: (person) => person.name },
             { key: "account", header: "Sign-in account", width: 200, kind: "person", text: (person) => person.account },
             { key: "units", header: "Units", text: (person) => person.units },
           ],
@@ -116,7 +117,7 @@ function AccountSection({ person, model, names, actions }: { person: string; mod
       <Heading level={2}>{t("Sign-in account")}</Heading>
       {account ? (
         <HStack gap={3} vAlign="center">
-          <PersonLabel name={names[account] ?? account} />
+          <PersonLabel id={account} name={names[account] ?? account} />
           {end && signs && <Button label={t("Unlink account")} variant="secondary" size="sm" isDisabled={busy}
             onClick={() => void run(async () => { await send(end, signs.id, { until: today() }); })} />}
         </HStack>
@@ -179,6 +180,8 @@ export function PersonPage({ id }: { id: string }) {
     return entity?.extends === elementType && group.field === "base" ? entity : undefined;
   };
   const others = groups.filter((group) => !facetOf(group) && group.records.length > 0);
+  const edit = actions.status === "ready" ? actions.data.find((action) => action.schema === "enterprise.element.edit") : undefined;
+  const elementAvatar = (element as { avatar?: string }).avatar;
   return (
     <Layout
       height="fill"
@@ -193,6 +196,13 @@ export function PersonPage({ id }: { id: string }) {
       content={
         <LayoutContent padding={gutter} role="main">
           <VStack gap={6}>
+            <AvatarPicker
+              name={element.name}
+              avatar={elementAvatar}
+              seed={id}
+              isDisabled={!edit}
+              onChange={async (next) => { if (edit) await send(edit, id, { avatar: next }); }}
+            />
             {directory.status === "ready" && actions.status === "ready" && (
               <AccountSection person={id} model={model} names={directory.data.names} actions={actions.data} />
             )}

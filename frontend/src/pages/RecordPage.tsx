@@ -25,6 +25,7 @@ import { RecordLines } from "./RecordLines";
 import { ObjectPreview } from "./ObjectPreview";
 import { useOptions } from "./options";
 import { enterable } from "./ParameterInput";
+import { PersonLabel } from "./MemberField";
 import { PropertyField } from "./PropertyField";
 import { dots, type Instances, Transitions } from "./Transitions";
 import { plain } from "./values";
@@ -53,11 +54,11 @@ function Rail({ described, editor, kept, refs, people, restricted, collaboration
         <MetadataList>
           <MetadataListItem label={t("Created")}>{kept.created.at && <Timestamp value={kept.created.at} format="date_time" type="body" color="primary" />}</MetadataListItem>
           <MetadataListItem label={t("Created by")}>
-            <Text type="body">{kept.created.by ? people?.[kept.created.by] ?? t("Unnamed member") : ""}</Text>
+            {kept.created.by ? <PersonLabel id={kept.created.by} name={people?.[kept.created.by] ?? t("Unnamed member")} /> : <Text type="body">{""}</Text>}
           </MetadataListItem>
           <MetadataListItem label={t("Updated")}>{kept.changed.at && <Timestamp value={kept.changed.at} format="date_time" type="body" color="primary" />}</MetadataListItem>
           <MetadataListItem label={t("Updated by")}>
-            <Text type="body">{kept.changed.by ? people?.[kept.changed.by] ?? t("Unnamed member") : ""}</Text>
+            {kept.changed.by ? <PersonLabel id={kept.changed.by} name={people?.[kept.changed.by] ?? t("Unnamed member")} /> : <Text type="body">{""}</Text>}
           </MetadataListItem>
           <MetadataListItem label={t("Revision")}>
             <Text type="body">{String(kept.revision)}</Text>

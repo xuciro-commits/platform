@@ -1,7 +1,7 @@
 import { useMediaQuery } from "@astryxdesign/core/hooks";
 import { HStack, StackItem, VStack } from "@astryxdesign/core/Layout";
 import { Link } from "@astryxdesign/core/Link";
-import { Heading, Text } from "@astryxdesign/core/Text";
+import { Text } from "@astryxdesign/core/Text";
 import type { ReactNode } from "react";
 
 export type Gutter = 4 | 6;
@@ -22,7 +22,7 @@ export function PageTitle({ title, back, actions, children }: { title: string; b
                 <Text type="large" size="lg" weight="semibold" color="secondary" aria-hidden="true">/</Text>
               </>
             )}
-            <Heading level={3} accessibilityLevel={1} maxLines={2}>{title}</Heading>
+            <Text as="h1" type="large" size="lg" weight="semibold" maxLines={2}>{title}</Text>
           </HStack>
         </StackItem>
         {actions}

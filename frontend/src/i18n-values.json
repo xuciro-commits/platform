@@ -405,5 +405,19 @@
   "days": "天",
   "Drag to move · Drag edges to resize": "拖动移动排期 · 拖动左右边缘调整区间",
   "Drag onto timeline to schedule": "长按拖到左侧时间线排期 · 单击查看详情",
-  "Resize start date": "调整开始日期"
+  "Resize start date": "调整开始日期",
+  "Avatar": "头像",
+  "Shown beside your name across the workspace.": "会在整个工作区你的名字旁边显示。",
+  "Upload image": "上传图片",
+  "Choose default": "选择默认头像",
+  "Default avatars": "默认头像",
+  "Avatar could not be uploaded": "头像上传失败",
+  "Avatar category": "头像分类",
+  "China": "中国面孔",
+  "Global": "国际面孔",
+  "Age group": "年龄段",
+  "Young adult": "青年",
+  "Middle-aged": "中年",
+  "Senior": "老年",
+  "Youth": "青少年"
 }

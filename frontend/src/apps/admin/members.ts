@@ -12,7 +12,7 @@ const Members = listPage<Api.MemberView[], Api.MemberView>({
   rows: (answer) => answer,
   id: (member) => member.id,
   columns: [
-    { key: "id", header: "Member", text: (member) => member.profile?.displayName || member.id },
+    { key: "id", header: "Member", kind: "member", text: (member) => member.profile?.displayName || member.id },
     {
       key: "roles",
       header: "Roles",

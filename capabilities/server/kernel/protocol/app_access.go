@@ -15,8 +15,9 @@ type ProjectAsset struct {
 }
 
 type ProjectPerson struct {
-	ID   string `json:"id"`
-	Name string `json:"name"`
+	ID     string `json:"id"`
+	Name   string `json:"name"`
+	Avatar string `json:"avatar,omitempty"`
 }
 
 func ProjectManager(m platform.Member, role string) bool {
@@ -47,6 +48,7 @@ type Profile struct {
 	Pronouns     string    `json:"pronouns,omitempty"`
 	Email        string    `json:"email,omitempty"`
 	Phone        string    `json:"phone,omitempty"`
+	Avatar       string    `json:"avatar,omitempty"`
 	Language     string    `json:"language,omitempty"`
 	Timezone     string    `json:"timezone,omitempty"`
 	DateFormat   string    `json:"dateFormat,omitempty"`
@@ -73,6 +75,7 @@ type Account struct {
 		WeekStart    string `json:"weekStart"`
 		Email        string `json:"email"`
 		Digest       string `json:"digest"`
+		Avatar       string `json:"avatar"`
 	} `json:"effective"`
 	Subjects []string `json:"subjects"`
 }
@@ -202,8 +205,9 @@ type IdentityProfile interface {
 }
 
 type MemberOption struct {
-	ID   string `json:"id"`
-	Name string `json:"name"`
+	ID     string `json:"id"`
+	Name   string `json:"name"`
+	Avatar string `json:"avatar,omitempty"`
 }
 
 type HostIdentities interface {

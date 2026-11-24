@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 import { randomUUID } from "node:crypto";
 import { readFileSync } from "node:fs";
+import { enterpriseRosterSteps, resolveMemberProfile } from "./demo-roster.mjs";
 
 const host = process.env.PLATFORM_HOST ?? "http://127.0.0.1:18511";
 const defaultFiles = ["./frontend-seed.json", "./crm-project.json"];
@@ -61,8 +62,8 @@ async function importPackage(session, path) {
 }
 
 async function members(session, sample) {
-  for (const [id, displayName] of Object.entries(sample.members ?? {})) {
-    await session.submit("platform.profile", id, "update", { displayName }, "platform");
+  for (const [id, entry] of Object.entries(sample.members ?? {})) {
+    await session.submit("platform.profile", id, "update", resolveMemberProfile(id, entry), "platform");
   }
 }
 
@@ -176,7 +177,8 @@ for (const file of files) {
     for (const path of ["./frontend-fixtures/production-provider-0.1.4.json", "../deploy/packages/production-provider.json"]) await importPackage(main, path);
   }
 
-  for (const [schema, type, id, payload] of sample.steps ?? []) {
+  const steps = sample.project.name === "sales" ? [...(sample.steps ?? []), ...enterpriseRosterSteps()] : (sample.steps ?? []);
+  for (const [schema, type, id, payload] of steps) {
     let authority = main.authorityFor(type);
     if (!authority) {
       await main.refresh();
@@ -195,7 +197,7 @@ for (const file of files) {
   }
 
   await words(main, sample);
-  console.log(`frontend-seed: ${(sample.types ?? []).length} types (${(sample.types ?? []).filter((each) => each.draft).length} drafts), ${written} records and ${(sample.steps ?? []).length} steps in project ${sample.project.name} on ${host}`);
+  console.log(`frontend-seed: ${(sample.types ?? []).length} types (${(sample.types ?? []).filter((each) => each.draft).length} drafts), ${written} records and ${steps.length} steps in project ${sample.project.name} on ${host}`);
 
   if (sample.install) {
     const tenant = await connect(sample.install.tenant);
@@ -215,12 +217,14 @@ for (const file of files) {
   }
 }
 
-for (const name of ["blank", "upgrade"]) {
+for (const name of ["blank", "upgrade", "publisher", "official"]) {
   const empty = await connect(name).catch(() => undefined);
   if (!empty) continue;
   const existing = await empty.call("/v1/members");
-  const named = new Map(existing.map((entry) => [entry.id, entry.profile?.displayName ?? ""]));
-  for (const [id, displayName] of Object.entries({ "admin-1": "王丹", "user-1": "田雪", "manager-1": "赵敏" })) {
-    if (!named.get(id)) await empty.submit("platform.profile", id, "update", { displayName }, "platform");
+  for (const entry of existing) {
+    if (!entry.profile?.displayName || !entry.profile?.avatar) {
+      const profile = resolveMemberProfile(entry.id, entry.profile?.displayName || undefined);
+      if (profile.displayName) await empty.submit("platform.profile", entry.id, "update", profile, "platform");
+    }
   }
 }

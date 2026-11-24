@@ -1,4 +1,3 @@
-import { Avatar } from "@astryxdesign/core/Avatar";
 import { Banner } from "@astryxdesign/core/Banner";
 import { Button } from "@astryxdesign/core/Button";
 import { Card } from "@astryxdesign/core/Card";
@@ -18,6 +17,7 @@ import { t, useLocale } from "../i18n";
 import { ActionDialog } from "./ActionDialog";
 import { reasonOf, send } from "./act";
 import { type Described, statusField } from "./describe";
+import { PersonAvatar, PersonLabel } from "./MemberField";
 import { type FollowUp, FollowUpBody, useFollowUps } from "./RecordFollowUps";
 import { plain, present } from "./values";
 
@@ -213,7 +213,10 @@ export function RecordActivity({ described, id, comments, catalog, entities }: {
             {stays.map((stay) => (
               <VStack key={stay.from} gap={0} role="listitem" aria-label={`${stay.label}: ${duration(locale, stay.from, stay.until)}`}>
                 <Text type="body" weight="medium">{stay.label}</Text>
-                <Text type="supporting" color="secondary">{`${duration(locale, stay.from, stay.until)} · ${person(stay.by)}`}</Text>
+                <HStack gap={1} vAlign="center">
+                  <Text type="supporting" color="secondary">{`${duration(locale, stay.from, stay.until)} ·`}</Text>
+                  <PersonLabel id={stay.by} name={person(stay.by)} size="xsm" color="secondary" />
+                </HStack>
               </VStack>
             ))}
           </HStack>
@@ -231,14 +234,14 @@ export function RecordActivity({ described, id, comments, catalog, entities }: {
           return (
             <HStack key={item.key} id={item.key} gap={3} vAlign="stretch">
               <VStack gap={1} xstyle={styles.rail}>
-                {item.kind === "comment" ? <Avatar name={actor} size="sm" tooltip={false} /> : <Icon icon={glyph} size="sm" color="secondary" />}
+                {item.kind === "comment" ? <PersonAvatar id={item.by} name={actor} size="sm" /> : <Icon icon={glyph} size="sm" color="secondary" />}
                 {!last && <VStack xstyle={styles.line} />}
               </VStack>
               <StackItem size="fill" xstyle={styles.body}>
                 <VStack gap={2}>
                   <HStack gap={2} vAlign="center" wrap="wrap">
                     <HStack gap={1} vAlign="center" wrap="wrap">
-                      <Text type="body" weight="medium">{actor}</Text>
+                      {item.kind === "comment" ? <Text type="body" weight="medium">{actor}</Text> : <PersonLabel id={item.by} name={actor} size="xsm" weight="medium" />}
                       <Text type="body" color="secondary">{item.kind === "comment" ? t("Commented") : item.kind === "group" ? item.items[0].title : item.kind === "followup" ? item.item.kind : item.title}</Text>
                     </HStack>
                     <HStack xstyle={styles.stamp}>

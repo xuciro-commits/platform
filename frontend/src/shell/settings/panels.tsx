@@ -13,6 +13,7 @@ import { useState } from "react";
 import { type Api, request, reread, useRead } from "../../host";
 import { dateText, t } from "../../i18n";
 import { reasonOf } from "../../pages/act";
+import { AvatarPicker } from "../../pages/AvatarPicker";
 import { type ProfileValues, useAccount } from "../account";
 import { controlWidth, SettingsCard, SettingsRow, TextSetting, ThemeChoiceCards } from "../../pages/SettingsRows";
 
@@ -33,9 +34,25 @@ export function ProfilePanel({ account }: { account: Account }) {
   const field = (name: keyof Api.Account, label: string, type?: "email" | "tel") => (
     <TextSetting label={label} type={type} value={text(account, name)} isDisabled={!account.canSave} onCommit={(value) => account.save({ [name]: value })} />
   );
+  const avatar = (account.account as { avatar?: string; effective?: { avatar?: string } } | undefined)?.avatar
+    || (account.account as { effective?: { avatar?: string } } | undefined)?.effective?.avatar;
   return (
     <VStack gap={5}>
       <SettingsCard title={t("Identity")}>
+        <SettingsRow
+          title={t("Avatar")}
+          icon={UserIcon}
+          description={t("Shown beside your name across the workspace.")}
+          detail={
+            <AvatarPicker
+              name={account.name || t("Account")}
+              avatar={avatar}
+              seed={account.me?.principalId}
+              isDisabled={!account.canSave}
+              onChange={(next) => account.save({ avatar: next } as ProfileValues)}
+            />
+          }
+        />
         <SettingsRow title={t("Display name")} icon={UserIcon} description={t("Shown on records, comments and mentions.")} control={field("displayName", t("Display name"))} />
         <SettingsRow title={t("Given name")} icon={UserIcon} control={field("givenName", t("Given name"))} />
         <SettingsRow title={t("Family name")} icon={UserIcon} control={field("familyName", t("Family name"))} />

@@ -12,6 +12,7 @@ import (
 	"platformserver/services/actions"
 	pageowner "platformserver/services/apps/pages"
 	automation "platformserver/services/automate/runtime"
+	"platformserver/services/data/blobs"
 	"platformserver/services/objects"
 	build "platformserver/services/resources/authoring"
 	enterprisemodel "platformserver/services/security/organization"
@@ -77,6 +78,14 @@ func (h *Host) routesRecords(rt *routes) {
 		}
 		file := view.Record.(platform.File)
 		t.downloadBytes(w, file.Hash, file.Name, file.ContentType)
+	})
+	rt.handle(transport.Route{Pattern: "POST /v1/avatars", Summary: "Upload an avatar image (AVIF, WebP, PNG or JPEG, max 2 MiB); transcodes to 256x256 AVIF when supported and stores in tenant object storage", Body: []byte{}, Answer: blobs.AvatarUpload{}}, transport.Answering(func(r *http.Request, m platform.Member, t *Tenant) (blobs.AvatarUpload, *platform.Error) {
+		return blobs.UploadAvatar(t.Admits(m), t.files(), t.ID, r.Body)
+	}))
+	rt.recordRead(transport.Route{Pattern: "GET /v1/avatars/{hash}", Summary: "Download a stored avatar image from tenant object storage"}, func(w http.ResponseWriter, r *http.Request, m platform.Member, t *Tenant) {
+		if err := blobs.DownloadAvatar(w, t.Admits(m), t.files(), t.ID, r.PathValue("hash"), transport.OutsideLane); err != nil {
+			Reply(w, nil, err)
+		}
 	})
 	rt.recordRead(transport.Route{Pattern: "GET /v1/media-sets/{id}/items/{hash}", Summary: "Download an item from a readable media set or retained version", Query: []transport.Param{{Name: "version", Description: "A retained version; latest when omitted"}}}, func(w http.ResponseWriter, r *http.Request, m platform.Member, t *Tenant) {
 		t.downloadMediaItem(w, r, m, h.Now())

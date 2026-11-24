@@ -158,6 +158,19 @@ func (u *Uploads) Purge(files platform.FileStore, tenant string, pending map[str
 	}
 }
 
+func StreamMediaItem(w http.ResponseWriter, files platform.FileStore, tenant, id, version, hash string, set platform.MediaSet, caller platform.Caller, outside func(http.ResponseWriter, func(http.ResponseWriter))) *platform.Error {
+	versions, _, refusal := platform.Find[platform.MediaSetVersion](caller, platform.Query{Domain: platform.Raw([][]any{{"mediaSet", "=", id}}), Sort: []string{"version"}, Limit: 1000})
+	if refusal != nil {
+		return refusal
+	}
+	item, refusal := MediaItem(set, versions, version, hash)
+	if refusal != nil {
+		return refusal
+	}
+	outside(w, func(w http.ResponseWriter) { Stream(w, files, tenant+"/"+item.Hash, item.Name, item.ContentType) })
+	return nil
+}
+
 func RefusalStatus(refusal *platform.Error) int {
 	if refusal.Code == pb.ErrorCode_ERROR_CODE_NOT_FOUND {
 		return http.StatusNotFound

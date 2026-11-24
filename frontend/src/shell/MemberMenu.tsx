@@ -1,4 +1,3 @@
-import { Avatar } from "@astryxdesign/core/Avatar";
 import {
   DropdownMenu,
   DropdownMenuDivider,
@@ -21,6 +20,7 @@ import {
 import { useState } from "react";
 import { endSession, switchAccount, useAccounts, useSession } from "../host";
 import { t } from "../i18n";
+import { PersonAvatar } from "../pages/MemberField";
 import { useAccount } from "./account";
 import { AddAccountDialog } from "./AddAccountDialog";
 import { SettingsDialog, type SettingsPanelId } from "./settings/SettingsDialog";
@@ -33,6 +33,8 @@ export function MemberMenu({ compact }: { compact?: boolean }) {
   const { me: data, name } = useAccount();
   const email = data?.account.effective.email || data?.account.email || data?.principalId || "";
   const subtitle = data?.tenant.name || data?.tenantId || email;
+  const avatar = (data?.account as { avatar?: string; effective?: { avatar?: string } } | undefined)?.avatar
+    || (data?.account as { effective?: { avatar?: string } } | undefined)?.effective?.avatar;
 
   return (
     <>
@@ -44,14 +46,14 @@ export function MemberMenu({ compact }: { compact?: boolean }) {
         menuMaxHeight={480}
         renderTrigger={(props) => (
           <Tooltip content={name || t("Account")} placement={compact ? "below" : "end"}>
-            <IconButton {...props} label={t("Account")} variant="ghost" icon={<Avatar name={name} size="sm" tooltip={false} />} />
+            <IconButton {...props} label={t("Account")} variant="ghost" icon={<PersonAvatar name={name} id={data?.principalId} avatar={avatar} size="sm" />} />
           </Tooltip>
         )}
       >
         <DropdownMenuSubMenu
           label={
             <HStack gap={2} vAlign="center">
-              <Avatar name={name} size="sm" tooltip={false} />
+              <PersonAvatar name={name} id={data?.principalId} avatar={avatar} size="sm" />
               <VStack gap={0}>
                 <Text type="body" weight="semibold" maxLines={1}>{name || t("Account")}</Text>
                 {subtitle && <Text type="supporting" color="secondary" maxLines={1}>{subtitle}</Text>}
@@ -70,7 +72,7 @@ export function MemberMenu({ compact }: { compact?: boolean }) {
                 key={account.token}
                 label={
                   <HStack gap={2} vAlign="center">
-                    <Avatar name={label} size="sm" tooltip={false} />
+                    <PersonAvatar name={label} id={account.id} size="sm" />
                     <VStack gap={0}>
                       <Text type="body" weight={active ? "medium" : "normal"} maxLines={1}>{label}</Text>
                       {account.tenantName && <Text type="supporting" color="secondary" maxLines={1}>{account.tenantName}</Text>}
