@@ -49,7 +49,11 @@ func (m Members[T]) Resolve(authorization, want, agent string) (platform.Member,
 			if d.SecondFactorRequired() && (m.SecondFactor == nil || !m.SecondFactor(credential)) {
 				return platform.Member{}, none, false
 			}
-			if !d.NoticeSession(member.ID, credential, agent, "sign-in", now) {
+			kind := "sign-in"
+			if strings.Count(credential, ".") != 2 {
+				kind = "dev"
+			}
+			if !d.NoticeSession(member.ID, credential, agent, kind, now) {
 				return platform.Member{}, none, false
 			}
 			d.SeenMember(member.ID, now)
