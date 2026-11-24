@@ -55,6 +55,7 @@ type PackageView struct {
 	Precheck     Precheck                   `json:"precheck"`
 	Source       string                     `json:"source"`
 	Space        string                     `json:"space,omitempty"`
+	Kind         string                     `json:"kind,omitempty"`
 }
 
 type PackageInstallStep struct {

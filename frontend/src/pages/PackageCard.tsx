@@ -70,6 +70,25 @@ function coverFor(id: string, source: "index" | "official") {
   return officialCovers.has(id) ? coverBase + "packages/" + id + "/assets/cover.avif" : undefined;
 }
 
+export const packageKinds = ["application", "master-data", "capability", "extension"];
+const kindLabels: Record<string, string> = {
+  application: "Application package", "master-data": "Master data package", capability: "Capability package", extension: "Extension package",
+};
+const kindPlaces: Record<string, string> = {
+  application: "Adds an application to the rail.",
+  "master-data": "Listed under Admin → Master data; it adds no application to the rail.",
+  capability: "Bind an implementation under Admin → Capabilities; applications that use it then show its actions.",
+  extension: "Adds fields, actions or views inside the application it extends.",
+};
+
+export function kindLabel(kind: string) {
+  return t(kindLabels[kind] ?? kind);
+}
+
+export function kindPlace(kind: string) {
+  return kindPlaces[kind] ? t(kindPlaces[kind]) : "";
+}
+
 export function listingLabel(value: string) {
   return t(listingLabels[value] ?? value);
 }
@@ -189,6 +208,7 @@ export function PackageCard({
           </HStack>
           <StackItem size="fill" />
           <HStack gap={2} vAlign="center">
+            {view.kind && <Token label={kindLabel(view.kind)} color="gray" size="sm" />}
             {parts.length > 0 && (
               <Text type="supporting" color="secondary" maxLines={1}>{parts.join(" · ")}</Text>
             )}
@@ -265,11 +285,12 @@ export function CatalogEntryCard({
           </HStack>
           <StackItem size="fill" />
           <VStack gap={2}>
-            {(entry.listing?.stage === "test" || entry.listing?.stage === "preview" || (entry.listing?.industries?.length ?? 0) > 0 || (entry.listing?.capabilities?.length ?? 0) > 0) && (
+            {(entry.kind || entry.listing?.stage === "test" || entry.listing?.stage === "preview" || (entry.listing?.industries?.length ?? 0) > 0 || (entry.listing?.domains?.length ?? 0) > 0) && (
               <HStack gap={1.5} vAlign="center" wrap="wrap">
+                {entry.kind && <Token label={kindLabel(entry.kind)} color="gray" size="sm" />}
                 {entry.listing?.stage === "test" && <Token label={t("Test")} color="orange" size="sm" />}
                 {entry.listing?.stage === "preview" && <Token label={t("Preview")} color="blue" size="sm" />}
-                {[...(entry.listing?.industries ?? []), ...(entry.listing?.capabilities ?? [])].slice(0, 3).map((value) => (
+                {[...(entry.listing?.industries ?? []), ...(entry.listing?.domains ?? [])].slice(0, 3).map((value) => (
                   <Token key={value} label={listingLabel(value)} color="gray" size="sm" />
                 ))}
               </HStack>

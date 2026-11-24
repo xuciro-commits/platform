@@ -217,6 +217,9 @@ func DecodeCatalog(raw []byte, baseURL string) (string, []runtimeprotocol.Packag
 				return "", nil, fmt.Errorf("Catalog entry %s@%s: %s", entry.ID, entry.Version, err)
 			}
 		}
+		if entry.Listing != nil {
+			entry.Listing.Domains, entry.Listing.Capabilities = packagedesc.Domains(*entry.Listing), nil
+		}
 		if entry.Kind != "" && !slices.Contains(packagedesc.Kinds, entry.Kind) {
 			return "", nil, fmt.Errorf("Catalog entry %s@%s: kind %q is not one of %s", entry.ID, entry.Version, entry.Kind, strings.Join(packagedesc.Kinds, ", "))
 		}

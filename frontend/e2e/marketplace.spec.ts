@@ -331,11 +331,11 @@ test("library tenant: a remote catalog lists its package beside the built-in ind
     await expect(demo).toBeVisible();
     await expect(remote).toHaveCount(0);
     await choose("Stage filter", "All stages");
-    await choose("Capability filter", "Sales");
+    await choose("Domain filter", "Sales");
     await expect(remote).toBeVisible();
     await expect(demo).toHaveCount(0);
     await expect(page.getByRole("listitem").filter({ hasText: "crm · 0.1.22" })).toHaveCount(0);
-    await choose("Capability filter", "All capabilities");
+    await choose("Domain filter", "All domains");
     await choose("Stage filter", "Released packages");
     await page.getByRole("textbox", { name: "Search", exact: true }).fill("pipeline");
     await expect(remote).toBeVisible();
@@ -383,4 +383,13 @@ test("publisher tenant: a master data package installs under Admin → Master da
   await expect(page.getByRole("link", { name: "Units of measure", exact: true })).toHaveCount(0);
   await list.getByRole("link", { name: "Units", exact: true }).click();
   await expect(page.getByRole("main").getByText("kg", { exact: true }).first()).toBeVisible();
+
+  await open(page, "Delivery", "Marketplace");
+  await page.getByRole("combobox", { name: "Kind filter", exact: true }).click();
+  await page.getByRole("option", { name: "Master data package", exact: true }).click();
+  const card = page.getByRole("listitem").filter({ hasText: "Units of measure" });
+  await expect(card).toContainText("Master data package");
+  await expect(page.getByRole("listitem").filter({ hasText: "Application package" })).toHaveCount(0);
+  await card.click();
+  await expect(page.getByRole("dialog").getByText("Listed under Admin → Master data; it adds no application to the rail.", { exact: true })).toBeVisible();
 });

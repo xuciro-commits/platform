@@ -10,7 +10,7 @@ import { Tooltip } from "@astryxdesign/core/Tooltip";
 import { useState } from "react";
 import type { Api, Read } from "../host";
 import { t } from "../i18n";
-import { sourceMeta } from "./PackageCard";
+import { kindLabel, kindPlace, sourceMeta } from "./PackageCard";
 
 function changeColor(kind: string): "green" | "blue" | "red" | "gray" {
   const normalized = kind.toLowerCase();
@@ -84,6 +84,14 @@ export function PackageReviewContent({
         <MetadataListItem label={t("Version")}>
           <Text type="body" hasTabularNumbers>{id} · {version}</Text>
         </MetadataListItem>
+        {view.kind && (
+          <MetadataListItem label={t("Package kind")}>
+            <VStack gap={1}>
+              <Token label={kindLabel(view.kind)} color="gray" size="sm" />
+              <Text type="supporting" color="secondary">{kindPlace(view.kind)}</Text>
+            </VStack>
+          </MetadataListItem>
+        )}
         <MetadataListItem label={t("Source")}>
           <Token label={source.label} color={source.color} size="sm" />
         </MetadataListItem>

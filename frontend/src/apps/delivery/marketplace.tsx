@@ -16,7 +16,7 @@ import { t } from "../../i18n";
 import { navigate } from "../../router";
 import { reasonOf } from "../../pages/act";
 import { PageTitle, useGutter } from "../../pages/frame";
-import { CatalogEntryCard, PackageCard, compareVersions, listingLabel } from "../../pages/PackageCard";
+import { CatalogEntryCard, PackageCard, compareVersions, kindLabel, packageKinds, listingLabel } from "../../pages/PackageCard";
 import { type InitialPackageSource, PackageImportWizard } from "../../pages/PackageImportWizard";
 import { PackageLibraryManager } from "../../pages/PackageLibraryManager";
 import { PackageReview } from "../../pages/PackageReview";
@@ -46,7 +46,8 @@ export default function Marketplace() {
   const [tab, setTab] = useState<Tab>("all");
   const [source, setSource] = useState("all");
   const [industry, setIndustry] = useState("all");
-  const [capability, setCapability] = useState("all");
+  const [domain, setDomain] = useState("all");
+  const [kind, setKind] = useState("all");
   const [stage, setStage] = useState("released");
   const [query, setQuery] = useState("");
   const gutter = useGutter();
@@ -97,14 +98,14 @@ export default function Marketplace() {
 
   const facets = useMemo(() => {
     const industries = new Set<string>();
-    const capabilities = new Set<string>();
+    const domains = new Set<string>();
     for (const { entry } of remoteEntries) {
       entry.listing?.industries?.forEach((value) => industries.add(value));
-      entry.listing?.capabilities?.forEach((value) => capabilities.add(value));
+      entry.listing?.domains?.forEach((value) => domains.add(value));
     }
-    return { industries: [...industries].sort(), capabilities: [...capabilities].sort() };
+    return { industries: [...industries].sort(), domains: [...domains].sort() };
   }, [remoteEntries]);
-  const classified = industry !== "all" || capability !== "all" || stage === "test";
+  const classified = industry !== "all" || domain !== "all" || stage === "test";
 
   const isLocalInstalled = (view: Api.PackageView) =>
     Boolean(view.installed && view.installed.state !== "retired" && view.installed.version === view.descriptor.version);
@@ -122,10 +123,11 @@ export default function Marketplace() {
     return rows.filter((view) => {
       if (source !== "all" && view.source !== source) return false;
       if (classified) return false;
+      if (kind !== "all" && view.kind !== kind) return false;
       if (!term) return true;
       return `${view.descriptor.title ?? ""} ${view.descriptor.id} ${view.descriptor.version} ${view.descriptor.description ?? ""}`.toLowerCase().includes(term);
     });
-  }, [rows, source, query, classified]);
+  }, [rows, source, query, classified, kind]);
 
   const baseRemote = useMemo(() => {
     if (source !== "all" && source !== "official" && source !== "third-party") return [];
@@ -137,11 +139,12 @@ export default function Marketplace() {
       if (stage === "released" && listing?.stage === "test") return false;
       if (stage === "test" && listing?.stage !== "test") return false;
       if (industry !== "all" && !listing?.industries?.includes(industry)) return false;
-      if (capability !== "all" && !listing?.capabilities?.includes(capability)) return false;
+      if (domain !== "all" && !listing?.domains?.includes(domain)) return false;
+      if (kind !== "all" && entry.kind !== kind) return false;
       if (!term) return true;
       return `${entry.title} ${entry.id} ${entry.version} ${entry.description ?? ""} ${libraryTitle} ${(listing?.keywords ?? []).join(" ")}`.toLowerCase().includes(term);
     });
-  }, [remoteEntries, source, query, industry, capability, stage]);
+  }, [remoteEntries, source, query, industry, domain, kind, stage]);
 
   const counts = useMemo(() => ({
     all: baseLocal.length + baseRemote.length,
@@ -228,6 +231,13 @@ export default function Marketplace() {
                     ]}
                   />
                   <Selector
+                    label={t("Kind filter")}
+                    isLabelHidden
+                    value={kind}
+                    onChange={setKind}
+                    options={[{ value: "all", label: t("All kinds") }, ...packageKinds.map((value) => ({ value, label: kindLabel(value) }))]}
+                  />
+                  <Selector
                     label={t("Industry filter")}
                     isLabelHidden
                     value={industry}
@@ -235,11 +245,11 @@ export default function Marketplace() {
                     options={[{ value: "all", label: t("All industries") }, ...facets.industries.map((value) => ({ value, label: listingLabel(value) }))]}
                   />
                   <Selector
-                    label={t("Capability filter")}
+                    label={t("Domain filter")}
                     isLabelHidden
-                    value={capability}
-                    onChange={setCapability}
-                    options={[{ value: "all", label: t("All capabilities") }, ...facets.capabilities.map((value) => ({ value, label: listingLabel(value) }))]}
+                    value={domain}
+                    onChange={setDomain}
+                    options={[{ value: "all", label: t("All domains") }, ...facets.domains.map((value) => ({ value, label: listingLabel(value) }))]}
                   />
                   <Selector
                     label={t("Stage filter")}

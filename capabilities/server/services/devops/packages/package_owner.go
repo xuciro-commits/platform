@@ -211,7 +211,23 @@ func (d *Owner) BlueprintViews() []protocol.PackageView {
 		out = append(out, protocol.PackageView{Descriptor: descriptor, Installed: &copy, Precheck: protocol.Precheck{ID: p.ID, Version: p.Version, OK: true}, Source: "installed"})
 	}
 	slices.SortFunc(out, func(a, b protocol.PackageView) int { return strings.Compare(a.Descriptor.ID, b.Descriptor.ID) })
+	withKinds(out)
 	return out
+}
+
+func withKinds(views []protocol.PackageView) {
+	descriptors := make([]platform.PackageDescriptor, 0, len(views))
+	for _, view := range views {
+		if view.Descriptor.Blueprint != nil {
+			descriptors = append(descriptors, view.Descriptor)
+		}
+	}
+	kinds := packagedesc.PackageKinds(descriptors)
+	for i := range views {
+		if views[i].Descriptor.Blueprint != nil {
+			views[i].Kind = packagedesc.Kind(views[i].Descriptor, kinds)
+		}
+	}
 }
 
 func (d *Owner) InstalledPackages() map[string]*protocol.InstalledPackage {
@@ -808,6 +824,7 @@ func (d *Owner) PackageViews() []protocol.PackageView {
 		}
 		return packagedesc.ComparePackageVersions(a.Descriptor.Version, b.Descriptor.Version)
 	})
+	withKinds(out)
 	return out
 }
 

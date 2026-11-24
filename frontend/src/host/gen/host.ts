@@ -3900,6 +3900,7 @@ export type PackageView = {
   precheck: Precheck;
   source: string;
   space?: string;
+  kind?: string;
 };
 
 export type Page = {
