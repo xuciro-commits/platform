@@ -11,7 +11,7 @@ import { Heading, Text } from "@astryxdesign/core/Text";
 import { Token } from "@astryxdesign/core/Token";
 import { useEffect, useMemo, useState } from "react";
 import { apps } from "../apps";
-import { type Api, useRead } from "../host";
+import { type Api, reread, useRead } from "../host";
 import { t } from "../i18n";
 import { reasonOf, send } from "./act";
 import { PageTitle, useGutter } from "./frame";
@@ -23,12 +23,12 @@ const bindSchema = "platform.protocol.bind";
 function useAppNames() {
   const applications = useRead<Api.ApplicationView[]>("/v1/applications");
   return useMemo(() => {
-    const names = new Map<string, string>();
+    const names = new Map<string, string>([["build", t("Build")]]);
     for (const app of apps) names.set(app.id, t(app.label));
     if (applications.status === "ready") {
       for (const view of applications.data) {
-        if (view.app) names.set(view.app, view.title || view.app);
         if (view.name) names.set(view.name, view.title || view.name);
+        if (view.app && (!view.name || view.name === view.app)) names.set(view.app, view.title || view.app);
       }
     }
     return (id: string) => names.get(id) ?? id;
@@ -116,12 +116,15 @@ export function CapabilityPage({ id }: { id: string }) {
     );
   }
 
+  const chosen = selected && protocol.providers.includes(selected) ? selected : protocol.bound || protocol.providers[0] || "";
+
   const runBind = async (provider: string) => {
     if (!bindAction) return;
     setBusy(true);
     setFailure("");
     try {
       await send(bindAction, protocol.id, { provider });
+      reread();
       setConfirmUnbind(false);
     } catch (problem) {
       setFailure(reasonOf(problem));
@@ -154,7 +157,7 @@ export function CapabilityPage({ id }: { id: string }) {
           </LayoutHeader>
         }
         content={
-          <LayoutContent padding={gutter} role="main">
+          <LayoutContent padding={gutter}>
             <VStack gap={6}>
               {unboundWarning && (
                 <Banner
@@ -188,7 +191,7 @@ export function CapabilityPage({ id }: { id: string }) {
                   <VStack gap={3}>
                     <RadioList
                       label={t("Available implementations")}
-                      value={selected}
+                      value={chosen}
                       onChange={setSelected}
                       isDisabled={!bindAction || busy}
                     >
@@ -207,8 +210,8 @@ export function CapabilityPage({ id }: { id: string }) {
                           label={t("Bind")}
                           variant="primary"
                           isLoading={busy}
-                          isDisabled={!selected || selected === (protocol.bound ?? "")}
-                          onClick={() => void runBind(selected)}
+                          isDisabled={!chosen || chosen === (protocol.bound ?? "")}
+                          onClick={() => void runBind(chosen)}
                         />
                       </HStack>
                     )}

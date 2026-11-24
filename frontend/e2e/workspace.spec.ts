@@ -452,7 +452,7 @@ test("capabilities: binding a capability contract makes dependent entries appear
     display: "number",
     fields: [{ name: "number", title: "Number", type: "text", required: true }],
     protocols: [{ name: contractName, version: 1, actions: { dial: "edit" } }],
-    access: [{ role: "builder", read: "all", create: true, edit: true }],
+    access: [{ role: "user", read: "all", create: true, edit: true }],
   });
   await submit(page, "build.object.publish", "build.object", `PHONE-${suffix}`, {});
 
@@ -485,7 +485,7 @@ test("capabilities: binding a capability contract makes dependent entries appear
       { name: "note", title: "Note", type: "text" },
     ],
     states: [{ name: "open", title: "Open", tone: "info" }],
-    access: [{ role: "builder", read: "all", create: true, edit: true }],
+    access: [{ role: "user", read: "all", create: true, edit: true }],
   });
   await submit(page, "build.actiontype.create", "build.actiontype", `DIAL-${suffix}`, {
     project: "sales",
@@ -528,14 +528,16 @@ test("capabilities: binding a capability contract makes dependent entries appear
   await expect(page.getByRole("heading", { level: 1, name: `Trunk Call ${suffix}`, exact: true })).toBeVisible();
   await expect(main.getByText("This capability is unbound", { exact: true })).toBeVisible();
   await main.getByRole("button", { name: "Bind", exact: true }).click();
-  await expect(main.getByText(/Currently bound to/)).toBeVisible();
+  await expect(main.getByText(/Currently bound to Build/)).toBeVisible();
 
   await page.goto(`/ontology/objects/${encodeURIComponent(callerType)}/CALL-1`);
   await expect(page.getByRole("button", { name: "Place call", exact: true })).toBeVisible();
 
   await page.goto(`/admin/capabilities/${encodeURIComponent(contractId)}`);
   await main.getByRole("button", { name: "Unbind", exact: true }).click();
-  await page.getByRole("alertdialog").getByRole("button", { name: "Unbind", exact: true }).click();
+  const confirm = page.getByRole("alertdialog");
+  await expect(confirm).toBeVisible();
+  await confirm.getByRole("button", { name: "Unbind", exact: true }).click();
   await expect(main.getByText("This capability is unbound", { exact: true })).toBeVisible();
 
   await page.goto(`/ontology/objects/${encodeURIComponent(callerType)}/CALL-1`);

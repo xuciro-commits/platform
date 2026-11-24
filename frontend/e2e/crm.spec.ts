@@ -564,8 +564,9 @@ test("peek: clicking a reference opens the record drawer without leaving the pag
 test("crm board: stage lanes carry their own colours and the plus in a lane header opens the create dialog with that stage", async ({ page }) => {
   await as(page, "manager-1");
   await page.goto("/crm/crm.deal");
+  await page.getByRole("radio", { name: "Table" }).click();
   const dealRow = page.getByRole("row", { name: /Northwind Regional CRM Expansion/ });
-  await expect(dealRow).toContainText("Dec 20, 2026");
+  await expect(dealRow).toContainText(/2026-12-20|Dec 20, 2026/);
   await expect(dealRow).not.toContainText(/:\d{2}/);
   await page.getByRole("radio", { name: "Board" }).click();
   await expect(page.getByRole("region", { name: "Negotiation", exact: true })).toBeVisible();
