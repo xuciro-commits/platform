@@ -166,17 +166,17 @@ test("tenants: switching keeps the entry and replaces what the page shows", asyn
   await open(page, "Ontology", "Object types");
   const opportunity = page.getByRole("row").filter({ hasText: "opportunityline" });
   await expect(opportunity).toBeVisible();
-  const tenant = async (name: string) => {
-    await page.getByRole("button", { name: "Account", exact: true }).click();
-    await page.getByRole("group", { name: "Tenant" }).getByRole("menuitemradio", { name, exact: true }).click();
+  const tenant = async (from: string, to: string) => {
+    await page.getByRole("navigation", { name: "Primary navigation" }).getByRole("button", { name: from, exact: true }).click();
+    await page.getByRole("group", { name: "Switch workspace" }).getByRole("menuitem", { name: to }).click();
   };
 
-  await tenant("publisher");
+  await tenant("acceptance", "publisher");
   await expect(page).toHaveURL(/\/ontology\/object-types$/);
   await expect(page.getByRole("heading", { level: 2, name: "Nothing here yet", exact: true })).toBeVisible();
   await expect(opportunity).toHaveCount(0);
 
-  await tenant("acceptance");
+  await tenant("publisher", "acceptance");
   await expect(opportunity).toBeVisible();
 });
 
@@ -330,15 +330,15 @@ test("trees: the organization rolls people up its units and a trace opens to its
   await signIn(page);
   const main = page.getByRole("main");
   await open(page, "Admin", "Organization");
-  await expect(main.getByRole("row").filter({ hasText: "Acme Industries" })).toContainText("3");
+  await expect(main.getByRole("row").filter({ hasText: "Acme Industries" })).toContainText("14");
   const sales = main.getByRole("row").filter({ hasText: /^Sales\s*department/ });
-  await expect(sales).toContainText("2");
+  await expect(sales).toContainText("8");
   await expect(main.getByRole("row").filter({ hasText: "Sales North" })).toHaveCount(0);
   await sales.click();
   await page.keyboard.press("ArrowRight");
-  await expect(main.getByRole("row").filter({ hasText: "Sales North" })).toContainText("1");
+  await expect(main.getByRole("row").filter({ hasText: "Sales North" })).toContainText("3");
   await page.getByRole("radio", { name: "Sites" }).click();
-  await expect(main.getByRole("row").filter({ hasText: /^Operations/ })).toContainText("1");
+  await expect(main.getByRole("row").filter({ hasText: /^Operations/ })).toContainText("6");
 
   await open(page, "Operations", "Traces");
   const traces = main.getByRole("row").filter({ hasText: /^GET / });
