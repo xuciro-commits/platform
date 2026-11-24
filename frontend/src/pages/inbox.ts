@@ -37,9 +37,13 @@ export function inTab(item: InboxItem, tab: InboxTab) {
 
 const taskKey = (id: string) => `task:${id}`;
 
-const today = () => {
+const today = (zone?: string) => {
   const now = new Date();
-  return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
+  try {
+    return new Intl.DateTimeFormat("en-CA", { timeZone: zone || undefined, year: "numeric", month: "2-digit", day: "2-digit" }).format(now);
+  } catch {
+    return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
+  }
 };
 
 function useFollowUps(): { status: Read<unknown>["status"]; reason?: string; data: InboxItem[] } {
@@ -48,11 +52,11 @@ function useFollowUps(): { status: Read<unknown>["status"]; reason?: string; dat
   const declared = me.status === "ready" && types.status === "ready"
     ? types.data.flatMap((entity) => {
       const follow = (entity.view as { inbox?: Follow } | undefined)?.inbox;
-      return follow?.member && follow.due ? [{ entity, follow, who: me.data.principalId }] : [];
+      return follow?.member && follow.due ? [{ entity, follow, who: me.data.principalId, zone: me.data.account.effective.timezone }] : [];
     })
     : [];
-  const pages = useReads<Api.RecordPage>(declared.map(({ entity, follow, who }) => {
-    const domain = [[follow.member, "=", who], [follow.due, "<=", today()], ...Object.entries(follow.open ?? {}).map(([field, values]) => [field, "in", values])];
+  const pages = useReads<Api.RecordPage>(declared.map(({ entity, follow, who, zone }) => {
+    const domain = [[follow.member, "=", who], [follow.due, "<=", today(zone)], ...Object.entries(follow.open ?? {}).map(([field, values]) => [field, "in", values])];
     return `/v1/records/${encodeURIComponent(entity.type)}?limit=100&domain=${encodeURIComponent(JSON.stringify(domain))}`;
   }));
   const failed = [me, types, pages].find((read) => read.status === "error" || read.status === "refused");
