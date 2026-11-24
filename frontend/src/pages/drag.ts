@@ -251,14 +251,18 @@ export function useDrag(
       const finish = () => {
         finishing.current = null;
         captureLayout([from, destination ?? from]);
-        try {
-          if (isMove && destination) onMove(id, destination);
-        } finally {
-          setDrag(null);
-        }
+        setDrag(null);
       };
       const element = floating.current;
       const end = isMove ? (changed ? null : landing.current?.getBoundingClientRect()) : box;
+      if (isMove && destination) {
+        try {
+          onMove(id, destination);
+        } catch (error) {
+          finish();
+          throw error;
+        }
+      }
       const reduced = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
       if (!element || !end || reduced) {
         finish();
