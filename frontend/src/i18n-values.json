@@ -497,5 +497,7 @@
   "Marked as unread": "已标为未读",
   "Mark as unread": "标为未读",
   "Once published, this product version is immutable and cannot be overwritten.": "发布后，该产品版本不可更改，也无法被覆盖。",
-  "Still needed: {fields}": "还需填写：{fields}"
+  "Still needed: {fields}": "还需填写：{fields}",
+  "Capability implementations": "能力实现",
+  "A capability implementation is a connector that serves a capability contract by calling a third-party service over https. It lists the addresses it may call and the credential it needs; the tenant binds it after it passes the contract's tests.": "能力实现是一个连接器：经 HTTPS 调用第三方服务来提供某个能力契约。它列出能访问的地址和需要的凭据；通过契约的测试后，租户才能绑定它。"
 }

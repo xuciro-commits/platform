@@ -226,6 +226,11 @@ var resourceDescriptors = []resourceDescriptor{
 		presentations: []resourcePresentation{presented("contract", "contracts", "Capability contract", "Capability contracts", 31)},
 	},
 	{
+		app: ID, typ: ImplementationType, kind: protocol.AssetImplementation, family: definitionResources, released: true, defaultDraft: true, directInstall: true, acceptedPublication: true,
+		published:     publishedVersion(func(record ontology.ImplementationRecord) string { return record.Published }),
+		presentations: []resourcePresentation{presented("implementation", "implementations", "Capability implementation", "Capability implementations", 32)},
+	},
+	{
 		app: ID, typ: protocol.FunctionType, kind: platform.AssetFunction, family: definitionResources, released: true, defaultDraft: true, directInstall: true, acceptedPublication: true,
 		published:     publishedVersion(func(record protocol.Function) string { return record.Published }),
 		presentations: []resourcePresentation{presented("function", "function", "AI function", "AI functions", 13)},

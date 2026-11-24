@@ -34,6 +34,9 @@ func (b *Build) checkContract(c protocol.ProtocolContract, providers bool) error
 	if err := c.Check(); err != nil {
 		return err
 	}
+	if err := b.checkContractImplementations(c); err != nil {
+		return err
+	}
 	provisions, _ := b.objectProtocols()
 	for _, provision := range provisions {
 		if provision.Protocol.ID() == c.ID() {

@@ -126,6 +126,12 @@ func (r Router) DecideBinding(_ platform.Caller, s *pb.Submission, _ time.Time) 
 	if p.Provider == "" {
 		return func(*pb.ChangeRecord) { r.Bindings.unset(id) }, nil
 	}
+	if app, name, named := runtimeprotocol.SplitImplementationIdentity(p.Provider); named {
+		if _, found := r.implementation(id, app, name); found {
+			return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "Connector {implementation} can be bound only after it passes the conformance tests of {protocol}", p.Provider, id)
+		}
+		return nil, &platform.Error{Code: pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT}
+	}
 	if !slices.ContainsFunc(r.Providers(id), func(b Binding) bool { return b.ID() == p.Provider }) {
 		return nil, &platform.Error{Code: pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT}
 	}
@@ -379,17 +385,47 @@ func (r Router) Event(name string) (platform.ProtocolEvent, bool) {
 }
 
 type ProtocolInfo struct {
-	Contract    *platform.Protocol       `json:"contract,omitempty"`
-	ID          string                   `json:"id"`
-	Title       string                   `json:"title,omitempty"`
-	Description string                   `json:"description,omitempty"`
-	Declared    bool                     `json:"declared,omitempty"`
-	Actions     []string                 `json:"actions"`
-	Reads       []string                 `json:"reads"`
-	Events      []platform.ProtocolEvent `json:"events"`
-	Providers   []string                 `json:"providers"`
-	Consumers   []string                 `json:"consumers"`
-	Bound       string                   `json:"bound,omitempty"`
+	Contract        *platform.Protocol       `json:"contract,omitempty"`
+	ID              string                   `json:"id"`
+	Title           string                   `json:"title,omitempty"`
+	Description     string                   `json:"description,omitempty"`
+	Declared        bool                     `json:"declared,omitempty"`
+	Actions         []string                 `json:"actions"`
+	Reads           []string                 `json:"reads"`
+	Events          []platform.ProtocolEvent `json:"events"`
+	Providers       []string                 `json:"providers"`
+	Consumers       []string                 `json:"consumers"`
+	Bound           string                   `json:"bound,omitempty"`
+	Implementations []ImplementationInfo     `json:"implementations,omitempty"`
+}
+
+type ImplementationInfo struct {
+	ID         string   `json:"id"`
+	Title      string   `json:"title"`
+	Kind       string   `json:"kind"`
+	Origins    []string `json:"origins"`
+	Credential string   `json:"credential,omitempty"`
+}
+
+func (r Router) implementations() map[string][]runtimeprotocol.ProtocolImplementation {
+	out := map[string][]runtimeprotocol.ProtocolImplementation{}
+	for _, a := range r.Host.LiveApps() {
+		if declared, ok := a.(interface {
+			ProtocolImplementations() []runtimeprotocol.ProtocolImplementation
+		}); ok {
+			out[a.Manifest().ID] = declared.ProtocolImplementations()
+		}
+	}
+	return out
+}
+
+func (r Router) implementation(protocol, app, name string) (runtimeprotocol.ProtocolImplementation, bool) {
+	for _, i := range r.implementations()[app] {
+		if i.Name == name && i.Contract == protocol {
+			return i, true
+		}
+	}
+	return runtimeprotocol.ProtocolImplementation{}, false
 }
 
 func (r Router) Protocols() []ProtocolInfo {
@@ -440,8 +476,18 @@ func (r Router) Protocols() []ProtocolInfo {
 			i.Actions = append(i.Actions, a.Schema)
 		}
 	}
+	for app, list := range r.implementations() {
+		for _, i := range list {
+			if byID[i.Contract] == nil {
+				byID[i.Contract], order = &ProtocolInfo{ID: i.Contract, Providers: []string{}, Consumers: []string{}}, append(order, i.Contract)
+			}
+			byID[i.Contract].Implementations = append(byID[i.Contract].Implementations, ImplementationInfo{
+				ID: runtimeprotocol.ImplementationIdentity(app, i.Name), Title: i.Title, Kind: i.Kind, Origins: slices.Clone(i.Origins), Credential: i.Credential})
+		}
+	}
 	out := []ProtocolInfo{}
 	for _, id := range order {
+		slices.SortFunc(byID[id].Implementations, func(x, y ImplementationInfo) int { return strings.Compare(x.ID, y.ID) })
 		if b, ok := r.Bound(id); ok {
 			byID[id].Bound = b.ID()
 		}

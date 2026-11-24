@@ -136,6 +136,10 @@
         {
           "type": "build.contract",
           "view": "contracts"
+        },
+        {
+          "type": "build.implementation",
+          "view": "implementations"
         }
       ]
     },

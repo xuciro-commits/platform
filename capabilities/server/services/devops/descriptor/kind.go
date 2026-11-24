@@ -123,7 +123,7 @@ func providesContract(p platform.PackageDescriptor) bool {
 		return false
 	}
 	for _, asset := range p.Blueprint.Assets {
-		if asset.Ref.Kind == protocol.AssetContract {
+		if asset.Ref.Kind == protocol.AssetContract || asset.Ref.Kind == protocol.AssetImplementation {
 			return true
 		}
 		if asset.Ref.Kind != platform.AssetObject {

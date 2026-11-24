@@ -10,6 +10,7 @@ const (
 	LinkTypeType          = AppID + ".linktype"
 	InterfaceType         = AppID + ".interface"
 	ContractType          = AppID + ".contract"
+	ImplementationType    = AppID + ".implementation"
 	BuilderRole           = "builder"
 	UserRole              = "user"
 	SchemaPublish         = ObjectType + ".publish"
@@ -20,4 +21,5 @@ const (
 	SchemaLinkType        = LinkTypeType + ".publish"
 	SchemaInterface       = InterfaceType + ".publish"
 	SchemaContract        = ContractType + ".publish"
+	SchemaImplementation  = ImplementationType + ".publish"
 )

@@ -2472,6 +2472,14 @@ export type ImpactItem = {
   status: string;
 };
 
+export type ImplementationInfo = {
+  id: string;
+  title: string;
+  kind: string;
+  origins: string[];
+  credential?: string;
+};
+
 export type ImportRow = {
   row: number;
   id: string;
@@ -4579,6 +4587,7 @@ export type ProtocolInfo = {
   providers: string[];
   consumers: string[];
   bound?: string;
+  implementations?: ImplementationInfo[];
 };
 
 export type ProtocolReleaseDescriptor = {

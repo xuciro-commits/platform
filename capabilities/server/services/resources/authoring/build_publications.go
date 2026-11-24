@@ -75,6 +75,10 @@ func published[T any](definition T) string {
 		value.Published = ""
 		value.Versions = nil
 		definition = any(value).(T)
+	case ontology.ImplementationRecord:
+		value.Published = ""
+		value.Versions = nil
+		definition = any(value).(T)
 	case ontology.ObjectTypeGroup:
 		value.Published = ""
 		value.Versions = nil
@@ -103,6 +107,9 @@ func (b *Build) Reinstall() error {
 		return err
 	}
 	if err := contractKind.restore(b); err != nil {
+		return err
+	}
+	if err := implementationKind.restore(b); err != nil {
 		return err
 	}
 

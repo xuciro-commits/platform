@@ -22,4 +22,6 @@ const (
 	SchemaInterface       = ontology.SchemaInterface
 	ContractType          = ontology.ContractType
 	SchemaContract        = ontology.SchemaContract
+	ImplementationType    = ontology.ImplementationType
+	SchemaImplementation  = ontology.SchemaImplementation
 )
