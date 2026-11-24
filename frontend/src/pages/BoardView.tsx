@@ -74,10 +74,24 @@ function CardBody({ card }: { card: BoardCard }) {
   );
 }
 
+const sortColumn = (items: BoardCard[], ids?: string[]) => {
+  if (!ids || ids.length === 0) return items;
+  const rank = new Map(ids.map((id, position) => [id, position]));
+  return [...items].sort((a, b) => {
+    const ra = rank.get(a.id);
+    const rb = rank.get(b.id);
+    if (ra !== undefined && rb !== undefined) return ra - rb;
+    if (ra !== undefined) return -1;
+    if (rb !== undefined) return 1;
+    return 0;
+  });
+};
+
 export function BoardView({ columns, cards, onMove, accepts, onCreate, page, total }: BoardProps) {
   const gutter = useGutter();
   const columnsScroll = useRef<HTMLDivElement | null>(null);
   const [optimistic, setOptimistic] = useState<Record<string, string>>({});
+  const [order, setOrder] = useState<Record<string, string[]>>({});
 
   useEffect(() => {
     setOptimistic((previous) => {
@@ -91,34 +105,64 @@ export function BoardView({ columns, cards, onMove, accepts, onCreate, page, tot
     });
   }, [cards]);
 
-  const handleMove = onMove && ((id: string, to: string) => {
-    setOptimistic((previous) => ({ ...previous, [id]: to }));
-    const clear = () => setOptimistic((previous) => {
-      if (!(id in previous)) return previous;
-      const { [id]: _, ...rest } = previous;
-      return rest;
+  const shownCards = useMemo(
+    () => (Object.keys(optimistic).length === 0 ? cards : cards.map((card) => (card.id in optimistic ? { ...card, column: optimistic[card.id] } : card))),
+    [cards, optimistic],
+  );
+
+  const known = useMemo(() => new Set(columns.map((column) => column.key)), [columns]);
+
+  const placeCard = (id: string, to: string, index: number) => {
+    const targetKey = known.has(to) ? to : "";
+    const currentInTarget = sortColumn(
+      shownCards.filter((card) => (targetKey ? card.column === targetKey : !known.has(card.column)) && card.id !== id),
+      order[targetKey],
+    ).map((card) => card.id);
+    const clamped = Math.max(0, Math.min(index, currentInTarget.length));
+    const nextTargetIds = [...currentInTarget.slice(0, clamped), id, ...currentInTarget.slice(clamped)];
+    setOrder((previous) => {
+      const next: Record<string, string[]> = {};
+      for (const [col, ids] of Object.entries(previous)) {
+        if (col === targetKey) continue;
+        const filtered = ids.filter((entry) => entry !== id);
+        if (filtered.length > 0) next[col] = filtered;
+      }
+      next[targetKey] = nextTargetIds;
+      return next;
     });
+  };
+
+  const handleMove = onMove && ((id: string, to: string, index: number) => {
+    const existing = shownCards.find((card) => card.id === id);
+    const from = existing?.column ?? "";
+    const previousOrder = order;
+    placeCard(id, to, index);
+    if (to === from) return;
+    setOptimistic((previous) => ({ ...previous, [id]: to }));
+    const clear = () => {
+      setOptimistic((previous) => {
+        if (!(id in previous)) return previous;
+        const { [id]: _, ...rest } = previous;
+        return rest;
+      });
+      setOrder(previousOrder);
+    };
     const pending = onMove(id, to);
     if (pending && typeof pending.then === "function") {
       pending.catch(clear);
     }
   });
 
-  const shownCards = useMemo(
-    () => (Object.keys(optimistic).length === 0 ? cards : cards.map((card) => (card.id in optimistic ? { ...card, column: optimistic[card.id] } : card))),
-    [cards, optimistic],
-  );
   const { drag, press, floating, landing, target, item } = useDrag(handleMove, accepts, columnsScroll);
 
   const lifted = drag ? shownCards.find((card) => card.id === drag.id) : undefined;
-
-  const known = new Set(columns.map((column) => column.key));
   const missing = shownCards.filter((card) => !known.has(card.column));
+
   const column = ({ key, label, dot }: BoardProps["columns"][number]): ReactNode => {
-    const own = key ? shownCards.filter((card) => card.column === key) : missing;
+    const raw = key ? shownCards.filter((card) => card.column === key) : missing;
+    const own = sortColumn(raw, order[key]);
     const resting = drag ? own.filter((card) => card.id !== drag.id) : own;
-    const liftedIndex = drag ? own.findIndex((card) => card.id === drag.id) : -1;
-    const ghostIndex = drag?.target === key ? (liftedIndex >= 0 ? liftedIndex : resting.length) : -1;
+    const ghostIndex = drag?.target === key ? Math.max(0, Math.min(drag.index, resting.length)) : -1;
     const sums = new Map<string, number>();
     for (const card of own) {
       if (card.amount === undefined) continue;
@@ -167,7 +211,7 @@ export function BoardView({ columns, cards, onMove, accepts, onCreate, page, tot
                     {drag && ghostIndex === index && <VStack ref={landing} xstyle={dragStyles.ghost(drag.height)} />}
                     <Card
                       padding={3}
-                      xstyle={[dragStyles.item, !onMove && dragStyles.fixed]}
+                      xstyle={[dragStyles.item, drag && dragStyles.dragging, !onMove && dragStyles.fixed]}
                       ref={item(card.id, key)}
                       onPointerDown={(event: ReactPointerEvent) => press(event, card.id, card.column)}>
                       <CardBody card={card} />
