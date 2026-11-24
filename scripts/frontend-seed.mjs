@@ -226,9 +226,17 @@ for (const file of files) {
   }
 }
 
-for (const name of ["blank", "upgrade", "publisher", "official"]) {
+const tenantPackages = {
+  official: { packages: partyPackages, grants: {} },
+  publisher: {
+    packages: [...partyPackages, "./frontend-fixtures/projects-0.1.0.json", "./frontend-fixtures/assets-0.1.0.json"],
+    grants: { "admin-1": [["projects", "manager"], ["assets", "custodian"]], "user-1": [["projects", "member"], ["assets", "staff"]] },
+  },
+};
+
+await Promise.all(["blank", "upgrade", "publisher", "official"].map(async (name) => {
   const empty = await connect(name).catch(() => undefined);
-  if (!empty) continue;
+  if (!empty) return;
   const existing = await empty.call("/v1/members");
   for (const entry of existing) {
     if (!entry.profile?.displayName || !entry.profile?.avatar) {
@@ -236,8 +244,13 @@ for (const name of ["blank", "upgrade", "publisher", "official"]) {
       if (profile.displayName) await empty.submit("platform.profile", entry.id, "update", profile, "platform");
     }
   }
-  if (name === "official") {
-    for (const path of partyPackages) await installPackage(empty, path);
-    console.log("frontend-seed: installed geo and party in tenant official");
+  const plan = tenantPackages[name];
+  if (!plan) return;
+  const installed = [];
+  for (const path of plan.packages) installed.push((await installPackage(empty, path)).id);
+  await empty.refresh();
+  for (const [member, roles] of Object.entries(plan.grants)) {
+    for (const [app, role] of roles) await empty.submit("platform.member", member, "grant", { app, role }, "platform");
   }
-}
+  console.log(`frontend-seed: installed ${installed.join(", ")} in tenant ${name}`);
+}));

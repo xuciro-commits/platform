@@ -132,6 +132,13 @@
           "platform": "admin",
           "build": "builder"
         }
+      },
+      {
+        "id": "user-1",
+        "subjects": [
+          "user"
+        ],
+        "roles": {}
       }
     ]
   },

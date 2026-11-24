@@ -381,3 +381,56 @@ test("publisher tenant: a master data package installs under Admin → Master da
   await card.click();
   await expect(page.getByRole("dialog").getByText("Listed under Admin → Master data; it adds no application to the rail.", { exact: true })).toBeVisible();
 });
+
+test("publisher tenant: projects lays its tasks on the Gantt chart and hours logged against a task add up on it", async ({ page }) => {
+  await signIn(page, "admin-1 · publisher");
+  const view = { version: 1, layout: "gantt", dates: "startdate", until: "enddate", after: "after", columns: ["title", "project", "stage", "assignee", "startdate", "enddate", "hours", "estimate"],
+    sort: [{ sortKey: "startdate", direction: "ascending" }], lanes: "stage", group: "none", filters: [], search: "", month: "2026-11" };
+  await page.goto(`/projects/projects.task?view=${encodeURIComponent(JSON.stringify(view))}`);
+  await expect(page.getByRole("radio", { name: "Gantt", exact: true })).toBeChecked();
+  await expect(page.getByRole("button", { name: "Wireframes (2026-11-19 – 2026-11-27)", exact: true })).toBeVisible();
+  await expect(page.getByRole("img", { name: "Dependency: Discovery workshop → Wireframes", exact: true })).toBeVisible();
+
+  await page.goto("/projects/projects.timelog");
+  await page.getByRole("button", { name: "New", exact: true }).click();
+  const entry = page.getByRole("dialog");
+  await entry.getByRole("combobox", { name: "Task", exact: true }).fill("Wireframes");
+  await page.getByRole("option", { name: /Wireframes/ }).click();
+  await entry.getByLabel("Hours", { exact: true }).fill("2.5");
+  await entry.getByRole("button", { name: "Create", exact: true }).click();
+  await expect(entry).toBeHidden();
+
+  await page.goto("/projects/projects.task/demo-task-2");
+  await expect(page.getByRole("heading", { level: 1, name: "Wireframes", exact: true })).toBeVisible();
+  await expect(property(page, "Logged hours")).toContainText("11.5");
+});
+
+test("publisher tenant: the custodian checks an asset out to a member, who sees only that asset and reports a fault on it", async ({ page }) => {
+  await signIn(page, "admin-1 · publisher");
+  await page.goto("/assets/assets.asset/demo-asset-2");
+  await expect(page.getByRole("heading", { level: 1, name: "Design laptop 16", exact: true })).toBeVisible();
+  await page.getByRole("button", { name: "Check out", exact: true }).click();
+  const checkout = page.getByRole("dialog", { name: "Check out", exact: true });
+  await checkout.getByRole("combobox", { name: "Check out to", exact: true }).fill("田雪");
+  await page.getByRole("option", { name: /田雪/ }).click();
+  await checkout.getByRole("button", { name: "Check out", exact: true }).click();
+  await expect(checkout).toBeHidden();
+  await expect(property(page, "Checked out to")).toContainText("田雪");
+
+  await signIn(page, "user-1 · publisher");
+  await page.goto("/assets/assets.asset");
+  await expect(page.getByRole("link", { name: "Design laptop 16", exact: true })).toBeVisible();
+  await expect(page.getByRole("link", { name: "Forklift FL-2", exact: true })).toHaveCount(0);
+  await page.goto("/assets/assets.maintenance");
+  await page.getByRole("button", { name: "New", exact: true }).click();
+  const report = page.getByRole("dialog");
+  await report.getByRole("textbox", { name: "Problem or task", exact: true }).fill("Battery drains in an hour");
+  await report.getByRole("combobox", { name: "Asset", exact: true }).fill("Design");
+  await page.getByRole("option", { name: /Design laptop 16/ }).click();
+  await report.getByRole("button", { name: "Create", exact: true }).click();
+  await expect(page.getByRole("heading", { level: 1, name: "Battery drains in an hour", exact: true })).toBeVisible();
+
+  await signIn(page, "admin-1 · publisher");
+  await page.goto("/assets/assets.asset/demo-asset-2");
+  await expect(property(page, "Open work orders")).toContainText("1");
+});

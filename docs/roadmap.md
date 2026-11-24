@@ -45,7 +45,7 @@
 - **2.8.3 第一个：重新设计 Frappe CRM。** 已做：crm 0.2.2 已发；official 与 crm 两个租户的 trunk 装官方 `crm`（夹具 0.3.0）；`deploy/packages/crm` 只留给 marketplace 的升级用例。
 - **2.8.6 起逐个接入。** 已做：helpdesk 0.2.0、hr-core 0.2.0、projects 0.1.0（项目、甘特上的任务、按人按天的工时，依赖 party；包库的 try 25 步）、
   assets 0.1.0（资产领用归还与流转记录、维修单与费用、员工报修，依赖 party；try 24 步；为它平台补了动作输入的 `member` 类型，随 v0.2.10 发）。
-  剩：projects 与 assets 还没进浏览器主干，装进 publisher 租户走一遍甘特、记工时与领用，验收是 marketplace 的 trunk 加一步。
+  浏览器主干：publisher 租户由种子装 geo、party、projects、assets 并授角色，marketplace 加两条（甘特与记工时、领用与员工报修），待负责人跑通。
   按 sources 的波次一个包一项：第一波 helpdesk、hr-core、assets、projects，第二波库存、购销、会计、制造与质量，
   每个能力参考多家取最好的设计。每接一个，官方包库的 Skill `open-app-intake` 补上新坑；与已有官方包重叠的能力，扩展已有的包，不另起一个。
 - 许可：借业务流程、模块划分、字段含义与交互思路，做出的是我们自己的设计（`redesign`），以 Apache-2.0 发布，不沿用来源的 GPL、AGPL；
