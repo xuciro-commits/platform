@@ -6,17 +6,17 @@ import { Markdown } from "@astryxdesign/core/Markdown";
 import { Spinner } from "@astryxdesign/core/Spinner";
 import { radiusVars } from "@astryxdesign/core/theme/tokens.stylex";
 import * as stylex from "@stylexjs/stylex";
-import { type ComponentType, type ReactNode, useEffect, useRef, useState } from "react";
+import { type ReactNode, useEffect, useRef, useState } from "react";
 import { requestBlob } from "../host";
 import { t } from "../i18n";
 import { reasonOf } from "./act";
 
 export type Media = { path: string; name: string; contentType?: string };
 type Kind = "image" | "pdf" | "text";
-type Viewer = ComponentType<{ media: Media; blob: Blob; onClose: () => void }>;
 
 const styles = stylex.create({
   page: { width: "100%", height: "auto", borderRadius: radiusVars["--radius-element"] },
+  loading: { minHeight: 160, alignItems: "center", justifyContent: "center" },
 });
 
 const byType: Record<string, Kind> = {
@@ -38,12 +38,17 @@ function ImageViewer({ media, blob, onClose }: { media: Media; blob: Blob; onClo
 function Reader({ media, onClose, children }: { media: Media; onClose: () => void; children: ReactNode }) {
   return (
     <Dialog isOpen onOpenChange={onClose} width={880} maxHeight="88dvh">
-      <Layout height="fill" padding={4} header={<DialogHeader title={media.name} onOpenChange={onClose} />} content={<LayoutContent>{children}</LayoutContent>} />
+      <Layout
+        height="fill"
+        padding={4}
+        header={<DialogHeader title={media.name} onOpenChange={onClose} />}
+        content={<LayoutContent isScrollable>{children}</LayoutContent>}
+      />
     </Dialog>
   );
 }
 
-function PdfViewer({ media, blob, onClose }: { media: Media; blob: Blob; onClose: () => void }) {
+function PdfContent({ media, blob }: { media: Media; blob: Blob }) {
   const pages = useRef<HTMLDivElement>(null);
   const [state, setState] = useState<{ loading: boolean; failure: string }>({ loading: true, failure: "" });
   useEffect(() => {
@@ -75,37 +80,37 @@ function PdfViewer({ media, blob, onClose }: { media: Media; blob: Blob; onClose
     };
   }, [blob]);
   return (
-    <Reader media={media} onClose={onClose}>
-      {state.loading && <Spinner />}
+    <>
+      {state.loading && <VStack xstyle={styles.loading}><Spinner /></VStack>}
       {state.failure && <Banner status="error" title={t("This file could not be shown")} description={state.failure} />}
       <VStack ref={pages} gap={4} role="document" aria-label={media.name} />
-    </Reader>
+    </>
   );
 }
 
-function TextViewer({ media, blob, onClose }: { media: Media; blob: Blob; onClose: () => void }) {
-  const [text, setText] = useState<string>();
-  useEffect(() => {
-    let live = true;
-    void blob.text().then((value) => live && setText(value));
-    return () => {
-      live = false;
-    };
-  }, [blob]);
-  return <Reader media={media} onClose={onClose}>{text === undefined ? <Spinner /> : <Markdown>{text}</Markdown>}</Reader>;
-}
-
-const viewers: Record<Kind, Viewer> = { image: ImageViewer, pdf: PdfViewer, text: TextViewer };
-
 export function MediaPreview({ media, onClose, onFailure }: { media: Media; onClose: () => void; onFailure: (reason: string) => void }) {
   const [blob, setBlob] = useState<Blob>();
+  const [text, setText] = useState<string>();
   const kind = kindOf(media);
   const callbacks = useRef({ onClose, onFailure });
   callbacks.current = { onClose, onFailure };
   useEffect(() => {
+    setBlob(undefined);
+    setText(undefined);
     const controller = new AbortController();
     requestBlob(media.path, controller.signal).then(
-      (answer) => !controller.signal.aborted && setBlob(answer),
+      async (answer) => {
+        if (controller.signal.aborted) return;
+        if (kind === "text") {
+          const content = await answer.text();
+          if (!controller.signal.aborted) {
+            setBlob(answer);
+            setText(content);
+          }
+          return;
+        }
+        setBlob(answer);
+      },
       (problem) => {
         if (controller.signal.aborted) return;
         callbacks.current.onFailure(reasonOf(problem));
@@ -113,8 +118,14 @@ export function MediaPreview({ media, onClose, onFailure }: { media: Media; onCl
       },
     );
     return () => controller.abort();
-  }, [media.path]);
+  }, [media.path, kind]);
   if (!kind) return null;
-  const View = viewers[kind];
-  return blob ? <View media={media} blob={blob} onClose={onClose} /> : kind === "image" ? null : <Reader media={media} onClose={onClose}><Spinner /></Reader>;
+  if (kind === "image") return blob ? <ImageViewer media={media} blob={blob} onClose={onClose} /> : null;
+  return (
+    <Reader media={media} onClose={onClose}>
+      {kind === "pdf"
+        ? (blob ? <PdfContent media={media} blob={blob} /> : <VStack xstyle={styles.loading}><Spinner /></VStack>)
+        : (text !== undefined ? <Markdown>{text}</Markdown> : <VStack xstyle={styles.loading}><Spinner /></VStack>)}
+    </Reader>
+  );
 }

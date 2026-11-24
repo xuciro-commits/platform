@@ -505,5 +505,7 @@
   "Open dependency": "查看依赖",
   "Installing required package ({current}/{total}): {pkg}": "正在安装前置依赖（{current}/{total}）：{pkg}",
   "Re-checking target package…": "正在重新校验目标包…",
-  "The reviewed package is unavailable; inspect it again": "已核验的包暂不可用，请重新读取并校验"
+  "The reviewed package is unavailable; inspect it again": "已核验的包暂不可用，请重新读取并校验",
+  "Remove file?": "移除附件？",
+  "Remove {name} from this record? It stays in the record's history.": "要从这条记录中移除“{name}”吗？它仍会保留在记录历史中。"
 }

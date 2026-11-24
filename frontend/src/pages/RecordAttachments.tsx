@@ -1,14 +1,15 @@
+import { AlertDialog } from "@astryxdesign/core/AlertDialog";
 import { Banner } from "@astryxdesign/core/Banner";
 import { Button } from "@astryxdesign/core/Button";
 import { EmptyState } from "@astryxdesign/core/EmptyState";
 import { FileInput } from "@astryxdesign/core/FileInput";
-import { HStack, StackItem, VStack } from "@astryxdesign/core/Layout";
+import { HStack, VStack } from "@astryxdesign/core/Layout";
 import { Link } from "@astryxdesign/core/Link";
 import { List, ListItem } from "@astryxdesign/core/List";
 import { Text } from "@astryxdesign/core/Text";
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { useRecordHref } from "../apps/entries";
-import { type Api, type Read, request, requestBlob } from "../host";
+import { type Api, type Read, request, requestBlob, reread, useRead } from "../host";
 import { t } from "../i18n";
 import { reasonOf, send } from "./act";
 import { kindOf, MediaPreview } from "./MediaPreview";
@@ -16,7 +17,7 @@ import type { Values } from "./describe";
 import { shown } from "./values";
 
 type Section = Read<Api.RecordSectionView>;
-type Attached = { id: string; name: string; size: number; contentType: string };
+type Attached = { id: string; revision?: number; name: string; size: number; contentType: string; by?: string };
 
 export function relatedGroups(section: Api.RecordSectionView) {
   return [...(section.related ?? []), ...(section.linked ?? [])].filter((group) => group.total > 0);
@@ -52,8 +53,11 @@ export function RecordLinks({ read, id, entities }: { read: Section; id: string;
   );
 }
 
-export function RecordFiles({ read, attach, target }: { read: Section; attach?: Api.Action; target: string }) {
+export function RecordFiles({ read, attach, detach, target }: { read: Section; attach?: Api.Action; detach?: Api.Action; target: string }) {
+  const me = useRead<Api.MeView>("/v1/me");
+  const principal = me.status === "ready" ? me.data.principalId : "";
   const [busy, setBusy] = useState(false);
+  const [removing, setRemoving] = useState<Attached>();
   const [failure, setFailure] = useState("");
   const [preview, setPreview] = useState<Attached>();
   const files = read.status === "ready" ? (read.data.files ?? []) as Attached[] : [];
@@ -65,6 +69,7 @@ export function RecordFiles({ read, attach, target }: { read: Section; attach?: 
     try {
       const uploaded = await request<Api.Upload>(`/v1/files?${new URLSearchParams({ name: file.name })}`, { body: file });
       await send(attach, crypto.randomUUID(), { ...uploaded, target }, 0);
+      reread();
     } catch (problem) {
       setFailure(reasonOf(problem));
     } finally {
@@ -81,6 +86,21 @@ export function RecordFiles({ read, attach, target }: { read: Section; attach?: 
       setFailure(reasonOf(problem));
     }
   };
+  const remove = async (file: Attached) => {
+    if (!detach || busy) return;
+    setBusy(true);
+    setFailure("");
+    try {
+      await send(detach, file.id, {}, file.revision);
+      if (preview?.id === file.id) setPreview(undefined);
+      setRemoving(undefined);
+      reread();
+    } catch (problem) {
+      setFailure(reasonOf(problem));
+    } finally {
+      setBusy(false);
+    }
+  };
   return (
     <VStack gap={4}>
       {attach && <FileInput label={t("Attach a file")} placeholder={t("Choose file")} value={null} mode="dropzone" isLoading={busy} isDisabled={busy}
@@ -92,15 +112,31 @@ export function RecordFiles({ read, attach, target }: { read: Section; attach?: 
       {read.status === "ready" && !files.length && <EmptyState headingLevel={3} title={t("No attached files")} />}
       {files.length > 0 && (
         <List header={t("Attached files")}>
-          {files.map((file) => (
-            <ListItem key={file.id} label={file.name} description={`${file.size.toLocaleString()} ${t("bytes")}`} endContent={
-              <HStack gap={2}>
-                {kindOf(file) && <Button label={t("Preview")} variant="ghost" onClick={() => { setFailure(""); setPreview(file); }} />}
-                <Button label={t("Download")} variant="secondary" onClick={() => download(file)} />
-              </HStack>
-            } />
-          ))}
+          {files.map((file) => {
+            const canRemove = Boolean(detach && (!file.by || !principal || file.by === principal));
+            return (
+              <ListItem key={file.id} label={file.name} description={`${file.size.toLocaleString()} ${t("bytes")}`} endContent={
+                <HStack gap={2}>
+                  {kindOf(file) && <Button label={t("Preview")} variant="ghost" onClick={() => { setFailure(""); setPreview(file); }} />}
+                  <Button label={t("Download")} variant="secondary" onClick={() => download(file)} />
+                  {canRemove && <Button label={t("Remove")} variant="ghost" isDisabled={busy} onClick={() => { setFailure(""); setRemoving(file); }} />}
+                </HStack>
+              } />
+            );
+          })}
         </List>
+      )}
+      {removing && (
+        <AlertDialog
+          isOpen
+          title={t("Remove file?")}
+          description={t("Remove {name} from this record? It stays in the record's history.").replace("{name}", removing.name)}
+          cancelLabel={t("Cancel")}
+          actionLabel={t("Remove")}
+          actionVariant="destructive"
+          onOpenChange={(open) => !open && !busy && setRemoving(undefined)}
+          onAction={() => void remove(removing)}
+        />
       )}
       {preview && <MediaPreview media={{ path: path(preview.id), name: preview.name, contentType: preview.contentType }} onClose={() => setPreview(undefined)} onFailure={setFailure} />}
     </VStack>

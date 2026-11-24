@@ -155,6 +155,7 @@ export function RecordPage({ described, id, listPath, listTitle, instances, enti
   const links = useRead<Api.RecordSectionView>(section ? `${section}/links` : null);
   const files = useRead<Api.RecordSectionView>(section ? `${section}/files` : null);
   const attach = catalog.find((action) => action.schema === "files.file.attach" && action.target !== described.type);
+  const detach = catalog.find((action) => action.schema === "files.file.detach" && action.target !== described.type);
   const collaboration = <Collaboration target={`${described.type}/${id}`} comments={comments} catalog={catalog} entities={entities} />;
   const changes = read.status === "ready" ? read.data.changes ?? [] : [];
   const definition = described.type === "build.object" && kept ? kept as unknown as Values : undefined;
@@ -328,7 +329,7 @@ export function RecordPage({ described, id, listPath, listTitle, instances, enti
                 </VStack>
               )}
               {tab === "links" && <RecordLinks read={links} id={id} entities={entities} />}
-              {tab === "files" && <RecordFiles read={files} attach={attach} target={`${described.type}/${id}`} />}
+              {tab === "files" && <RecordFiles read={files} attach={attach} detach={detach} target={`${described.type}/${id}`} />}
               {tab === "activity" && <RecordActivity described={described} id={id} comments={comments} catalog={catalog} entities={entities} />}
               {tab === "preview" && definition && <ObjectPreview definition={definition} source={detail} catalog={catalog} />}
               {tab === "properties" && <Rail described={body} editor={editor} kept={kept} refs={refs} people={people} restricted={restricted} collaboration={collaboration} />}
