@@ -117,7 +117,16 @@
 | Connector | 连接器 | 连接的访问类型（数据库、REST、文件、消息）；也是能力实现的一种形态 | 数据 |
 | Person | 人 | 组织里的一个人类；账号可以登录为某人 | 管理 |
 | Facet | 附属对象 | 包用 `extends` 挂在下层名词（人、地点、当事人）上的一组自己的字段，经 `base` 一对一 | architecture |
-| Base data package | 基础数据包 | 多个应用共用的名词与参考数据（当事人、区划、计量单位） | architecture |
+| Application package | 应用包 | 一个业务场景的对象、动作、页面与流程；进应用轨 | architecture |
+| Master data package | 主数据包 | 多个应用共用的名词与参考数据（当事人、区划、计量单位）；不进应用轨 | architecture |
+| Capability package | 能力包 | 带能力契约或它的实现；入口只在声明了 `uses` 的应用里 | architecture |
+| Extension package | 扩展包 | 只给一个应用加字段、动作、流程或视图；与客户扩展同一机制，随包交付 | architecture |
+| Platform feature | 平台特性 | 每个类型都有、由界面运行时给的能力（评论、附件、打印预览）；不是包 | architecture |
+| Contribution slot | 贡献位 | 界面上允许别的包放入口的位置：记录页动作菜单、“管理 → 主数据” | frontend |
+| Marketplace | 市场 | 列出可安装的产品版本，按种类、行业与业务领域筛选 | 交付 |
+| Domain | 业务领域 | 市场的分类标签（销售、人事、库存），不是能力 | 交付 |
+| Runtime composition | 运行装配 | 部署选用哪个存储与 owner 模块、包按什么顺序装；不是租户的能力绑定 | architecture |
+| Action group | 动作组 | 一组可整体停用的动作（`Action.Capability`）；不是能力 | backend |
 | Capability contract | 能力契约 | 一项能力的带版本接口：动作、读取、事件、计量与一致性测试 | architecture |
 | Implementation | 能力实现 | 实现某个能力契约的东西：声明式、连接器、沙箱代码或受管服务 | architecture |
 | Binding | 绑定 | 租户选定由哪个实现提供某个能力契约 | 管理 |

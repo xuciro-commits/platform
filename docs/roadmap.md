@@ -28,14 +28,14 @@
 
 - 业务对照只读 `idea/from-frappe-crm/matrix.md`；`idea/**/captures/` 与 `idea/**/evidence/` 只为核对某个具体细节时定向看一张。
 
-顺序：2.9 的 A1–A4 → 2.8 的 projects；2.9 的 B 与 projects 并行。设计稿在负责人的 Agent Files（`artifacts/platform/extensibility-design.md`）。
+顺序：2.9 的 A5 与 B1c → A4 收尾（crm 0.3.0）→ 2.8 的 projects；B2 起与 projects 并行。原始设计稿在负责人的 Agent Files（`artifacts/platform/extensibility-design.md`）。
 
 ## 2.8 开放应用接入
 
 灵魂：别家开放的应用，能被轻易、高效地接进平台。转化的是业务内容与产品设计：读懂它解决什么、怎样流转，
 按平台的对象、动作、状态、角色重新设计，合并、拆分、舍弃都写明理由；不搬来源的定义与代码，不逐一复刻。
 每接一个，踩过的坑写进 Skill，下一个照着走；官方包在 [platform-packages](https://github.com/xuciro-commits/platform-packages)，
-分类与发版让管理简单明确。`deploy/packages/` 里现有的八个包是平台的测试夹具，不进官方包库。
+分类与发版让管理简单明确。`deploy/packages/` 里的包是平台的测试夹具，不进官方包库。
 
 平台发行版带单体宿主与 `pkg`（`v*` tag 才跑 `release.yml`）；包库的 `platform.lock` 写发行版，CI 下载 `pkg` 并核对摘要，只在 PR 与手动触发时跑。
 
@@ -54,11 +54,19 @@
 灵魂：一个人、一个客户只有一份，各应用挂自己的附属对象；能力像插上的显卡，应用只认契约，换供应商不改应用。
 分层与规则在 [architecture](architecture.md)“扩展”。
 
-- A3b 已做：官方基础包 `geo`（249 个国家和地区，中国 3209 个县以上区划；来源 CLDR 49 与民政部 2023 年代码，许可见包里的 NOTICE）。
+- A3b 已做：官方主数据包 `geo`（249 个国家和地区，中国 3209 个县以上区划；来源 CLDR 49 与民政部 2023 年代码，许可见包里的 NOTICE）。
   平台为它加了包数据：`data/*.yaml` 的行按批写入、接力，每批一个接受结果（K42）；参考记录上限 200 放宽到 500。
   剩下：party 的地址改为可选的结构化引用（国家、区划、街道），随 A4 的 party 0.2.0 做。
 - A4 迁移进行中：helpdesk 0.2.0（客户/联系人用 party）、hr-core 0.2.0（员工挂到人上）已做，走 preview 破坏性升级（有数据的旧版拒升级、需卸载重装）；平台为人补了 K43（按人判范围、从人带出、演示数据建人）。
   剩 crm 0.3.0 改用 party（最后做）。
+- **A5 包的种类与落点**（[architecture](architecture.md)“扩展”）。一项一次提交，在 crm 0.3.0 之前做：
+  - “Marketing”改译“营销”，与“市场”不再撞。
+  - `pkg` 推导种类写进 `catalog.json`；`listing.capabilities` 改名 `domains`（旧名再读一个版本），taxonomy 补 `master-data`；
+    `pkg check` 拒绝反向依赖。验收：一个主数据依赖应用的样例包被指名拒绝。
+  - 贡献位：YAML 包能写 contributions（现在只有宿主类型有，`pkg` 不读、前端不渲染）；运行时渲染记录页动作菜单与“管理 → 主数据”两个位。
+    验收：workspace 的 trunk 装一个只贡献的包 → 位里出现 → 退役后消失。
+  - party、uom、geo 改为贡献到“管理 → 主数据”，去掉各自的应用根（preview 破坏性升级）。验收：应用轨不再多三个图标，引用字段照常可选。
+  - 市场按种类分栏，详情写装上后在哪里看到；安装是否挪到“管理”，做时与负责人看过界面再定。验收：marketplace 的 trunk。
 - **B1 能力契约成为资源。** 契约就是宿主已有的协议（`名字/主版本`）：路由、`platform.protocol.bind`、`GET /v1/protocols`、动作目录按 `uses` 隐藏都沿用，不另起一套。分三项：
   - B1a 已做：契约资源 `build.contract`（包目录 `contracts/`），存在构建应用里，不进宿主定义；实现装上与契约装上两头都核对（K40）。
     同名契约的两个主版本并存留到 B2；包安装时契约不符在准备阶段就拒并给出原因。
@@ -69,7 +77,7 @@
     验收：workspace 的 trunk 走一遍装契约 → 入口不在 → 绑定 → 入口出现。同一契约的多个声明式实现（都在构建应用里）要等 B2 给实现独立身份。
 - **B2 连接器实现。** 凭据引用、出站白名单、一致性测试门禁。验收：测试不过不能绑定的不变量。
 - **B3 第一个探针 `call/1`。** 云通话连接器与测试实现；crm 联系人“拨打”与通话记录。验收：crm 的 trunk。
-- **B4 受管服务。** 注册、证书、探活、预留与结算；第二个探针（码流或 OCR）。
+- **B4 受管服务。** 注册、证书、探活、预留与结算；第二个探针 `document.render/1`：把单据渲染成 PDF（无头浏览器或 Typst）。
 - **B5 计量与配额**，并入阶段 4。
 
 ## 承重的要求
