@@ -2,6 +2,7 @@ import { PersonLabel } from "./MemberField";
 import { Badge } from "@astryxdesign/core/Badge";
 import { Banner } from "@astryxdesign/core/Banner";
 import { Button } from "@astryxdesign/core/Button";
+import { Card } from "@astryxdesign/core/Card";
 import { EmptyState } from "@astryxdesign/core/EmptyState";
 import { useContainerReveal, useMediaQuery } from "@astryxdesign/core/hooks";
 import type { UseContainerRevealReturn } from "@astryxdesign/core/hooks";
@@ -20,13 +21,14 @@ import { useToast } from "@astryxdesign/core/Toast";
 import { Token } from "@astryxdesign/core/Token";
 import { Toolbar } from "@astryxdesign/core/Toolbar";
 import { VisuallyHidden } from "@astryxdesign/core/VisuallyHidden";
-import { ArrowLeftIcon, ArrowPathIcon, CheckIcon, EnvelopeIcon, InboxIcon, XMarkIcon } from "@heroicons/react/24/outline";
+import { ArrowLeftIcon, ArrowPathIcon, CheckIcon, EnvelopeIcon, XMarkIcon } from "@heroicons/react/24/outline";
 import * as stylex from "@stylexjs/stylex";
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { type Api, reread, useRead } from "../host";
 import { t } from "../i18n";
 import { PageTitle, useGutter } from "./frame";
 import { usePath } from "../router";
+import { useIsDark } from "../shell/appearance";
 import { reasonOf, send } from "./act";
 import { type InboxItem, type InboxTab, inTab, inboxTabs, useInbox } from "./inbox";
 import { motionEases, motionStyles, motionTimings, prefersReducedMotion } from "./motion";
@@ -45,6 +47,14 @@ const OPEN_CELL_STYLE = { backgroundColor: "var(--color-accent-muted)" };
 const styles = stylex.create({
   claimCell: { flexBasis: "100%", flexShrink: 0 },
   clip: { overflow: "hidden" },
+  emptyArtwork: (dark: boolean) => ({
+    width: 240,
+    aspectRatio: "16 / 10",
+    backgroundImage: "url(/media/anatomy/inbox-empty." + (dark ? "dark" : "light") + ".svg)",
+    backgroundPosition: "center",
+    backgroundSize: "contain",
+    backgroundRepeat: "no-repeat",
+  }),
 });
 const INTERACTIVE_WITHIN_ROW = 'button, input, a, label, dialog, [role="checkbox"], [role="button"], [role="menuitem"]';
 
@@ -281,6 +291,7 @@ export function InboxPage() {
   const tab = inboxTabs.some((candidate) => candidate.value === asked) ? asked : "all";
   const inbox = useInbox();
   const gutter = useGutter();
+  const dark = useIsDark();
   const { act, failure, hasUnreadAction } = useActions();
   const [chosenId, setChosenId] = useState<string | null | undefined>(undefined);
   const visible = useMemo(() => inbox.items.filter((item) => inTab(item, tab)), [inbox.items, tab]);
@@ -474,8 +485,9 @@ export function InboxPage() {
             (isPaneFullWidth && opened ? (
               <ItemPane item={opened} act={act} onClose={() => setChosenId(null)} isFullWidth canMarkUnread={hasUnreadAction} />
             ) : visible.length === 0 ? (
-              <VStack padding={6}>
-                <EmptyState title={t("Nothing here")} description={t("Work assigned to you and notifications about your records arrive here.")} icon={<Icon icon={InboxIcon} size="lg" />} />
+              <VStack padding={6} hAlign="center" gap={3} xstyle={motionStyles.fadeEnter}>
+                <Card variant="transparent" padding={0} xstyle={styles.emptyArtwork(dark)} />
+                <EmptyState title={t("Nothing here")} description={t("Work assigned to you and notifications about your records arrive here.")} />
               </VStack>
             ) : (
               <Table data={visible} columns={columns} idKey="id" plugins={{ rowStatus, rows }} density="balanced" dividers="none" hasHover textOverflow="truncate" />

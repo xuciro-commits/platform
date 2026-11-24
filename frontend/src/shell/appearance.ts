@@ -1,4 +1,4 @@
-import { useSyncExternalStore } from "react";
+import { useEffect, useState, useSyncExternalStore } from "react";
 
 export type Appearance = "system" | "light" | "dark";
 
@@ -17,4 +17,19 @@ export function useAppearance() {
     listeners.add(notify);
     return () => listeners.delete(notify);
   }, () => current);
+}
+
+export function useIsDark() {
+  const mode = useAppearance();
+  const [systemDark, setSystemDark] = useState(() =>
+    typeof window !== "undefined" && window.matchMedia("(prefers-color-scheme: dark)").matches,
+  );
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const media = window.matchMedia("(prefers-color-scheme: dark)");
+    const update = () => setSystemDark(media.matches);
+    media.addEventListener("change", update);
+    return () => media.removeEventListener("change", update);
+  }, []);
+  return mode === "dark" || (mode === "system" && systemDark);
 }

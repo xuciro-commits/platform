@@ -24,17 +24,20 @@ import {
 import * as stylex from "@stylexjs/stylex";
 import type { Api } from "../host";
 import { t } from "../i18n";
+import { useIsDark } from "../shell/appearance";
 
 const styles = stylex.create({
   action: { flexShrink: 0 },
-  cover: (src: string) => ({
+  cover: (src: string, vector: boolean) => ({
     width: "32%",
     minWidth: 88,
     maxWidth: 124,
     aspectRatio: "4 / 3",
     flexShrink: 0,
+    backgroundColor: vector ? colorVars["--color-background-muted"] : undefined,
     backgroundImage: "url(" + src + ")",
-    backgroundSize: "cover",
+    backgroundSize: vector ? "contain" : "cover",
+    backgroundRepeat: "no-repeat",
     backgroundPosition: "center",
     borderRadius: radiusVars["--radius-element"],
   }),
@@ -61,13 +64,14 @@ const listingLabels: Record<string, string> = {
 
 const officialCovers = new Set(["crm", "helpdesk", "hr-core", "party", "uom"]);
 const coverBase = "https://raw.githubusercontent.com/xuciro-commits/platform-packages/3a13d89d9183add8a5d5e2faa248bc67c43dd039/";
-function coverFor(id: string, source: "index" | "official") {
+const anatomyCovers = new Set(["crm", "helpdesk", "party"]);
+function coverFor(id: string, source: "index" | "official", dark: boolean) {
+  if (anatomyCovers.has(id)) return { src: "/media/anatomy/cover-" + id + "." + (dark ? "dark" : "light") + ".svg", vector: true };
   if (source === "index") {
-    if (id === "crm") return coverBase + "marketplace/covers/crm-index.avif";
-    if (id === "application.production-provider") return coverBase + "marketplace/covers/application.production-provider.avif";
+    if (id === "application.production-provider") return { src: coverBase + "marketplace/covers/application.production-provider.avif", vector: false };
     return undefined;
   }
-  return officialCovers.has(id) ? coverBase + "packages/" + id + "/assets/cover.avif" : undefined;
+  return officialCovers.has(id) ? { src: coverBase + "packages/" + id + "/assets/cover.avif", vector: false } : undefined;
 }
 
 export const packageKinds = ["application", "master-data", "capability", "extension"];
@@ -154,8 +158,9 @@ export function PackageCard({
       : retired && installed?.version === version
         ? t("Reinstall")
         : t("Install");
+  const dark = useIsDark();
   const icon = packageIcon(id, counts);
-  const cover = view.source === "index" ? coverFor(id, "index") : undefined;
+  const cover = view.source === "index" ? coverFor(id, "index", dark) : undefined;
   const parts = [
     counts.apps > 0 ? `${counts.apps} ${counts.apps === 1 ? t("app root") : t("app roots")}` : "",
     counts.plugins > 0 ? `${counts.plugins} ${counts.plugins === 1 ? t("plugin capability") : t("plugin capabilities")}` : "",
@@ -199,7 +204,7 @@ export function PackageCard({
             />
           </HStack>
           <HStack gap={3} vAlign="start">
-            {cover && <Card variant="transparent" padding={0} xstyle={styles.cover(cover)} />}
+            {cover && <Card variant="transparent" padding={0} xstyle={styles.cover(cover.src, cover.vector)} />}
             <StackItem size="fill">
               <Text type="supporting" color="secondary" maxLines={2}>
                 {summary}
@@ -238,8 +243,9 @@ export function CatalogEntryCard({
 }) {
   const display = t(entry.title || entry.id);
   const summary = entry.description ? t(entry.description) : `${display} (${entry.id})`;
+  const dark = useIsDark();
   const icon = packageIcon(entry.id, { apps: 1, plugins: 0 });
-  const cover = official ? coverFor(entry.id, "official") : undefined;
+  const cover = official ? coverFor(entry.id, "official", dark) : undefined;
   const activeInstalled = installed && installed.state !== "retired" ? installed : undefined;
   const upgradable = Boolean(activeInstalled && compareVersions(entry.version, activeInstalled.version) > 0);
   const actionLabel = upgradable ? t("Upgrade") : t("Install");
@@ -276,7 +282,7 @@ export function CatalogEntryCard({
             />
           </HStack>
           <HStack gap={3} vAlign="start">
-            {cover && <Card variant="transparent" padding={0} xstyle={styles.cover(cover)} />}
+            {cover && <Card variant="transparent" padding={0} xstyle={styles.cover(cover.src, cover.vector)} />}
             <StackItem size="fill">
               <Text type="supporting" color="secondary" maxLines={2}>
                 {summary}
