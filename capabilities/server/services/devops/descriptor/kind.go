@@ -3,7 +3,6 @@ package descriptor
 import (
 	"encoding/json"
 	"fmt"
-	"slices"
 
 	"platformserver/kernel/protocol"
 	"platformserver/platform"
@@ -18,44 +17,36 @@ const (
 
 var Kinds = []string{KindApplication, KindMasterData, KindCapability, KindExtension}
 
-type KindSource struct {
-	Descriptor platform.PackageDescriptor
-	Listing    *protocol.PackageListing
-}
-
-func PackageKinds(sources []KindSource) map[string]string {
+func PackageKinds(packages []platform.PackageDescriptor) map[string]string {
 	kinds := map[string]string{}
 	inSet := map[string]bool{}
-	for _, s := range sources {
-		inSet[s.Descriptor.ID] = true
+	for _, p := range packages {
+		inSet[p.ID] = true
 	}
-	ready := func(s KindSource) bool {
-		for _, need := range s.Descriptor.Requires {
+	ready := func(p platform.PackageDescriptor) bool {
+		for _, need := range p.Requires {
 			if id, _ := PackageDependency(need); inSet[id] && kinds[id] == "" {
 				return false
 			}
 		}
 		return true
 	}
-	for range sources {
-		for _, s := range sources {
-			if kinds[s.Descriptor.ID] == "" && ready(s) {
-				kinds[s.Descriptor.ID] = Kind(s.Descriptor, s.Listing, kinds)
+	for range packages {
+		for _, p := range packages {
+			if kinds[p.ID] == "" && ready(p) {
+				kinds[p.ID] = Kind(p, kinds)
 			}
 		}
 	}
-	for _, s := range sources {
-		if kinds[s.Descriptor.ID] == "" {
-			kinds[s.Descriptor.ID] = Kind(s.Descriptor, s.Listing, kinds)
+	for _, p := range packages {
+		if kinds[p.ID] == "" {
+			kinds[p.ID] = Kind(p, kinds)
 		}
 	}
 	return kinds
 }
 
-func Kind(p platform.PackageDescriptor, l *protocol.PackageListing, kinds map[string]string) string {
-	if l != nil && slices.Contains(Domains(*l), KindMasterData) {
-		return KindMasterData
-	}
+func Kind(p platform.PackageDescriptor, kinds map[string]string) string {
 	if hasApplication(p) {
 		return KindApplication
 	}
@@ -70,9 +61,9 @@ func Kind(p platform.PackageDescriptor, l *protocol.PackageListing, kinds map[st
 	return KindMasterData
 }
 
-func CheckKinds(sources []KindSource, kinds map[string]string) error {
-	for _, s := range sources {
-		p, kind := s.Descriptor, kinds[s.Descriptor.ID]
+func CheckKinds(packages []platform.PackageDescriptor, kinds map[string]string) error {
+	for _, p := range packages {
+		kind := kinds[p.ID]
 		for _, need := range p.Requires {
 			id, constraint := PackageDependency(need)
 			required, known := kinds[id]
@@ -99,7 +90,20 @@ func hasApplication(p platform.PackageDescriptor) bool {
 	if p.Blueprint == nil {
 		return false
 	}
-	return slices.ContainsFunc(p.Blueprint.Roots, func(root platform.AssetRef) bool { return root.Kind == platform.AssetApp })
+	for _, root := range p.Blueprint.Roots {
+		if root.Kind != platform.AssetApp {
+			continue
+		}
+		for _, asset := range p.Blueprint.Assets {
+			var body struct {
+				Surface string `json:"surface"`
+			}
+			if asset.Ref == root && json.Unmarshal(asset.Body, &body) == nil && body.Surface != KindMasterData {
+				return true
+			}
+		}
+	}
+	return false
 }
 
 func providesContract(p platform.PackageDescriptor) bool {

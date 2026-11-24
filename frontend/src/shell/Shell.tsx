@@ -8,7 +8,7 @@ import { ChartPieIcon, Cog6ToothIcon, RectangleGroupIcon, WrenchScrewdriverIcon 
 import { MobileNav } from "@astryxdesign/core/MobileNav";
 import { useToast } from "@astryxdesign/core/Toast";
 import { lazy, Suspense, useEffect, useMemo, useState } from "react";
-import { type App, apps, locate, type NavItem, type NavSection, pathOf } from "../apps";
+import { type App, apps, locate, type NavItem, type NavSection, pathOf, settingsItemId } from "../apps";
 import { entries, recordHref } from "../apps/entries";
 import { type Api, useRead, useSession } from "../host";
 import { Records } from "../pages/RecordList";
@@ -26,14 +26,12 @@ import { iconOf } from "../pages/icons";
 const AppDashboard = lazy(() => import("../pages/AppDashboard").then((module) => ({ default: module.AppDashboard })));
 const SettingsTables = lazy(() => import("../pages/SettingsTables").then((module) => ({ default: module.SettingsTables })));
 
-const slug = (text: string) => text.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "") || "settings";
-
 function installedApps(views: Api.ApplicationView[], entities: Api.EntityInfo[]): App[] {
   return views.flatMap((view) => {
     const sections = (view.menu ?? []).flatMap((group): NavSection[] => {
       if (group.layout === "settings") {
         const types = group.entries.flatMap((page) => (page.object ? [page.object] : []));
-        return types.length ? [{ title: "", items: [{ id: `settings-${slug(group.title || "settings")}`, label: group.title || "Settings", icon: Cog6ToothIcon, settings: types }] }] : [];
+        return types.length ? [{ title: "", items: [{ id: settingsItemId(group.title), label: group.title || "Settings", icon: Cog6ToothIcon, settings: types }] }] : [];
       }
       const items = group.entries.flatMap((page): NavItem[] => page.object ? [{
         id: page.name,

@@ -109,7 +109,7 @@ func visiblePages(definitions []platform.Definition) map[platform.AssetRef]*plat
 func applicationView(definition platform.Definition, visible map[platform.AssetRef]*platform.Page) protocol.ApplicationView {
 	application := definition.Application
 	view := protocol.ApplicationView{App: definition.Ref.App, Name: definition.Ref.Name, Title: application.Title,
-		Description: application.Description, Icon: application.Icon, Source: definition.Source}
+		Description: application.Description, Icon: application.Icon, Surface: application.Surface, Source: definition.Source}
 	if view.Title == "" {
 		view.Title = view.Name
 	}

@@ -232,6 +232,7 @@ type ApplicationView struct {
 	Title       string                 `json:"title"`
 	Description string                 `json:"description,omitempty"`
 	Icon        string                 `json:"icon,omitempty"`
+	Surface     string                 `json:"surface,omitempty"`
 	Source      string                 `json:"source"`
 	Package     string                 `json:"package,omitempty"`
 	HasDemo     bool                   `json:"hasDemo,omitempty"`

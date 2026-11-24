@@ -421,6 +421,7 @@ export type Application = {
   title: string;
   description?: string;
   icon?: string;
+  surface?: string;
   pages: string[];
   groups?: AppGroup[];
   dashboard?: unknown;
@@ -663,6 +664,7 @@ export type ApplicationView = {
   title: string;
   description?: string;
   icon?: string;
+  surface?: string;
   source: string;
   package?: string;
   hasDemo?: boolean;

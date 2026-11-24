@@ -357,3 +357,30 @@ test("library tenant: a remote catalog lists its package beside the built-in ind
   }
 });
 });
+
+test("publisher tenant: a master data package installs under Admin → Master data instead of the application rail", async ({ page }) => {
+  const bytes = readFileSync(fileURLToPath(new URL("../../scripts/frontend-fixtures/uom-0.1.1.json", import.meta.url)));
+  await page.goto("/");
+  await page.getByRole("button", { name: "admin-1 · publisher" }).click();
+  await expect(page.getByRole("button", { name: "Account", exact: true })).toBeVisible();
+
+  await open(page, "Delivery", "Marketplace");
+  await page.getByRole("button", { name: "More actions", exact: true }).click();
+  await page.getByRole("menuitem", { name: "Install from URL or file", exact: true }).click();
+  const wizard = page.getByRole("dialog", { name: /Install from URL or file/ });
+  await wizard.locator('input[type="file"]').setInputFiles({ name: "uom-0.1.1.json", mimeType: "application/json", buffer: bytes });
+  await wizard.getByRole("button", { name: "Inspect package", exact: true }).click();
+  await expect(wizard.getByText("uom · 0.1.1", { exact: true })).toBeVisible();
+  await wizard.getByRole("button", { name: "Add to library", exact: true }).click();
+  await wizard.getByRole("button", { name: "Continue", exact: true }).click({ timeout: 20_000 });
+  await wizard.getByRole("button", { name: "Install package", exact: true }).click();
+  await expect(wizard).toBeHidden({ timeout: 30_000 });
+
+  await page.goto("/");
+  await open(page, "Admin", "Master data");
+  const list = page.getByRole("main", { name: "Master data", exact: true });
+  await expect(list.getByRole("link", { name: "Units", exact: true })).toBeVisible();
+  await expect(page.getByRole("link", { name: "Units of measure", exact: true })).toHaveCount(0);
+  await list.getByRole("link", { name: "Units", exact: true }).click();
+  await expect(page.getByRole("main").getByText("kg", { exact: true }).first()).toBeVisible();
+});

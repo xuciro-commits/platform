@@ -61,10 +61,9 @@
   剩 crm 0.3.0 改用 party（最后做）。
 - **A5 包的种类与落点**（[architecture](architecture.md)“扩展”）。一项一次提交，在 crm 0.3.0 之前做：
   - 种类已由 `pkg` 推导进 `catalog.json` 的 `kind`，`pkg check` 指名拒绝反向依赖（`services/devops/descriptor/kind.go`）；
-    主数据包还带应用根，暂按领域 `master-data` 认出，去掉应用根后这条特例删掉。领域已改名 `domains`，旧名 `capabilities` 再读一个版本。
-  - 贡献位：YAML 包能写 contributions（现在只有宿主类型有，`pkg` 不读、前端不渲染）；运行时渲染记录页动作菜单与“管理 → 主数据”两个位。
-    验收：workspace 的 trunk 装一个只贡献的包 → 位里出现 → 退役后消失。
-  - party、uom、geo 改为贡献到“管理 → 主数据”，去掉各自的应用根（preview 破坏性升级）。验收：应用轨不再多三个图标，引用字段照常可选。
+    领域已改名 `domains`，旧名 `capabilities` 再读一个版本。主数据已落进“管理 → 主数据”：应用写 `surface: master-data`，不去应用根，
+    因为 `steward` 角色与设置菜单都归应用；party 0.2.1、geo 0.1.1、uom 0.1.1 已改，随平台 v0.2.9 发。
+  - 扩展的落点：目标应用的记录页显示扩展包挂的附属对象（现在只有人员页显示），到第一个扩展包时做。
   - 市场按种类分栏，详情写装上后在哪里看到；安装是否挪到“管理”，做时与负责人看过界面再定。验收：marketplace 的 trunk。
 - **B1 能力契约成为资源。** 契约就是宿主已有的协议（`名字/主版本`）：路由、`platform.protocol.bind`、`GET /v1/protocols`、动作目录按 `uses` 隐藏都沿用，不另起一套。分三项：
   - B1a 已做：契约资源 `build.contract`（包目录 `contracts/`），存在构建应用里，不进宿主定义；实现装上与契约装上两头都核对（K40）。

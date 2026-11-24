@@ -129,7 +129,7 @@ func ApplicationDescriptor(a protocol.Application) platform.Application {
 	for _, g := range a.Groups {
 		groups = append(groups, platform.AppGroup{Title: g.Title, Roles: slices.Clone(g.Roles), Pages: slices.Clone(g.Pages), Layout: g.Layout})
 	}
-	return platform.Application{Languages: a.Languages, Profile: a.Profile, Header: a.Header, Name: a.Name, Title: a.Title, Description: a.Description, Icon: a.Icon, Pages: slices.Clone(a.Pages), Groups: groups, Dashboard: dashboardBody(a.Dashboard), Resources: slices.Clone(a.Resources), Concepts: a.Concepts, UIProfile: a.UIProfile, Variables: a.Variables, Queries: a.Queries, Extends: a.Extends, Entry: a.Entry, Replacements: slices.Clone(a.Replacements)}
+	return platform.Application{Languages: a.Languages, Profile: a.Profile, Header: a.Header, Name: a.Name, Title: a.Title, Description: a.Description, Icon: a.Icon, Surface: a.Surface, Pages: slices.Clone(a.Pages), Groups: groups, Dashboard: dashboardBody(a.Dashboard), Resources: slices.Clone(a.Resources), Concepts: a.Concepts, UIProfile: a.UIProfile, Variables: a.Variables, Queries: a.Queries, Extends: a.Extends, Entry: a.Entry, Replacements: slices.Clone(a.Replacements)}
 }
 
 func dashboardBody(blocks []protocol.DashboardBlock) json.RawMessage {

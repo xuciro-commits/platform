@@ -75,7 +75,7 @@ export function AppRail({ current, compact, apps, collapsed, onExpand }: { curre
       <IconButton label={t(app.label)} variant={app.id === current.id ? "secondary" : "ghost"} icon={icon} href={pathOf(app)} onClick={onExpand} aria-current={app.id === current.id ? "page" : undefined} />
     </Tip>
   );
-  const of = (group: RailGroup) => apps.filter((app) => app.group === group).map((app) => link(app, app.badge
+  const of = (group: RailGroup) => apps.filter((app) => app.group === group && app.surface !== "master-data").map((app) => link(app, app.badge
     ? <Avatar name={t(app.label)} size="sm" shape="square" tooltip={false} />
     : <Icon icon={app.icon} />));
   const groups = middle.map(of).filter((links) => links.length);

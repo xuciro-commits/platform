@@ -48,6 +48,7 @@ type Application struct {
 	Title        string                                `json:"title" field:"required,search" title:"Name" help:"What people call it" example:"Front desk"`
 	Description  string                                `json:"description,omitempty" type:"longtext" help:"What people do in it"`
 	Icon         string                                `json:"icon,omitempty" help:"How it is drawn in the launcher"`
+	Surface      string                                `json:"surface,omitempty" field:"aside" choices:"work,master-data" title:"Where it appears" help:"work puts it in the application rail; master-data puts it under Admin → Master data"`
 	Pages        []string                              `json:"pages" title:"Pages" help:"The pages it holds, by their name, in the order people see them"`
 	Resources    []platform.AssetRef                   `json:"resources,omitempty" field:"aside" title:"Application resources" help:"Published objects, workflows and functions included in its release; ownership and permissions stay with each resource"`
 	Concepts     []platform.AppConcept                 `json:"concepts,omitempty" field:"aside" type:"json" title:"Business concepts" help:"Named studio groups; grouping changes navigation only"`

@@ -11,6 +11,7 @@ import (
 	"strings"
 
 	"platformserver/kernel/protocol"
+	"platformserver/platform"
 	packagedesc "platformserver/services/devops/descriptor"
 )
 
@@ -151,12 +152,12 @@ func run(args []string, out io.Writer) error {
 }
 
 func packageKinds(builds []built) (map[string]string, error) {
-	sources := make([]packagedesc.KindSource, 0, len(builds))
+	descriptors := make([]platform.PackageDescriptor, 0, len(builds))
 	for _, b := range builds {
-		sources = append(sources, packagedesc.KindSource{Descriptor: b.descriptor, Listing: b.listing})
+		descriptors = append(descriptors, b.descriptor)
 	}
-	kinds := packagedesc.PackageKinds(sources)
-	return kinds, packagedesc.CheckKinds(sources, kinds)
+	kinds := packagedesc.PackageKinds(descriptors)
+	return kinds, packagedesc.CheckKinds(descriptors, kinds)
 }
 
 func artifactURL(template string, b built) string {
