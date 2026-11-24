@@ -2,6 +2,8 @@ import { AlertDialog } from "@astryxdesign/core/AlertDialog";
 import { Banner } from "@astryxdesign/core/Banner";
 import { EmptyState } from "@astryxdesign/core/EmptyState";
 import { useMediaQuery } from "@astryxdesign/core/hooks";
+import { Icon } from "@astryxdesign/core/Icon";
+import { IconButton } from "@astryxdesign/core/IconButton";
 import { HStack, Layout, LayoutContent, LayoutHeader, LayoutPanel, VStack } from "@astryxdesign/core/Layout";
 import { MetadataList, MetadataListItem } from "@astryxdesign/core/MetadataList";
 import { Skeleton } from "@astryxdesign/core/Skeleton";
@@ -9,6 +11,7 @@ import { StatusDot } from "@astryxdesign/core/StatusDot";
 import { Tab, TabList } from "@astryxdesign/core/TabList";
 import { Heading, Text } from "@astryxdesign/core/Text";
 import { Timestamp } from "@astryxdesign/core/Timestamp";
+import { CheckIcon, ClipboardDocumentIcon } from "@heroicons/react/24/outline";
 import { type ReactNode, useEffect, useMemo, useState } from "react";
 import { type Api, useRead } from "../host";
 import { t } from "../i18n";
@@ -64,8 +67,35 @@ function formatChangeValue(described: Described, path: string, value: unknown, r
   return t("Structured value");
 }
 
+function CopyId({ id }: { id: string }) {
+  const [copied, setCopied] = useState(false);
+  const copy = () => {
+    void navigator.clipboard?.writeText(id);
+    setCopied(true);
+    window.setTimeout(() => setCopied(false), 1400);
+  };
+  return (
+    <HStack gap={1} vAlign="center">
+      <Text type="code" color="secondary" maxLines={1}>{id}</Text>
+      <IconButton
+        label={copied ? t("Copied") : t("Copy")}
+        tooltip={copied ? t("Copied") : t("Copy")}
+        variant="ghost"
+        size="sm"
+        icon={
+          <HStack key={copied ? "copied" : "copy"} xstyle={motionStyles.popEnter}>
+            <Icon icon={copied ? CheckIcon : ClipboardDocumentIcon} color={copied ? "success" : undefined} size="sm" />
+          </HStack>
+        }
+        onClick={copy}
+      />
+    </HStack>
+  );
+}
+
 function Rail({ described, editor, kept, refs, people, restricted, collaboration }: { described: Described; editor: Editor; kept: Kept; refs?: Api.RecordView["refs"]; people?: Api.RecordView["people"]; restricted: ReadonlySet<string>; collaboration?: ReactNode }) {
   const technical = described.type.startsWith("build.") || described.type.startsWith("platform.");
+  const showIdInHeader = technical || Boolean(described.entity.naming);
   return (
     <VStack gap={6}>
       <FieldGroup described={described} editor={editor} sections={[{ title: "Properties", fields: described.aside }]} direction="vertical" refs={refs} restricted={restricted} />
@@ -85,6 +115,11 @@ function Rail({ described, editor, kept, refs, people, restricted, collaboration
               {kept.changed.by && <PersonLabel id={kept.changed.by} name={people?.[kept.changed.by] ?? t("Unnamed member")} />}
             </VStack>
           </MetadataListItem>
+          {!showIdInHeader && (
+            <MetadataListItem label={t("Record ID")}>
+              <CopyId id={kept.id} />
+            </MetadataListItem>
+          )}
           {technical && (
             <MetadataListItem label={t("Revision")}>
               <Text type="body" hasTabularNumbers>{String(kept.revision)}</Text>
@@ -143,6 +178,7 @@ export function RecordPage({ described, id, listPath, listTitle, instances, enti
   const name = described.name(values, id);
   const search = useCommandSearch();
   const loaded = read.status === "ready";
+  const showIdInHeader = described.type.startsWith("build.") || described.type.startsWith("platform.") || Boolean(described.entity.naming);
   useEffect(() => {
     if (loaded) search?.remember({ href: base, label: name, type: described.type, id });
   }, [search, loaded, base, name, described.type, id]);
@@ -181,9 +217,11 @@ export function RecordPage({ described, id, listPath, listTitle, instances, enti
           <VStack gap={4} padding={gutter} paddingBlockStart={3} paddingBlockEnd={0}>
             <PageTitle title={name} back={origin ? { href: origin.href, label: origin.title || t(listTitle) } : { href: listHref, label: t(listTitle) }} actions={!narrow && actions}>
               <HStack gap={4} vAlign="center" wrap="wrap">
-                <Text type="code" color="secondary">
-                  {id}
-                </Text>
+                {showIdInHeader && (
+                  <Text type="code" color="secondary">
+                    {id}
+                  </Text>
+                )}
                 {status && (
                   <HStack gap={2} vAlign="center">
                     <StatusDot variant={dots[(status.tone ?? "neutral") as keyof typeof dots] ?? dots.neutral} label={t(status.title)} />

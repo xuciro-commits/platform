@@ -189,7 +189,10 @@ function DefinitionTable({ slot, field, rows, states, entities, subject, bound, 
       {removing !== undefined && (
         <AlertDialog isOpen title={`${t("Remove from draft")}: ${rows[removing]?.title ?? rows[removing]?.name}`}
           description={failure || t("The installed type changes only when you publish.")}
-          actionLabel={t("Remove")} isActionLoading={busy}
+          cancelLabel={t("Cancel")}
+          actionLabel={t("Remove")}
+          actionVariant="destructive"
+          isActionLoading={busy}
           onOpenChange={(open) => !open && !busy && setRemoving(undefined)}
           onAction={() => applying(rows.filter((_, index) => index !== removing))} />
       )}

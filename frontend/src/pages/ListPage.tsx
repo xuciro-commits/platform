@@ -420,7 +420,15 @@ export function ListView<Answer, Row>({ definition, read, primary, back, exportR
                       </HStack>
                     </HStack>
                   )}
-                  {viewsOpen && definition.savedViews && <VStack xstyle={motionStyles.bannerEnter}>{saved.bar}</VStack>}
+                  {definition.savedViews && (
+                    <VStack
+                      ref={(node) => { if (node) node.inert = !viewsOpen; }}
+                      aria-hidden={!viewsOpen || undefined}
+                      xstyle={[motionStyles.collapseGrid, viewsOpen && motionStyles.collapseOpen]}
+                    >
+                      <VStack xstyle={motionStyles.collapseInner}>{saved.bar}</VStack>
+                    </VStack>
+                  )}
                   {saved.unsaved}
                 </VStack>
               </Section>

@@ -4,6 +4,7 @@ import { Dialog, DialogHeader } from "@astryxdesign/core/Dialog";
 import { FormLayout } from "@astryxdesign/core/FormLayout";
 import { HStack, Layout, LayoutContent, LayoutFooter, StackItem, VStack } from "@astryxdesign/core/Layout";
 import { Selector } from "@astryxdesign/core/Selector";
+import { Text } from "@astryxdesign/core/Text";
 import { type KeyboardEvent, useEffect, useRef, useState } from "react";
 import { type Api, useRead } from "../host";
 import { t } from "../i18n";
@@ -120,8 +121,15 @@ export function ActionDialog({ action, described, heading, confirm, id, revision
   const shownParameters = action.payload.filter((parameter) => !(parameter.name in fixed) && enterable(parameter) && (!quick || parameter.required || parameter.name === described?.display || initial[parameter.name] !== undefined))
     .flatMap((parameter) => (!only ? [parameter] : only.includes(parameter.name) ? [{ ...parameter, required: true }] : []));
   const blocked = action.payload.filter((parameter) => parameter.required && !(parameter.name in fixed) && !enterable(parameter)).map((parameter) => parameter.name);
-  const missing = shownParameters.some((parameter) => missingValue(parameter, values[parameter.name]));
-  const canSubmit = !busy && !missing && blocked.length === 0 && (!owned || Boolean(effectiveProject));
+  const missingLabels = [
+    ...(owned && !effectiveProject ? [t("Project")] : []),
+    ...shownParameters.filter((parameter) => missingValue(parameter, values[parameter.name])).map((parameter) => {
+      const field = described?.fields.find((candidate) => candidate.name === parameter.name);
+      return t(field?.title ?? parameter.label ?? parameter.name);
+    }),
+  ];
+  const missing = missingLabels.length > 0;
+  const canSubmit = !busy && !missing && blocked.length === 0;
 
   const apply = async () => {
     if (!canSubmit) return;
@@ -205,7 +213,13 @@ export function ActionDialog({ action, described, heading, confirm, id, revision
         footer={
           <LayoutFooter>
             <HStack gap={2} vAlign="center">
-              <StackItem size="fill" />
+              <StackItem size="fill">
+                {missingLabels.length > 0 && (
+                  <Text type="supporting" color="secondary" maxLines={1}>
+                    {t("Still needed: {fields}").replace("{fields}", missingLabels.slice(0, 3).join(", "))}
+                  </Text>
+                )}
+              </StackItem>
               <Button label={t("Cancel")} variant="secondary" onClick={onClose} />
               <Button label={confirm} variant="primary" isDisabled={!canSubmit} isLoading={busy} onClick={apply} />
             </HStack>

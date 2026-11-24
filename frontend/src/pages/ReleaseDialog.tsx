@@ -146,7 +146,7 @@ export function ReleaseDialog({ onClose, onDone }: { onClose: () => void; onDone
                   ))}
                 </List>
               )}
-              <Text type="supporting">{t("This cannot be undone here.")}</Text>
+              <Text type="supporting" color="secondary">{t("Once published, this product version is immutable and cannot be overwritten.")}</Text>
             </VStack>
           </LayoutContent>
         }
@@ -155,7 +155,7 @@ export function ReleaseDialog({ onClose, onDone }: { onClose: () => void; onDone
             <HStack gap={2} vAlign="center">
               <StackItem size="fill" />
               <Button label={t("Cancel")} variant="secondary" isDisabled={busy} onClick={onClose} />
-              <Button label={title} variant="primary" isDisabled={busy || !ready} onClick={() => void publish()} />
+              <Button label={title} variant="primary" isLoading={busy} isDisabled={busy || !ready} onClick={() => void publish()} />
             </HStack>
           </LayoutFooter>
         }

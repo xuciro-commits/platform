@@ -495,5 +495,7 @@
   "Entries in applications that depend on this capability will be hidden until enabled again. Existing data is not deleted.": "停用后，应用中依赖此能力的入口会暂时隐藏；重新启用即可恢复，不会删除已有数据。",
   "Marked as read": "已标为已读",
   "Marked as unread": "已标为未读",
-  "Mark as unread": "标为未读"
+  "Mark as unread": "标为未读",
+  "Once published, this product version is immutable and cannot be overwritten.": "发布后，该产品版本不可更改，也无法被覆盖。",
+  "Still needed: {fields}": "还需填写：{fields}"
 }

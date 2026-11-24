@@ -14,7 +14,7 @@ import { RadioList, RadioListItem } from "@astryxdesign/core/RadioList";
 import { Selector } from "@astryxdesign/core/Selector";
 import { Text } from "@astryxdesign/core/Text";
 import { TextInput } from "@astryxdesign/core/TextInput";
-import { borderVars, colorVars, durationVars, easeVars, fontWeightVars, radiusVars } from "@astryxdesign/core/theme/tokens.stylex";
+import { borderVars, colorVars, fontWeightVars, radiusVars } from "@astryxdesign/core/theme/tokens.stylex";
 import { MagnifyingGlassIcon } from "@heroicons/react/24/outline";
 import * as stylex from "@stylexjs/stylex";
 import { type ReactNode, useEffect, useState } from "react";
@@ -40,8 +40,8 @@ const styles = stylex.create({
     minWidth: 120,
     width: { default: 160, ":focus-within": 240 },
     transitionProperty: "width",
-    transitionDuration: { default: durationVars["--duration-fast"], "@media (prefers-reduced-motion: reduce)": "0s" },
-    transitionTimingFunction: easeVars["--ease-standard"],
+    transitionDuration: "var(--motion-snappy)",
+    transitionTimingFunction: "var(--ease-apple)",
   },
   overflowSlot: { display: "flex", alignItems: "center", flexGrow: 1, paddingInlineEnd: readoutReserve, flexShrink: 100, minWidth: 44 + readoutReserve },
   overflowItem: { display: "flex", flexDirection: "column" },
