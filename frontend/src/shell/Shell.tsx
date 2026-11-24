@@ -3,7 +3,7 @@ import { Button } from "@astryxdesign/core/Button";
 import { Divider } from "@astryxdesign/core/Divider";
 import { EmptyState } from "@astryxdesign/core/EmptyState";
 import { useHotkeys } from "@astryxdesign/core/hooks";
-import { HStack } from "@astryxdesign/core/HStack";
+import { HStack, VStack } from "@astryxdesign/core/Layout";
 import { ChartPieIcon, Cog6ToothIcon, RectangleGroupIcon, WrenchScrewdriverIcon } from "@heroicons/react/24/outline";
 import { MobileNav } from "@astryxdesign/core/MobileNav";
 import { useToast } from "@astryxdesign/core/Toast";
@@ -123,9 +123,9 @@ export function Shell() {
         ) }}
       >
         <ErrorBoundary key={path}>
-          <HStack key={`${app.id}/${item.id}`} height="100%" width="100%" xstyle={motionStyles.contentEnter}>
+          <VStack key={`${app.id}/${item.id}`} xstyle={[motionStyles.pageSlot, motionStyles.contentEnter]}>
             <Suspense fallback={null}>{content}</Suspense>
-          </HStack>
+          </VStack>
         </ErrorBoundary>
       </AppShell>
     </CommandSearch>

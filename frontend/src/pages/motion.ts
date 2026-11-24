@@ -26,27 +26,27 @@ const fadeIn = stylex.keyframes({
 
 const contentIn = stylex.keyframes({
   from: { opacity: 0, transform: "translate3d(0, 4px, 0)" },
-  to: { opacity: 1, transform: "translate3d(0, 0, 0)" },
+  to: { opacity: 1, transform: "none" },
 });
 
 const panelIn = stylex.keyframes({
   from: { opacity: 0, transform: "translate3d(14px, 0, 0)" },
-  to: { opacity: 1, transform: "translate3d(0, 0, 0)" },
+  to: { opacity: 1, transform: "none" },
 });
 
 const floatIn = stylex.keyframes({
   from: { opacity: 0, transform: "translate3d(0, 10px, 0) scale(0.98)" },
-  to: { opacity: 1, transform: "translate3d(0, 0, 0) scale(1)" },
+  to: { opacity: 1, transform: "none" },
 });
 
 const bannerIn = stylex.keyframes({
   from: { opacity: 0, transform: "translate3d(0, -4px, 0)" },
-  to: { opacity: 1, transform: "translate3d(0, 0, 0)" },
+  to: { opacity: 1, transform: "none" },
 });
 
 const popIn = stylex.keyframes({
   from: { opacity: 0, transform: "scale(0.84)" },
-  to: { opacity: 1, transform: "scale(1)" },
+  to: { opacity: 1, transform: "none" },
 });
 
 const shakeNudge = stylex.keyframes({
@@ -54,7 +54,7 @@ const shakeNudge = stylex.keyframes({
   "25%": { transform: "translate3d(-3px, 0, 0)" },
   "55%": { transform: "translate3d(3px, 0, 0)" },
   "80%": { transform: "translate3d(-1.5px, 0, 0)" },
-  "100%": { transform: "translate3d(0, 0, 0)" },
+  "100%": { transform: "none" },
 });
 
 export const motionStyles = stylex.create({
@@ -62,42 +62,42 @@ export const motionStyles = stylex.create({
     animationName: fadeIn,
     animationDuration: "var(--motion-snappy)",
     animationTimingFunction: "var(--ease-apple)",
-    animationFillMode: "both",
+    animationFillMode: "backwards",
     "@media (prefers-reduced-motion: reduce)": { animationName: "none" },
   },
   contentEnter: {
     animationName: contentIn,
     animationDuration: "var(--motion-snappy)",
     animationTimingFunction: "var(--ease-apple)",
-    animationFillMode: "both",
+    animationFillMode: "backwards",
     "@media (prefers-reduced-motion: reduce)": { animationName: fadeIn },
   },
   panelEnter: {
     animationName: panelIn,
     animationDuration: "var(--motion-fluid)",
     animationTimingFunction: "var(--ease-apple-out)",
-    animationFillMode: "both",
+    animationFillMode: "backwards",
     "@media (prefers-reduced-motion: reduce)": { animationName: fadeIn },
   },
   floatEnter: {
     animationName: floatIn,
     animationDuration: "var(--motion-spring)",
     animationTimingFunction: "var(--ease-spring)",
-    animationFillMode: "both",
+    animationFillMode: "backwards",
     "@media (prefers-reduced-motion: reduce)": { animationName: fadeIn },
   },
   bannerEnter: {
     animationName: bannerIn,
     animationDuration: "var(--motion-snappy)",
     animationTimingFunction: "var(--ease-apple)",
-    animationFillMode: "both",
+    animationFillMode: "backwards",
     "@media (prefers-reduced-motion: reduce)": { animationName: fadeIn },
   },
   popEnter: {
     animationName: popIn,
     animationDuration: "var(--motion-snappy)",
     animationTimingFunction: "var(--ease-spring)",
-    animationFillMode: "both",
+    animationFillMode: "backwards",
     "@media (prefers-reduced-motion: reduce)": { animationName: "none" },
   },
   shakeError: {
@@ -105,6 +105,12 @@ export const motionStyles = stylex.create({
     animationDuration: "var(--motion-fluid)",
     animationTimingFunction: "var(--ease-apple)",
     "@media (prefers-reduced-motion: reduce)": { animationName: "none" },
+  },
+  pageSlot: {
+    flexGrow: 1,
+    minWidth: 0,
+    width: "100%",
+    height: "100%",
   },
   sidebarShell: {
     display: "flex",
