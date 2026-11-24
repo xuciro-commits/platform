@@ -15,6 +15,7 @@ import type { Described, Section, Values } from "./describe";
 import { type InputStatus, ParameterInput, enterable, settles } from "./ParameterInput";
 import { plain, present, shown } from "./values";
 import { OneOfInput, ReferenceLink } from "./ReferenceField";
+import { motionStyles } from "./motion";
 import { PropertyField } from "./PropertyField";
 import { MemberLabel } from "./MemberField";
 
@@ -268,7 +269,7 @@ export function FieldGroup({ described, editor, sections, direction, focusEmpty,
     <VStack gap={6} onBlur={editor.settle}>
       {editor.conflict && sections.some((section) => section.fields.some((field) => field.name === editor.conflict?.name)) && <EditorConflict editor={editor} described={described} />}
       {shownSections.map((section) => (
-        <VStack key={section.title} gap={3}>
+        <VStack key={section.title} gap={3} xstyle={more ? motionStyles.fadeEnter : undefined}>
           <Heading level={3} accessibilityLevel={2}>{t(section.title)}</Heading>
           <FormLayout direction={direction} defaultOptionality="optional" xstyle={direction === "horizontal-labels" ? styles.aligned : undefined}>
             {section.fields.map((field) => {

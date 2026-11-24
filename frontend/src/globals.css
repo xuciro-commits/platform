@@ -7,8 +7,24 @@
   --font-family-code: ui-monospace, "SF Mono", "JetBrains Mono", Menlo, Monaco, Consolas, monospace;
   --text-heading-3-weight: var(--font-weight-semibold);
   --text-heading-4-weight: var(--font-weight-semibold);
+  --motion-instant: 80ms;
+  --motion-snappy: 150ms;
+  --motion-fluid: 220ms;
+  --motion-spring: 215ms;
+  --ease-apple: cubic-bezier(0.22, 1, 0.36, 1);
+  --ease-apple-out: cubic-bezier(0.32, 0.72, 0, 1);
+  --ease-spring: cubic-bezier(0.22, 1.12, 0.36, 1);
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
   text-rendering: optimizeLegibility;
   font-variant-numeric: tabular-nums;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  [data-astryx-theme] {
+    --motion-instant: 0.01ms;
+    --motion-snappy: 0.01ms;
+    --motion-fluid: 0.01ms;
+    --motion-spring: 0.01ms;
+  }
 }

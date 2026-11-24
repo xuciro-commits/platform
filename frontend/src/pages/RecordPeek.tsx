@@ -13,6 +13,7 @@ import { type Api, useRead } from "../host";
 import { t } from "../i18n";
 import { describe, withRestrictedFields } from "./describe";
 import { useOptions } from "./options";
+import { motionStyles } from "./motion";
 import { enterable } from "./ParameterInput";
 import { PropertyField } from "./PropertyField";
 import { FieldGroup, useEditor } from "./RecordFields";
@@ -99,7 +100,7 @@ export function PeekDrawer({ isOpen, onOpenChange, label, title, subtitle, endCo
   if (surface === "panel") {
     if (!isOpen) return null;
     return (
-      <LayoutPanel width={440} hasDivider padding={0} isScrollable={false} role="dialog" label={label}>
+      <LayoutPanel width={440} hasDivider padding={0} isScrollable={false} role="dialog" label={label} xstyle={motionStyles.panelEnter}>
         {inner}
       </LayoutPanel>
     );
@@ -283,25 +284,26 @@ export function RecordPeek({ type, id, name, isOpen, onOpenChange, hasScrim = tr
         )}
         {failed && <Banner status="error" title={t("This record could not be loaded")} description={failed || t("Reload the page to try again.")} />}
         {refused && <EmptyState headingLevel={3} title={t("You cannot see this record")} description={refused || t("Ask an administrator of this workspace for access.")} />}
-        {refusal && <Banner status="error" title={t("Not done")} description={refusal} />}
+        {refusal && <VStack xstyle={motionStyles.bannerEnter}><Banner status="error" title={t("Not done")} description={refusal} /></VStack>}
         {kept && described && detail && body && (
-          <RecordPeekFields
-            key={activeKey}
-            described={described}
-            detail={detail}
-            id={active.id}
-            values={values}
-            kept={kept}
-            refs={refs}
-            restricted={restricted}
-            allowed={read.status === "ready" ? read.data.actions : undefined}
-            heading={heading}
-            sections={sections}
-            options={options}
-            parameters={parameters}
-            title={title}
-            onFailure={setRefusal}
-          />
+          <VStack key={activeKey} gap={4} xstyle={motionStyles.fadeEnter}>
+            <RecordPeekFields
+              described={described}
+              detail={detail}
+              id={active.id}
+              values={values}
+              kept={kept}
+              refs={refs}
+              restricted={restricted}
+              allowed={read.status === "ready" ? read.data.actions : undefined}
+              heading={heading}
+              sections={sections}
+              options={options}
+              parameters={parameters}
+              title={title}
+              onFailure={setRefusal}
+            />
+          </VStack>
         )}
       </VStack>
     </PeekDrawer>

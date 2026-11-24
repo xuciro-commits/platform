@@ -22,6 +22,7 @@ import { ErrorBoundary } from "./ErrorBoundary";
 import { legacyTarget } from "./legacy";
 import { SignIn } from "./SignIn";
 import { iconOf } from "../pages/icons";
+import { motionStyles } from "../pages/motion";
 
 const AppDashboard = lazy(() => import("../pages/AppDashboard").then((module) => ({ default: module.AppDashboard })));
 const SettingsTables = lazy(() => import("../pages/SettingsTables").then((module) => ({ default: module.SettingsTables })));
@@ -122,7 +123,9 @@ export function Shell() {
         ) }}
       >
         <ErrorBoundary key={path}>
-          <Suspense fallback={null}>{content}</Suspense>
+          <HStack key={`${app.id}/${item.id}`} height="100%" width="100%" xstyle={motionStyles.contentEnter}>
+            <Suspense fallback={null}>{content}</Suspense>
+          </HStack>
         </ErrorBoundary>
       </AppShell>
     </CommandSearch>
@@ -177,8 +180,12 @@ function Navigation({ app, item, apps, object, listPath }: { app: App; item?: Na
     <HStack height="100%">
       <AppRail current={app} apps={apps} collapsed={collapsed} onExpand={() => collapse(false)} />
       <Divider orientation="vertical" />
-      {!collapsed && <AppSidebar app={app} item={item} apps={apps} object={object} listPath={listPath} onCollapse={() => collapse(true)} />}
-      {!collapsed && <Divider orientation="vertical" />}
+      <HStack xstyle={[motionStyles.sidebarShell, collapsed && motionStyles.sidebarCollapsed]} aria-hidden={collapsed || undefined}>
+        <HStack xstyle={motionStyles.sidebarInner}>
+          <AppSidebar app={app} item={item} apps={apps} object={object} listPath={listPath} onCollapse={() => collapse(true)} />
+          <Divider orientation="vertical" />
+        </HStack>
+      </HStack>
     </HStack>
   );
 }

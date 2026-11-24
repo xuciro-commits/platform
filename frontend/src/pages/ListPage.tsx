@@ -23,6 +23,7 @@ import { HostRefusal, type Read, reread } from "../host";
 import { dayText, t } from "../i18n";
 import { navigate, usePath, useSearch } from "../router";
 import { PageTitle, useGutter } from "./frame";
+import { motionStyles } from "./motion";
 import { useListWindow } from "./ListWindow";
 import { type CellEdit, CellProperty } from "./PropertyField";
 import { type Chip, FilterBar } from "./ListFilters";
@@ -415,7 +416,7 @@ export function ListView<Answer, Row>({ definition, read, primary, back, exportR
                       </HStack>
                     </HStack>
                   )}
-                  {viewsOpen && definition.savedViews && saved.bar}
+                  {viewsOpen && definition.savedViews && <VStack xstyle={motionStyles.bannerEnter}>{saved.bar}</VStack>}
                   {saved.unsaved}
                 </VStack>
               </Section>
@@ -470,7 +471,7 @@ export function ListView<Answer, Row>({ definition, read, primary, back, exportR
               />
             )}
             {failure && (
-              <VStack paddingInline={gutter} paddingBlockEnd={4}>
+              <VStack paddingInline={gutter} paddingBlockEnd={4} xstyle={motionStyles.bannerEnter}>
                 <Banner status="error" title={t("Not saved")} description={failure} />
               </VStack>
             )}
@@ -530,7 +531,7 @@ export function ListView<Answer, Row>({ definition, read, primary, back, exportR
               </Suspense>
             )}
             {ready && shown.length > 0 && !board && !calendar && !gantt && (
-              <VStack height="100%" paddingInline={gutter}>
+              <VStack key="table" height="100%" paddingInline={gutter} xstyle={motionStyles.fadeEnter}>
                 <Table
                   data={rows.slice(first, last)}
                   columns={columns}

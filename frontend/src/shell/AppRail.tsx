@@ -17,6 +17,7 @@ import { type App, pathOf, type RailGroup } from "../apps";
 import { t } from "../i18n";
 import { useInbox } from "../pages/inbox";
 import { navigate } from "../router";
+import { motionStyles } from "../pages/motion";
 import { useCommandSearch } from "./CommandSearch";
 import { MemberMenu } from "./MemberMenu";
 
@@ -63,7 +64,7 @@ export function AppRail({ current, compact, apps, collapsed, onExpand }: { curre
           <Tip label={bell} below={compact}>
             <IconButton {...props} label={t("Notifications")} variant="ghost" icon={<Icon icon={BellIcon} />} />
           </Tip>
-          {unread > 0 && <StatusDot variant="error" label={t("Unread")} xstyle={styles.unread} />}
+          {unread > 0 && <StatusDot variant="error" label={t("Unread")} xstyle={[styles.unread, motionStyles.popEnter]} />}
         </VStack>
       )}
     />
@@ -96,9 +97,11 @@ export function AppRail({ current, compact, apps, collapsed, onExpand }: { curre
       </VStack>
       <VStack gap={1} hAlign="center">
         {collapsed && (
-          <Tip label={t("Show sidebar")} keys="mod+b">
-            <IconButton label={t("Show sidebar")} variant="ghost" icon={<Icon icon={ChevronDoubleRightIcon} />} onClick={onExpand} />
-          </Tip>
+          <VStack xstyle={motionStyles.popEnter}>
+            <Tip label={t("Show sidebar")} keys="mod+b">
+              <IconButton label={t("Show sidebar")} variant="ghost" icon={<Icon icon={ChevronDoubleRightIcon} />} onClick={onExpand} />
+            </Tip>
+          </VStack>
         )}
         {notifications}
         {of("manage")}

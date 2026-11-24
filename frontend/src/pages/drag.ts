@@ -1,15 +1,16 @@
 import * as stylex from "@stylexjs/stylex";
 import { type PointerEvent as ReactPointerEvent, type RefObject, useEffect, useLayoutEffect, useRef, useState } from "react";
+import { motionEases, motionTimings, prefersReducedMotion } from "./motion";
 
 export type Drag = { id: string; width: number; height: number; x: number; y: number; target: string | null; index: number };
 
 type SlotItem = { id: string; top: number; bottom: number; midY: number };
 
 const dragThreshold = 5;
-const slotDuration = 190;
-const slotEase = "cubic-bezier(0.2, 0.9, 0.2, 1)";
-const dropDuration = 215;
-const dropEase = "cubic-bezier(0.22, 1.12, 0.36, 1)";
+const slotDuration = motionTimings.slot;
+const slotEase = motionEases.slot;
+const dropDuration = motionTimings.spring;
+const dropEase = motionEases.spring;
 const liftScale = 1.028;
 const maxTilt = 5.5;
 const hysteresis = 6;
@@ -121,7 +122,7 @@ export function useDrag(
     const before = beforeLayout.current;
     beforeLayout.current = null;
     if (!before) return;
-    const reduced = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    const reduced = prefersReducedMotion();
     for (const [id, old] of before) {
       const node = items.current.get(id);
       if (!node) continue;
@@ -161,7 +162,7 @@ export function useDrag(
     const offsetY = startY - box.top;
     const originX = `${(clamp(offsetX / Math.max(1, box.width), 0.15, 0.85) * 100).toFixed(1)}%`;
     const originY = `${(clamp(offsetY / Math.max(1, box.height), 0.15, 0.85) * 100).toFixed(1)}%`;
-    const reduced = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    const reduced = prefersReducedMotion();
     const previousSelection = document.body.style.userSelect;
     const previousCursor = document.body.style.cursor;
     const pointer = { x: startX, y: startY };

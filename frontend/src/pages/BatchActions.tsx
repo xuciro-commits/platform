@@ -10,6 +10,7 @@ import { usePageCommands } from "../shell/CommandSearch";
 import { ActionDialog } from "./ActionDialog";
 import { type BatchRow, sendBatch } from "./act";
 import type { Described, Values } from "./describe";
+import { motionStyles } from "./motion";
 import { enterable } from "./ParameterInput";
 
 type Batch = { action: Api.Action; rows: BatchRow[] };
@@ -57,7 +58,7 @@ export function BatchActions({ described, records, ids, clear }: { described: De
   return (
     <>
       {(ids.length > 0 || result) && (
-        <VStack hAlign="center" padding={2} role="region" aria-label={t("Batch actions")}>
+        <VStack hAlign="center" padding={2} role="region" aria-label={t("Batch actions")} xstyle={motionStyles.floatEnter}>
           <Card padding={2}>
             <VStack gap={2}>
               {ids.length > 0 && (

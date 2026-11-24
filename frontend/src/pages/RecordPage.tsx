@@ -26,6 +26,7 @@ import { ObjectPreview } from "./ObjectPreview";
 import { useOptions } from "./options";
 import { enterable } from "./ParameterInput";
 import { PersonLabel } from "./MemberField";
+import { motionStyles } from "./motion";
 import { PropertyField } from "./PropertyField";
 import { dots, type Instances, Transitions } from "./Transitions";
 import { plain } from "./values";
@@ -225,38 +226,42 @@ export function RecordPage({ described, id, listPath, listTitle, instances, enti
               description={read.reason || t("Ask an administrator of this workspace for access.")}
             />
           )}
-          {kept && tab === "details" && (
-            <VStack gap={6}>
-              {editor.stale && <Banner status="info" title={t("This record has new changes")} />}
-              {refusal && <Banner status="error" title={t("Not done")} description={refusal} />}
-              <FieldGroup described={detail} editor={editor} sections={body.sections} direction="horizontal-labels" focusEmpty={fresh} fold={!fresh} refs={refs} restricted={restricted} />
-              {definition && <DefinitionRows described={detail} source={definition} entities={entities} catalog={catalog} id={id} revision={kept.revision} />}
-              {described.entity.sets?.flatMap((set) => {
-                if (set.direction !== "inverse") return [];
-                const type = entities.find((entry) => entry.type === set.object);
-                return type ? <RecordLines key={set.name} parent={described.type} id={id} set={set} child={describe(type, catalog)} /> : [];
-              })}
-            </VStack>
-          )}
-          {kept && tab === "changes" && (
-            <VStack gap={4}>
-              {changes.map((change) => (
-                <VStack key={change.path} gap={1}>
-                  <HStack gap={2} vAlign="center">
-                    <Text type="code">{change.path}</Text>
-                    <Text type="supporting">{t(change.change === "added" ? "Added" : change.change === "removed" ? "Removed" : "Changed")}</Text>
-                  </HStack>
-                  {change.from !== undefined && <Text type="body">{t("Before")} · {JSON.stringify(change.from)}</Text>}
-                  {change.to !== undefined && <Text type="body">{t("After")} · {JSON.stringify(change.to)}</Text>}
+          {kept && (
+            <VStack key={tab} xstyle={motionStyles.contentEnter}>
+              {tab === "details" && (
+                <VStack gap={6}>
+                  {editor.stale && <VStack xstyle={motionStyles.bannerEnter}><Banner status="info" title={t("This record has new changes")} /></VStack>}
+                  {refusal && <VStack xstyle={motionStyles.bannerEnter}><Banner status="error" title={t("Not done")} description={refusal} /></VStack>}
+                  <FieldGroup described={detail} editor={editor} sections={body.sections} direction="horizontal-labels" focusEmpty={fresh} fold={!fresh} refs={refs} restricted={restricted} />
+                  {definition && <DefinitionRows described={detail} source={definition} entities={entities} catalog={catalog} id={id} revision={kept.revision} />}
+                  {described.entity.sets?.flatMap((set) => {
+                    if (set.direction !== "inverse") return [];
+                    const type = entities.find((entry) => entry.type === set.object);
+                    return type ? <RecordLines key={set.name} parent={described.type} id={id} set={set} child={describe(type, catalog)} /> : [];
+                  })}
                 </VStack>
-              ))}
+              )}
+              {tab === "changes" && (
+                <VStack gap={4}>
+                  {changes.map((change) => (
+                    <VStack key={change.path} gap={1}>
+                      <HStack gap={2} vAlign="center">
+                        <Text type="code">{change.path}</Text>
+                        <Text type="supporting">{t(change.change === "added" ? "Added" : change.change === "removed" ? "Removed" : "Changed")}</Text>
+                      </HStack>
+                      {change.from !== undefined && <Text type="body">{t("Before")} · {JSON.stringify(change.from)}</Text>}
+                      {change.to !== undefined && <Text type="body">{t("After")} · {JSON.stringify(change.to)}</Text>}
+                    </VStack>
+                  ))}
+                </VStack>
+              )}
+              {tab === "links" && <RecordLinks read={links} id={id} entities={entities} />}
+              {tab === "files" && <RecordFiles read={files} attach={attach} target={`${described.type}/${id}`} />}
+              {tab === "activity" && <RecordActivity described={described} id={id} comments={comments} catalog={catalog} entities={entities} />}
+              {tab === "preview" && definition && <ObjectPreview definition={definition} source={detail} catalog={catalog} />}
+              {tab === "properties" && <Rail described={body} editor={editor} kept={kept} refs={refs} people={people} restricted={restricted} collaboration={collaboration} />}
             </VStack>
           )}
-          {kept && tab === "links" && <RecordLinks read={links} id={id} entities={entities} />}
-          {kept && tab === "files" && <RecordFiles read={files} attach={attach} target={`${described.type}/${id}`} />}
-          {kept && tab === "activity" && <RecordActivity described={described} id={id} comments={comments} catalog={catalog} entities={entities} />}
-          {kept && tab === "preview" && definition && <ObjectPreview definition={definition} source={detail} catalog={catalog} />}
-          {kept && tab === "properties" && <Rail described={body} editor={editor} kept={kept} refs={refs} people={people} restricted={restricted} collaboration={collaboration} />}
         </LayoutContent>
       }
       end={
