@@ -4,7 +4,7 @@ import { createServer } from "node:http";
 import type { AddressInfo } from "node:net";
 import { fileURLToPath } from "node:url";
 import { type Locator, type Page, expect, test } from "@playwright/test";
-import { open, property, edit } from "./support";
+import { open, property, edit, signIn } from "./support";
 
 test.describe.serial("blank tenant", () => {
 let page: Page;
@@ -22,9 +22,7 @@ test.afterAll(async () => {
 });
 
 test("blank tenant: an administrator installs CRM from the marketplace after reviewing its applications and roles", async () => {
-  await page.goto("/");
-  await page.getByRole("button", { name: "admin-1 · blank" }).click();
-  await expect(page.getByRole("button", { name: "Account", exact: true })).toBeVisible();
+  await signIn(page, "admin-1 · blank");
   await expect(page.getByRole("link", { name: "CRM", exact: true })).toHaveCount(0);
 
   await open(page, "Delivery", "Marketplace");
@@ -55,7 +53,7 @@ test("blank tenant: a package role granted to a member opens CRM for them, its e
   await expect(memberPane.getByRole("listitem").filter({ hasText: /salesrep/ })).toBeVisible();
 
   await signOut();
-  await page.getByRole("button", { name: "user-1 · blank" }).click();
+  await signIn(page, "user-1 · blank");
   await expect(page.getByRole("link", { name: "CRM", exact: true })).toBeVisible();
   await page.getByRole("link", { name: "CRM", exact: true }).click();
   await nav.getByRole("link", { name: "Deals", exact: true }).click();
@@ -73,19 +71,18 @@ test("blank tenant: a package role granted to a member opens CRM for them, its e
   await expect(page.getByRole("heading", { level: 1, name: "林海", exact: true })).toBeVisible();
 
   await signOut();
-  await page.getByRole("button", { name: "admin-1 · blank" }).click();
+  await signIn(page, "admin-1 · blank");
   await open(page, "Admin", "Members");
   await page.getByRole("row", { name: /田雪/ }).click();
   await memberPane.getByRole("listitem").filter({ hasText: /salesrep/ }).getByRole("button", { name: "Revoke", exact: true }).click();
   await expect(memberPane.getByRole("listitem").filter({ hasText: /salesrep/ })).toHaveCount(0);
 
   await signOut();
-  await page.getByRole("button", { name: "user-1 · blank" }).click();
-  await expect(page.getByRole("button", { name: "Account", exact: true })).toBeVisible();
+  await signIn(page, "user-1 · blank");
   await expect(page.getByRole("link", { name: "CRM", exact: true })).toHaveCount(0);
 
   await signOut();
-  await page.getByRole("button", { name: "admin-1 · blank" }).click();
+  await signIn(page, "admin-1 · blank");
   await open(page, "Admin", "Members");
   await page.getByRole("row", { name: /田雪/ }).click();
   await memberPane.getByRole("combobox", { name: "Package role", exact: true }).click();
@@ -102,7 +99,7 @@ test("blank tenant: a package role granted to a member opens CRM for them, its e
 
 test("blank tenant: the sales rep runs a lead to Won and the sales manager sees it on the board and the dashboard", async () => {
   await signOut();
-  await page.getByRole("button", { name: "user-1 · blank" }).click();
+  await signIn(page, "user-1 · blank");
   await page.getByRole("link", { name: "CRM", exact: true }).click();
   await nav.getByRole("link", { name: "Leads", exact: true }).click();
   await page.getByRole("link", { name: "林海", exact: true }).click();
@@ -142,7 +139,7 @@ test("blank tenant: the sales rep runs a lead to Won and the sales manager sees 
   await expect(won.getByRole("heading", { level: 4, name: "星海制造", exact: true })).toBeVisible();
 
   await signOut();
-  await page.getByRole("button", { name: "manager-1 · blank" }).click();
+  await signIn(page, "manager-1 · blank");
   await page.getByRole("link", { name: "CRM", exact: true }).click();
   await nav.getByRole("link", { name: "Deals", exact: true }).click();
   await page.getByRole("radio", { name: "Board" }).click();
@@ -153,7 +150,7 @@ test("blank tenant: the sales rep runs a lead to Won and the sales manager sees 
 
 test("blank tenant: retiring CRM removes its entry and keeps the records, reinstalling brings both back", async () => {
   await signOut();
-  await page.getByRole("button", { name: "admin-1 · blank" }).click();
+  await signIn(page, "admin-1 · blank");
   await open(page, "Delivery", "Installations");
   const crmRow = page.getByRole("listitem").filter({ hasText: /^CRM/ });
   await crmRow.getByRole("button", { name: "Manage installation", exact: true }).click();
@@ -175,7 +172,7 @@ test("blank tenant: retiring CRM removes its entry and keeps the records, reinst
   await expect(crmRow).toContainText("active");
 
   await signOut();
-  await page.getByRole("button", { name: "user-1 · blank" }).click();
+  await signIn(page, "user-1 · blank");
   await expect(page.getByRole("link", { name: "CRM", exact: true })).toBeVisible();
   await page.getByRole("link", { name: "CRM", exact: true }).click();
   await nav.getByRole("link", { name: "Deals", exact: true }).click();
@@ -189,9 +186,7 @@ const previous = fileURLToPath(new URL("../../scripts/frontend-fixtures/crm-0.1.
 test("upgrade tenant: install CRM from a local package file after checking its origin and SHA-256", async ({ page }) => {
   const bytes = readFileSync(previous);
   const sha256 = createHash("sha256").update(bytes).digest("hex");
-  await page.goto("/");
-  await page.getByRole("button", { name: "admin-1 · upgrade" }).click();
-  await expect(page.getByRole("button", { name: "Account", exact: true })).toBeVisible();
+  await signIn(page, "admin-1 · upgrade");
 
   await open(page, "Delivery", "Marketplace");
   await page.getByRole("button", { name: "More actions", exact: true }).click();
@@ -218,12 +213,8 @@ test("upgrade tenant: install CRM from a local package file after checking its o
 });
 
 test("upgrade tenant: CRM upgrades to a version with a new optional lead field and the lead keeps its values", async ({ page }) => {
-  const signIn = async () => {
-    await page.goto("/");
-    await page.getByRole("button", { name: "admin-1 · upgrade" }).click();
-    await expect(page.getByRole("button", { name: "Account", exact: true })).toBeVisible();
-  };
-  await signIn();
+  const enter = () => signIn(page, "admin-1 · upgrade");
+  await enter();
   await open(page, "Admin", "Members");
   await page.getByRole("row", { name: /王丹/ }).click();
   const memberPane = page.getByRole("dialog", { name: "Details" }).or(page.getByRole("complementary", { name: "Details" }));
@@ -234,7 +225,7 @@ test("upgrade tenant: CRM upgrades to a version with a new optional lead field a
 
   await page.getByRole("button", { name: "Account", exact: true }).click();
   await page.getByRole("menuitem", { name: "Sign out", exact: true }).click();
-  await signIn();
+  await enter();
   const nav = page.getByRole("navigation", { name: "Primary navigation" });
   await page.getByRole("link", { name: "CRM", exact: true }).click();
   await nav.getByRole("link", { name: "Leads", exact: true }).click();
@@ -298,9 +289,7 @@ test("library tenant: a remote catalog lists its package beside the built-in ind
   await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
   const address = `http://127.0.0.1:${(server.address() as AddressInfo).port}/catalog.json`;
   try {
-    await page.goto("/");
-    await page.getByRole("button", { name: "admin-1 · library" }).click();
-    await expect(page.getByRole("button", { name: "Account", exact: true })).toBeVisible();
+    await signIn(page, "admin-1 · library");
     await open(page, "Delivery", "Marketplace");
     await page.getByRole("button", { name: "More actions", exact: true }).click();
     await page.getByRole("menuitem", { name: "Manage library", exact: true }).click();
@@ -360,9 +349,7 @@ test("library tenant: a remote catalog lists its package beside the built-in ind
 
 test("publisher tenant: a master data package installs under Admin → Master data instead of the application rail", async ({ page }) => {
   const bytes = readFileSync(fileURLToPath(new URL("../../scripts/frontend-fixtures/uom-0.1.1.json", import.meta.url)));
-  await page.goto("/");
-  await page.getByRole("button", { name: "admin-1 · publisher" }).click();
-  await expect(page.getByRole("button", { name: "Account", exact: true })).toBeVisible();
+  await signIn(page, "admin-1 · publisher");
 
   await open(page, "Delivery", "Marketplace");
   await page.getByRole("button", { name: "More actions", exact: true }).click();

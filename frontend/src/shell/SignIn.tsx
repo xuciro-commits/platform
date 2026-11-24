@@ -130,8 +130,8 @@ export function SignIn() {
                     {sign?.issuer && (returning ? <Returning sign={sign} /> : <Credentials sign={sign} />)}
                     {sign && !sign.issuer && (
                       <VStack gap={3} hAlign="stretch">
-                        {(sign.identities ?? []).map((identity) => (
-                          <Button key={identity.tenant + "/" + identity.token} label={identity.member + " · " + identity.tenant}
+                        {[...new Map((sign.identities ?? []).map((identity) => [identity.token, identity])).values()].map((identity) => (
+                          <Button key={identity.token} label={identity.member}
                             variant="secondary" size="lg" onClick={() => startSession({ token: identity.token, tenant: identity.tenant })} />
                         ))}
                       </VStack>

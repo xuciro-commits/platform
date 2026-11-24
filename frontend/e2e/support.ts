@@ -10,9 +10,24 @@ export async function signIn(page: Page, seat = "admin-1 · acceptance") {
     await page.goto("/home/overview");
     return;
   }
+  const [member, tenant] = seat.split(" · ");
   await page.goto("/");
-  await page.getByRole("button", { name: seat }).click();
+  await page.getByRole("button", { name: member, exact: true }).click();
   await expect(page.getByRole("button", { name: "Account", exact: true })).toBeVisible();
+  if (tenant) {
+    const switched = await page.evaluate((target) => {
+      const raw = sessionStorage.getItem("platform:session");
+      if (!raw) return false;
+      const current = JSON.parse(raw) as { token: string; tenant: string };
+      if (current.tenant === target) return false;
+      sessionStorage.setItem("platform:session", JSON.stringify({ ...current, tenant: target }));
+      return true;
+    }, tenant);
+    if (switched) {
+      await page.goto("/home/overview");
+      await expect(page.getByRole("button", { name: "Account", exact: true })).toBeVisible();
+    }
+  }
   const raw = await page.evaluate(() => sessionStorage.getItem("platform:session"));
   if (raw) sessions.set(seat, raw);
 }

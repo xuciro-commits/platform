@@ -52,8 +52,7 @@ test("mobile: the navigation drawer contains the application controls", async ({
 
 
 test("restricted fields: a reader sees the field label and no amount", async ({ page }) => {
-  await page.goto("/");
-  await page.getByRole("button", { name: "user-1 · acceptance" }).click();
+  await signIn(page, "user-1 · acceptance");
   await page.goto("/ontology/objects/sales.opportunity/OPP-001");
   await expect(page.getByRole("heading", { level: 1, name: "冲压线改造" })).toBeVisible();
   await expect(page.getByText("Amount", { exact: true })).toBeVisible();
@@ -103,7 +102,7 @@ test("member menu: language and appearance live in settings, sign out returns to
 
   await page.getByRole("button", { name: "Account", exact: true }).click();
   await page.getByRole("menuitem", { name: "Sign out", exact: true }).click();
-  await expect(page.getByRole("button", { name: "admin-1 · acceptance" })).toBeVisible();
+  await expect(page.getByRole("button", { name: "admin-1", exact: true })).toBeVisible();
 });
 
 

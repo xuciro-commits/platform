@@ -193,9 +193,7 @@ test("crm: a lead with a note and a task converts into an organization, contact 
 
 test("crm: a sales rep works only their own leads while the sales manager sees the whole team's, whose activity reads in names", async ({ page }) => {
   const leads = async (seat: string) => {
-    await page.goto("/");
-    await page.getByRole("button", { name: `${seat} · acceptance` }).click();
-    await expect(page.getByRole("button", { name: "Account", exact: true })).toBeVisible();
+    await signIn(page, `${seat} · acceptance`);
     await page.goto("/ontology/objects/crm.lead");
     await expect(page.getByText("沈若溪", { exact: true })).toBeVisible();
   };
@@ -506,7 +504,7 @@ test("roles: sales reps see only business menu entries and actions, and see a le
   await page.goto("/");
   await page.getByRole("button", { name: "Account", exact: true }).click();
   await page.getByRole("menuitem", { name: "Sign out", exact: true }).click();
-  await page.getByRole("button", { name: "user-1 · crm" }).click();
+  await as(page, "user-1");
   await page.getByRole("link", { name: "CRM", exact: true }).click();
   const nav = page.getByRole("navigation", { name: "Primary navigation" });
   await expect(nav.getByRole("link", { name: "Leads", exact: true })).toBeVisible();
@@ -524,7 +522,7 @@ test("roles: sales reps see only business menu entries and actions, and see a le
 
   await page.getByRole("button", { name: "Account", exact: true }).click();
   await page.getByRole("menuitem", { name: "Sign out", exact: true }).click();
-  await page.getByRole("button", { name: "manager-1 · crm" }).click();
+  await as(page, "manager-1");
   await page.goto(`/crm/crm.lead/${handedId}`);
   await edit(page, "Lead owner");
   await page.getByRole("combobox", { name: "Lead owner", exact: true }).fill("田雪");
@@ -533,7 +531,7 @@ test("roles: sales reps see only business menu entries and actions, and see a le
 
   await page.getByRole("button", { name: "Account", exact: true }).click();
   await page.getByRole("menuitem", { name: "Sign out", exact: true }).click();
-  await page.getByRole("button", { name: "user-1 · crm" }).click();
+  await as(page, "user-1");
   await page.goto("/crm/crm.lead");
   await expect(page.getByRole("link", { name: handed, exact: true })).toBeVisible();
 });

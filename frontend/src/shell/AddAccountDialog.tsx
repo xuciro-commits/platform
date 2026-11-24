@@ -87,10 +87,10 @@ export function AddAccountDialog({ onClose }: { onClose: () => void }) {
         {sign && !sign.issuer && (
           <VStack gap={2} hAlign="stretch">
             <Text type="supporting" color="secondary">{t("Choose an account to add to this session.")}</Text>
-            {(sign.identities ?? []).map((identity) => (
+            {[...new Map((sign.identities ?? []).map((identity) => [identity.token, identity])).values()].map((identity) => (
               <Button
-                key={`${identity.tenant}/${identity.token}`}
-                label={existing.has(identity.token) ? `${identity.member} · ${identity.tenant} (${t("Signed in")})` : `${identity.member} · ${identity.tenant}`}
+                key={identity.token}
+                label={existing.has(identity.token) ? `${identity.member} (${t("Signed in")})` : identity.member}
                 variant="secondary"
                 isDisabled={existing.has(identity.token)}
                 onClick={() => {

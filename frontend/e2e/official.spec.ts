@@ -1,7 +1,7 @@
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { type Page, expect, test } from "@playwright/test";
-import { edit, property } from "./support";
+import { edit, property, signIn } from "./support";
 
 const artifact = fileURLToPath(new URL("../../scripts/frontend-fixtures/crm-official-0.2.2.json", import.meta.url));
 
@@ -20,9 +20,7 @@ async function as(seat: string) {
     await page.getByRole("button", { name: "Account", exact: true }).click();
     await page.getByRole("menuitem", { name: "Sign out", exact: true }).click();
   }
-  await page.goto("/");
-  await page.getByRole("button", { name: `${seat} · official` }).click();
-  await expect(page.getByRole("button", { name: "Account", exact: true })).toBeVisible();
+  await signIn(page, `${seat} · official`);
 }
 
 async function crm(entry: string) {
