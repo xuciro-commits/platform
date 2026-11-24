@@ -99,6 +99,7 @@ type built struct {
 	lock         lock
 	assets       int
 	listing      *protocol.PackageListing
+	descriptor   platform.PackageDescriptor
 }
 
 type resource struct {
@@ -698,7 +699,7 @@ func build(dir string, previous *platform.PackageDescriptor) (built, error) {
 	if err := packagedesc.Validate(descriptor, resolver.WithDependencies); err != nil {
 		return built{}, err
 	}
-	return built{id: id, version: version, title: descriptor.Title, description: descriptor.Description, artifact: artifact, artifactName: artifactName, lock: next, assets: len(assets), listing: listing}, nil
+	return built{id: id, version: version, title: descriptor.Title, description: descriptor.Description, artifact: artifact, artifactName: artifactName, lock: next, assets: len(assets), listing: listing, descriptor: descriptor}, nil
 }
 
 func snapshot(dir string) (*platform.PackageDescriptor, []byte, error) {
@@ -822,6 +823,7 @@ func readListing(manifest *object) (*protocol.PackageListing, error) {
 	if err := platform.DecodeJSON([]byte(stringify(value)), &listing, "listing"); err != nil {
 		return nil, err
 	}
+	listing.Domains, listing.Capabilities = packagedesc.Domains(listing), nil
 	if err := packagedesc.CheckListing(listing); err != nil {
 		return nil, err
 	}

@@ -3655,6 +3655,7 @@ export type PackageCatalogEntry = {
   url: string;
   sha256: string;
   listing?: PackageListing;
+  kind?: string;
 };
 
 export type PackageConnection = {
@@ -3772,6 +3773,7 @@ export type PackageLifecycleImpact = {
 
 export type PackageListing = {
   industries?: string[];
+  domains?: string[];
   capabilities?: string[];
   keywords?: string[];
   stage?: string;

@@ -14,7 +14,7 @@ var Industries = []string{
 	"professional-services", "construction", "real-estate", "energy", "logistics", "agriculture", "nonprofit", "public-sector",
 }
 
-var Capabilities = []string{
+var DomainValues = []string{
 	"sales", "marketing", "service", "hr", "payroll", "accounting", "inventory", "purchasing", "production",
 	"projects", "assets", "maintenance", "quality", "learning", "knowledge", "lending", "operations", "master-data",
 }
@@ -23,11 +23,21 @@ var Stages = []string{"stable", "preview", "test"}
 
 var Relations = []string{"redesign", "derived", "original"}
 
+func Domains(l protocol.PackageListing) []string {
+	out := slices.Clone(l.Domains)
+	for _, value := range l.Capabilities {
+		if !slices.Contains(out, value) {
+			out = append(out, value)
+		}
+	}
+	return out
+}
+
 func CheckListing(l protocol.PackageListing) error {
-	for field, values := range map[string][]string{"industries": l.Industries, "capabilities": l.Capabilities} {
+	for field, values := range map[string][]string{"industries": l.Industries, "domains": l.Domains, "capabilities": l.Capabilities} {
 		allowed := Industries
-		if field == "capabilities" {
-			allowed = Capabilities
+		if field != "industries" {
+			allowed = DomainValues
 		}
 		if len(values) > 8 {
 			return fmt.Errorf("listing %s: at most 8", field)

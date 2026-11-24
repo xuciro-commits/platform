@@ -129,10 +129,12 @@ type PackageCatalogEntry struct {
 	URL         string          `json:"url"`
 	Sha256      string          `json:"sha256"`
 	Listing     *PackageListing `json:"listing,omitempty"`
+	Kind        string          `json:"kind,omitempty"`
 }
 
 type PackageListing struct {
 	Industries   []string              `json:"industries,omitempty"`
+	Domains      []string              `json:"domains,omitempty"`
 	Capabilities []string              `json:"capabilities,omitempty"`
 	Keywords     []string              `json:"keywords,omitempty"`
 	Stage        string                `json:"stage,omitempty"`

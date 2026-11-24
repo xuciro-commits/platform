@@ -11,6 +11,7 @@ import (
 	"strings"
 
 	"platformserver/kernel/protocol"
+	packagedesc "platformserver/services/devops/descriptor"
 )
 
 const usage = `usage:
@@ -81,6 +82,7 @@ func run(args []string, out io.Writer) error {
 			return errors.New(usage)
 		}
 		doc := catalogDocument{Version: 1, Title: *title, Packages: []protocol.PackageCatalogEntry{}}
+		var builds []built
 		for _, dir := range flags.Args() {
 			previous, _, err := snapshot(dir)
 			if err != nil {
@@ -90,7 +92,16 @@ func run(args []string, out io.Writer) error {
 			if err != nil {
 				return err
 			}
-			doc.Packages = append(doc.Packages, catalogEntry(b, artifactURL(*prefix, b)))
+			builds = append(builds, b)
+		}
+		kinds, err := packageKinds(builds)
+		if err != nil {
+			return err
+		}
+		for _, b := range builds {
+			entry := catalogEntry(b, artifactURL(*prefix, b))
+			entry.Kind = kinds[b.id]
+			doc.Packages = append(doc.Packages, entry)
 		}
 		raw, err := json.MarshalIndent(doc, "", "  ")
 		if err != nil {
@@ -122,12 +133,30 @@ func run(args []string, out io.Writer) error {
 			fmt.Fprintf(out, "%s %s@%s (%d resources) in %s\n", verb, b.id, b.version, b.assets, filepath.Base(dir))
 			checked = append(checked, b)
 		}
+		if args[0] == "check" {
+			kinds, err := packageKinds(checked)
+			if err != nil {
+				return err
+			}
+			for _, b := range checked {
+				fmt.Fprintf(out, "%s is %s\n", b.id, kinds[b.id])
+			}
+		}
 		if args[0] == "check" && *install {
 			return installCheck(dirs, checked, out)
 		}
 		return nil
 	}
 	return errors.New(usage)
+}
+
+func packageKinds(builds []built) (map[string]string, error) {
+	sources := make([]packagedesc.KindSource, 0, len(builds))
+	for _, b := range builds {
+		sources = append(sources, packagedesc.KindSource{Descriptor: b.descriptor, Listing: b.listing})
+	}
+	kinds := packagedesc.PackageKinds(sources)
+	return kinds, packagedesc.CheckKinds(sources, kinds)
 }
 
 func artifactURL(template string, b built) string {

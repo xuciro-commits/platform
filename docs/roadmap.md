@@ -60,9 +60,8 @@
 - A4 迁移进行中：helpdesk 0.2.0（客户/联系人用 party）、hr-core 0.2.0（员工挂到人上）已做，走 preview 破坏性升级（有数据的旧版拒升级、需卸载重装）；平台为人补了 K43（按人判范围、从人带出、演示数据建人）。
   剩 crm 0.3.0 改用 party（最后做）。
 - **A5 包的种类与落点**（[architecture](architecture.md)“扩展”）。一项一次提交，在 crm 0.3.0 之前做：
-  - “Marketing”改译“营销”，与“市场”不再撞。
-  - `pkg` 推导种类写进 `catalog.json`；`listing.capabilities` 改名 `domains`（旧名再读一个版本），taxonomy 补 `master-data`；
-    `pkg check` 拒绝反向依赖。验收：一个主数据依赖应用的样例包被指名拒绝。
+  - 种类已由 `pkg` 推导进 `catalog.json` 的 `kind`，`pkg check` 指名拒绝反向依赖（`services/devops/descriptor/kind.go`）；
+    主数据包还带应用根，暂按领域 `master-data` 认出，去掉应用根后这条特例删掉。领域已改名 `domains`，旧名 `capabilities` 再读一个版本。
   - 贡献位：YAML 包能写 contributions（现在只有宿主类型有，`pkg` 不读、前端不渲染）；运行时渲染记录页动作菜单与“管理 → 主数据”两个位。
     验收：workspace 的 trunk 装一个只贡献的包 → 位里出现 → 退役后消失。
   - party、uom、geo 改为贡献到“管理 → 主数据”，去掉各自的应用根（preview 破坏性升级）。验收：应用轨不再多三个图标，引用字段照常可选。
