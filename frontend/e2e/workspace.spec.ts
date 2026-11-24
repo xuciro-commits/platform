@@ -86,14 +86,14 @@ test("member menu: language and appearance live in settings, sign out returns to
   await expect(page.getByRole("button", { name: "账户", exact: true })).toBeVisible();
 
   dialog = await settings("账户", "偏好");
-  await dialog.getByRole("checkbox", { name: "深色", exact: true }).click();
+  await dialog.getByText("深色", { exact: true }).click();
   await expect(page.locator("html")).toHaveAttribute("data-theme", "dark");
   await close(dialog);
   await page.reload();
   await expect(page.locator("html")).toHaveAttribute("data-theme", "dark");
 
   dialog = await settings("账户", "偏好");
-  await dialog.getByRole("checkbox", { name: "跟随系统", exact: true }).click();
+  await dialog.getByText("跟随系统", { exact: true }).click();
   await close(dialog);
   dialog = await settings("账户", "设置");
   await dialog.getByRole("combobox", { name: "语言", exact: true }).click();

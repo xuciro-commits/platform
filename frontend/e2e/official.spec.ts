@@ -94,7 +94,7 @@ test("official tenant: a rep sees only their own leads and deals while the sales
   await as("manager-1");
   await crm("Deals");
   await page.getByRole("radio", { name: "Table" }).click();
-  await expect(page.getByRole("main").getByText("曦和精密", { exact: true }).first()).toBeVisible();
+  await expect(page.getByRole("main", { name: "Deals", exact: true }).getByText("曦和精密", { exact: true }).first()).toBeVisible();
   await expect(page.getByRole("navigation", { name: "Primary navigation" }).getByRole("link", { name: "Settings", exact: true })).toBeVisible();
 });
 
