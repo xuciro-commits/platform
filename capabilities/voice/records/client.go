@@ -38,6 +38,7 @@ type Client struct {
 	stream  *http.Client
 	log     *slog.Logger
 	changes chan struct{}
+	owners  []Owner
 
 	mu        sync.Mutex
 	principal string
@@ -181,12 +182,14 @@ type callRow struct {
 	Offer     string    `json:"offer"`
 	Answer    string    `json:"answer"`
 	Ended     bool      `json:"ended"`
+	Preferred string    `json:"preferred"`
+	Widened   bool      `json:"widened"`
 	CalledAt  time.Time `json:"calledat"`
 }
 
 func (r callRow) record() gateway.Record {
 	return gateway.Record{ID: r.ID, State: r.State, Direction: r.Direction, Number: r.Number, Agent: r.Agent,
-		Offer: r.Offer, Answer: r.Answer, Ended: r.Ended, CalledAt: r.CalledAt}
+		Offer: r.Offer, Answer: r.Answer, Ended: r.Ended, Preferred: r.Preferred, Widened: r.Widened, CalledAt: r.CalledAt}
 }
 
 func (c *Client) Read(ctx context.Context, id string) (gateway.Record, error) {
@@ -216,9 +219,45 @@ func (c *Client) Active(ctx context.Context) ([]gateway.Record, error) {
 	return out, nil
 }
 
+// Owner names a record type that gives contacts an owner: records of Type whose
+// Contact field refers to the party contact, with the owning member in Owner.
+type Owner struct {
+	Type    string `json:"type"`
+	Contact string `json:"contact"`
+	Owner   string `json:"owner"`
+}
+
+// OwnedBy sets where the client looks for a contact's owner, in order.
+func (c *Client) OwnedBy(owners []Owner) { c.owners = owners }
+
 // Contact finds the business partner contact a number belongs to: the first one with
-// it as mobile or phone who has not asked not to be contacted.
-func (c *Client) Contact(ctx context.Context, number string) (string, string) {
+// it as mobile or phone who has not asked not to be contacted, and the member who owns
+// that contact in the first owner source that has one.
+func (c *Client) Contact(ctx context.Context, number string) gateway.Party {
+	contact, organization := c.party(ctx, number)
+	if contact == "" {
+		return gateway.Party{}
+	}
+	return gateway.Party{Contact: contact, Organization: organization, Owner: c.owner(ctx, contact)}
+}
+
+func (c *Client) owner(ctx context.Context, contact string) string {
+	for _, o := range c.owners {
+		var rows []map[string]any
+		if err := c.list(ctx, o.Type, [][]any{{o.Contact, "=", contact}}, &rows); err != nil {
+			c.log.Warn("could not look up the contact's owner", "type", o.Type, "error", err)
+			continue
+		}
+		for _, row := range rows {
+			if owner, _ := row[o.Owner].(string); owner != "" {
+				return owner
+			}
+		}
+	}
+	return ""
+}
+
+func (c *Client) party(ctx context.Context, number string) (string, string) {
 	if number == "" {
 		return "", ""
 	}

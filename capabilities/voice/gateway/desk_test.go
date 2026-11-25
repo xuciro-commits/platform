@@ -23,6 +23,7 @@ type fakeRecords struct {
 	changes       chan struct{}
 	refuseConnect bool
 	failedWrites  int
+	party         Party
 }
 
 func newFakeRecords() *fakeRecords {
@@ -31,7 +32,7 @@ func newFakeRecords() *fakeRecords {
 
 var allowedFrom = map[string][]string{
 	"create": {""}, "receive": {"ringing"}, "connect": {"ringing"},
-	"finish": {"connected"}, "miss": {"ringing"}, "fail": {"ringing", "connected"},
+	"finish": {"connected"}, "miss": {"ringing"}, "fail": {"ringing", "connected"}, "widen": {"ringing"},
 }
 
 func (f *fakeRecords) Submit(_ context.Context, action, id string, payload map[string]any, key string) (string, error) {
@@ -67,7 +68,12 @@ func (f *fakeRecords) Submit(_ context.Context, action, id string, payload map[s
 		r = &Record{ID: id, State: "ringing", Direction: "outbound", Number: text("number"), CalledAt: time.Now()}
 		f.recs[id] = r
 	case "receive":
-		r.Direction = "inbound"
+		r.Direction, r.Preferred = "inbound", text("preferred")
+	case "widen":
+		if r.Offer != "" || r.Widened {
+			return "", &Refused{Status: 200, Code: "guard", Message: "already taken or widened"}
+		}
+		r.Widened = true
 	case "connect":
 		r.State, r.Agent, r.Answer = "connected", text("agent"), text("answer")
 	case "finish":
@@ -104,7 +110,11 @@ func (f *fakeRecords) Active(context.Context) ([]Record, error) {
 	return out, nil
 }
 
-func (f *fakeRecords) Contact(context.Context, string) (string, string) { return "", "" }
+func (f *fakeRecords) Contact(context.Context, string) Party {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	return f.party
+}
 
 func (f *fakeRecords) Changes() <-chan struct{} { return f.changes }
 
@@ -149,11 +159,14 @@ func (f *fakeRecords) wait(t *testing.T, what string, match func(Record) bool) R
 	return Record{}
 }
 
-func deskGateway(t *testing.T) (*fakeRecords, *trunk) {
+func deskGateway(t *testing.T, setup ...func(*Desk, *fakeRecords)) (*fakeRecords, *trunk) {
 	t.Helper()
 	recs := newFakeRecords()
 	d := NewDesk(recs, slog.New(slog.DiscardHandler))
 	d.poll = 50 * time.Millisecond
+	for _, s := range setup {
+		s(d, recs)
+	}
 	g, err := New(Config{Realm: testRealm, Trunks: map[string]string{testTrunk: testPassword}, RingTimeout: 5 * time.Second, Logger: slog.New(slog.DiscardHandler)}, d.Incoming)
 	if err != nil {
 		t.Fatal(err)
@@ -210,6 +223,63 @@ func TestDeskConnectsIncomingCallToTheAgentWhoTakesIt(t *testing.T) {
 	if err := session.Bye(ctx); err != nil {
 		t.Fatal(err)
 	}
+	recs.wait(t, "completed", func(r Record) bool { return r.ID == ringing.ID && r.State == "completed" })
+}
+
+func TestDeskRingsTheContactsOwnerFirstThenEveryone(t *testing.T) {
+	recs, tr := deskGateway(t, func(d *Desk, f *fakeRecords) {
+		d.PreferFor(300 * time.Millisecond)
+		f.party = Party{Contact: "C1", Organization: "O1", Owner: "member-7"}
+	})
+	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
+	defer cancel()
+	ringCtx, hangUp := context.WithCancel(ctx)
+	defer hangUp()
+	session := tr.invite(t, ringCtx)
+	waited := make(chan error, 1)
+	go func() { waited <- session.WaitAnswer(ringCtx, answerOptions(testPassword, nil)) }()
+	ringing := recs.wait(t, "ringing for the owner", func(r Record) bool { return r.Direction == "inbound" && r.Preferred == "member-7" })
+	if ringing.Widened {
+		t.Fatal("the call rang for everyone before the owner had a chance")
+	}
+	recs.wait(t, "ringing for everyone", func(r Record) bool { return r.ID == ringing.ID && r.Widened })
+	hangUp()
+	<-waited
+	recs.wait(t, "missed", func(r Record) bool { return r.ID == ringing.ID && r.State == "missed:canceled" })
+}
+
+func TestDeskDoesNotWidenACallTheOwnerTook(t *testing.T) {
+	recs, tr := deskGateway(t, func(d *Desk, f *fakeRecords) {
+		d.PreferFor(400 * time.Millisecond)
+		f.party = Party{Contact: "C1", Owner: "member-7"}
+	})
+	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
+	defer cancel()
+	l, a := newLine(t), newAgent(t)
+	recipient := sip.Uri{Scheme: "sip", User: "100", Host: tr.gateway.Host, Port: tr.gateway.Port}
+	session, err := tr.dialogs.Invite(ctx, recipient, l.sdp(),
+		sip.NewHeader("Content-Type", "application/sdp"),
+		sip.NewHeader("P-Asserted-Identity", "<tel:"+testCaller+">"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	waited := make(chan error, 1)
+	go func() { waited <- session.WaitAnswer(ctx, answerOptions(testPassword, nil)) }()
+	ringing := recs.wait(t, "ringing for the owner", func(r Record) bool { return r.Preferred == "member-7" })
+	recs.change(ringing.ID, func(r *Record) { r.Agent, r.Offer = "member-7", string(a.offer) })
+	if err := <-waited; err != nil {
+		t.Fatal(err)
+	}
+	session.Ack(ctx)
+	connected := recs.wait(t, "connected", func(r Record) bool { return r.State == "connected" && r.Answer != "" })
+	time.Sleep(600 * time.Millisecond)
+	recs.mu.Lock()
+	widened := recs.recs[connected.ID].Widened
+	recs.mu.Unlock()
+	if widened || connected.Agent != "member-7" {
+		t.Fatalf("the owner's call was widened (%v) or went to %q", widened, connected.Agent)
+	}
+	session.Bye(ctx)
 	recs.wait(t, "completed", func(r Record) bool { return r.ID == ringing.ID && r.State == "completed" })
 }
 

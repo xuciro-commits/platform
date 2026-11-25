@@ -1,6 +1,6 @@
 {
   "id": "phone",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "title": "Phone",
   "namespace": "phone",
   "description": "Incoming and outgoing calls through the platform's voice gateway, answered and placed in the browser, with a call log matched to business partner contacts. It implements the call/1 capability, so other apps can place calls once an administrator binds it.",
@@ -186,7 +186,16 @@
               "The call ended before anyone answered.": "这通电话没有人接就结束了。",
               "Receive": "来电入线",
               "An incoming call is ringing; the voice gateway records the line and the matched contact.": "来电正在振铃，语音网关记下线路和对上的联系人。",
-              "Leave empty until someone answers.": "有人接听前留空。"
+              "Leave empty until someone answers.": "有人接听前留空。",
+              "Rings first for": "优先振铃",
+              "The contact's owner, who gets the call before everyone else.": "联系人负责人，来电先响给他。",
+              "Ringing for everyone": "已响给所有人",
+              "The contact's owner did not answer in time.": "联系人负责人没有及时接听。",
+              "The contact's owner; only they can take the call until it rings for everyone.": "联系人负责人；在响给所有人之前，只有他能接。",
+              "Ring everyone": "响给所有人",
+              "Nobody answered in time for the contact's owner, so the call now rings for every agent.": "联系人负责人没有及时接听，电话改为响给所有坐席。",
+              "Someone already took this call.": "这通电话已经有人接了。",
+              "Someone else already took this call, or it is still ringing for the contact's owner.": "这通电话已经有人接了，或者还在优先响给联系人负责人。"
             }
           }
         }
@@ -273,6 +282,10 @@
                 "organization": {
                   "type": "string"
                 },
+                "preferred": {
+                  "type": "string",
+                  "description": "The contact's owner, who gets the call before everyone else."
+                },
                 "reason": {
                   "type": "string",
                   "enum": [
@@ -301,6 +314,10 @@
                     "missed",
                     "failed"
                   ]
+                },
+                "widened": {
+                  "type": "boolean",
+                  "description": "The contact's owner did not answer in time."
                 }
               },
               "required": [
@@ -425,6 +442,23 @@
               "type": "member",
               "readOnly": true,
               "aside": true
+            },
+            {
+              "name": "preferred",
+              "title": "Rings first for",
+              "type": "member",
+              "readOnly": true,
+              "aside": true,
+              "help": "The contact's owner, who gets the call before everyone else."
+            },
+            {
+              "name": "widened",
+              "title": "Ringing for everyone",
+              "type": "boolean",
+              "default": "false",
+              "readOnly": true,
+              "aside": true,
+              "help": "The contact's owner did not answer in time."
             },
             {
               "name": "offer",
@@ -553,6 +587,12 @@
                   "title": "Agent",
                   "type": "member",
                   "help": "Leave empty until someone answers."
+                },
+                {
+                  "name": "preferred",
+                  "title": "Rings first for",
+                  "type": "member",
+                  "help": "The contact's owner; only they can take the call until it rings for everyone."
                 }
               ],
               "transaction": {
@@ -617,6 +657,14 @@
                           "kind": "text",
                           "ref": "input.agent"
                         }
+                      },
+                      {
+                        "field": "preferred",
+                        "expr": {
+                          "op": "",
+                          "kind": "text",
+                          "ref": "input.preferred"
+                        }
                       }
                     ]
                   }
@@ -624,6 +672,54 @@
                 "subject": "phone.call"
               },
               "name": "receive"
+            },
+            {
+              "title": "Ring everyone",
+              "description": "Nobody answered in time for the contact's owner, so the call now rings for every agent.",
+              "from": [
+                "ringing"
+              ],
+              "roles": [
+                "gateway"
+              ],
+              "transaction": {
+                "guard": {
+                  "op": "empty",
+                  "kind": "boolean",
+                  "args": [
+                    {
+                      "op": "",
+                      "kind": "text",
+                      "ref": "offer"
+                    }
+                  ]
+                },
+                "message": "Someone already took this call.",
+                "steps": [
+                  {
+                    "target": {
+                      "type": "phone.call",
+                      "id": "$subject"
+                    },
+                    "kind": "update",
+                    "name": "subject",
+                    "changes": [
+                      {
+                        "field": "widened",
+                        "expr": {
+                          "op": "",
+                          "kind": "boolean",
+                          "lit": {
+                            "value": true
+                          }
+                        }
+                      }
+                    ]
+                  }
+                ],
+                "subject": "phone.call"
+              },
+              "name": "widen"
             },
             {
               "title": "Take",
@@ -645,17 +741,74 @@
               ],
               "transaction": {
                 "guard": {
-                  "op": "empty",
+                  "op": "and",
                   "kind": "boolean",
                   "args": [
                     {
-                      "op": "",
-                      "kind": "text",
-                      "ref": "offer"
+                      "op": "empty",
+                      "kind": "boolean",
+                      "args": [
+                        {
+                          "op": "",
+                          "kind": "text",
+                          "ref": "offer"
+                        }
+                      ]
+                    },
+                    {
+                      "op": "or",
+                      "kind": "boolean",
+                      "args": [
+                        {
+                          "op": "empty",
+                          "kind": "boolean",
+                          "args": [
+                            {
+                              "op": "",
+                              "kind": "text",
+                              "ref": "preferred"
+                            }
+                          ]
+                        },
+                        {
+                          "op": "=",
+                          "kind": "boolean",
+                          "args": [
+                            {
+                              "op": "",
+                              "kind": "boolean",
+                              "ref": "widened"
+                            },
+                            {
+                              "op": "",
+                              "kind": "boolean",
+                              "lit": {
+                                "value": true
+                              }
+                            }
+                          ]
+                        },
+                        {
+                          "op": "=",
+                          "kind": "boolean",
+                          "args": [
+                            {
+                              "op": "",
+                              "kind": "text",
+                              "ref": "preferred"
+                            },
+                            {
+                              "op": "",
+                              "kind": "text",
+                              "ref": "caller.id"
+                            }
+                          ]
+                        }
+                      ]
                     }
                   ]
                 },
-                "message": "Someone else already took this call.",
+                "message": "Someone else already took this call, or it is still ringing for the contact's owner.",
                 "steps": [
                   {
                     "target": {
@@ -1172,7 +1325,7 @@
           "type": "phone.call",
           "schemaVersions": [
             {
-              "version": "schema.sha256.fca6689b35847e24eec213ea3dcf06585586fb6b9772e663543eef41192399f3",
+              "version": "schema.sha256.69c7f25d68f20149480bdf35ce17f4a78b638cd40348c7c9318b14f088472b99",
               "family": 1
             }
           ]
@@ -1275,6 +1428,12 @@
                   "name": "agent"
                 },
                 {
+                  "name": "preferred"
+                },
+                {
+                  "name": "widened"
+                },
+                {
                   "name": "offer"
                 },
                 {
@@ -1326,6 +1485,12 @@
                   },
                   {
                     "name": "agent"
+                  },
+                  {
+                    "name": "preferred"
+                  },
+                  {
+                    "name": "widened"
                   },
                   {
                     "name": "offer"
@@ -1393,6 +1558,12 @@
                   "name": "agent"
                 },
                 {
+                  "name": "preferred"
+                },
+                {
+                  "name": "widened"
+                },
+                {
                   "name": "offer"
                 },
                 {
@@ -1444,6 +1615,12 @@
                   },
                   {
                     "name": "agent"
+                  },
+                  {
+                    "name": "preferred"
+                  },
+                  {
+                    "name": "widened"
                   },
                   {
                     "name": "offer"

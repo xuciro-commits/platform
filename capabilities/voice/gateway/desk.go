@@ -15,6 +15,7 @@ const (
 	defaultPoll = 2 * time.Second
 	dialWindow  = 2 * time.Minute
 	recordWait  = 10 * time.Second
+	preferFirst = 15 * time.Second
 )
 
 // Record is the part of a call record the desk reads: the record the platform keeps
@@ -28,7 +29,17 @@ type Record struct {
 	Offer     string
 	Answer    string
 	Ended     bool
+	Preferred string
+	Widened   bool
 	CalledAt  time.Time
+}
+
+// Party is who a number belongs to: the business partner contact, their organization,
+// and the member who owns that contact, whom an incoming call rings for first.
+type Party struct {
+	Contact      string
+	Organization string
+	Owner        string
 }
 
 // Records is the platform seen from the gateway: it writes call records through the
@@ -37,7 +48,7 @@ type Records interface {
 	Submit(ctx context.Context, action, id string, payload map[string]any, key string) (string, error)
 	Read(ctx context.Context, id string) (Record, error)
 	Active(ctx context.Context) ([]Record, error)
-	Contact(ctx context.Context, number string) (contact, organization string)
+	Contact(ctx context.Context, number string) Party
 	Changes() <-chan struct{}
 }
 
@@ -62,6 +73,7 @@ type Desk struct {
 	log     *slog.Logger
 	now     func() time.Time
 	poll    time.Duration
+	prefer  time.Duration
 	mu      sync.Mutex
 	held    map[string]bool
 	signal  chan struct{}
@@ -72,7 +84,15 @@ func NewDesk(records Records, log *slog.Logger) *Desk {
 	if log == nil {
 		log = slog.Default()
 	}
-	return &Desk{records: records, log: log, now: time.Now, poll: defaultPoll, held: map[string]bool{}, signal: make(chan struct{}), done: make(chan struct{})}
+	return &Desk{records: records, log: log, now: time.Now, poll: defaultPoll, prefer: preferFirst, held: map[string]bool{}, signal: make(chan struct{}), done: make(chan struct{})}
+}
+
+// PreferFor sets how long an incoming call rings only for the contact's owner before
+// it rings for every agent; zero keeps the default.
+func (d *Desk) PreferFor(window time.Duration) {
+	if window > 0 {
+		d.prefer = window
+	}
 }
 
 // Attach gives the desk the gateway that carries its calls.
@@ -108,11 +128,10 @@ func (d *Desk) Incoming(c *Call) {
 	d.tryHold(id)
 	defer d.release(id)
 	receive := map[string]any{"line": c.Trunk}
-	if contact, organization := d.contact(c.Caller); contact != "" {
-		receive["contact"] = contact
-		if organization != "" {
-			receive["organization"] = organization
-		}
+	party := d.contact(c.Caller)
+	party.into(receive)
+	if party.Owner != "" {
+		receive["preferred"] = party.Owner
 	}
 	if _, err := d.submit("receive", id, receive, key+":receive"); err != nil {
 		c.Unavailable(context.Background())
@@ -120,12 +139,24 @@ func (d *Desk) Incoming(c *Call) {
 		d.submit("fail", id, map[string]any{"failure": "The call could not be recorded."}, key+":fail")
 		return
 	}
+	var widen <-chan time.Time
+	if party.Owner != "" {
+		timer := time.NewTimer(d.prefer)
+		defer timer.Stop()
+		widen = timer.C
+	}
 	for {
 		wake := d.changed()
 		select {
 		case <-c.Done():
 			d.unanswered(id, key, c.Cause())
 			return
+		case <-widen:
+			widen = nil
+			if rec, err := d.read(id); err == nil && rec.Offer == "" && !rec.Ended {
+				d.submit("widen", id, map[string]any{}, key+":widen")
+			}
+			continue
 		case <-wake:
 		}
 		rec, err := d.read(id)
@@ -184,12 +215,7 @@ func (d *Desk) outgoing(r Record) {
 		return
 	}
 	connect := map[string]any{"agent": r.Agent, "line": call.Trunk, "answer": string(answer)}
-	if contact, organization := d.contact(r.Number); contact != "" {
-		connect["contact"] = contact
-		if organization != "" {
-			connect["organization"] = organization
-		}
-	}
+	d.contact(r.Number).into(connect)
 	d.connect(call, r.ID, key, connect)
 }
 
@@ -343,7 +369,17 @@ func (d *Desk) read(id string) (Record, error) {
 	return d.records.Read(ctx, id)
 }
 
-func (d *Desk) contact(number string) (string, string) {
+func (p Party) into(payload map[string]any) {
+	if p.Contact == "" {
+		return
+	}
+	payload["contact"] = p.Contact
+	if p.Organization != "" {
+		payload["organization"] = p.Organization
+	}
+}
+
+func (d *Desk) contact(number string) Party {
 	ctx, cancel := context.WithTimeout(context.Background(), recordWait)
 	defer cancel()
 	return d.records.Contact(ctx, number)

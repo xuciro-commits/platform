@@ -24,6 +24,8 @@ type settings struct {
 	Dialing      map[string]gateway.TrunkDialing `json:"dialing"`
 	DialPrefixes []string                        `json:"dialPrefixes"`
 	RingSeconds  int                             `json:"ringSeconds"`
+	Owners       []records.Owner                 `json:"owners"`
+	PreferSecs   int                             `json:"preferSeconds"`
 }
 
 type options struct {
@@ -72,7 +74,9 @@ func run(ctx context.Context, logger *slog.Logger, o options) error {
 			return errors.New("-platform needs -tenant and -token-file")
 		}
 		client := records.New(o.platform, o.tenant, tokenFrom(o.cred), logger)
+		client.OwnedBy(s.Owners)
 		desk = gateway.NewDesk(client, logger)
+		desk.PreferFor(time.Duration(s.PreferSecs) * time.Second)
 		onCall = desk.Incoming
 		go client.Follow(ctx)
 	}
