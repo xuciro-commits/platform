@@ -61,16 +61,25 @@ func (w Wake) Signal() {
 	}
 }
 
-func Rotate[T any](items []T, within time.Duration, step func(T) bool) {
+func Rotate[T any](items []T, within time.Duration, start int, step func(T) bool) (int, bool) {
+	if len(items) == 0 {
+		return 0, false
+	}
 	started := time.Now()
+	cursor := start % len(items)
 	for more := true; more && time.Since(started) < within; {
 		more = false
-		for _, item := range items {
-			if step(item) {
+		for i := range len(items) {
+			if step(items[cursor]) {
 				more = true
+			}
+			cursor = (cursor + 1) % len(items)
+			if time.Since(started) >= within {
+				return cursor, more || i+1 < len(items)
 			}
 		}
 	}
+	return cursor, false
 }
 
 func CodeDigest(parts ...string) string {
@@ -102,15 +111,20 @@ type WorkLoop[T any] struct {
 func (w WorkLoop[T]) Start() func(context.Context) error {
 	ctx, cancel := context.WithCancel(context.Background())
 	var background sync.WaitGroup
+	turn := 0
 	Pulse(ctx, &background, time.Second, w.Wake, func() bool {
 		tenants, now := w.Tenants(), w.Now()
-		Rotate(tenants, 900*time.Millisecond, func(t T) bool { return w.Round(t, now) })
+		var more bool
+		turn, more = Rotate(tenants, 900*time.Millisecond, turn, func(t T) bool { return w.Round(t, now) })
 		var outside []func()
 		for _, t := range tenants {
 			outside = append(outside, w.Outside(t)...)
 		}
 		background.Add(1)
 		go func() { defer background.Done(); w.OnLane(outside) }()
+		if more && w.Wake != nil {
+			w.Wake.Signal()
+		}
 		return true
 	})
 	Every(ctx, &background, 5*time.Second, func() bool {

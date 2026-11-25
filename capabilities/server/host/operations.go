@@ -83,6 +83,9 @@ func (t *Tenant) step(now time.Time) (more bool) {
 			more = false
 		}
 	}()
+	if !t.workLoop().Pending(now) {
+		return false
+	}
 	type progress struct {
 		more  bool
 		took  int

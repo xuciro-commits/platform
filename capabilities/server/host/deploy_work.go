@@ -9,8 +9,6 @@ import (
 	"platformserver/services/data/transform"
 )
 
-const roundSize = 10
-
 func CodeOf(tenants ...*Tenant) string {
 	var parts []string
 	for _, t := range tenants {
@@ -31,7 +29,7 @@ var activeTicks = []func(*Tenant, time.Time){(*Tenant).Evaluate, (*Tenant).PullS
 func runWorkFrom(current func() []*Tenant) func(context.Context) error {
 	return runtimekernel.WorkLoop[*Tenant]{
 		Tenants: current, Now: Now, Wake: workReady,
-		Round: func(t *Tenant, now time.Time) bool { return t.Round(now, roundSize) },
+		Round: func(t *Tenant, now time.Time) bool { return t.step(now) },
 		Outside: func(t *Tenant) []func() {
 			outside := append(t.dispatches(Now()), t.agentSchedule().Turns().Due(Now())...)
 			return append(outside, t.continuousSources(Now())...)
