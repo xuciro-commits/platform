@@ -446,9 +446,14 @@ func executeAction(c platform.Caller, e platform.RecordType, t platform.ActionTy
 		}
 	default:
 		info, _ := records.Describe("", e, func(reflect.Type) string { return "?" })
-		f, _ := info.Field(e.Lifecycle.Field)
-		if refusal := transitionRefusal(c, t, e.Type, id, v.Elem().FieldByIndex(f.Index).String(), v.Elem().Field(0).Interface().(platform.Record).Archived, now); refusal != nil {
-			return nil, refusal
+		archived := v.Elem().Field(0).Interface().(platform.Record).Archived
+		if e.Lifecycle.Field != "" {
+			f, _ := info.Field(e.Lifecycle.Field)
+			if refusal := transitionRefusal(c, t, e.Type, id, v.Elem().FieldByIndex(f.Index).String(), archived, now); refusal != nil {
+				return nil, refusal
+			}
+		} else if archived {
+			return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "{record} is archived", id)
 		}
 		for _, rule := range t.Rules {
 			if rule.Function != nil {

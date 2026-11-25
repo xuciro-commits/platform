@@ -144,14 +144,17 @@ func CodeObjectDescriptor(entity platform.RecordType, info platform.RecordTypeIn
 		Transitions    []transition
 	}
 	var steps *lifecycle
-	if entity.Lifecycle != nil {
+	if entity.Lifecycle != nil && (entity.Lifecycle.Field != "" || len(entity.Lifecycle.Actions) > 0) {
 		steps = &lifecycle{Field: entity.Lifecycle.Field, Initial: entity.Lifecycle.Initial, States: entity.Lifecycle.States}
 		for _, step := range entity.Lifecycle.Actions {
-			from := step.Criteria.State.In
+			var from []string
+			if step.Criteria.State != nil {
+				from = step.Criteria.State.In
+			}
 			var to []string
 			hasFunction, hasAfter := false, len(step.Effects) > 0
 			for _, rule := range step.Rules {
-				if rule.Edit != nil && rule.Edit.Field == entity.Lifecycle.Field {
+				if entity.Lifecycle.Field != "" && rule.Edit != nil && rule.Edit.Field == entity.Lifecycle.Field {
 					to = rule.Edit.Allowed
 				}
 				if rule.Transaction != nil {

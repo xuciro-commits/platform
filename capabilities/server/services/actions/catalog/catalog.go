@@ -115,7 +115,10 @@ func EntityActions(e platform.RecordType) []platform.Action {
 			Description: "Return this archived record to its lists.", Payload: []platform.Field{}, Roles: roles(e.Standard, "archive")})
 	}
 	if e.Lifecycle != nil {
-		reverses := stateReverses(e, info.Lifecycle)
+		var reverses map[int]string
+		if info.Lifecycle != nil {
+			reverses = stateReverses(e, info.Lifecycle)
+		}
 		for i, t := range e.Lifecycle.Actions {
 			c := t.Capability
 			if c == "" {
@@ -125,16 +128,26 @@ func EntityActions(e platform.RecordType) []platform.Action {
 			if payload == nil {
 				payload = []platform.Field{}
 			}
+			title := t.Title
+			if info.Lifecycle != nil {
+				title = info.Lifecycle.Transitions[i].Title
+			} else if title == "" {
+				title = strings.ToUpper(t.Name[:1]) + t.Name[1:]
+			}
 			description := t.Description
 			if description == "" {
-				move := info.Lifecycle.Transitions[i]
-				to := move.To
-				if slices.ContainsFunc(t.Rules, func(rule platform.ActionRule) bool { return rule.Transaction != nil }) {
-					to = move.From
+				if info.Lifecycle != nil {
+					move := info.Lifecycle.Transitions[i]
+					to := move.To
+					if slices.ContainsFunc(t.Rules, func(rule platform.ActionRule) bool { return rule.Transaction != nil }) {
+						to = move.From
+					}
+					description = fmt.Sprintf("Move %s from %s to %s.", article(info.Title), strings.Join(move.From, " or "), strings.Join(to, " or "))
+				} else {
+					description = fmt.Sprintf("Apply %s to %s.", t.Name, article(info.Title))
 				}
-				description = fmt.Sprintf("Move %s from %s to %s.", article(info.Title), strings.Join(move.From, " or "), strings.Join(to, " or "))
 			}
-			out = append(out, platform.Action{Schema: e.Type + "." + t.Name, Reverse: reverses[i], Target: e.Type, Capability: c, Title: info.Lifecycle.Transitions[i].Title,
+			out = append(out, platform.Action{Schema: e.Type + "." + t.Name, Reverse: reverses[i], Target: e.Type, Capability: c, Title: title,
 				Description: description, Payload: payload, Roles: t.Roles, Adoption: t.Adoption, Approval: t.Approval, DeferRequired: t.DeferRequired, ConfirmationOnly: t.ConfirmationOnly, Open: t.Open})
 			if t.Approval != nil && t.Approval.Pending != "" {
 				for _, m := range [][2]string{{platform.ApprovalHeld, "Hold for approval"}, {platform.ApprovalRejected, "Mark rejected"}, {platform.ApprovalReturned, "Return from approval"}} {

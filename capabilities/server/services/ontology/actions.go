@@ -12,9 +12,6 @@ import (
 var ValueInputTypes = map[string]string{"text": "string", "longtext": "string", "integer": "integer", "decimal": "number", "date": "date", "datetime": "datetime", "boolean": "boolean", "choice": "string", "reference": "string", "attachment": "attachment", "money": "money", "member": "member"}
 
 func CheckProcess(o Object, app, objectType, builderRole, userRole, functionCallType string, lookup func(string) (platform.RecordTypeInfo, bool)) error {
-	if len(o.States) == 0 && len(o.Actions) > 0 {
-		return fmt.Errorf("an object needs states before it has actions")
-	}
 	states := map[string]bool{}
 	for _, s := range o.States {
 		switch {
@@ -49,8 +46,12 @@ func CheckProcess(o Object, app, objectType, builderRole, userRole, functionCall
 			return fmt.Errorf("%s is the platform's own", where)
 		case a.Title == "":
 			return fmt.Errorf("%s has no title", where)
-		case len(a.From) == 0:
+		case len(o.States) > 0 && len(a.From) == 0:
 			return fmt.Errorf("%s says no state it is taken from", where)
+		case len(o.States) == 0 && len(a.From) > 0:
+			return fmt.Errorf("%s names states, which the object does not have", where)
+		case len(o.States) == 0 && a.Approval != nil:
+			return fmt.Errorf("%s waiting for approval needs states", where)
 		case a.Transaction == nil:
 			return fmt.Errorf("%s has no transaction", where)
 		case a.Open != "" && fields[a.Open].Type != "reference":

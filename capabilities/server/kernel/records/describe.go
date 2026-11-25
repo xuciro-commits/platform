@@ -104,60 +104,69 @@ func Describe(app string, e Entity, typeOf func(reflect.Type) string) (EntityInf
 		}
 	}
 	if l := e.Lifecycle; l != nil {
-		f, ok := info.Field(l.Field)
-		states := map[string]bool{}
-		for _, s := range l.States {
-			states[s.Name] = true
-		}
-		if !ok || !f.ReadOnly || (f.Type != "text" && f.Type != "choice") || !states[l.Initial] || len(states) != len(l.States) {
-			return EntityInfo{}, fmt.Errorf("entity %s: the lifecycle needs a read-only text or choice status field, unique states and an initial state among them", e.Type)
-		}
-		info.Lifecycle = &LifecycleInfo{Field: l.Field, Initial: l.Initial, States: l.States, Transitions: []TransitionInfo{}}
-		for i, t := range l.Actions {
-			if t.Criteria.State == nil || t.Criteria.State.Field != l.Field {
-				return EntityInfo{}, fmt.Errorf("entity %s: transition %q needs a unique name and states of the lifecycle", e.Type, t.Name)
+		if l.Field == "" && len(l.States) == 0 {
+			for i, t := range l.Actions {
+				if t.Criteria.State != nil || t.Name == "" || slices.ContainsFunc(l.Actions[:i], func(x ActionType) bool { return x.Name == t.Name }) ||
+					t.Name == "create" || t.Name == "edit" || t.Name == "archive" {
+					return EntityInfo{}, fmt.Errorf("entity %s: action %q needs a unique name without states", e.Type, t.Name)
+				}
 			}
-			from := t.Criteria.State.In
-			var to []string
-			var inputName string
-			hasFunction, hasTransaction := false, false
-			for _, rule := range t.Rules {
-				if rule.Function != nil {
-					hasFunction = true
+		} else {
+			f, ok := info.Field(l.Field)
+			states := map[string]bool{}
+			for _, s := range l.States {
+				states[s.Name] = true
+			}
+			if !ok || !f.ReadOnly || (f.Type != "text" && f.Type != "choice") || !states[l.Initial] || len(states) != len(l.States) {
+				return EntityInfo{}, fmt.Errorf("entity %s: the lifecycle needs a read-only text or choice status field, unique states and an initial state among them", e.Type)
+			}
+			info.Lifecycle = &LifecycleInfo{Field: l.Field, Initial: l.Initial, States: l.States, Transitions: []TransitionInfo{}}
+			for i, t := range l.Actions {
+				if t.Criteria.State == nil || t.Criteria.State.Field != l.Field {
+					return EntityInfo{}, fmt.Errorf("entity %s: transition %q needs a unique name and states of the lifecycle", e.Type, t.Name)
 				}
-				if rule.Edit != nil && rule.Edit.Field == l.Field {
-					to, inputName = rule.Edit.Allowed, rule.Edit.Parameter
-				}
-				if rule.Transaction != nil {
-					hasTransaction = rule.Transaction.Spec != nil && rule.Transaction.Run != nil
-					to = slices.Clone(from)
-					if e.TransactionDestination != nil {
-						if dest, input := e.TransactionDestination(e.Type, l.Field, rule.Transaction.Spec, t.Parameters); len(dest) > 0 {
-							to, inputName = dest, input
+				from := t.Criteria.State.In
+				var to []string
+				var inputName string
+				hasFunction, hasTransaction := false, false
+				for _, rule := range t.Rules {
+					if rule.Function != nil {
+						hasFunction = true
+					}
+					if rule.Edit != nil && rule.Edit.Field == l.Field {
+						to, inputName = rule.Edit.Allowed, rule.Edit.Parameter
+					}
+					if rule.Transaction != nil {
+						hasTransaction = rule.Transaction.Spec != nil && rule.Transaction.Run != nil
+						to = slices.Clone(from)
+						if e.TransactionDestination != nil {
+							if dest, input := e.TransactionDestination(e.Type, l.Field, rule.Transaction.Spec, t.Parameters); len(dest) > 0 {
+								to, inputName = dest, input
+							}
 						}
 					}
 				}
-			}
-			ends := append(slices.Clone(from), to...)
-			if t.Name == "" || len(from) == 0 || len(to) == 0 || slices.ContainsFunc(ends, func(s string) bool { return !states[s] }) ||
-				slices.ContainsFunc(l.Actions[:i], func(x ActionType) bool { return x.Name == t.Name }) || t.Name == "create" || t.Name == "edit" || t.Name == "archive" {
-				return EntityInfo{}, fmt.Errorf("entity %s: transition %q needs a unique name and states of the lifecycle", e.Type, t.Name)
-			}
-			if inputName != "" {
-				index := slices.IndexFunc(t.Parameters, func(f Field) bool { return f.Name == inputName })
-				var input Field
-				if index >= 0 {
-					input = t.Parameters[index]
+				ends := append(slices.Clone(from), to...)
+				if t.Name == "" || len(from) == 0 || len(to) == 0 || slices.ContainsFunc(ends, func(s string) bool { return !states[s] }) ||
+					slices.ContainsFunc(l.Actions[:i], func(x ActionType) bool { return x.Name == t.Name }) || t.Name == "create" || t.Name == "edit" || t.Name == "archive" {
+					return EntityInfo{}, fmt.Errorf("entity %s: transition %q needs a unique name and states of the lifecycle", e.Type, t.Name)
 				}
-				if index < 0 || input.Type != "string" || !input.Required || input.Ref != "" || len(input.Choices) != len(to) || slices.ContainsFunc(to, func(state string) bool { return !slices.Contains(input.Choices, state) }) || !hasFunction && !hasTransaction {
-					return EntityInfo{}, fmt.Errorf("entity %s: transition %s needs its required destination choice and original action", e.Type, t.Name)
+				if inputName != "" {
+					index := slices.IndexFunc(t.Parameters, func(f Field) bool { return f.Name == inputName })
+					var input Field
+					if index >= 0 {
+						input = t.Parameters[index]
+					}
+					if index < 0 || input.Type != "string" || !input.Required || input.Ref != "" || len(input.Choices) != len(to) || slices.ContainsFunc(to, func(state string) bool { return !slices.Contains(input.Choices, state) }) || !hasFunction && !hasTransaction {
+						return EntityInfo{}, fmt.Errorf("entity %s: transition %s needs its required destination choice and original action", e.Type, t.Name)
+					}
 				}
+				title := t.Title
+				if title == "" {
+					title = strings.ToUpper(t.Name[:1]) + t.Name[1:]
+				}
+				info.Lifecycle.Transitions = append(info.Lifecycle.Transitions, TransitionInfo{Name: t.Name, Schema: e.Type + "." + t.Name, Title: title, From: from, To: to, ToInput: inputName})
 			}
-			title := t.Title
-			if title == "" {
-				title = strings.ToUpper(t.Name[:1]) + t.Name[1:]
-			}
-			info.Lifecycle.Transitions = append(info.Lifecycle.Transitions, TransitionInfo{Name: t.Name, Schema: e.Type + "." + t.Name, Title: title, From: from, To: to, ToInput: inputName})
 		}
 	}
 	for _, x := range [][2]any{{e.Standard.Create, ".create"}, {e.Standard.Edit, ".edit"}, {e.Standard.Archive, ".archive"}, {e.Standard.Restore, ".restore"}} {

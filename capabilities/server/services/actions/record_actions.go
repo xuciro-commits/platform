@@ -175,17 +175,22 @@ func checkAction(c platform.Caller, manifest platform.Manifest, action platform.
 			continue
 		}
 		transition, found := recordAction(entity, action.Schema)
-		if !found || transition.Criteria.State == nil {
+		if !found {
 			break
 		}
-		state, _ := subject[transition.Criteria.State.Field].(string)
 		archived, _ := subject["archived"].(bool)
-		if refusal := transitionRefusal(c, transition, action.Target, sub.GetTarget().GetId(), state, archived, now); refusal != nil {
-			if refusal.Code == pb.ErrorCode_ERROR_CODE_POLICY_DENIED {
-				result.Authorization = nil
-			} else {
-				result.Message = refusal.Message
+		if transition.Criteria.State != nil {
+			state, _ := subject[transition.Criteria.State.Field].(string)
+			if refusal := transitionRefusal(c, transition, action.Target, sub.GetTarget().GetId(), state, archived, now); refusal != nil {
+				if refusal.Code == pb.ErrorCode_ERROR_CODE_POLICY_DENIED {
+					result.Authorization = nil
+				} else {
+					result.Message = refusal.Message
+				}
+				return result
 			}
+		} else if archived {
+			result.Message = platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "{record} is archived", sub.GetTarget().GetId()).Message
 			return result
 		}
 		for _, rule := range transition.Rules {

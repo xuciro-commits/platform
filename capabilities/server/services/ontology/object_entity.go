@@ -81,12 +81,15 @@ func rollUp(c platform.Caller, r *pb.ChangeRecord, o Object, model reflect.Type,
 }
 
 func compileLifecycle(o Object, roles []string, env ObjectRuntimeEnvironment) *platform.Lifecycle {
-	if len(o.States) == 0 {
+	if len(o.States) == 0 && len(o.Actions) == 0 {
 		return nil
 	}
-	life := &platform.Lifecycle{Field: "state", Initial: o.States[0].Name}
-	for _, state := range o.States {
-		life.States = append(life.States, platform.State{Name: state.Name, Title: state.Title, Tone: state.Tone, Description: state.Description})
+	life := &platform.Lifecycle{}
+	if len(o.States) > 0 {
+		life.Field, life.Initial = "state", o.States[0].Name
+		for _, state := range o.States {
+			life.States = append(life.States, platform.State{Name: state.Name, Title: state.Title, Tone: state.Tone, Description: state.Description})
+		}
 	}
 	for _, action := range o.Actions {
 		payload := []platform.Field{}
@@ -113,8 +116,12 @@ func compileLifecycle(o Object, roles []string, env ObjectRuntimeEnvironment) *p
 		if description == "" {
 			description = "Apply this business transaction."
 		}
+		var stateCriteria *platform.FieldCondition
+		if life.Field != "" {
+			stateCriteria = &platform.FieldCondition{Field: life.Field, In: slices.Clone(action.From)}
+		}
 		life.Actions = append(life.Actions, platform.ActionType{ConfirmationOnly: action.ConfirmationOnly, Adoption: action.Adoption, Open: action.Open,
-			Criteria: platform.ActionCriteria{State: &platform.FieldCondition{Field: life.Field, In: slices.Clone(action.From)}, Business: criteria},
+			Criteria: platform.ActionCriteria{State: stateCriteria, Business: criteria},
 			Name:     action.Name, Title: action.Title, Description: description, Roles: takers, Capability: o.Name, Parameters: payload, Approval: approval, DeferRequired: true,
 			Rules: []platform.ActionRule{{Transaction: &platform.TransactionRule{Spec: action.Transaction, Run: func(c platform.Caller, r *pb.ChangeRecord, now time.Time) *platform.Error {
 				if env.Transaction == nil {
