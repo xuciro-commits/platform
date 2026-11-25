@@ -33,6 +33,8 @@ type Owner struct {
 	packageLibraries map[string]protocol.PackageLibrary
 	index            *protocol.PackageIndex
 	host             protocol.PackageHost
+	viewsCacheKey    string
+	viewsCache       []protocol.PackageView
 }
 
 func New(tenant string, resolver publication.Resolver) *Owner {
@@ -45,6 +47,7 @@ func (d *Owner) BindPackageIndex(index *protocol.PackageIndex) {
 	d.mu.Lock()
 	defer d.mu.Unlock()
 	d.index = index
+	d.viewsCacheKey, d.viewsCache = "", nil
 }
 
 func (d *Owner) BoundIndex() *protocol.PackageIndex { d.mu.Lock(); defer d.mu.Unlock(); return d.index }
@@ -64,6 +67,7 @@ func (d *Owner) Restore(s protocol.PackageState) {
 	if d.packages == nil {
 		d.packages = map[string]*protocol.InstalledPackage{}
 	}
+	d.viewsCacheKey, d.viewsCache = "", nil
 }
 
 func (d *Owner) Prepare(c platform.Caller, s *pb.Submission) (func(*pb.ChangeRecord), *platform.Error) {
@@ -71,7 +75,12 @@ func (d *Owner) Prepare(c platform.Caller, s *pb.Submission) (func(*pb.ChangeRec
 	if apply == nil {
 		return nil, err
 	}
-	return func(r *pb.ChangeRecord) { d.mu.Lock(); defer d.mu.Unlock(); apply(r) }, err
+	return func(r *pb.ChangeRecord) {
+		d.mu.Lock()
+		defer d.mu.Unlock()
+		apply(r)
+		d.viewsCacheKey, d.viewsCache = "", nil
+	}, err
 }
 
 var _ protocol.BlueprintCatalog = (*Owner)(nil)
@@ -316,7 +325,7 @@ func (d *Owner) packageIndex() (*protocol.PackageIndex, error) {
 	if bound.Directory == "" {
 		return d.sourceIndex(bound)
 	}
-	current, err := LoadPackageIndex(d.resolver, bound.Directory)
+	current, _, err := loadCachedPackageIndex(d.resolver, bound.Directory)
 	if err != nil {
 		return bound, err
 	}
@@ -728,8 +737,37 @@ func (d *Owner) decide(c platform.Caller, s *pb.Submission) (func(*pb.ChangeReco
 }
 
 func (d *Owner) PackageViews() []protocol.PackageView {
+	d.mu.Lock()
+	bound := d.index
+	d.mu.Unlock()
+	var (
+		index    *protocol.PackageIndex
+		dirStamp string
+		indexErr error
+	)
+	if bound.Directory == "" {
+		index, indexErr = d.sourceIndex(bound)
+	} else {
+		var current *protocol.PackageIndex
+		current, dirStamp, indexErr = loadCachedPackageIndex(d.resolver, bound.Directory)
+		if indexErr != nil {
+			index = bound
+		} else {
+			index, indexErr = d.sourceIndex(current)
+		}
+	}
+	cacheKey := ""
+	if indexErr == nil {
+		cacheKey = d.viewsFingerprint(dirStamp, bound)
+		d.mu.Lock()
+		if d.viewsCacheKey == cacheKey && d.viewsCache != nil {
+			cached := slices.Clone(d.viewsCache)
+			d.mu.Unlock()
+			return cached
+		}
+		d.mu.Unlock()
+	}
 	out := []protocol.PackageView{}
-	index, indexErr := d.packageIndex()
 	installed := d.packagesOf()
 	products := map[string]platform.ProductVersionView{}
 	if d.host != nil {
@@ -825,6 +863,11 @@ func (d *Owner) PackageViews() []protocol.PackageView {
 		return packagedesc.ComparePackageVersions(a.Descriptor.Version, b.Descriptor.Version)
 	})
 	withKinds(out)
+	if cacheKey != "" {
+		d.mu.Lock()
+		d.viewsCacheKey, d.viewsCache = cacheKey, slices.Clone(out)
+		d.mu.Unlock()
+	}
 	return out
 }
 

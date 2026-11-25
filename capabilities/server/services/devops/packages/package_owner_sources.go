@@ -158,16 +158,33 @@ func (d *Owner) InstalledBlueprint(id, version string) ([]platform.AssetRef, []p
 }
 
 func (d *Owner) PreparationBlueprint(id, version string) (platform.PackageBlueprint, *runtimeprotocol.InstalledPackage, error) {
-	for _, view := range d.PackageViews() {
-		if view.Descriptor.ID != id || view.Descriptor.Version != version {
-			continue
-		}
-		if view.Installed != nil && view.Installed.Version == version && view.Installed.State == "active" {
+	installed := d.packagesOf()
+	var heldCopy *runtimeprotocol.InstalledPackage
+	if held := installed[id]; held != nil {
+		copy := *held
+		heldCopy = &copy
+		if held.Version == version && held.State == "active" {
 			blueprint, err := d.packageBlueprint(id, version)
-			return blueprint, view.Installed, err
+			return blueprint, heldCopy, err
 		}
-		if view.Descriptor.Blueprint != nil {
-			return *view.Descriptor.Blueprint, view.Installed, nil
+	}
+	if index, err := d.packageIndex(); err == nil {
+		if descriptor, found := packagedesc.Find(index, id, version); found && descriptor.Blueprint != nil {
+			return *descriptor.Blueprint, heldCopy, nil
+		}
+	}
+	if held := installed[id]; held != nil {
+		if held.Version == version && held.Artifact != "" {
+			if sealed, err := d.sealedPackageDescriptor(id, version, held.Artifact); err == nil && sealed.Blueprint != nil {
+				return *sealed.Blueprint, heldCopy, nil
+			}
+		}
+		for _, retained := range held.Retained {
+			if retained.Version == version && retained.Digest != "" {
+				if sealed, err := d.sealedPackageDescriptor(id, version, retained.Digest); err == nil && sealed.Blueprint != nil {
+					return *sealed.Blueprint, heldCopy, nil
+				}
+			}
 		}
 	}
 	return platform.PackageBlueprint{}, nil, fmt.Errorf("application package %s@%s is unavailable", id, version)
