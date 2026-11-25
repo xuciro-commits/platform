@@ -495,7 +495,7 @@ func (s exprScope) call(n *exprNode, want string) (*object, string, error) {
 	name := n.name
 	switch name {
 	case "today", "now", "me":
-		kinds := map[string]string{"today": "date", "now": "datetime", "me": "text"}
+		kinds := map[string]string{"today": "date", "now": "datetime", "me": "reference"}
 		return exprObject("$"+name, kinds[name]), kinds[name], nil
 	case "and", "or", "not":
 		args := make([]any, 0, len(n.args))

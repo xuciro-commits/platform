@@ -144,6 +144,15 @@ func expandObject(body *object, path string, definitions map[string]*object, typ
 			}
 		}
 	}
+	if value, ok := body.get("createTransaction"); ok {
+		creation := &object{}
+		creation.set("transaction", value)
+		if err := expandAction(creation, s, path+": createTransaction"); err != nil {
+			return err
+		}
+		compiled, _ := creation.get("transaction")
+		body.set("createTransaction", compiled)
+	}
 	value, declared := body.get("actions")
 	actions, _ := value.([]any)
 	if !declared {
@@ -242,6 +251,8 @@ func expandAction(action *object, base exprScope, at string) error {
 				change.set("field", field)
 				if src, _ := set.values[field].(string); src == "$subject" {
 					change.set("from", "$subject")
+				} else if strings.ReplaceAll(src, " ", "") == "me()" {
+					change.set("from", "$me")
 				} else {
 					want := s.objects[target][field].kind
 					raw := set.values[field]
