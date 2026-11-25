@@ -11,7 +11,7 @@ const styles = stylex.create({
   artwork: { width: "min(100%, 560px)", aspectRatio: "20 / 11", backgroundImage: "url(/media/workspace-empty.avif)", backgroundPosition: "center", backgroundSize: "contain", backgroundRepeat: "no-repeat" },
 });
 
-export function WorkspaceWelcome() {
+export function WorkspaceWelcome({ canInstall = true }: { canInstall?: boolean }) {
   return (
     <Center axis="both" padding={6} minHeight="70dvh">
       <Card padding={8} maxWidth={760} width="100%">
@@ -19,7 +19,7 @@ export function WorkspaceWelcome() {
           <Card variant="transparent" padding={0} xstyle={styles.artwork} />
           <Heading level={2}>{t("Your workspace is ready")}</Heading>
           <Text type="body" color="secondary">{t("Install your first application to bring your workspace to life.")}</Text>
-          <Button variant="primary" size="lg" label={t("Explore marketplace")} onClick={() => void navigate("/delivery/marketplace")} />
+          {canInstall && <Button variant="primary" size="lg" label={t("Explore marketplace")} onClick={() => void navigate("/delivery/marketplace")} />}
         </VStack>
       </Card>
     </Center>

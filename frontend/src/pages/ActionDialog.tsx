@@ -101,7 +101,7 @@ export function ActionDialog({ action, described, heading, confirm, id, revision
       const root = formRef.current;
       if (!root) return;
       const focusable = root.querySelector<HTMLElement>(
-        "input:not([disabled]):not([type=hidden]), textarea:not([disabled]), [role=combobox]:not([aria-disabled=true])",
+        "input:not([role=combobox]):not([disabled]):not([type=hidden]), textarea:not([disabled])",
       );
       focusable?.focus();
     });

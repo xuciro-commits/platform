@@ -89,12 +89,14 @@ test("official tenant: a rep sees only their own leads and deals while the sales
   await crm("Deals");
   await expect(page.getByRole("main", { name: "Deals", exact: true }).getByText("曦和精密", { exact: true })).toHaveCount(0);
   await expect(page.getByRole("navigation", { name: "Primary navigation" }).getByRole("link", { name: "Settings", exact: true })).toHaveCount(0);
+  for (const builderApp of ["Ontology", "Delivery", "Admin"]) await expect(page.getByRole("link", { name: builderApp, exact: true })).toHaveCount(0);
 
   await as("manager-1");
   await crm("Deals");
   await page.getByRole("radio", { name: "Table" }).click();
   await expect(page.getByRole("main", { name: "Deals", exact: true }).getByText("曦和精密", { exact: true }).first()).toBeVisible();
   await expect(page.getByRole("navigation", { name: "Primary navigation" }).getByRole("link", { name: "Settings", exact: true })).toBeVisible();
+  for (const builderApp of ["Ontology", "Delivery", "Admin"]) await expect(page.getByRole("link", { name: builderApp, exact: true })).toHaveCount(0);
 });
 
 test("official tenant: the deal is won and the CRM home counts its revenue", async () => {

@@ -411,7 +411,7 @@ export function ListView<Answer, Row>({ definition, read, primary, back, exportR
                         <IconButton label={t("Refresh")} tooltip={t("Refresh")} variant="ghost" size="sm" icon={<Icon icon={ArrowPathIcon} size="sm" />} onClick={reread} />
                         {powerToggle}
                         <Divider orientation="vertical" />
-                        <HStack gap={1} vAlign="center" role="group" aria-label={t("View options")}>
+                        <HStack gap={1} vAlign="center" wrap="wrap" role="group" aria-label={t("View options")}>
                           {(lanes || Boolean(definition.calendar?.fields.length) || Boolean(definition.gantt)) && (
                             <SegmentedControl size="sm" label={t("Layout")} value={view.layout} onChange={(layout) => update({ layout: layout as ViewState["layout"], lanes: lanes?.key ?? view.lanes })}>
                               <SegmentedControlItem value="table" label={t("Table")} icon={<Icon icon={TableCellsIcon} size="sm" />} />

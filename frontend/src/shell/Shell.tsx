@@ -93,33 +93,57 @@ export function Shell() {
     if (!destination) toast({ body: t("This legacy link has no corresponding page in the new frontend.") });
   }, [signedIn, legacy, hash, resource, resourcePath, toast]);
   const available = useMemo(() => {
-    const granted: Record<string, boolean> = me.status === "ready" ? { admin: me.data.apps.some((entry) => entry.id === "platform"), host: Boolean(me.data.hostAdmin) } : {};
-    const fixed = apps.filter((known) => me.status !== "ready" || known.group !== "manage" || granted[known.id]);
+    if (me.status !== "ready") return apps;
+    const admin = me.data.apps.some((entry) => entry.id === "platform");
+    const host = Boolean(me.data.hostAdmin);
+    const builder = admin || host || me.data.apps.some((entry) => entry.id === "build" && entry.role !== "user");
+    const ai = builder || me.data.apps.some((entry) => entry.id === "ai" || entry.id === "agent");
+    const operations = admin || host || me.data.apps.some((entry) => entry.id === "flow" || entry.id === "data");
+    const granted: Record<string, boolean> = {
+      home: true,
+      data: builder,
+      ontology: builder,
+      logic: builder,
+      apps: builder,
+      ai,
+      delivery: builder,
+      operations,
+      admin,
+      host,
+    };
+    const fixed = apps.filter((known) => granted[known.id]).map((known) =>
+      known.id === "home" && !builder
+        ? { ...known, sections: known.sections.map((section) => ({ ...section, items: section.items.filter((entry) => entry.id === "overview" || entry.id === "inbox") })) }
+        : known,
+    );
     return projected.status === "ready" ? [...fixed, ...installedApps(projected.data, entities.status === "ready" ? entities.data : []).filter((app) => !apps.some((known) => known.id === app.id))] : fixed;
   }, [projected, me, entities]);
-  const { app, item, found } = locate(path, available);
+  const directObject = segments[1] === "ontology" && segments[2] === "objects" && Boolean(segments[3]);
+  const { app, item, found } = locate(path, directObject ? apps : available);
+  const navApp = available.some((candidate) => candidate.id === app.id) ? app : available[0];
+  const navItem = navApp === app && found ? item : undefined;
   const object = item.object ?? (app.id === "ontology" && item.id === "objects" ? decodeURIComponent(segments[3] ?? "") : "");
   const listPath = app.id === "ontology" && item.id === "objects" ? `/ontology/objects/${encodeURIComponent(object)}` : item.object ? `/${app.id}/${item.id}` : undefined;
   if (!session) return <SignIn />;
   if (legacy) return null;
   const Entry = entries[`${app.id}/${item.id}`];
-  const retiredLink = projected.status === "ready" && segments[3] && !available.some((application) => application.id === segments[1]);
+  const retiredLink = projected.status === "ready" && segments[3] && !directObject && !available.some((application) => application.id === segments[1]);
   const missing = !found && projected.status === "ready" && me.status === "ready";
   const content = retiredLink ? <RetainedRecord key={path} path={path} />
-    : missing ? <Missing home={pathOf(app)} label={t(app.label)} />
+    : missing ? <Missing home={pathOf(navApp)} label={t(navApp.label)} />
     : Entry ? <Entry key={`${app.id}/${item.id}`} />
     : app.dashboard && item.id === "dashboard" ? <AppDashboard key={app.id} title={item.label} blocks={app.dashboard} listOf={(type) => listOf(app, type)} />
     : app.group === "installed" && item.settings ? <SettingsTables key={`${app.id}/${item.id}`} title={item.label} types={item.settings} />
     : app.group === "installed" && item.object && listPath ? <Records key={`${app.id}/${item.id}`} declared={{ title: item.label, about: item.description ?? "", type: item.object }} listPath={listPath} id={segments[3]} />
     : null;
   return (
-    <CommandSearch app={app} item={item} apps={available} tenant={session.tenant}>
+    <CommandSearch app={navApp} item={navItem ?? navApp.sections[0].items[0]} apps={available} tenant={session.tenant}>
       <AppShell
         contentPadding={0}
-        sideNav={<Navigation app={app} item={found ? item : undefined} apps={available} object={object || undefined} listPath={listPath} />}
+        sideNav={<Navigation app={navApp} item={navItem} apps={available} object={object || undefined} listPath={listPath} />}
         mobileNav={{ content: (
-          <MobileNav header={<AppRail current={app} apps={available} compact />}>
-            <AppSidebar app={app} item={found ? item : undefined} apps={available} object={object || undefined} listPath={listPath} inDrawer />
+          <MobileNav header={<AppRail current={navApp} apps={available} compact />}>
+            <AppSidebar app={navApp} item={navItem} apps={available} object={object || undefined} listPath={listPath} inDrawer />
           </MobileNav>
         ) }}
       >
