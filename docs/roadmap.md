@@ -112,7 +112,7 @@
     来电 `Call.Connect` 让 200 OK 只带协商好的编解码，外呼 `DialBrowser` 把浏览器的编解码报给中继；通话结束即关媒体，浏览器断线即挂断。
     媒体端口与 ICE 候选只用网关对中继公布的地址。测试用 pion 对端与模拟手机核对双向语音与按键（`make test-voice`）。
   - B3e 已做（网关侧）：`gateway.Desk` 把来电写成振铃记录、先接者得，外呼按记录挑空闲中继拨出，浏览器挂断即挂线，重启时把未结束的通话记失败；
-    平台客户端 `capabilities/voice/records` 只走公开接口。中继可配外呼号码头与固定头（`dialing`）。
+    平台客户端 `capabilities/voice/records` 只走公开接口。接通写回失败时网关挂线，补写失败状态期间不重拨。中继可配外呼号码头与固定头（`dialing`）。
     真手机（Voice SIP Agent，Direct telephony）局域网连浏览器实测：来电与外呼都双向通话、挂断正常。已知限制：网关手机本机仍外放通话声音。
   - B3e 已做（浏览器）：外壳的通话条 `src/pages/CallDock.tsx`，改造自 `BannerFloating`；任何在视图 `call` 段声明了字段与动作的类型都得到来电横幅与通话条：
     接听经 `take` 写入浏览器的会话描述，网关的答复写回后接上声音，挂断经 `hangup`。trunk `phone` 用例以网关席位模拟来电、接听与结束。

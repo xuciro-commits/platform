@@ -16,11 +16,13 @@ import (
 // record only from the states the action allows, and a repeated key is answered
 // with the record it wrote the first time.
 type fakeRecords struct {
-	mu      sync.Mutex
-	recs    map[string]*Record
-	keys    map[string]string
-	actions []string
-	changes chan struct{}
+	mu            sync.Mutex
+	recs          map[string]*Record
+	keys          map[string]string
+	actions       []string
+	changes       chan struct{}
+	refuseConnect bool
+	failedWrites  int
 }
 
 func newFakeRecords() *fakeRecords {
@@ -39,6 +41,13 @@ func (f *fakeRecords) Submit(_ context.Context, action, id string, payload map[s
 		return got, nil
 	}
 	name := action[len("phone.call."):]
+	if name == "connect" && f.refuseConnect {
+		return "", &Refused{Status: 409, Code: "state"}
+	}
+	if name == "fail" && f.failedWrites > 0 {
+		f.failedWrites--
+		return "", context.DeadlineExceeded
+	}
 	from, ok := allowedFrom[name]
 	if !ok {
 		return "", &Refused{Status: 200, Code: "unknown", Message: action}
@@ -241,6 +250,32 @@ func TestDeskGivesUpOnCallsNotPlacedInTime(t *testing.T) {
 	recs.put(Record{ID: "CALL-8", State: "ringing", Direction: "outbound", Number: testNumber, Ended: true, CalledAt: time.Now()})
 	recs.wait(t, "failed", func(r Record) bool { return r.ID == "CALL-7" && r.State == "failed" })
 	recs.wait(t, "missed", func(r Record) bool { return r.ID == "CALL-8" && r.State == "missed:canceled" })
+}
+
+func TestDeskEndsTheLineWhenThePlatformRefusesToRecordTheConnection(t *testing.T) {
+	recs, tr := deskGateway(t)
+	recs.mu.Lock()
+	recs.refuseConnect = true
+	recs.failedWrites = 3
+	recs.mu.Unlock()
+	l, a := newLine(t), newAgent(t)
+	recs.put(Record{ID: "CALL-9", State: "ringing", Direction: "outbound", Number: testNumber, Agent: "member-1", Offer: string(a.offer), CalledAt: time.Now()})
+	o := tr.offer(t)
+	if err := o.session.RespondSDP(l.sdp()); err != nil {
+		t.Fatal(err)
+	}
+	recs.wait(t, "failed", func(r Record) bool { return r.ID == "CALL-9" && r.State == "failed" })
+	select {
+	case <-o.session.Context().Done():
+	case <-time.After(2 * time.Second):
+		t.Fatal("the trunk call is still open after the connection was refused")
+	}
+	select {
+	case next := <-tr.offers:
+		close(next.done)
+		t.Fatal("the call was dialed again while its failure was being written")
+	default:
+	}
 }
 
 func TestDeskClosesCallsAnEarlierRunLeftOpen(t *testing.T) {

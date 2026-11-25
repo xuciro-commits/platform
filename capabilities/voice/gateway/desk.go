@@ -65,13 +65,14 @@ type Desk struct {
 	mu      sync.Mutex
 	held    map[string]bool
 	signal  chan struct{}
+	done    chan struct{}
 }
 
 func NewDesk(records Records, log *slog.Logger) *Desk {
 	if log == nil {
 		log = slog.Default()
 	}
-	return &Desk{records: records, log: log, now: time.Now, poll: defaultPoll, held: map[string]bool{}, signal: make(chan struct{})}
+	return &Desk{records: records, log: log, now: time.Now, poll: defaultPoll, held: map[string]bool{}, signal: make(chan struct{}), done: make(chan struct{})}
 }
 
 // Attach gives the desk the gateway that carries its calls.
@@ -80,6 +81,7 @@ func (d *Desk) Attach(g *Gateway) { d.gw = g }
 // Run follows the call records until ctx ends: it closes what an earlier run left
 // open, then dials the outgoing calls agents place.
 func (d *Desk) Run(ctx context.Context) {
+	defer close(d.done)
 	d.reconcile(ctx)
 	tick := time.NewTicker(d.poll)
 	defer tick.Stop()
@@ -150,8 +152,7 @@ func (d *Desk) Incoming(c *Call) {
 			d.submit("fail", id, map[string]any{"failure": "The browser's audio could not be connected."}, key+":fail")
 			return
 		}
-		d.submit("connect", id, map[string]any{"agent": rec.Agent, "answer": string(answer)}, key+":connect")
-		d.talk(c, id, key)
+		d.connect(c, id, key, map[string]any{"agent": rec.Agent, "answer": string(answer)})
 		return
 	}
 }
@@ -189,8 +190,7 @@ func (d *Desk) outgoing(r Record) {
 			connect["organization"] = organization
 		}
 	}
-	d.submit("connect", r.ID, connect, key+":connect")
-	d.talk(call, r.ID, key)
+	d.connect(call, r.ID, key, connect)
 }
 
 func (d *Desk) dial(ctx context.Context, r Record) (*Call, []byte, error) {
@@ -203,6 +203,29 @@ func (d *Desk) dial(ctx context.Context, r Record) (*Call, []byte, error) {
 		err = dialErr
 	}
 	return nil, nil, err
+}
+
+func (d *Desk) connect(c *Call, id, key string, payload map[string]any) {
+	if _, err := d.submit("connect", id, payload, key+":connect"); err != nil {
+		ctx, cancel := context.WithTimeout(context.Background(), recordWait)
+		c.Hangup(ctx)
+		cancel()
+		c.end(Failed)
+		failure := map[string]any{"failure": "The platform could not record the connection."}
+		for {
+			_, err := d.submit("fail", id, failure, key+":fail")
+			var refused *Refused
+			if err == nil || errors.As(err, &refused) {
+				return
+			}
+			select {
+			case <-d.done:
+				return
+			case <-time.After(d.poll):
+			}
+		}
+	}
+	d.talk(c, id, key)
 }
 
 func (d *Desk) talk(c *Call, id, key string) {
