@@ -181,6 +181,7 @@
         ],
         "roles": {
           "build": "builder",
+          "party": "user",
           "crm": "salesrep"
         }
       },
@@ -191,6 +192,7 @@
         ],
         "roles": {
           "build": "user",
+          "party": "user",
           "crm": "salesrep"
         }
       },
@@ -200,6 +202,7 @@
           "manager"
         ],
         "roles": {
+          "party": "user",
           "crm": "salesmanager"
         }
       }

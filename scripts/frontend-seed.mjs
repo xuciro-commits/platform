@@ -230,7 +230,7 @@ const tenantPackages = {
   official: { packages: partyPackages, grants: {} },
   publisher: {
     packages: [...partyPackages, "./frontend-fixtures/projects-0.1.0.json", "./frontend-fixtures/assets-0.1.0.json"],
-    grants: { "admin-1": [["projects", "manager"], ["assets", "custodian"]], "user-1": [["projects", "member"], ["assets", "staff"]] },
+    grants: { "admin-1": [["party", "user"], ["projects", "manager"], ["assets", "custodian"]], "user-1": [["party", "user"], ["projects", "member"], ["assets", "staff"]] },
   },
 };
 
@@ -250,7 +250,11 @@ await Promise.all(["blank", "upgrade", "publisher", "official"].map(async (name)
   for (const path of plan.packages) installed.push((await installPackage(empty, path)).id);
   await empty.refresh();
   for (const [member, roles] of Object.entries(plan.grants)) {
-    for (const [app, role] of roles) await empty.submit("platform.member", member, "grant", { app, role }, "platform");
+    let revision = 0;
+    for (const [app, role] of roles) {
+      const accepted = await empty.submit("platform.member", member, "grant", { app, role }, "platform", revision);
+      revision = accepted.revision;
+    }
   }
   console.log(`frontend-seed: installed ${installed.join(", ")} in tenant ${name}`);
 }));

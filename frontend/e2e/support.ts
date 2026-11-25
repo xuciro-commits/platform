@@ -5,13 +5,17 @@ export async function signIn(page: Page, seat = "admin-1 · acceptance") {
   const signedIn = page.getByRole("button", { name: /^(Account|Open navigation)$/ });
   const cached = sessions.get(seat);
   if (cached) {
-    if (page.url() === "about:blank") await page.goto("/");
-    await page.evaluate((raw) => sessionStorage.setItem("platform:session", raw), cached);
+    if (!page.url().startsWith("http")) await page.goto("/");
+    await page.evaluate((raw) => {
+      sessionStorage.clear();
+      sessionStorage.setItem("platform:session", raw);
+    }, cached);
     await page.goto("/home/overview");
     await expect(signedIn).toBeVisible();
     return;
   }
   const [member, tenant] = seat.split(" · ");
+  if (page.url().startsWith("http")) await page.evaluate(() => sessionStorage.clear());
   await page.goto("/");
   await page.getByRole("button", { name: member, exact: true }).click();
   await expect(signedIn).toBeVisible();
