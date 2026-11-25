@@ -10,7 +10,7 @@ const files = process.argv.slice(2).length ? process.argv.slice(2) : defaultFile
 async function connect(tenant) {
   const headers = { authorization: "Bearer admin", "platform-tenant": tenant, "content-type": "application/json" };
   const call = async (path, body) => {
-    const response = await fetch(host + path, { method: body ? "POST" : "GET", headers, body: body ? JSON.stringify(body) : undefined, signal: AbortSignal.timeout(20000) });
+    const response = await fetch(host + path, { method: body ? "POST" : "GET", headers, body: body ? JSON.stringify(body) : undefined, signal: AbortSignal.timeout(120000) });
     const answer = await response.json();
     if (!response.ok || answer.error) throw new Error(`${path}: ${JSON.stringify(answer.error ?? answer)}`);
     return answer;
@@ -31,7 +31,7 @@ async function connect(tenant) {
     const response = await fetch(host + "/v1/submissions", {
       method: "POST",
       headers: { ...headers, ...(version ? { "platform-schema-version": version.version } : {}) },
-      signal: AbortSignal.timeout(20000),
+      signal: AbortSignal.timeout(120000),
       body: JSON.stringify({
         tenantId: identity.tenantId,
         principalId: identity.principalId,
@@ -229,8 +229,9 @@ for (const file of files) {
 const tenantPackages = {
   official: { packages: partyPackages, grants: {} },
   phone: {
-    packages: [...partyPackages, "./frontend-fixtures/call-0.1.0.json", "./frontend-fixtures/phone-0.1.0.json"],
-    grants: { "user-1": [["party", "user"], ["phone", "agent"]], "manager-1": [["phone", "gateway"]] },
+    packages: [...partyPackages, "./frontend-fixtures/call-0.1.0.json", "./frontend-fixtures/phone-0.1.0.json", "./frontend-fixtures/crm-official-0.3.1.json"],
+    grants: { "user-1": [["party", "user"], ["phone", "agent"], ["crm", "salesrep"]], "manager-1": [["party", "user"], ["phone", "gateway"]] },
+    bind: ["call/1"],
   },
   publisher: {
     packages: [...partyPackages, "./frontend-fixtures/projects-0.1.0.json", "./frontend-fixtures/assets-0.1.0.json"],
@@ -259,6 +260,11 @@ await Promise.all(["blank", "upgrade", "publisher", "official", "phone"].map(asy
       const accepted = await empty.submit("platform.member", member, "grant", { app, role }, "platform", revision);
       revision = accepted.revision;
     }
+  }
+  for (const protocol of plan.bind ?? []) {
+    const providers = (await empty.call("/v1/protocols")).find((entry) => entry.id === protocol)?.providers ?? [];
+    if (providers.length !== 1) throw new Error(`${name}: ${protocol} has ${providers.length} providers, expected one`);
+    await empty.submit("platform.protocol", protocol, "bind", { provider: providers[0] }, "platform");
   }
   console.log(`frontend-seed: installed ${installed.join(", ")} in tenant ${name}`);
 }));
