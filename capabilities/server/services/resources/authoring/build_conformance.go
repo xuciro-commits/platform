@@ -1,7 +1,6 @@
 package authoring
 
 import (
-	"bytes"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -59,67 +58,40 @@ func (p PendingCheck) Run(tenant string, caller platform.Member, env CheckEnviro
 	if p.setup.Secret != "" {
 		credential, allowed = env.Credential(p.setup.Secret, "implementation/"+p.setup.Implementation, p.setup.Address)
 	}
-	run := runConformance(p.contract, p.implementation, p.setup.Address, credential, allowed, env.Send, p.setup.ID, now)
+	key := fmt.Sprintf("conformance:%s:%s:%d", tenant, p.setup.ID, p.setup.Revision)
+	run := protocol.ConformanceRun{At: now, Passed: len(p.contract.Tests) > 0, Cases: []protocol.ConformanceCase{}}
+	for _, test := range p.contract.Tests {
+		outcome := conformanceCase(p.implementation, p.setup, test, credential, allowed, env.Send, key+":"+test.Name)
+		run.Passed = run.Passed && outcome.OK
+		run.Cases = append(run.Cases, outcome)
+	}
 	run.Fingerprint = protocol.ConnectorFingerprint(p.contract, p.implementation, p.setup.Address, p.setup.Secret)
 	return ConnectorTestedSubmission(tenant, caller, p.setup, run)
 }
 
-func runConformance(c protocol.ProtocolContract, i protocol.ProtocolImplementation, address string, credential []byte, allowed bool,
-	send func(*http.Request, bool) (*http.Response, error), key string, now time.Time) protocol.ConformanceRun {
-	run := protocol.ConformanceRun{At: now, Passed: len(c.Tests) > 0, Cases: []protocol.ConformanceCase{}}
-	for _, test := range c.Tests {
-		outcome := conformanceCase(i, test, address, credential, allowed, send, key)
-		run.Passed = run.Passed && outcome.OK
-		run.Cases = append(run.Cases, outcome)
-	}
-	return run
-}
-
-func conformanceCase(i protocol.ProtocolImplementation, test protocol.ContractTest, address string, credential []byte, allowed bool,
+func conformanceCase(i protocol.ProtocolImplementation, setup ConnectorSetup, test protocol.ContractTest, credential []byte, allowed bool,
 	send func(*http.Request, bool) (*http.Response, error), key string) protocol.ConformanceCase {
 	out := protocol.ConformanceCase{Name: test.Name}
 	at := slices.IndexFunc(i.Requests, func(r protocol.ImplementationRequest) bool { return r.Action == test.Action })
-	if at < 0 || !slices.Contains(i.Origins, protocol.ConnectorOrigin(address)) {
-		out.Detail = "the connector has no request for " + test.Action + " at " + address
+	if at < 0 || !slices.Contains(i.Origins, protocol.ConnectorOrigin(setup.Address)) {
+		out.Detail = "the connector has no request for " + test.Action + " at " + setup.Address
 		return out
 	}
-	request := i.Requests[at]
-	path, err := protocol.ConnectorPath(request.Path, test.Payload)
+	request, err := connectorWriteback(i, setup.Implementation, setup.Address, setup.Secret, i.Requests[at], test.Payload)
 	if err != nil {
 		out.Detail = err.Error()
 		return out
 	}
-	var body io.Reader
-	if request.Method != http.MethodGet && request.Method != http.MethodDelete {
-		payload := test.Payload
-		if payload == nil {
-			payload = map[string]any{}
-		}
-		raw, _ := json.Marshal(payload)
-		body = bytes.NewReader(raw)
+	if (i.Credential != "" || request.Secret != "") && !allowed {
+		out.Detail = "the credential is missing, or its allowed uses do not include this connector at " + setup.Address
+		return out
 	}
-	req, err := http.NewRequest(request.Method, address+path, body)
+	req, err := request.HTTPRequest(key, credential)
 	if err != nil {
 		out.Detail = err.Error()
 		return out
 	}
-	req.Header.Set("Accept", "application/json")
-	req.Header.Set("Idempotency-Key", key+":"+test.Name)
-	if body != nil {
-		req.Header.Set("Content-Type", "application/json")
-	}
-	if i.Credential != "" {
-		if !allowed {
-			out.Detail = "the credential is missing, or its allowed uses do not include this connector at " + address
-			return out
-		}
-		header := "Authorization"
-		if i.Credential == "api-key" {
-			header = "X-API-Key"
-		}
-		req.Header.Set(header, string(credential))
-	}
-	resp, err := send(req, false)
+	resp, err := send(req, request.AllowPrivate)
 	if err != nil {
 		out.Detail = "no answer: " + err.Error()
 		return out

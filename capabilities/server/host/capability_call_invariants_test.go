@@ -52,11 +52,11 @@ func TestInvariantK46BoundConnectorServesCapabilityCallsThroughOutboundEffects(t
 	}
 
 	live.accept(t, "build.contract.create", build.ContractType, "CALL", map[string]any{"name": "telephony.call", "major": 1, "title": "Phone calls",
-		"actions": []runtimeprotocol.ContractAction{{Name: "dial", Title: "Dial", Payload: []platform.Field{{Name: "number", Label: "Number", Type: "text", Required: true}}}},
-		"tests":   []runtimeprotocol.ContractTest{{Name: "dials", Action: "dial", Payload: map[string]any{"number": "+15550100"}, Expect: []string{"call"}}}})
+		"actions": []runtimeprotocol.ContractAction{{Name: "dial", Title: "Dial", Payload: []platform.Field{{Name: "number", Label: "Number", Type: "text", Required: true}}}, {Name: "status", Title: "Status"}},
+		"tests":   []runtimeprotocol.ContractTest{{Name: "dials", Action: "dial", Payload: map[string]any{"number": "+15550100"}, Expect: []string{"call"}}, {Name: "checks-status", Action: "status"}}})
 	live.accept(t, "build.contract.publish", build.ContractType, "CALL", map[string]any{})
 	live.accept(t, "build.implementation.create", build.ImplementationType, "CLOUDTALK", map[string]any{"name": "cloudtalk", "title": "CloudTalk", "contract": contract,
-		"kind": "connector", "origins": []string{"https://api.cloudtalk.example"}, "requests": []runtimeprotocol.ImplementationRequest{{Action: "dial", Method: "POST", Path: "/calls/{number}"}}})
+		"kind": "connector", "origins": []string{"https://api.cloudtalk.example"}, "requests": []runtimeprotocol.ImplementationRequest{{Action: "dial", Method: "POST", Path: "/calls/{number}"}, {Action: "status", Method: "GET", Path: "/status"}}})
 	live.accept(t, "build.implementation.publish", build.ImplementationType, "CLOUDTALK", map[string]any{})
 	live.accept(t, "build.connectorsetup.create", build.ConnectorSetupType, "CLOUDTALK", map[string]any{"implementation": connector, "address": "https://api.cloudtalk.example"})
 
@@ -87,6 +87,17 @@ func TestInvariantK46BoundConnectorServesCapabilityCallsThroughOutboundEffects(t
 	member, _ := live.Member("admin")
 	if _, refused := live.Submit(member, bind, invariantClock); refused != nil {
 		t.Fatalf("a tested connector binds: %+v", refused)
+	}
+	const statusRequest = "GET https://api.cloudtalk.example/status "
+	if got := sent[len(sent)-1]; got != statusRequest {
+		t.Fatalf("the test sends a GET without a body: %q", got)
+	}
+	if _, _, refused := live.Invoke(member, contract, "status", "", []byte("{}"), "check-status", invariantClock); refused != nil {
+		t.Fatalf("the bound connector accepts the status call: %+v", refused)
+	}
+	deliver(live.Tenant, invariantClock)
+	if got := sent[len(sent)-1]; got != statusRequest || len(sent) != 3 {
+		t.Fatalf("the production GET has the same request shape: %q", sent)
 	}
 	tested := len(sent)
 
@@ -138,5 +149,22 @@ func TestInvariantK46BoundConnectorServesCapabilityCallsThroughOutboundEffects(t
 	deliver(replayed.Tenant, invariantClock.Add(2*time.Hour))
 	if after := replayed.recordImage(t); !reflect.DeepEqual(before, after) || len(sent) != tested+2 {
 		t.Fatalf("replay rebuilds the calls without calling the connector again: %d sent", len(sent)-tested)
+	}
+
+	pending, ok := live.router().Submission(member.ID, contract, "dial", "", platform.Raw(map[string]any{"number": "+15550125"}), "before-unbind")
+	if !ok {
+		t.Fatal("the bound connector accepts preparation of another call")
+	}
+	unbind := live.submission(controlowner.SchemaProtocolBind, controlowner.ProtocolType, contract, map[string]any{"provider": ""})
+	unbind.PrincipalId, unbind.Authority = "admin", controlowner.PlatformApp
+	if _, refused := live.Submit(member, unbind, invariantClock); refused != nil {
+		t.Fatalf("unbind the connector: %+v", refused)
+	}
+	if _, refused := live.Submit(member, pending, invariantClock); refused == nil || !strings.Contains(refused.Message, "not bound") {
+		t.Fatalf("a pending call for an unbound connector must be refused: %+v", refused)
+	}
+	deliver(live.Tenant, invariantClock.Add(3*time.Hour))
+	if len(sent) != tested+2 {
+		t.Fatal("a refused pending call must not send anything")
 	}
 }

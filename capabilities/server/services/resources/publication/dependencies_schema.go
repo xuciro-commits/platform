@@ -6,11 +6,12 @@ import (
 	"fmt"
 	"slices"
 
+	"platformserver/kernel/protocol"
 	"platformserver/platform"
 )
 
 func (resolver Resolver) checkReleaseBindings(ref platform.AssetRef, body []byte, declared []platform.AssetRef) error {
-	description, err := resolver.describeAsset(platform.ReleaseAsset{Ref: ref, Body: body}, true)
+	description, err := resolver.describeAsset(platform.ReleaseAsset{Ref: ref, Body: body, Requires: declared}, true)
 	if err != nil {
 		return err
 	}
@@ -26,7 +27,8 @@ func (resolver Resolver) CheckAssetDependencies(asset platform.ReleaseAsset) err
 	if asset.Provides == nil {
 		return resolver.checkReleaseBindings(asset.Ref, asset.Body, asset.Requires)
 	}
-	description, err := resolver.DescribeAsset(asset)
+	legacyConnector := asset.Ref.Kind == protocol.AssetImplementation && len(asset.Requires) == 0
+	description, err := resolver.describeAsset(asset, legacyConnector)
 	if err != nil {
 		return err
 	}

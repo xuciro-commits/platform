@@ -21,7 +21,7 @@ const (
 	ImplementationConnector                    = "connector"
 )
 
-var implementationPlaceholder = regexp.MustCompile(`\{([^{}]*)\}`)
+var implementationPlaceholder = regexp.MustCompile(`\{([^{}]+)\}`)
 
 type ProtocolImplementation struct {
 	Name        string                  `json:"name"`
@@ -65,6 +65,9 @@ func ConnectorFingerprint(c ProtocolContract, i ProtocolImplementation, address,
 }
 
 func ConnectorPath(path string, payload map[string]any) (string, error) {
+	if err := checkConnectorTemplate(path); err != nil {
+		return "", err
+	}
 	missing := ""
 	out := implementationPlaceholder.ReplaceAllStringFunc(path, func(match string) string {
 		value, found := payload[match[1:len(match)-1]]
@@ -78,6 +81,22 @@ func ConnectorPath(path string, payload map[string]any) (string, error) {
 		return "", fmt.Errorf("the path needs %s, which the test does not give", missing)
 	}
 	return out, nil
+}
+
+func checkConnectorTemplate(path string) error {
+	if strings.ContainsAny(implementationPlaceholder.ReplaceAllString(path, ""), "{}") {
+		return fmt.Errorf("the path %q has a malformed parameter placeholder", path)
+	}
+	return nil
+}
+
+func (i ProtocolImplementation) CheckPathTemplates() error {
+	for _, request := range i.Requests {
+		if err := checkConnectorTemplate(request.Path); err != nil {
+			return fmt.Errorf("Connector %s action %s: %w", i.Name, request.Action, err)
+		}
+	}
+	return nil
 }
 
 const (

@@ -138,6 +138,11 @@ func (e Environment) InstallCandidate(candidate protocol.ReleaseCandidate, b bui
 	if err := install(kind(platform.AssetPropertyType, platform.AssetValueType), b.InstallDefinitionAsset); err != nil {
 		return err
 	}
+	for _, definition := range []platform.AssetKind{protocol.AssetContract, protocol.AssetImplementation} {
+		if err := install(kind(definition), b.InstallDefinitionAsset); err != nil {
+			return err
+		}
+	}
 	definitions := map[string][]json.RawMessage{build.ObjectType: {}}
 	processes := map[string][]json.RawMessage{}
 	for _, asset := range candidate.Assets {
@@ -147,7 +152,7 @@ func (e Environment) InstallCandidate(candidate protocol.ReleaseCandidate, b bui
 		if asset.Ref.Kind == platform.AssetObject && slices.ContainsFunc(b.Manifest().Entities, func(e platform.RecordType) bool { return e.Type == asset.Ref.Name }) {
 			continue
 		}
-		if kind(platform.AssetPropertyType, platform.AssetValueType, platform.AssetLinkType, platform.AssetQuery, platform.AssetObjectTypeGroup, platform.AssetFunction, platform.AssetCompute, platform.AssetAgent)(asset.Ref.Kind) || b.DefinitionMetadataKind(asset.Ref.Kind) {
+		if kind(platform.AssetPropertyType, platform.AssetValueType, platform.AssetLinkType, platform.AssetQuery, platform.AssetObjectTypeGroup, platform.AssetFunction, platform.AssetCompute, platform.AssetAgent, protocol.AssetContract, protocol.AssetImplementation)(asset.Ref.Kind) || b.DefinitionMetadataKind(asset.Ref.Kind) {
 			continue
 		}
 		if asset.SourceVersion != b.Manifest().Version {

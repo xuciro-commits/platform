@@ -370,6 +370,34 @@ func (r Client) Check(c Connection) (string, error) {
 	}
 }
 
+func (req WritebackRequest) HTTPRequest(key string, credential []byte) (*http.Request, error) {
+	var body io.Reader
+	if req.Consumer == "" || req.Body != nil {
+		raw, err := json.Marshal(req.Body)
+		if err != nil {
+			return nil, err
+		}
+		body = strings.NewReader(string(raw))
+	}
+	r, err := http.NewRequest(req.Method, req.URL, body)
+	if err != nil {
+		return nil, err
+	}
+	if body != nil {
+		r.Header.Set("Content-Type", "application/json")
+	}
+	r.Header.Set("Accept", "application/json")
+	r.Header.Set("Idempotency-Key", key)
+	if len(credential) != 0 {
+		header := req.Header
+		if header == "" {
+			header = "Authorization"
+		}
+		r.Header.Set(header, strings.TrimSpace(string(credential)))
+	}
+	return r, nil
+}
+
 func (c Client) Writeback(x platform.Effect) (out platform.Outcome) {
 	sum := sha256.Sum256([]byte(x.Body))
 	out = platform.Outcome{Effect: x.ID, Digest: hex.EncodeToString(sum[:])}
@@ -399,30 +427,23 @@ func (c Client) Writeback(x platform.Effect) (out platform.Outcome) {
 		answer.Digest = out.Digest
 		return answer
 	}
-	var requestBody any = req.Body
-	body, _ := json.Marshal(requestBody)
-	r, err := http.NewRequest(req.Method, req.URL, strings.NewReader(string(body)))
-	if err != nil {
-		out.Result, out.Detail = "rejected", "the request method or address is invalid"
-		return out
-	}
-	r.Header.Set("Content-Type", "application/json")
-	r.Header.Set("Accept", "application/json")
-	r.Header.Set("Idempotency-Key", x.ID)
+	key := x.ID
 	if req.Dispatch != "" {
-		r.Header.Set("Idempotency-Key", req.DispatchKey)
+		key = req.DispatchKey
 	}
+	var credential []byte
 	if req.Secret != "" {
-		v, ok := c.Credentials.CredentialHeader(req.Secret, req.CredentialConsumer(), req.URL)
+		var ok bool
+		credential, ok = c.Credentials.CredentialHeader(req.Secret, req.CredentialConsumer(), req.URL)
 		if !ok {
 			out.Result, out.Detail = "retry", "secret "+req.Secret+" missing"
 			return out
 		}
-		header := "Authorization"
-		if req.Header != "" {
-			header = req.Header
-		}
-		r.Header.Set(header, strings.TrimSpace(string(v)))
+	}
+	r, err := req.HTTPRequest(key, credential)
+	if err != nil {
+		out.Result, out.Detail = "rejected", "the request method or address is invalid"
+		return out
 	}
 	resp, err := c.Send(r, req.AllowPrivate)
 	switch {

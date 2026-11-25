@@ -361,6 +361,15 @@ func (resolver Resolver) describeAsset(asset platform.ReleaseAsset, historical b
 		if err := implementation.Check(); err != nil {
 			return out, err
 		}
+		if !historical {
+			if err := implementation.CheckPathTemplates(); err != nil {
+				return out, err
+			}
+		}
+		if !historical || len(asset.Requires) != 0 {
+			name, _, _ := strings.Cut(implementation.Contract, "/")
+			add(platform.AssetRef{App: asset.Ref.App, Kind: runtimeprotocol.AssetContract, Name: name})
+		}
 	case runtimeprotocol.AssetContract:
 		var contract runtimeprotocol.ProtocolContract
 		if err := json.Unmarshal(asset.Body, &contract); err != nil {

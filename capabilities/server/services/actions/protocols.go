@@ -329,6 +329,11 @@ func (r Router) ConnectorSubmission(principal, protocol, action string, payload 
 		Schema: &pb.SchemaRef{Name: served, Version: 1}, IdempotencyKey: key, CorrelationId: correlation, Payload: body}, owner, true
 }
 
+func (r Router) IsBoundConnector(protocol, implementation string) bool {
+	selected, bound := r.Bindings.get(protocol)
+	return bound && selected == implementation
+}
+
 func (r Router) Submission(principal, protocol, action, id string, payload []byte, key string) (*pb.Submission, bool) {
 	if sub, _, ok := r.ConnectorSubmission(principal, protocol, action, payload, key, ""); ok {
 		return sub, true

@@ -3,6 +3,7 @@ package authoring
 import (
 	"encoding/json"
 	"fmt"
+	"net/http"
 	"slices"
 	"strings"
 	"time"
@@ -75,24 +76,38 @@ func (b *Build) decideCapability(c platform.Caller, s *pb.Submission, now time.T
 	return nil, nil, false
 }
 
-func (b *Build) connectorRequest(in capabilityCallInput) (protocol.ImplementationRequest, ConnectorSetup, error) {
+func connectorWriteback(implementation protocol.ProtocolImplementation, identity, address, secret string, request protocol.ImplementationRequest, payload map[string]any) (dataowner.WritebackRequest, error) {
+	path, err := protocol.ConnectorPath(request.Path, payload)
+	if err != nil {
+		return dataowner.WritebackRequest{}, err
+	}
+	if request.Method == http.MethodGet || request.Method == http.MethodDelete {
+		payload = nil
+	} else if payload == nil {
+		payload = map[string]any{}
+	}
+	req := dataowner.WritebackRequest{Consumer: "implementation/" + identity, Method: request.Method, Transport: "http", URL: address + path, Secret: secret, Body: payload}
+	if implementation.Credential == "api-key" {
+		req.Header = "X-API-Key"
+	}
+	return req, nil
+}
+
+func (b *Build) connectorRequest(in capabilityCallInput) (dataowner.WritebackRequest, error) {
 	contract, implementation, found := b.ConnectorParts(in.Implementation)
 	if !found || implementation.Contract != in.Protocol || !slices.ContainsFunc(contract.Actions, func(a protocol.ContractAction) bool { return a.Name == in.Action }) {
-		return protocol.ImplementationRequest{}, ConnectorSetup{}, fmt.Errorf("%s does not serve %s#%s", in.Implementation, in.Protocol, in.Action)
+		return dataowner.WritebackRequest{}, fmt.Errorf("%s does not serve %s#%s", in.Implementation, in.Protocol, in.Action)
 	}
 	at := slices.IndexFunc(implementation.Requests, func(r protocol.ImplementationRequest) bool { return r.Action == in.Action })
 	setups, err := readDefinitionInventory[ConnectorSetup](b.host.Automation(platform.Caller{}, ID))
 	if err != nil {
-		return protocol.ImplementationRequest{}, ConnectorSetup{}, err
+		return dataowner.WritebackRequest{}, err
 	}
 	setup := slices.IndexFunc(setups, func(s ConnectorSetup) bool { return s.Implementation == in.Implementation && !s.Archived })
 	if at < 0 || setup < 0 {
-		return protocol.ImplementationRequest{}, ConnectorSetup{}, fmt.Errorf("%s is not set up", in.Implementation)
+		return dataowner.WritebackRequest{}, fmt.Errorf("%s is not set up", in.Implementation)
 	}
-	if _, err := protocol.ConnectorPath(implementation.Requests[at].Path, in.Payload); err != nil {
-		return protocol.ImplementationRequest{}, ConnectorSetup{}, err
-	}
-	return implementation.Requests[at], setups[setup], nil
+	return connectorWriteback(implementation, in.Implementation, setups[setup].Address, setups[setup].Secret, implementation.Requests[at], in.Payload)
 }
 
 func (b *Build) submitCapabilityCall(c platform.Caller, s *pb.Submission, now time.Time) (*pb.ChangeRecord, *platform.Error) {
@@ -108,10 +123,13 @@ func (b *Build) submitCapabilityCall(c platform.Caller, s *pb.Submission, now ti
 			return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "This capability call was already sent")
 		}
 		if !c.Replaying {
+			if !b.host.IsBoundConnector(in.Protocol, in.Implementation) {
+				return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "Capability {protocol} is not bound to {implementation}", in.Protocol, in.Implementation)
+			}
 			if known, err := b.ConnectorBindable(in.Protocol, in.Implementation); !known || err != nil {
 				return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "Capability {protocol} cannot be served by {implementation} now", in.Protocol, in.Implementation)
 			}
-			if _, _, err := b.connectorRequest(in); err != nil {
+			if _, err := b.connectorRequest(in); err != nil {
 				return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "{why}", err.Error())
 			}
 		}
@@ -129,22 +147,12 @@ func (b *Build) EventEffects(tenant string, c platform.Caller, e platform.Event,
 	}
 	var in capabilityCallInput
 	json.Unmarshal(s.GetPayload(), &in)
-	request, setup, err := b.connectorRequest(in)
+	req, err := b.connectorRequest(in)
 	if err != nil {
 		if preparing {
 			return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "{why}", err.Error())
 		}
 		return planned, nil
-	}
-	_, implementation, _ := b.ConnectorParts(in.Implementation)
-	path, _ := protocol.ConnectorPath(request.Path, in.Payload)
-	body := in.Payload
-	if body == nil {
-		body = map[string]any{}
-	}
-	req := dataowner.WritebackRequest{Consumer: "implementation/" + in.Implementation, Method: request.Method, Transport: "http", URL: setup.Address + path, Secret: setup.Secret, Body: body}
-	if implementation.Credential == "api-key" {
-		req.Header = "X-API-Key"
 	}
 	if preparing && req.Secret != "" {
 		if refusal := credential(req); refusal != nil {

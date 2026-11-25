@@ -114,6 +114,9 @@ func TestInvariantK45ConnectorBindsOnlyAfterItsConformanceTestsPass(t *testing.T
 	if last.Method != http.MethodPost || last.URL.String() != "https://api.cloudtalk.example/calls/+15550100" || !strings.Contains(bodies[len(bodies)-1], `"number":"+15550100"`) || last.Header.Get("Idempotency-Key") == "" {
 		t.Fatalf("the test calls the mapped request at the tenant's address: %s %s %s", last.Method, last.URL, bodies[len(bodies)-1])
 	}
+	if first := sent[len(sent)-2]; first.Header.Get("Idempotency-Key") == last.Header.Get("Idempotency-Key") {
+		t.Fatal("a fresh test run must reach the connector with its own idempotency key")
+	}
 	if refused := bind(); refused != nil {
 		t.Fatalf("a connector that passed with its current setup binds: %+v", refused)
 	}

@@ -17,7 +17,11 @@ var implementationKind = resourceKind[ontology.ImplementationRecord, ontology.Im
 	immutable:   "A published capability implementation keeps its name and the contract it implements",
 	records:     func(b *Build) map[string]ontology.ImplementationRecord { return b.implementations },
 	validate: func(b *Build, r ontology.ImplementationRecord) (ontology.ImplementationRecord, error) {
-		return r, b.checkImplementation(protocol.ProtocolImplementation(r.Definition()))
+		implementation := protocol.ProtocolImplementation(r.Definition())
+		if err := implementation.CheckPathTemplates(); err != nil {
+			return r, err
+		}
+		return r, b.checkImplementation(implementation)
 	},
 	identity:        func(a, b ontology.ImplementationRecord) bool { return a.Name == b.Name && a.Contract == b.Contract },
 	fromDeclaration: ontology.ImplementationRecordFromDeclaration,

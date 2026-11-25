@@ -21,6 +21,10 @@ func (t *Tenant) ProtocolProvider(protocol string) (string, bool) {
 	return t.router().ProtocolProvider(protocol)
 }
 
+func (h hostView) IsBoundConnector(protocol, implementation string) bool {
+	return h.t.router().IsBoundConnector(protocol, implementation)
+}
+
 func (t *Tenant) Invoke(m platform.Member, protocol, action, id string, payload []byte, key string, now time.Time) (*pb.EntityRef, *pb.ChangeRecord, *platform.Error) {
 	target, record, err, _ := t.invokeDiagnosed(m, protocol, action, id, payload, key, now)
 	return target, record, err

@@ -11,6 +11,7 @@ type BuildHost interface {
 	CompartmentExists(string) bool
 	ProjectApprovals(string) int
 	CheckResourceSchema(string, *platform.SchemaVersion) *platform.Error
+	IsBoundConnector(protocol, implementation string) bool
 	TransactionRuntime(BusinessRuntimeContext) TransactionExecutor
 	ManagedDefinition(platform.AssetRef) bool
 	Action(schema string) (app string, a platform.Action, ok bool)

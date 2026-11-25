@@ -3,12 +3,14 @@ package host
 import (
 	"maps"
 	"reflect"
+	"slices"
 	"strings"
 	"testing"
 
 	runtimeprotocol "platformserver/kernel/protocol"
 	"platformserver/platform"
 	"platformserver/services/actions"
+	trialowner "platformserver/services/devops/trials"
 	build "platformserver/services/resources/authoring"
 	controlowner "platformserver/services/security/control"
 )
@@ -61,6 +63,7 @@ func TestInvariantK40ConnectorImplementationsMatchTheirContract(t *testing.T) {
 	}{
 		{"a connector without a request for a contract action", map[string]any{"requests": []runtimeprotocol.ImplementationRequest{{Action: "hangup", Method: "POST", Path: "/hangup"}}}, "no request for action dial", false},
 		{"a path naming something that is not a parameter", map[string]any{"requests": []runtimeprotocol.ImplementationRequest{{Action: "dial", Method: "POST", Path: "/calls/{who}"}}}, "not a parameter of action dial", false},
+		{"an unclosed path placeholder", map[string]any{"requests": []runtimeprotocol.ImplementationRequest{{Action: "dial", Method: "POST", Path: "/calls/{number"}}}, "malformed parameter placeholder", false},
 		{"an origin with a path", map[string]any{"origins": []string{"https://api.cloudtalk.example/v1"}}, "not an exact https origin", false},
 		{"a plain http origin", map[string]any{"origins": []string{"http://api.cloudtalk.example"}}, "not an exact https origin", false},
 		{"a kind other than connector", map[string]any{"kind": "wasm"}, "must be a connector", true},
@@ -110,5 +113,28 @@ func TestInvariantK40ConnectorImplementationsMatchTheirContract(t *testing.T) {
 	}
 	if listedAfter := listed(replayed.Tenant); !reflect.DeepEqual(listedBefore, listedAfter) {
 		t.Fatalf("replay must install the same implementations: %+v != %+v", listedBefore, listedAfter)
+	}
+
+	root := platform.AssetRef{App: build.ID, Kind: runtimeprotocol.AssetImplementation, Name: "cloudtalk"}
+	contractRef := platform.AssetRef{App: build.ID, Kind: runtimeprotocol.AssetContract, Name: "telephony.call"}
+	assets, err := live.App(build.ID).(*build.Build).ReleaseAssets()
+	if err != nil {
+		t.Fatal(err)
+	}
+	assets = slices.DeleteFunc(assets, func(asset platform.ReleaseAsset) bool { return asset.Ref != root && asset.Ref != contractRef })
+	candidate, err := PublicationResolver().Candidate([]platform.AssetRef{root}, assets)
+	if err != nil || !slices.ContainsFunc(candidate.Assets, func(asset platform.ReleaseAsset) bool { return asset.Ref == contractRef }) {
+		t.Fatalf("the connector closes over its contract: %v", err)
+	}
+	environment, err := trialowner.PrepareEnvironment(live.apps, live.simulations, actions.NewAuthority, candidate, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	sandbox, err := candidateTestTenantWithEnvironment(candidate, live.member(t), simulationEnvironment{Environment: environment, Services: live.services})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := listed(sandbox).Implementations; len(got) != 1 || got[0].ID != runtimeprotocol.ImplementationIdentity(root.App, root.Name) {
+		t.Fatalf("the candidate sandbox must load the connector: %+v", got)
 	}
 }
