@@ -233,6 +233,12 @@ func expandAction(action *object, base exprScope, at string) error {
 		if step == nil {
 			continue
 		}
+		if use, ok := step.values["request"].(string); ok {
+			if err := expandRequest(step, use, s, at); err != nil {
+				return err
+			}
+			continue
+		}
 		target, err := stepTarget(step, s)
 		if err != nil {
 			return fmt.Errorf("%s step %s: %w", at, text(step, "name"), err)
@@ -272,6 +278,36 @@ func expandAction(action *object, base exprScope, at string) error {
 		}
 		s.steps[text(step, "name")] = target
 	}
+	return nil
+}
+
+func expandRequest(step *object, use string, s exprScope, at string) error {
+	if !step.has("name") {
+		step.set("name", "request")
+	}
+	payload := []any{}
+	if with := asObject(step.values["with"]); with != nil {
+		for _, field := range with.order() {
+			raw := with.values[field]
+			if _, isText := raw.(string); !isText {
+				raw = literalSource(raw)
+			}
+			compiled, err := compileAt(raw, s, "text", at+" step "+text(step, "name")+" "+field)
+			if err != nil {
+				return err
+			}
+			set := &object{}
+			set.set("field", field)
+			set.set("expr", compiled)
+			payload = append(payload, set)
+		}
+		step.remove("with")
+	}
+	request := &object{}
+	request.set("use", use)
+	request.set("payload", payload)
+	step.set("kind", "request")
+	step.set("request", request)
 	return nil
 }
 
