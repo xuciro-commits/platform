@@ -125,7 +125,7 @@ export function ActionDialog({ action, described, heading, confirm, id, revision
     ...(owned && !effectiveProject ? [t("Project")] : []),
     ...shownParameters.filter((parameter) => missingValue(parameter, values[parameter.name])).map((parameter) => {
       const field = described?.fields.find((candidate) => candidate.name === parameter.name);
-      return t(field?.title ?? parameter.label ?? parameter.name);
+      return t(parameter.label || field?.title || parameter.name);
     }),
   ];
   const missing = missingLabels.length > 0;

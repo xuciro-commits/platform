@@ -394,9 +394,11 @@ test("publisher tenant: projects lays its tasks on the Gantt chart and hours log
   await page.goto("/projects/projects.timelog");
   await page.getByRole("button", { name: "New", exact: true }).click();
   const entry = page.getByRole("dialog");
-  await entry.getByRole("combobox", { name: "Task", exact: true }).fill("Wireframes");
+  await entry.getByRole("combobox", { name: /^Task(?: Required)?$/ }).fill("Wireframes");
   await page.getByRole("option", { name: /Wireframes/ }).click();
-  await entry.getByLabel("Hours", { exact: true }).fill("2.5");
+  const hours = entry.getByRole("spinbutton", { name: /^Hours(?: Required)?$/ });
+  await hours.fill("2.5");
+  await hours.press("Tab");
   await entry.getByRole("button", { name: "Create", exact: true }).click();
   await expect(entry).toBeHidden();
 
@@ -411,7 +413,7 @@ test("publisher tenant: the custodian checks an asset out to a member, who sees 
   await expect(page.getByRole("heading", { level: 1, name: "Design laptop 16", exact: true })).toBeVisible();
   await page.getByRole("button", { name: "Check out", exact: true }).click();
   const checkout = page.getByRole("dialog", { name: "Check out", exact: true });
-  await checkout.getByRole("combobox", { name: "Check out to", exact: true }).fill("田雪");
+  await checkout.getByRole("combobox", { name: /^Check out to(?: Required)?$/ }).fill("田雪");
   await page.getByRole("option", { name: /田雪/ }).click();
   await checkout.getByRole("button", { name: "Check out", exact: true }).click();
   await expect(checkout).toBeHidden();
@@ -424,8 +426,8 @@ test("publisher tenant: the custodian checks an asset out to a member, who sees 
   await page.goto("/assets/assets.maintenance");
   await page.getByRole("button", { name: "New", exact: true }).click();
   const report = page.getByRole("dialog");
-  await report.getByRole("textbox", { name: "Problem or task", exact: true }).fill("Battery drains in an hour");
-  await report.getByRole("combobox", { name: "Asset", exact: true }).fill("Design");
+  await report.getByRole("textbox", { name: /^Problem or task(?: Required)?$/ }).fill("Battery drains in an hour");
+  await report.getByRole("combobox", { name: /^Asset(?: Required)?$/ }).fill("Design");
   await page.getByRole("option", { name: /Design laptop 16/ }).click();
   await report.getByRole("button", { name: "Create", exact: true }).click();
   await expect(page.getByRole("heading", { level: 1, name: "Battery drains in an hour", exact: true })).toBeVisible();
