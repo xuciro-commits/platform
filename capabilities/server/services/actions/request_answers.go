@@ -67,6 +67,13 @@ func (r RequestAnswers) answer(q PendingRequest, now time.Time) (refusal *platfo
 			platform.Raw(q.Payload), providerKey, s.GetIdempotencyKey(), now, q.Provider)
 		return record, refusal
 	})
+	if q.Reply == "" {
+		if err != nil {
+			outcome = err.Code.String()
+			return err
+		}
+		return r.Failure()
+	}
 	if err != nil {
 		answer.Outcome, answer.Code, answer.Reason = "refused", err.Code.String(), err.Message
 		outcome = answer.Code

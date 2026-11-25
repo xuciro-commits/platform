@@ -131,9 +131,7 @@ func (c Caller) Next(r *pb.ChangeRecord, sequence string, date time.Time) (strin
 	return c.rt.Next(c, r, sequence, date)
 }
 
-const TxnMaxSteps = 256
-
-const TxnMaxIterations = 1000
+const TxnMaxSteps, TxnMaxIterations = 256, 1000
 
 const TxnMaxExecutionSteps = TxnMaxSteps * TxnMaxIterations
 
@@ -160,6 +158,7 @@ type TxnStep struct {
 	Effect    *TxnEffect    `json:"effect,omitempty"`
 	Work      *TxnWork      `json:"work,omitempty"`
 	Call      *TxnCall      `json:"call,omitempty"`
+	Request   *TxnRequest   `json:"request,omitempty"`
 	ForEach   *TxnForEach   `json:"forEach,omitempty"`
 	Intervals *TxnIntervals `json:"intervals,omitempty"`
 	Refusals  []Refusal     `json:"refusals,omitempty"`
@@ -202,6 +201,11 @@ type TxnPost struct {
 type TxnEffect struct {
 	Writeback string   `json:"writeback"`
 	Payload   []TxnSet `json:"payload,omitempty"`
+}
+
+type TxnRequest struct {
+	Use     string   `json:"use"`
+	Payload []TxnSet `json:"payload,omitempty"`
 }
 
 type TxnWork struct {

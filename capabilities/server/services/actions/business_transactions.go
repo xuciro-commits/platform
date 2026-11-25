@@ -488,6 +488,19 @@ func (b *Runtime) transactAttempt(c platform.Caller, receipt *pb.ChangeRecord, t
 				}
 				continue
 			}
+			if step.Request != nil {
+				payload, problem := b.txnParameters(c, step.Request.Payload, scope, subject, facts, now)
+				if problem != nil {
+					return problem
+				}
+				protocol, action, _ := strings.Cut(step.Request.Use, "#")
+				target := receipt.GetChangeId() + "-" + step.Name
+				if frame != "" {
+					target += "-" + frame
+				}
+				c.Request(receipt, platform.Request{Protocol: protocol, Action: action, Target: target, Payload: payload})
+				continue
+			}
 			if step.Work != nil {
 				w := step.Work
 				assignment := platform.Assignment{Title: w.Title, Ref: txn.Subject + "/" + subjectID, Key: txn.Subject + "/" + subjectID + ":" + stepKey, Close: w.Close, Answers: w.Answers}

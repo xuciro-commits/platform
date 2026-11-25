@@ -271,14 +271,14 @@ func CheckTransactions(object Object, ctx TransactionContext, engines ...platfor
 				if step.ForEach != nil {
 					return fmt.Errorf("%s has unexpected iteration fields", where)
 				}
-				typed := map[string]bool{"post": step.Post != nil, "effect": step.Effect != nil, "work": step.Work != nil, "call": step.Call != nil, "intervals": step.Intervals != nil}
+				typed := map[string]bool{"post": step.Post != nil, "effect": step.Effect != nil, "work": step.Work != nil, "call": step.Call != nil, "request": step.Request != nil, "intervals": step.Intervals != nil}
 				count := 0
 				for _, present := range typed {
 					if present {
 						count++
 					}
 				}
-				if count > 0 || slices.Contains([]string{"post", "effect", "work", "call", "intervals"}, step.Kind) {
+				if count > 0 || slices.Contains([]string{"post", "effect", "work", "call", "request", "intervals"}, step.Kind) {
 					if count != 1 || !typed[step.Kind] || step.Link != nil || step.Sequence != nil || len(step.Changes) > 0 {
 						return fmt.Errorf("%s needs exactly its typed payload", where)
 					}

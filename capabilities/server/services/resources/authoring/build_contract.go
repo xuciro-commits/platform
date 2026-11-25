@@ -89,6 +89,18 @@ func (b *Build) checkUses(object ontology.Object) error {
 				return fmt.Errorf("Action %s uses %s, which is not an action of an installed capability contract", action.Name, used)
 			}
 		}
+		if action.Transaction == nil {
+			continue
+		}
+		undeclared := ""
+		ontology.WalkTxnSteps(action.Transaction.Steps, func(step platform.TxnStep) {
+			if step.Request != nil && undeclared == "" && !slices.Contains(action.Uses, step.Request.Use) {
+				undeclared = step.Request.Use
+			}
+		})
+		if undeclared != "" {
+			return fmt.Errorf("Action %s requests %s, which it does not declare in uses", action.Name, undeclared)
+		}
 	}
 	return nil
 }

@@ -349,6 +349,16 @@ func checkTypedTxnStep(ctx TransactionContext, step platform.TxnStep, scope plat
 		if err := check(w.Key, "text", "reference"); err != nil {
 			return err
 		}
+	case "request":
+		q := step.Request
+		contract, verb, found := strings.Cut(q.Use, "#")
+		name, major, versioned := strings.Cut(contract, "/")
+		if !found || verb == "" || !versioned || name == "" || major == "" {
+			return fmt.Errorf("Request steps name a capability contract action as name/major#action")
+		}
+		if err := parameters(q.Payload); err != nil {
+			return err
+		}
 	case "call":
 		call := step.Call
 		if call == nil || call.Ref.Check() != nil || call.Ref.Kind != platform.AssetQuery || call.Version < 0 || !slices.Contains([]string{"", "snapshot", "current"}, call.View) || !slices.Contains([]string{"text", "reference", "choice", "integer", "decimal", "boolean", "date", "datetime", "money"}, call.ResultType.Kind) {

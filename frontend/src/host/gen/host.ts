@@ -5770,6 +5770,11 @@ export type TxnRef = {
   via?: string;
 };
 
+export type TxnRequest = {
+  use: string;
+  payload?: TxnSet[];
+};
+
 export type TxnSet = {
   field: string;
   expr?: Expr;
@@ -5788,6 +5793,7 @@ export type TxnStep = {
   effect?: TxnEffect;
   work?: TxnWork;
   call?: TxnCall;
+  request?: TxnRequest;
   forEach?: TxnForEach;
   intervals?: TxnIntervals;
   refusals?: Refusal[];
