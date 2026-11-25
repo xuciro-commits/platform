@@ -533,5 +533,19 @@
   "Grant selected roles": "授予所选角色",
   "Manage all members": "管理全部成员",
   "Granted {count} role(s) to {member}. You can revoke them anytime under Admin → Members.": "已为 {member} 授予 {count} 项角色，随时可在「管理 → 成员」撤销。",
-  "Dismiss": "关闭提示"
+  "Dismiss": "关闭提示",
+  "Hide setup": "收起配置",
+  "Configure": "配置",
+  "Outbound origin": "出站地址",
+  "Requires a {kind} credential allowing consumer implementation/{id}.": "需要类型为 {kind} 的凭据，且允许用途包含 implementation/{id}。",
+  "Manage credentials": "管理凭据",
+  "Save setup": "保存配置",
+  "Save and run tests": "保存并运行测试",
+  "Run conformance tests": "运行一致性测试",
+  "Connector setup saved. Run conformance tests to verify before enabling.": "连接器配置已保存，请运行一致性测试验证后再启用。",
+  "Conformance tests requested. Refresh in a moment to view the latest results.": "已提交一致性测试请求，请稍后刷新查看最新结果。",
+  "Conformance tests are running in the background…": "一致性测试正在后台运行…",
+  "Last conformance test: {passed}/{total} passed": "最近一次一致性测试：通过 {passed}/{total} 项",
+  "Passed": "通过",
+  "Failed": "失败"
 }

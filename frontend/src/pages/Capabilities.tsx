@@ -18,6 +18,7 @@ import { apps, pathOf } from "../apps";
 import { type Api, reread, useRead } from "../host";
 import { t } from "../i18n";
 import { reasonOf, send } from "./act";
+import { ConnectorSetupCard, type ConnectorSetupRecord } from "./ConnectorSetupCard";
 import { PageTitle, useGutter } from "./frame";
 import { ListView } from "./ListPage";
 import { motionStyles } from "./motion";
@@ -64,13 +65,6 @@ function statusOf(protocol: Api.ProtocolInfo, nameOf: (id: string) => string): {
   return { label: t("Automatic"), dot: "accent" };
 }
 
-function connectorState(state?: string): { label: string; hint?: string } {
-  if (state === "passed") return { label: t("Tests passed") };
-  if (state === "unconfigured") return { label: t("Not set up"), hint: t("Add its address and credential in Connector setups, then run the contract tests.") };
-  if (state === "stale") return { label: t("Changed since the last test"), hint: t("Run the contract tests again in Connector setups before enabling it.") };
-  return { label: t("Not tested or failed"), hint: t("Run the contract tests in Connector setups; it can be enabled once they pass.") };
-}
-
 export function CapabilitiesList() {
   const protocols = useRead<Api.ProtocolInfo[]>("/v1/protocols");
   const { nameOf } = useAppDirectory();
@@ -78,7 +72,7 @@ export function CapabilitiesList() {
   return (
     <ListView
       read={protocols}
-      primary={empty ? <Button label={t("Browse marketplace")} variant="primary" href="/delivery/marketplace" /> : undefined}
+      primary={empty ? <Button label={t("Browse marketplace")} variant="primary" href="/delivery/marketplace?kind=capability" /> : undefined}
       definition={{
         title: "Capabilities",
         about: "Manage shared capabilities for this workspace. Choose a provider to enable its features across connected applications.",
@@ -110,6 +104,8 @@ export function CapabilityPage({ id }: { id: string }) {
   const gutter = useGutter();
   const protocols = useRead<Api.ProtocolInfo[]>("/v1/protocols");
   const actions = useRead<Api.Action[]>("/v1/actions");
+  const setups = useRead<Api.RecordPage>("/v1/records/build.connectorsetup?limit=200");
+  const credentials = useRead<Api.CredentialCatalog>("/v1/credentials");
   const { nameOf, hrefOf } = useAppDirectory();
   const toast = useToast();
   const protocol = protocols.status === "ready" ? protocols.data.find((candidate) => candidate.id === id) : undefined;
@@ -149,7 +145,8 @@ export function CapabilityPage({ id }: { id: string }) {
   const consumerNames = protocol.consumers.map(nameOf).join(", ");
   const title = protocol.title || protocol.id;
   const connectors = protocol.implementations ?? [];
-  const labelOf = (id: string) => connectors.find((connector) => connector.id === id)?.title || nameOf(id);
+  const setupRows = setups.status === "ready" ? (setups.data.records as ConnectorSetupRecord[]) : [];
+  const labelOf = (targetId: string) => connectors.find((connector) => connector.id === targetId)?.title || nameOf(targetId);
 
   const runBind = async (provider: string) => {
     if (!bindAction) return;
@@ -225,7 +222,7 @@ export function CapabilityPage({ id }: { id: string }) {
                   <VStack gap={2}>
                     <Text type="supporting" color="secondary">{t("No providers are installed for this capability yet.")}</Text>
                     <HStack>
-                      <Link href="/delivery/marketplace">{t("Browse marketplace")}</Link>
+                      <Link href="/delivery/marketplace?kind=capability">{t("Browse marketplace")}</Link>
                     </HStack>
                   </VStack>
                 ) : singleProvider && !protocol.bound ? (
@@ -286,35 +283,19 @@ export function CapabilityPage({ id }: { id: string }) {
                     <Heading level={2}>{t("Connectors")}</Heading>
                     <Link href="/ontology/connector-setups">{t("Connector setups")}</Link>
                   </HStack>
-                  {connectors.map((connector) => {
-                    const state = connectorState(connector.state);
-                    const active = protocol.bound === connector.id;
-                    return (
-                      <Card key={connector.id} padding={4}>
-                        <VStack gap={2}>
-                          <HStack gap={3} vAlign="center" hAlign="between" wrap="wrap">
-                            <VStack gap={1}>
-                              <Text type="body">{connector.title || connector.id}</Text>
-                              <Text type="supporting" color="secondary">{connector.origins.join(", ")}</Text>
-                            </VStack>
-                            <HStack gap={2} vAlign="center">
-                              <Token label={active ? t("Active") : state.label} color={active || connector.state === "passed" ? "green" : connector.state === "stale" ? "orange" : "gray"} size="sm" />
-                              {bindAction && !active && (
-                                <Button
-                                  label={t("Enable")}
-                                  variant="secondary"
-                                  size="sm"
-                                  isDisabled={busy || connector.state !== "passed"}
-                                  onClick={() => void runBind(connector.id)}
-                                />
-                              )}
-                            </HStack>
-                          </HStack>
-                          {!active && state.hint && <Text type="supporting" color="secondary">{state.hint}</Text>}
-                        </VStack>
-                      </Card>
-                    );
-                  })}
+                  {connectors.map((connector) => (
+                    <ConnectorSetupCard
+                      key={connector.id}
+                      connector={connector}
+                      setup={setupRows.find((row) => row.implementation === connector.id)}
+                      credentials={credentials.status === "ready" ? credentials.data.credentials : []}
+                      actions={actions.status === "ready" ? actions.data : []}
+                      active={protocol.bound === connector.id}
+                      busy={busy}
+                      canBind={Boolean(bindAction)}
+                      onEnable={() => void runBind(connector.id)}
+                    />
+                  ))}
                 </VStack>
               )}
 
