@@ -57,17 +57,47 @@ function useAppDirectory() {
   }, [applications]);
 }
 
+type CapabilityCallRecord = { protocol?: string; implementation?: string; state?: string };
+
 function statusOf(protocol: Api.ProtocolInfo, nameOf: (id: string) => string): { label: string; dot: Dot } {
   const connector = protocol.implementations?.find((candidate) => candidate.id === protocol.bound);
   if (protocol.bound) return { label: `${t("Active")}: ${connector?.title || nameOf(protocol.bound)}`, dot: "success" };
-  if (protocol.providers.length === 0) return { label: t("No providers installed"), dot: "neutral" };
+  if (protocol.providers.length === 0 && !(protocol.implementations?.length)) return { label: t("No providers installed"), dot: "neutral" };
   if (protocol.declared) return { label: t("Not enabled — entries hidden"), dot: "warning" };
   return { label: t("Automatic"), dot: "accent" };
 }
 
+function healthOf(
+  protocol: Api.ProtocolInfo,
+  calls: CapabilityCallRecord[],
+  setups: ConnectorSetupRecord[],
+  credentials: Api.CredentialInfo[],
+): { label: string; dot: Dot } {
+  if (!protocol.bound) return { label: "", dot: "neutral" };
+  const setup = setups.find((row) => row.implementation === protocol.bound);
+  if (setup?.secret) {
+    const cred = credentials.find((item) => item.id === setup.secret);
+    if (cred && cred.state !== "active") return { label: t("Credential disabled"), dot: "red" };
+  }
+  const recent = calls.filter((call) => call.protocol === protocol.id && call.implementation === protocol.bound);
+  if (recent.length === 0) return { label: t("No recent calls"), dot: "neutral" };
+  const latest = recent[0];
+  const failedCount = recent.slice(0, 5).filter((call) => call.state === "failed").length;
+  if (latest.state === "failed" || failedCount >= 2) return { label: t("Recent failures"), dot: "red" };
+  if (latest.state === "unknown") return { label: t("Outcome unknown"), dot: "warning" };
+  if (latest.state === "answered") return { label: t("Healthy"), dot: "success" };
+  return { label: t("In flight"), dot: "accent" };
+}
+
 export function CapabilitiesList() {
   const protocols = useRead<Api.ProtocolInfo[]>("/v1/protocols");
+  const calls = useRead<Api.RecordPage>("/v1/records/build.capabilitycall?limit=100&sort=-updatedAt");
+  const setups = useRead<Api.RecordPage>("/v1/records/build.connectorsetup?limit=200");
+  const credentials = useRead<Api.CredentialCatalog>("/v1/credentials");
   const { nameOf } = useAppDirectory();
+  const callRows = calls.status === "ready" ? (calls.data.records as CapabilityCallRecord[]) : [];
+  const setupRows = setups.status === "ready" ? (setups.data.records as ConnectorSetupRecord[]) : [];
+  const credRows = credentials.status === "ready" ? credentials.data.credentials : [];
   const empty = protocols.status === "ready" && protocols.data.length === 0;
   return (
     <ListView
@@ -84,14 +114,21 @@ export function CapabilitiesList() {
           {
             key: "status",
             header: "Status",
-            width: 240,
+            width: 220,
             text: (item) => statusOf(item, nameOf).label,
             dot: (item) => statusOf(item, nameOf).dot,
           },
           {
+            key: "health",
+            header: "Health",
+            width: 170,
+            text: (item) => healthOf(item, callRows, setupRows, credRows).label,
+            dot: (item) => healthOf(item, callRows, setupRows, credRows).dot,
+          },
+          {
             key: "consumers",
             header: "Used by",
-            width: 240,
+            width: 220,
             text: (item) => (item.consumers.length ? item.consumers.map(nameOf).join(", ") : t("None")),
           },
         ],
@@ -289,6 +326,7 @@ export function CapabilityPage({ id }: { id: string }) {
                       connector={connector}
                       setup={setupRows.find((row) => row.implementation === connector.id)}
                       credentials={credentials.status === "ready" ? credentials.data.credentials : []}
+                      managedAvailable={credentials.status === "ready" && credentials.data.managedAvailable}
                       actions={actions.status === "ready" ? actions.data : []}
                       active={protocol.bound === connector.id}
                       busy={busy}

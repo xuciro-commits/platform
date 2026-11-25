@@ -12,6 +12,7 @@ import { useEffect, useState } from "react";
 import { type Api, reread } from "../host";
 import { t } from "../i18n";
 import { reasonOf, send } from "./act";
+import { InlineCredentialDialog } from "./InlineCredentialDialog";
 
 export type ConformanceCase = { name: string; ok: boolean; detail?: string };
 export type ConformanceRun = { at?: string; passed?: boolean; fingerprint?: string; cases?: ConformanceCase[] };
@@ -43,6 +44,11 @@ const styles = stylex.create({
     borderColor: colorVars["--color-border"],
     backgroundColor: colorVars["--color-background-muted"],
   },
+  detailBox: {
+    padding: "6px 8px",
+    borderRadius: radiusVars["--radius-element"],
+    backgroundColor: colorVars["--color-background-muted"],
+  },
 });
 
 function stateLabel(state?: string) {
@@ -56,6 +62,7 @@ export function ConnectorSetupCard({
   connector,
   setup,
   credentials,
+  managedAvailable,
   actions,
   active,
   busy: parentBusy,
@@ -65,6 +72,7 @@ export function ConnectorSetupCard({
   connector: Api.ImplementationInfo;
   setup?: ConnectorSetupRecord;
   credentials: Api.CredentialInfo[];
+  managedAvailable: boolean;
   actions: Api.Action[];
   active: boolean;
   busy: boolean;
@@ -74,11 +82,14 @@ export function ConnectorSetupCard({
   const createAction = actions.find((a) => a.schema === "build.connectorsetup.create");
   const editAction = actions.find((a) => a.schema === "build.connectorsetup.edit");
   const testAction = actions.find((a) => a.schema === "build.connectorsetup.test");
+  const saveCredentialAction = actions.find((a) => a.schema === "platform.credential.save");
   const canConfigure = Boolean(setup ? editAction : createAction);
 
   const [expanded, setExpanded] = useState(!setup || connector.state !== "passed");
   const [address, setAddress] = useState(setup?.address || connector.origins[0] || "");
   const [secret, setSecret] = useState(setup?.secret || "");
+  const [creatingCredential, setCreatingCredential] = useState(false);
+  const [openDetails, setOpenDetails] = useState<string[]>([]);
   const [busy, setBusy] = useState(false);
   const [failure, setFailure] = useState("");
   const [notice, setNotice] = useState("");
@@ -95,6 +106,10 @@ export function ConnectorSetupCard({
     value: cred.id,
     label: cred.title ? `${cred.title} (${cred.id})` : cred.id,
   }));
+
+  const toggleDetail = (name: string) => {
+    setOpenDetails((prev) => (prev.includes(name) ? prev.filter((item) => item !== name) : [...prev, name]));
+  };
 
   const saveSetup = async (): Promise<{ id: string; revision: number } | undefined> => {
     const action = setup ? editAction : createAction;
@@ -144,112 +159,156 @@ export function ConnectorSetupCard({
   const passedCount = cases.filter((item) => item.ok).length;
 
   return (
-    <Card padding={4}>
-      <VStack gap={3}>
-        <HStack gap={3} vAlign="center" hAlign="between" wrap="wrap">
-          <VStack gap={0.5}>
-            <Text type="body" weight="medium">{connector.title || connector.id}</Text>
-            <Text type="supporting" color="secondary">{connector.origins.join(", ")}</Text>
-          </VStack>
-          <HStack gap={2} vAlign="center" wrap="wrap">
-            <Token label={badge.label} color={badge.color} size="sm" />
-            {canConfigure && (
-              <Button
-                label={expanded ? t("Hide setup") : t("Configure")}
-                variant="ghost"
-                size="sm"
-                onClick={() => setExpanded((open) => !open)}
-              />
-            )}
-            {canBind && !active && (
-              <Button
-                label={t("Enable")}
-                variant="primary"
-                size="sm"
-                isDisabled={parentBusy || busy || connector.state !== "passed"}
-                onClick={onEnable}
-              />
-            )}
-          </HStack>
-        </HStack>
-
-        {failure && <Banner status="error" title={t("Not saved")} description={failure} />}
-        {notice && <Banner status="info" title={notice} />}
-        {setup?.requested && (
-          <HStack gap={2} vAlign="center" hAlign="between" wrap="wrap">
-            <Text type="supporting" color="secondary">{t("Conformance tests are running in the background…")}</Text>
-            <Button label={t("Refresh")} variant="ghost" size="sm" onClick={() => reread()} />
-          </HStack>
-        )}
-
-        {expanded && canConfigure && (
-          <VStack gap={3} xstyle={styles.configBox}>
-            <HStack gap={3} vAlign="end" wrap="wrap">
-              <Selector
-                label={t("Outbound origin")}
-                value={address}
-                onChange={setAddress}
-                options={connector.origins.map((origin) => ({ value: origin, label: origin }))}
-              />
-              {connector.credential && (
-                <Selector
-                  label={t("Credential")}
-                  value={secret}
-                  onChange={setSecret}
-                  options={credentialOptions}
+    <>
+      <Card padding={4}>
+        <VStack gap={3}>
+          <HStack gap={3} vAlign="center" hAlign="between" wrap="wrap">
+            <VStack gap={0.5}>
+              <Text type="body" weight="medium">{connector.title || connector.id}</Text>
+              <Text type="supporting" color="secondary">{connector.origins.join(", ")}</Text>
+            </VStack>
+            <HStack gap={2} vAlign="center" wrap="wrap">
+              <Token label={badge.label} color={badge.color} size="sm" />
+              {canConfigure && (
+                <Button
+                  label={expanded ? t("Hide setup") : t("Configure")}
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => setExpanded((open) => !open)}
                 />
               )}
-            </HStack>
-            {connector.credential && (
-              <HStack gap={2} vAlign="center" wrap="wrap">
-                <Text type="supporting" color="secondary">
-                  {t("Requires a {kind} credential allowing consumer implementation/{id}.").replace("{kind}", connector.credential).replace("{id}", connector.id)}
-                </Text>
-                <Link href="/admin/credentials">{t("Manage credentials")}</Link>
-              </HStack>
-            )}
-            <HStack gap={2} vAlign="center" wrap="wrap">
-              <Button
-                label={t("Save setup")}
-                variant="secondary"
-                size="sm"
-                isLoading={busy}
-                isDisabled={!address || !dirty}
-                onClick={() => void handleSave()}
-              />
-              {testAction && (
+              {canBind && !active && (
                 <Button
-                  label={dirty ? t("Save and run tests") : t("Run conformance tests")}
+                  label={t("Enable")}
                   variant="primary"
                   size="sm"
-                  isLoading={busy}
-                  isDisabled={!address || (Boolean(connector.credential) && !secret)}
-                  onClick={() => void handleTest()}
+                  isDisabled={parentBusy || busy || connector.state !== "passed"}
+                  onClick={onEnable}
                 />
               )}
             </HStack>
-          </VStack>
-        )}
+          </HStack>
 
-        {cases.length > 0 && (
-          <VStack gap={2}>
-            <HStack gap={2} vAlign="center">
-              <Text type="supporting" weight="medium">
-                {t("Last conformance test: {passed}/{total} passed").replace("{passed}", String(passedCount)).replace("{total}", String(cases.length))}
-              </Text>
-              <StackItem size="fill" />
+          {failure && <Banner status="error" title={t("Not saved")} description={failure} />}
+          {notice && <Banner status="info" title={notice} />}
+          {setup?.requested && (
+            <HStack gap={2} vAlign="center" hAlign="between" wrap="wrap">
+              <Text type="supporting" color="secondary">{t("Conformance tests are running in the background…")}</Text>
               <Button label={t("Refresh")} variant="ghost" size="sm" onClick={() => reread()} />
             </HStack>
-            {cases.map((item) => (
-              <HStack key={item.name} gap={2} vAlign="center" xstyle={styles.caseRow} wrap="wrap">
-                <Token label={item.ok ? t("Passed") : t("Failed")} color={item.ok ? "green" : "red"} size="sm" />
-                <Text type="body" weight="medium">{item.name}</Text>
-                {item.detail && <Text type="supporting" color="secondary">{item.detail}</Text>}
+          )}
+
+          {expanded && canConfigure && (
+            <VStack gap={3} xstyle={styles.configBox}>
+              <HStack gap={3} vAlign="end" wrap="wrap">
+                <Selector
+                  label={t("Outbound origin")}
+                  value={address}
+                  onChange={setAddress}
+                  options={connector.origins.map((origin) => ({ value: origin, label: origin }))}
+                />
+                {connector.credential && (
+                  <Selector
+                    label={t("Credential")}
+                    value={secret}
+                    onChange={setSecret}
+                    options={credentialOptions}
+                  />
+                )}
+                {connector.credential && saveCredentialAction && (
+                  <Button
+                    label={t("New credential")}
+                    variant="secondary"
+                    size="sm"
+                    isDisabled={!address || busy}
+                    onClick={() => setCreatingCredential(true)}
+                  />
+                )}
               </HStack>
-            ))}
-          </VStack>
-        )}
-      </VStack>
-    </Card>
+              {connector.credential && (
+                <HStack gap={2} vAlign="center" wrap="wrap">
+                  <Text type="supporting" color="secondary">
+                    {t("Requires a {kind} credential allowing consumer implementation/{id}.").replace("{kind}", connector.credential).replace("{id}", connector.id)}
+                  </Text>
+                  <Link href="/admin/credentials">{t("Manage credentials")}</Link>
+                </HStack>
+              )}
+              <HStack gap={2} vAlign="center" wrap="wrap">
+                <Button
+                  label={t("Save setup")}
+                  variant="secondary"
+                  size="sm"
+                  isLoading={busy}
+                  isDisabled={!address || !dirty}
+                  onClick={() => void handleSave()}
+                />
+                {testAction && (
+                  <Button
+                    label={dirty ? t("Save and run tests") : t("Run conformance tests")}
+                    variant="primary"
+                    size="sm"
+                    isLoading={busy}
+                    isDisabled={!address || (Boolean(connector.credential) && !secret)}
+                    onClick={() => void handleTest()}
+                  />
+                )}
+              </HStack>
+            </VStack>
+          )}
+
+          {cases.length > 0 && (
+            <VStack gap={2}>
+              <HStack gap={2} vAlign="center">
+                <Text type="supporting" weight="medium">
+                  {t("Last conformance test: {passed}/{total} passed").replace("{passed}", String(passedCount)).replace("{total}", String(cases.length))}
+                </Text>
+                <StackItem size="fill" />
+                <Button label={t("Refresh")} variant="ghost" size="sm" onClick={() => reread()} />
+              </HStack>
+              {cases.map((item) => {
+                const detailOpen = openDetails.includes(item.name);
+                return (
+                  <VStack key={item.name} gap={2} xstyle={styles.caseRow}>
+                    <HStack gap={2} vAlign="center" wrap="wrap">
+                      <Token label={item.ok ? t("Passed") : t("Failed")} color={item.ok ? "green" : "red"} size="sm" />
+                      <Text type="body" weight="medium">{item.name}</Text>
+                      <StackItem size="fill" />
+                      {item.detail && (
+                        <Button
+                          label={detailOpen ? t("Hide technical details") : t("View technical details")}
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => toggleDetail(item.name)}
+                        />
+                      )}
+                    </HStack>
+                    {item.detail && detailOpen && (
+                      <VStack xstyle={styles.detailBox}>
+                        <Text type="code" color="secondary">{item.detail}</Text>
+                      </VStack>
+                    )}
+                  </VStack>
+                );
+              })}
+            </VStack>
+          )}
+        </VStack>
+      </Card>
+      {creatingCredential && saveCredentialAction && (
+        <InlineCredentialDialog
+          saveAction={saveCredentialAction}
+          kind={connector.credential || "bearer"}
+          consumer={`implementation/${connector.id}`}
+          origin={address}
+          managedAvailable={managedAvailable}
+          onClose={() => setCreatingCredential(false)}
+          onCreated={(createdId) => {
+            setSecret(createdId);
+            setCreatingCredential(false);
+            setNotice(t("Credential created and selected. Save setup or run conformance tests."));
+          }}
+        />
+      )}
+    </>
   );
 }
