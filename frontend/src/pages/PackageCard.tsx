@@ -234,12 +234,14 @@ export function CatalogEntryCard({
   entry,
   libraryTitle,
   official = false,
+  otherVersions = 0,
   installed,
   onSelect,
 }: {
   entry: Api.PackageCatalogEntry;
   libraryTitle: string;
   official?: boolean;
+  otherVersions?: number;
   installed?: Api.InstalledPackage;
   onSelect: () => void;
 }) {
@@ -309,7 +311,7 @@ export function CatalogEntryCard({
               )}
               <StackItem size="fill" />
               <Text type="supporting" color="secondary" hasTabularNumbers maxLines={1}>
-                {entry.id} · {entry.version}
+                {entry.id} · {entry.version}{otherVersions > 0 ? ` (+${otherVersions})` : ""}
               </Text>
             </HStack>
           </VStack>

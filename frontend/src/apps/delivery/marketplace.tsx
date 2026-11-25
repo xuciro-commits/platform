@@ -48,15 +48,32 @@ function collapseLocalVersions(list: Api.PackageView[], showAll: boolean): Local
   if (showAll) return list.map((view) => ({ view, otherVersions: 0 }));
   const groups = new Map<string, Api.PackageView[]>();
   for (const view of list) {
-    const key = `${view.source}:${view.descriptor.id}`;
-    const bucket = groups.get(key) ?? [];
+    const bucket = groups.get(view.descriptor.id) ?? [];
     bucket.push(view);
-    groups.set(key, bucket);
+    groups.set(view.descriptor.id, bucket);
   }
   const out: LocalCard[] = [];
   for (const bucket of groups.values()) {
     bucket.sort((a, b) => rankLocalVersion(b) - rankLocalVersion(a) || compareVersions(b.descriptor.version, a.descriptor.version));
     out.push({ view: bucket[0], otherVersions: bucket.length - 1 });
+  }
+  return out;
+}
+
+type RemoteCard = { entry: Api.PackageCatalogEntry; libraryTitle: string; official: boolean; otherVersions: number };
+
+function collapseRemoteVersions(list: { entry: Api.PackageCatalogEntry; libraryTitle: string; official: boolean }[], showAll: boolean): RemoteCard[] {
+  if (showAll) return list.map((item) => ({ ...item, otherVersions: 0 }));
+  const groups = new Map<string, { entry: Api.PackageCatalogEntry; libraryTitle: string; official: boolean }[]>();
+  for (const item of list) {
+    const bucket = groups.get(item.entry.id) ?? [];
+    bucket.push(item);
+    groups.set(item.entry.id, bucket);
+  }
+  const out: RemoteCard[] = [];
+  for (const bucket of groups.values()) {
+    bucket.sort((a, b) => Number(b.official) - Number(a.official) || compareVersions(b.entry.version, a.entry.version));
+    out.push({ ...bucket[0], otherVersions: bucket.length - 1 });
   }
   return out;
 }
@@ -166,7 +183,7 @@ export default function Marketplace() {
 
   const baseLocal = useMemo(() => collapseLocalVersions(baseLocalRaw, showAllVersions), [baseLocalRaw, showAllVersions]);
 
-  const baseRemote = useMemo(() => {
+  const baseRemoteRaw = useMemo(() => {
     if (source !== "all" && source !== "official" && source !== "third-party") return [];
     const term = query.trim().toLowerCase();
     return remoteEntries.filter(({ entry, libraryTitle, official }) => {
@@ -182,6 +199,8 @@ export default function Marketplace() {
       return `${entry.title} ${entry.id} ${entry.version} ${entry.description ?? ""} ${libraryTitle} ${(listing?.keywords ?? []).join(" ")}`.toLowerCase().includes(term);
     });
   }, [remoteEntries, source, query, industry, domain, kind, stage]);
+
+  const baseRemote = useMemo(() => collapseRemoteVersions(baseRemoteRaw, showAllVersions), [baseRemoteRaw, showAllVersions]);
 
   const counts = useMemo(() => ({
     all: baseLocal.length + baseRemote.length,
@@ -218,7 +237,13 @@ export default function Marketplace() {
   const totalVisible = filtered.length + filteredRemote.length;
   const failedLibraries = libraries.status === "ready" ? libraries.data.filter((lib) => lib.status === "error") : [];
   const libraryProblem = syncFailure || failedLibraries.map((lib) => (lib.error ? `${libraryName(lib)}: ${lib.error}` : libraryName(lib))).join(" · ");
-  const hasCollapsedVersions = baseLocalRaw.length > baseLocal.length;
+  const hasCollapsedVersions = baseLocalRaw.length > baseLocal.length || baseRemoteRaw.length > baseRemote.length;
+  const selectedVersions = useMemo(() => {
+    if (!selected) return [];
+    return rows
+      .filter((view) => view.descriptor.id === selected.view.descriptor.id)
+      .sort((a, b) => compareVersions(b.descriptor.version, a.descriptor.version));
+  }, [rows, selected]);
 
   return (
     <>
@@ -347,12 +372,13 @@ export default function Marketplace() {
                       onAction={() => setSelected({ view, mode: modeOf(view) })}
                     />
                   ))}
-                  {filteredRemote.map(({ entry, libraryTitle, official }) => (
+                  {filteredRemote.map(({ entry, libraryTitle, official, otherVersions }) => (
                     <CatalogEntryCard
                       key={`remote:${entry.id}@${entry.version}`}
                       entry={entry}
                       libraryTitle={libraryTitle}
                       official={official}
+                      otherVersions={otherVersions}
                       installed={installedById.get(entry.id)}
                       onSelect={() => openRemoteImport(entry)}
                     />
@@ -370,6 +396,8 @@ export default function Marketplace() {
         <PackageReview
           view={selected.view}
           mode={selected.mode}
+          versions={selectedVersions}
+          onSelectVersion={(nextView) => setSelected({ view: nextView, mode: modeOf(nextView) })}
           close={() => setSelected(undefined)}
           done={(installedIds) => {
             setSelected(undefined);

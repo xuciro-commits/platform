@@ -2,13 +2,15 @@ import { Banner } from "@astryxdesign/core/Banner";
 import { Button } from "@astryxdesign/core/Button";
 import { Dialog, DialogHeader } from "@astryxdesign/core/Dialog";
 import { HStack, Layout, LayoutContent, LayoutFooter, LayoutHeader, StackItem, VStack } from "@astryxdesign/core/Layout";
+import { Selector } from "@astryxdesign/core/Selector";
 import { Text } from "@astryxdesign/core/Text";
 import { TextInput } from "@astryxdesign/core/TextInput";
 import * as stylex from "@stylexjs/stylex";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { type Api, reread, useRead } from "../host";
 import { t } from "../i18n";
 import { reasonOf, send } from "./act";
+import { sourceMeta } from "./PackageCard";
 import { PackageReviewContent } from "./PackageReviewContent";
 
 type Mode = "install" | "manage";
@@ -17,7 +19,37 @@ const styles = stylex.create({
   shell: { height: "min(680px, calc(100dvh - 4rem))" },
 });
 
-export function PackageReview({ view, mode, close, done }: { view: Api.PackageView; mode: Mode; close: () => void; done: (installedIds?: string[]) => void }) {
+function versionOptionLabel(candidate: Api.PackageView): string {
+  const version = candidate.descriptor.version;
+  const tags: string[] = [];
+  if (candidate.installed && candidate.installed.state !== "retired" && candidate.installed.version === version) {
+    tags.push(t("Installed"));
+  } else if (candidate.update) {
+    tags.push(t("Upgrade"));
+  } else if (candidate.rollback) {
+    tags.push(t("Roll back"));
+  } else if (candidate.downgrade) {
+    tags.push(t("Downgrade"));
+  }
+  tags.push(sourceMeta(candidate.source).label);
+  return `${version} · ${tags.join(" · ")}`;
+}
+
+export function PackageReview({
+  view,
+  mode,
+  versions,
+  onSelectVersion,
+  close,
+  done,
+}: {
+  view: Api.PackageView;
+  mode: Mode;
+  versions?: Api.PackageView[];
+  onSelectVersion?: (next: Api.PackageView) => void;
+  close: () => void;
+  done: (installedIds?: string[]) => void;
+}) {
   const id = view.descriptor.id;
   const version = view.descriptor.version;
   const review = useRead<Api.PackageReview>(`/v1/packages/${encodeURIComponent(id)}/review?version=${encodeURIComponent(version)}${mode === "manage" ? "&mode=uninstall" : ""}`);
@@ -29,6 +61,12 @@ export function PackageReview({ view, mode, close, done }: { view: Api.PackageVi
   const retired = installed?.state === "retired";
   const named = mode === "install" && !installed && !!view.space;
   const [namespace, setNamespace] = useState(view.space ?? "");
+
+  useEffect(() => {
+    setNamespace(view.space ?? "");
+    setFailure("");
+  }, [id, version, view.space]);
+
   const actions = catalog.status === "ready" ? catalog.data : [];
   const installSchema = view.rollback ? "platform.package.rollback" : view.update ? "platform.package.upgrade" : view.downgrade ? "platform.package.downgrade" : "platform.package.install";
   const installAction = actions.find((action) => action.schema === installSchema);
@@ -86,6 +124,20 @@ export function PackageReview({ view, mode, close, done }: { view: Api.PackageVi
           content={
             <LayoutContent isScrollable padding={5}>
               <VStack gap={5}>
+                {versions && versions.length > 1 && onSelectVersion && (
+                  <Selector
+                    label={t("Version")}
+                    value={version}
+                    onChange={(nextVersion) => {
+                      const matched = versions.find((candidate) => candidate.descriptor.version === nextVersion);
+                      if (matched) onSelectVersion(matched);
+                    }}
+                    options={versions.map((candidate) => ({
+                      value: candidate.descriptor.version,
+                      label: versionOptionLabel(candidate),
+                    }))}
+                  />
+                )}
                 {failure && <Banner status="error" title={t("Not done")} description={failure} />}
                 {loading && <Text type="supporting" color="secondary">{t("Loading…")}</Text>}
                 {problems.length > 0 && <Banner status="error" title={t("This version cannot be used as it stands")} description={problems.join(" · ")} />}
