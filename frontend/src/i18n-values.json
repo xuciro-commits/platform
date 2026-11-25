@@ -520,5 +520,18 @@
   "Capability calls": "能力调用",
   "Enable": "启用",
   "A connector setup gives one capability implementation this workspace's address and credential and runs the contract's tests against it. A connector can be enabled for its capability only after its tests pass with the current setup.": "连接器配置给一个能力实现填上本工作区的地址和凭据，并按契约的测试跑一遍。只有用当前配置测试通过后，才能为该能力启用这个连接器。",
-  "Each call an application made through a capability that a connector serves: what was sent, and what the connector answered. A call without an answer is never resent automatically; settle it in Integrations.": "应用经由连接器提供的能力发出的每次调用：发了什么、连接器答了什么。没有答复的调用不会自动重发，请到“集成”里处置。"
+  "Each call an application made through a capability that a connector serves: what was sent, and what the connector answered. A call without an answer is never resent automatically; settle it in Integrations.": "应用经由连接器提供的能力发出的每次调用：发了什么、连接器答了什么。没有答复的调用不会自动重发，请到“集成”里处置。",
+  "Open master data": "打开主数据",
+  "Configure capability": "配置能力",
+  "Manage roles": "管理角色",
+  "Open app": "打开应用",
+  "Installation ready": "安装已就绪",
+  "Packages do not grant permissions automatically. Open the installed entry or explicitly assign roles below.": "安装包不会自动授予任何权限。可直接打开对应入口，或在下方显式为成员分配角色。",
+  "Includes demo data": "含示例数据",
+  "Grant initial roles (optional)": "快速授予初始角色（可选）",
+  "Select a member and check the roles to grant explicitly. Every role can be revoked later under Admin → Members.": "选择成员并勾选要显式授予的角色。所有角色后续均可在「管理 → 成员」随时撤销。",
+  "Grant selected roles": "授予所选角色",
+  "Manage all members": "管理全部成员",
+  "Granted {count} role(s) to {member}. You can revoke them anytime under Admin → Members.": "已为 {member} 授予 {count} 项角色，随时可在「管理 → 成员」撤销。",
+  "Dismiss": "关闭提示"
 }

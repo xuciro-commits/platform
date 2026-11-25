@@ -13,7 +13,7 @@ import * as stylex from "@stylexjs/stylex";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { type Api, request, reread, useRead } from "../../host";
 import { t } from "../../i18n";
-import { navigate } from "../../router";
+import { navigate, useSearch } from "../../router";
 import { reasonOf } from "../../pages/act";
 import { PageTitle, useGutter } from "../../pages/frame";
 import { CatalogEntryCard, PackageCard, compareVersions, kindLabel, packageKinds, listingLabel } from "../../pages/PackageCard";
@@ -47,7 +47,8 @@ export default function Marketplace() {
   const [source, setSource] = useState("all");
   const [industry, setIndustry] = useState("all");
   const [domain, setDomain] = useState("all");
-  const [kind, setKind] = useState("all");
+  const initialSearch = useSearch();
+  const [kind, setKind] = useState(() => new URLSearchParams(initialSearch).get("kind") || "all");
   const [stage, setStage] = useState("released");
   const [query, setQuery] = useState("");
   const gutter = useGutter();
@@ -81,7 +82,7 @@ export default function Marketplace() {
   }, [rows]);
 
   const remoteEntries = useMemo(() => {
-    if (libraries.status !== "ready") return [];
+    if (packages.status !== "ready" || libraries.status !== "ready") return [];
     const existing = new Set(rows.map((view) => `${view.descriptor.id}@${view.descriptor.version}`));
     const seen = new Set<string>();
     const out: { entry: Api.PackageCatalogEntry; libraryTitle: string; official: boolean }[] = [];
@@ -94,7 +95,7 @@ export default function Marketplace() {
       }
     }
     return out;
-  }, [libraries, rows]);
+  }, [libraries, packages.status, rows]);
 
   const facets = useMemo(() => {
     const industries = new Set<string>();
@@ -292,7 +293,7 @@ export default function Marketplace() {
                   description={counts.all === 0 ? t("Review versions, dependencies and their installation scope before adding them to this workspace.") : t("Try a different search.")}
                 />
               )}
-              {totalVisible > 0 && (
+              {packages.status !== "loading" && totalVisible > 0 && (
                 <Grid columns={{ minWidth: 320, max: 3 }} gap={4} role="list">
                   {filtered.map((view) => (
                     <PackageCard
@@ -326,9 +327,9 @@ export default function Marketplace() {
           view={selected.view}
           mode={selected.mode}
           close={() => setSelected(undefined)}
-          done={() => {
+          done={(installedIds) => {
             setSelected(undefined);
-            navigate("/delivery/installations");
+            navigate(installedIds?.length ? `/delivery/installations?installed=${encodeURIComponent(installedIds.join(","))}` : "/delivery/installations");
           }}
         />
       )}
@@ -336,10 +337,10 @@ export default function Marketplace() {
         <PackageImportWizard
           initialSource={importSource}
           onClose={() => { setImporting(false); setImportSource(undefined); }}
-          onDone={() => {
+          onDone={(installedIds) => {
             setImporting(false);
             setImportSource(undefined);
-            navigate("/delivery/installations");
+            navigate(installedIds?.length ? `/delivery/installations?installed=${encodeURIComponent(installedIds.join(","))}` : "/delivery/installations");
           }}
         />
       )}

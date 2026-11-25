@@ -43,7 +43,7 @@ export function PackageImportWizard({
 }: {
   initialSource?: InitialPackageSource;
   onClose: () => void;
-  onDone: () => void;
+  onDone: (installedIds?: string[]) => void;
 }) {
   const [step, setStep] = useState(0);
   const [sourceMode, setSourceMode] = useState<SourceMode>(initialSource ? "url" : "file");
@@ -58,6 +58,7 @@ export function PackageImportWizard({
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const autoInspected = useRef(false);
+  const installedDeps = useRef<string[]>([]);
 
   const packages = useRead<Api.PackageView[]>("/v1/packages");
   const libraries = useRead<Api.PackageLibraryView[]>("/v1/packages/libraries");
@@ -224,6 +225,7 @@ export function PackageImportWizard({
             : { id: dep.id, version: dep.version, namespace: dep.namespace };
           await send(depAction, dep.id, payload);
           await installed(dep.id, dep.version);
+          if (!installedDeps.current.includes(dep.id)) installedDeps.current.push(dep.id);
         }
         reread();
         setProgress(t("Re-checking target package…"));
@@ -260,7 +262,7 @@ export function PackageImportWizard({
       const named = !importedView?.installed && Boolean(namespace.trim());
       await send(action, preview.descriptor.id, named ? { id, version, namespace: namespace.trim() } : { id, version });
       reread();
-      onDone();
+      onDone([...installedDeps.current, preview.descriptor.id]);
     } catch (problem) {
       setError(reasonOf(problem));
       setBusy(false);

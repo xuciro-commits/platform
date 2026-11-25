@@ -17,7 +17,7 @@ const styles = stylex.create({
   shell: { height: "min(680px, calc(100dvh - 4rem))" },
 });
 
-export function PackageReview({ view, mode, close, done }: { view: Api.PackageView; mode: Mode; close: () => void; done: () => void }) {
+export function PackageReview({ view, mode, close, done }: { view: Api.PackageView; mode: Mode; close: () => void; done: (installedIds?: string[]) => void }) {
   const id = view.descriptor.id;
   const version = view.descriptor.version;
   const review = useRead<Api.PackageReview>(`/v1/packages/${encodeURIComponent(id)}/review?version=${encodeURIComponent(version)}${mode === "manage" ? "&mode=uninstall" : ""}`);
@@ -65,7 +65,7 @@ export function PackageReview({ view, mode, close, done }: { view: Api.PackageVi
     try {
       await send(action, id, payload);
       reread();
-      done();
+      done(mode === "install" ? [id] : undefined);
     } catch (problem) {
       setFailure(reasonOf(problem));
       setBusy(false);
