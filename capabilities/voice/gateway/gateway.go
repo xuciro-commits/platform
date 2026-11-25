@@ -25,9 +25,56 @@ type Config struct {
 	Realm        string
 	Host         string
 	Trunks       map[string]string
+	Dialing      map[string]TrunkDialing
 	DialPrefixes []string
 	RingTimeout  time.Duration
 	Logger       *slog.Logger
+}
+
+// TrunkDialing is how a trunk wants to be told what to dial, for trunks that do not read
+// the number from the Request-URI alone: a header that repeats the number, and fixed
+// headers sent with every call, such as the SIM slot a phone should dial from.
+type TrunkDialing struct {
+	NumberHeader string            `json:"numberHeader"`
+	Headers      map[string]string `json:"headers"`
+}
+
+// reservedHeaders are the headers the gateway writes itself; a trunk's dialing
+// settings cannot replace them.
+var reservedHeaders = []string{"via", "from", "to", "call-id", "cseq", "contact", "content-type", "content-length", "max-forwards", "route", "record-route", "authorization", "proxy-authorization"}
+
+func (d TrunkDialing) check(trunk string) error {
+	names := []string{}
+	if d.NumberHeader != "" {
+		names = append(names, d.NumberHeader)
+	}
+	for name, value := range d.Headers {
+		if strings.ContainsAny(value, "\r\n") {
+			return fmt.Errorf("voice gateway: trunk %s: header %s has a line break", trunk, name)
+		}
+		names = append(names, name)
+	}
+	for _, name := range names {
+		if !headerName(name) {
+			return fmt.Errorf("voice gateway: trunk %s: %q is not a header name", trunk, name)
+		}
+		if slices.Contains(reservedHeaders, strings.ToLower(name)) {
+			return fmt.Errorf("voice gateway: trunk %s: the gateway writes %s itself", trunk, name)
+		}
+	}
+	return nil
+}
+
+func headerName(name string) bool {
+	if name == "" {
+		return false
+	}
+	for _, r := range name {
+		if !(r >= 'a' && r <= 'z' || r >= 'A' && r <= 'Z' || r >= '0' && r <= '9' || strings.ContainsRune("-.!%*_+`'~", r)) {
+			return false
+		}
+	}
+	return true
 }
 
 type Registration struct {
@@ -62,6 +109,14 @@ func New(cfg Config, onCall func(*Call)) (*Gateway, error) {
 	}
 	if onCall == nil {
 		return nil, errors.New("voice gateway: a call handler is required")
+	}
+	for trunk, d := range cfg.Dialing {
+		if _, ok := cfg.Trunks[trunk]; !ok {
+			return nil, fmt.Errorf("voice gateway: dialing settings for %s, which has no account", trunk)
+		}
+		if err := d.check(trunk); err != nil {
+			return nil, err
+		}
 	}
 	if cfg.RingTimeout <= 0 {
 		cfg.RingTimeout = defaultRingTimeout

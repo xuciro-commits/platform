@@ -19,10 +19,11 @@ import (
 )
 
 type settings struct {
-	Realm        string            `json:"realm"`
-	Trunks       map[string]string `json:"trunks"`
-	DialPrefixes []string          `json:"dialPrefixes"`
-	RingSeconds  int               `json:"ringSeconds"`
+	Realm        string                          `json:"realm"`
+	Trunks       map[string]string               `json:"trunks"`
+	Dialing      map[string]gateway.TrunkDialing `json:"dialing"`
+	DialPrefixes []string                        `json:"dialPrefixes"`
+	RingSeconds  int                             `json:"ringSeconds"`
 }
 
 type options struct {
@@ -76,7 +77,7 @@ func run(ctx context.Context, logger *slog.Logger, o options) error {
 		go client.Follow(ctx)
 	}
 	g, err := gateway.New(gateway.Config{
-		Realm: s.Realm, Host: o.host, Trunks: s.Trunks, DialPrefixes: s.DialPrefixes, RingTimeout: time.Duration(s.RingSeconds) * time.Second, Logger: logger,
+		Realm: s.Realm, Host: o.host, Trunks: s.Trunks, Dialing: s.Dialing, DialPrefixes: s.DialPrefixes, RingTimeout: time.Duration(s.RingSeconds) * time.Second, Logger: logger,
 	}, onCall)
 	if err != nil {
 		return err

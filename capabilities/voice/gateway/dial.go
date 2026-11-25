@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"maps"
 	"slices"
 	"strings"
 	"sync"
@@ -77,6 +78,13 @@ func (g *Gateway) Dial(ctx context.Context, r DialRequest) (*Call, error) {
 	req.AppendHeader(from)
 	req.AppendHeader(&sip.ToHeader{Address: target, Params: sip.NewParams()})
 	req.AppendHeader(sip.NewHeader("Content-Type", "application/sdp"))
+	dialing := g.cfg.Dialing[r.Trunk]
+	if dialing.NumberHeader != "" {
+		req.AppendHeader(sip.NewHeader(dialing.NumberHeader, r.Number))
+	}
+	for _, name := range slices.Sorted(maps.Keys(dialing.Headers)) {
+		req.AppendHeader(sip.NewHeader(name, dialing.Headers[name]))
+	}
 	req.SetBody(r.Offer)
 	if reg.Source != "" {
 		req.SetDestination(reg.Source)
