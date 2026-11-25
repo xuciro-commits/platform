@@ -216,7 +216,6 @@ export function PackageImportWizard({
           if (dep.source === "remote") {
             if (!dep.digest) throw new Error(t("The reviewed package is unavailable; inspect it again"));
             await send(importAction, dep.id, { id: dep.id, digest: dep.digest });
-            await listed(dep.id, dep.version);
           }
           const depAction = dep.action === "upgrade" ? upgradeAction : installAction;
           if (!depAction) throw new Error(t("Install package"));
@@ -224,7 +223,6 @@ export function PackageImportWizard({
             ? { id: dep.id, version: dep.version }
             : { id: dep.id, version: dep.version, namespace: dep.namespace };
           await send(depAction, dep.id, payload);
-          await installed(dep.id, dep.version);
           if (!installedDeps.current.includes(dep.id)) installedDeps.current.push(dep.id);
         }
         reread();
@@ -240,7 +238,6 @@ export function PackageImportWizard({
       }
       setProgress("");
       await send(importAction, target.descriptor.id, { id: target.descriptor.id, digest: target.digest });
-      await listed(target.descriptor.id, target.descriptor.version);
       setImported(true);
       reread();
       setStep(2);
@@ -453,22 +450,6 @@ function base64Of(file: File) {
   });
 }
 
-async function listed(id: string, version: string) {
-  for (let attempt = 0; attempt < 20; attempt++) {
-    const views = await request<Api.PackageView[]>("/v1/packages");
-    if (views.some((view) => view.descriptor.id === id && view.descriptor.version === version)) return;
-    await new Promise((resolve) => setTimeout(resolve, 250));
-  }
-}
-
 async function inspectPackage(body: Api.PackageInspectRequest) {
   return request<Api.PackagePreview>("/v1/packages/inspect", { body });
-}
-
-async function installed(id: string, version: string) {
-  for (let attempt = 0; attempt < 40; attempt++) {
-    const views = await request<Api.PackageView[]>("/v1/packages");
-    if (views.some((view) => view.descriptor.id === id && view.installed?.state === "active" && view.installed.version === version)) return;
-    await new Promise((resolve) => setTimeout(resolve, 250));
-  }
 }

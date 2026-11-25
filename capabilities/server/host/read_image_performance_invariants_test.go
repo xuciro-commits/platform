@@ -1,9 +1,13 @@
 package host
 
 import (
+	"bytes"
 	"encoding/json"
 	"fmt"
+	"net/http"
+	"net/http/httptest"
 	"platformserver/kernel/protocol"
+	"platformserver/services/devops/packages"
 	releaseowner "platformserver/services/devops/releases"
 	"reflect"
 	"slices"
@@ -373,5 +377,168 @@ func TestInvariantK13SQLRecordWindowsRespectVisibilityAndPrivateRows(t *testing.
 				}
 			}
 		})
+	}
+}
+
+func TestInvariantK13PlatformAcceptanceVisibleOnNextRead(t *testing.T) {
+	source := newInvariantTenant(t, "k13-pkg-src")
+	source.accept(t, "build.object.create", build.ObjectType, "OBJ1", invariantObject("alpha", "Alpha"))
+	source.accept(t, "build.app.create", protocol.AppType, "APP1", map[string]any{
+		"name": "alphaapp", "title": "Alpha app",
+		"resources": []platform.AssetRef{{App: build.ID, Kind: platform.AssetObject, Name: "invariantproject.alpha"}},
+	})
+	candidateID := invariantPublishData(t, source, source.member(t), []build.JointDraftRef{
+		{Kind: platform.AssetObject, ID: "OBJ1"},
+		{Kind: platform.AssetApp, ID: "APP1"},
+	}, "k13-pkg")
+	candidate, err := PublicationResolver().ReadCandidate(candidateID, source.releases.Raw(candidateID))
+	if err != nil {
+		t.Fatal(err)
+	}
+	makeDescriptor := func(version string) platform.PackageDescriptor {
+		return platform.PackageDescriptor{
+			ID: "readafterwrite", Version: version, Namespace: "readafterwrite", Title: "Read After Write",
+			Blueprint: &platform.PackageBlueprint{
+				Roots:  []platform.AssetRef{{App: build.ID, Kind: platform.AssetApp, Name: "alphaapp"}},
+				Assets: candidate.Assets,
+			},
+		}
+	}
+	vNew := makeDescriptor("1.1.0")
+	vOld := makeDescriptor("1.0.0")
+	vExtra := makeDescriptor("1.2.0")
+
+	seat := protocol.Seat{Subjects: []string{"user:admin@example.com"}, Member: platform.Member{
+		ID: "admin", Roles: map[string]string{controlowner.PlatformApp: controlowner.Admin},
+	}}
+	target := newInvariantTenant(t, "k13-pkg-target", seat)
+	target.App(controlowner.PlatformApp).(packages.Catalog).BindPackageIndex(&protocol.PackageIndex{Packages: []platform.PackageDescriptor{vNew}})
+	target.invalidateReadImage()
+	h := NewHost(Tokens(map[string]string{"admin-token": "user:admin@example.com"}), target.Tenant)
+	handler := h.Handler()
+
+	doGet := func(path string) *httptest.ResponseRecorder {
+		t.Helper()
+		req := httptest.NewRequest(http.MethodGet, path, nil)
+		req.Header.Set("Authorization", "Bearer admin-token")
+		req.Header.Set(TenantHeader, target.ID)
+		rec := httptest.NewRecorder()
+		handler.ServeHTTP(rec, req)
+		return rec
+	}
+	listPackages := func() []protocol.PackageView {
+		t.Helper()
+		rec := doGet("/v1/packages")
+		if rec.Code != http.StatusOK {
+			t.Fatalf("GET /v1/packages: status=%d body=%s", rec.Code, rec.Body.String())
+		}
+		var views []protocol.PackageView
+		if err := json.Unmarshal(rec.Body.Bytes(), &views); err != nil {
+			t.Fatalf("decode /v1/packages: %v", err)
+		}
+		return views
+	}
+	submitHTTP := func(schema, key string, payload any) {
+		t.Helper()
+		reqBody := map[string]any{
+			"tenantId":       target.ID,
+			"principalId":    "admin",
+			"authority":      controlowner.PlatformApp,
+			"target":         map[string]any{"type": protocol.PackageType, "id": vOld.ID},
+			"schema":         map[string]any{"name": schema, "version": 1},
+			"idempotencyKey": key,
+			"payload":        platform.Raw(payload),
+		}
+		req := httptest.NewRequest(http.MethodPost, "/v1/submissions", bytes.NewReader(platform.Raw(reqBody)))
+		req.Header.Set("Authorization", "Bearer admin-token")
+		req.Header.Set(TenantHeader, target.ID)
+		req.Header.Set("Content-Type", "application/json")
+		rec := httptest.NewRecorder()
+		handler.ServeHTTP(rec, req)
+		if rec.Code != http.StatusOK {
+			t.Fatalf("POST /v1/submissions %s: status=%d body=%s", schema, rec.Code, rec.Body.String())
+		}
+		var ans SubmissionAnswer
+		if err := json.Unmarshal(rec.Body.Bytes(), &ans); err != nil || ans.Record == nil || ans.Error != nil {
+			t.Fatalf("POST /v1/submissions %s answer: err=%v body=%s", schema, err, rec.Body.String())
+		}
+	}
+
+	initial := listPackages()
+	if len(initial) != 1 || initial[0].Descriptor.Version != "1.1.0" {
+		t.Fatalf("initial packages: %+v", initial)
+	}
+	if target.readImage.Load() == nil {
+		t.Fatal("expected warm readImage before platform submission")
+	}
+
+	previewOld, err := target.InspectPackage(t.Context(), protocol.PackageInspectRequest{Content: platform.Raw(vOld)})
+	if err != nil {
+		t.Fatal(err)
+	}
+	submitHTTP(packages.SchemaPackageImport, "k13-import-old", map[string]any{"id": vOld.ID, "digest": previewOld.Digest})
+	afterImport := listPackages()
+	if !slices.ContainsFunc(afterImport, func(v protocol.PackageView) bool {
+		return v.Descriptor.ID == vOld.ID && v.Descriptor.Version == "1.0.0"
+	}) {
+		t.Fatalf("GET /v1/packages immediately after import missed 1.0.0: %+v", afterImport)
+	}
+	if rec := doGet("/v1/packages/" + vOld.ID + "/review?version=1.0.0"); rec.Code != http.StatusOK {
+		t.Fatalf("GET review immediately after import failed: status=%d body=%s", rec.Code, rec.Body.String())
+	}
+	if rec := doGet("/v1/packages/" + vOld.ID + "/preparation?version=1.0.0"); rec.Code != http.StatusOK {
+		t.Fatalf("GET preparation immediately after import failed: status=%d body=%s", rec.Code, rec.Body.String())
+	}
+
+	submitHTTP(packages.SchemaPackageInstall, "k13-install-old", map[string]any{"id": vOld.ID, "version": "1.0.0", "namespace": "readafterwrite"})
+	afterInstall := listPackages()
+	if !slices.ContainsFunc(afterInstall, func(v protocol.PackageView) bool {
+		return v.Descriptor.ID == vOld.ID && v.Installed != nil && v.Installed.State == "active" && v.Installed.Version == "1.0.0"
+	}) {
+		t.Fatalf("GET /v1/packages immediately after install missed active 1.0.0: %+v", afterInstall)
+	}
+
+	previewExtra, err := target.InspectPackage(t.Context(), protocol.PackageInspectRequest{Content: platform.Raw(vExtra)})
+	if err != nil {
+		t.Fatal(err)
+	}
+	submitHTTP(packages.SchemaPackageImport, "k13-import-extra", map[string]any{"id": vExtra.ID, "digest": previewExtra.Digest})
+	if views := listPackages(); !slices.ContainsFunc(views, func(v protocol.PackageView) bool {
+		return v.Descriptor.ID == vExtra.ID && v.Descriptor.Version == "1.2.0"
+	}) {
+		t.Fatalf("GET /v1/packages immediately after importing 1.2.0 missed it")
+	}
+	submitHTTP(packages.SchemaPackageRemoveSource, "k13-remove-extra", map[string]any{"id": vExtra.ID, "digest": previewExtra.Digest})
+	if views := listPackages(); slices.ContainsFunc(views, func(v protocol.PackageView) bool {
+		return v.Descriptor.ID == vExtra.ID && v.Descriptor.Version == "1.2.0"
+	}) {
+		t.Fatalf("GET /v1/packages immediately after removing 1.2.0 still showed it")
+	}
+
+	submitSetting := func(key, value string) {
+		t.Helper()
+		reqBody := map[string]any{
+			"tenantId":       target.ID,
+			"principalId":    "admin",
+			"authority":      controlowner.PlatformApp,
+			"target":         map[string]any{"type": controlowner.SettingType, "id": controlowner.PlatformApp + "/" + controlowner.SettingLanguage},
+			"schema":         map[string]any{"name": controlowner.SchemaSettingSet, "version": 1},
+			"idempotencyKey": key,
+			"payload":        platform.Raw(map[string]any{"value": value}),
+		}
+		req := httptest.NewRequest(http.MethodPost, "/v1/submissions", bytes.NewReader(platform.Raw(reqBody)))
+		req.Header.Set("Authorization", "Bearer admin-token")
+		req.Header.Set(TenantHeader, target.ID)
+		req.Header.Set("Content-Type", "application/json")
+		rec := httptest.NewRecorder()
+		handler.ServeHTTP(rec, req)
+		if rec.Code != http.StatusOK {
+			t.Fatalf("POST /v1/submissions setting: status=%d body=%s", rec.Code, rec.Body.String())
+		}
+	}
+	submitSetting("k13-setting-lang", "zh-CN")
+	settingsRec := doGet("/v1/settings")
+	if settingsRec.Code != http.StatusOK || !bytes.Contains(settingsRec.Body.Bytes(), []byte(`"zh-CN"`)) {
+		t.Fatalf("GET /v1/settings immediately after platform.setting.set missed zh-CN: status=%d body=%s", settingsRec.Code, settingsRec.Body.String())
 	}
 }

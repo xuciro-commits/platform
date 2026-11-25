@@ -106,11 +106,6 @@
 
 ## 之后的行
 
-- **包的读在并发下慢。** 全量 trunk（三个 worker）里 `GET /v1/packages` 要 3.5–6.2 秒，`review` 6.3 秒，`preparation` 超过 10 秒：
-  每次读都为索引里每个包重算预检与安装计划。按定义纪元缓存包视图，审阅与准备只算被问的那个包。验收：同样负载下三个读各在 1 秒内。
-- **平台变更写后即读（2.8 之后）。** 导入包被接受后，紧接着的 `GET /v1/packages` 读到的是接受之前的读映像，界面不再收到变更，停在“加载中”。
-  导入向导暂以轮询兜住（`PackageImportWizard` 的 `listed`）。根因在宿主：平台自身的接受结果推进读映像后才回应，或回应里带上要等的位置。
-  先在 K13 写清“接受之后同一成员的下一次读看得到它”，再改，删掉向导里的轮询。验收：`make test RUN=K13`、marketplace 的 trunk。
 - 界面微件第二批落在各行：每个做成 `src/pages/` 里的一个表现，所有类型同时得到；一个一次提交，trunk 加一步用到它。
 - 旧前端已归档于 Git 标签 `archive/web-final`（`git show archive/web-final:<路径>` 查阅原始意图），未落地能力按后续阶段以 Astryx 重做：
   - 记录与数据微件（`web/packages/ui/src/records/`）：`RecordGantt`、`RecordTimeline`、`EditableRecordGrid`、
