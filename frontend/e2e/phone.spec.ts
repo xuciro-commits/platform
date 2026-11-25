@@ -8,6 +8,9 @@ test.use({
   launchOptions: { args: ["--use-fake-ui-for-media-stream", "--use-fake-device-for-media-stream"] },
 });
 
+// Both cases seat user-1, whose call dock lists every call of theirs; in parallel each sees the other's "Hang up".
+test.describe.configure({ mode: "serial" });
+
 async function seat(browser: Browser, name: string) {
   const context = await browser.newContext({ permissions: ["microphone"] });
   await context.addInitScript(() => {
