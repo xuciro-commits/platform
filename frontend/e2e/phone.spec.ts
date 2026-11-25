@@ -10,9 +10,27 @@ test.use({
 
 async function seat(browser: Browser, name: string) {
   const context = await browser.newContext({ permissions: ["microphone"] });
+  await context.addInitScript(() => {
+    const list: AudioContext[] = [];
+    const Native = window.AudioContext;
+    if (Native) {
+      class TrackedAudioContext extends Native {
+        constructor(...args: ConstructorParameters<typeof AudioContext>) {
+          super(...args);
+          list.push(this);
+        }
+      }
+      Object.defineProperty(window, "AudioContext", { value: TrackedAudioContext, configurable: true, writable: true });
+    }
+    (window as unknown as { __audioContexts: AudioContext[] }).__audioContexts = list;
+  });
   const page = await context.newPage();
   await signIn(page, `${name} · phone`);
   return page;
+}
+
+async function audioContextStates(page: Page) {
+  return page.evaluate(() => ((window as unknown as { __audioContexts?: AudioContext[] }).__audioContexts ?? []).map((ctx) => ctx.state));
 }
 
 async function call(gateway: Page, id: string) {
@@ -64,4 +82,33 @@ test("phone tenant: an agent answers an incoming call in the browser and hangs i
   await submit(gateway, "phone.call.finish", "phone.call", id, { seconds: 3 }, ended.revision as number);
   await expect(agent.getByText(`On a call with ${caller}`, { exact: true })).toHaveCount(0, { timeout: 15_000 });
   expect((await call(gateway, id)).state).toBe("completed");
+});
+
+test("phone tenant: an outbound call plays a ringback AudioContext while ringing and closes it on connect", async ({ browser }) => {
+  const agent = await seat(browser, "user-1");
+  const gateway = await seat(browser, "manager-1");
+  const callee = "+8613900139000";
+
+  const created = await submit(agent, "phone.call.create", "phone.call", "", { number: callee });
+  const id = created.record.submission.target.id as string;
+
+  await expect(agent.getByText(`Calling ${callee}`, { exact: true })).toBeVisible({ timeout: 15_000 });
+  await expect.poll(async () => String((await call(gateway, id)).offer ?? ""), { timeout: 15_000 }).toContain("m=audio");
+  await expect.poll(async () => (await audioContextStates(agent)).filter((state) => state === "running").length, { timeout: 15_000 }).toBe(1);
+
+  const ringing = await call(gateway, id);
+  const answer = await answerFor(gateway, String(ringing.offer));
+  await submit(gateway, "phone.call.connect", "phone.call", id, { agent: ringing.agent, line: "phone1", answer }, ringing.revision as number);
+
+  await expect(agent.getByText(`On a call with ${callee}`, { exact: true })).toBeVisible({ timeout: 15_000 });
+  await expect.poll(async () => {
+    const states = await audioContextStates(agent);
+    return states.length > 0 && states.every((state) => state === "closed");
+  }, { timeout: 15_000 }).toBe(true);
+
+  await agent.getByRole("button", { name: "Hang up", exact: true }).click();
+  await expect.poll(async () => (await call(gateway, id)).ended, { timeout: 15_000 }).toBe(true);
+  const ended = await call(gateway, id);
+  await submit(gateway, "phone.call.finish", "phone.call", id, { seconds: 2 }, ended.revision as number);
+  await expect(agent.getByText(`On a call with ${callee}`, { exact: true })).toHaveCount(0, { timeout: 15_000 });
 });

@@ -91,6 +91,70 @@ function closeSession(key: string) {
   media.speaker.srcObject = null;
 }
 
+function startRingback(): () => void {
+  const AudioCtor = window.AudioContext ?? (window as unknown as { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
+  if (!AudioCtor) return () => undefined;
+  const ctx = new AudioCtor();
+  const gain = ctx.createGain();
+  gain.gain.value = 0;
+  gain.connect(ctx.destination);
+  const osc = ctx.createOscillator();
+  osc.type = "sine";
+  osc.frequency.value = 450;
+  osc.connect(gain);
+  osc.start();
+
+  let stopped = false;
+  let timer: ReturnType<typeof setInterval> | undefined;
+
+  const pulse = () => {
+    if (stopped || ctx.state !== "running") return;
+    const start = ctx.currentTime;
+    gain.gain.cancelScheduledValues(start);
+    gain.gain.setValueAtTime(0, start);
+    gain.gain.linearRampToValueAtTime(0.08, start + 0.015);
+    gain.gain.setValueAtTime(0.08, start + 0.985);
+    gain.gain.linearRampToValueAtTime(0, start + 1);
+  };
+
+  const begin = () => {
+    if (stopped || timer !== undefined) return;
+    pulse();
+    timer = setInterval(pulse, 5000);
+  };
+
+  const resume = () => {
+    window.removeEventListener("pointerdown", resume);
+    window.removeEventListener("keydown", resume);
+    if (stopped) return;
+    void ctx.resume().then(begin).catch(() => undefined);
+  };
+
+  if (ctx.state === "running") {
+    begin();
+  } else {
+    window.addEventListener("pointerdown", resume, { once: true });
+    window.addEventListener("keydown", resume, { once: true });
+    void ctx.resume().then(() => {
+      window.removeEventListener("pointerdown", resume);
+      window.removeEventListener("keydown", resume);
+      begin();
+    }).catch(() => undefined);
+  }
+
+  return () => {
+    if (stopped) return;
+    stopped = true;
+    window.removeEventListener("pointerdown", resume);
+    window.removeEventListener("keydown", resume);
+    if (timer !== undefined) clearInterval(timer);
+    try { osc.stop(); } catch { void 0; }
+    try { osc.disconnect(); } catch { void 0; }
+    try { gain.disconnect(); } catch { void 0; }
+    if (ctx.state !== "closed") void ctx.close().catch(() => undefined);
+  };
+}
+
 function duration(since: number, now: number) {
   const seconds = Math.max(0, Math.floor((now - since) / 1000));
   return `${Math.floor(seconds / 60)}:${String(seconds % 60).padStart(2, "0")}`;
@@ -106,6 +170,7 @@ export function CallDock() {
   const [failure, setFailure] = useState("");
   const [busy, setBusy] = useState("");
   const since = useRef(new Map<string, number>()).current;
+  const ringback = useRef<(() => void) | null>(null);
   const [now, setNow] = useState(() => Date.now());
   const self = me.status === "ready" ? me.data.principalId : "";
 
@@ -141,6 +206,11 @@ export function CallDock() {
   const mine = calls.filter((call) => self && call.agent === self && !call.ended);
   const ringing = calls.filter((call) => call.state === "ringing" && !call.agent && !call.offer && call.canTake);
 
+  const stopRingback = () => {
+    ringback.current?.();
+    ringback.current = null;
+  };
+
   const take = async (call: Call) => {
     if (!call.take) return;
     setBusy(key(call));
@@ -158,10 +228,14 @@ export function CallDock() {
 
   const hangUp = async (call: Call) => {
     if (!call.hangup) return;
+    stopRingback();
+    setBusy(key(call));
     try {
       await send(call.hangup, call.id, {}, call.revision);
     } catch (problem) {
       setFailure(reasonOf(problem));
+    } finally {
+      setBusy("");
     }
   };
 
@@ -182,7 +256,20 @@ export function CallDock() {
       if (busy === held || open.has(held)) continue;
       if (media.seen || !listed.has(held)) closeSession(held);
     }
+    for (const tracked of [...since.keys()]) {
+      if (!open.has(tracked)) since.delete(tracked);
+    }
   });
+
+  const outboundRinging = mine.some((call) => call.state === "ringing" && Boolean(call.offer));
+  useEffect(() => {
+    if (!outboundRinging) {
+      stopRingback();
+      return;
+    }
+    ringback.current = startRingback();
+    return () => stopRingback();
+  }, [outboundRinging]);
 
   const talking = mine.some((call) => call.state === "connected");
   useEffect(() => {
@@ -202,7 +289,7 @@ export function CallDock() {
           status={call.state === "connected" ? "success" : "info"}
           title={call.state === "connected" ? t("On a call with {name}").replace("{name}", who(call)) : t("Calling {name}").replace("{name}", who(call))}
           description={call.state === "connected" ? duration(since.get(key(call)) ?? now, now) : call.contact ? call.number : t("Ringing")}
-          endContent={call.canHangUp ? <Button label={t("Hang up")} variant="destructive" size="sm" clickAction={() => hangUp(call)} /> : undefined}
+          endContent={call.canHangUp ? <Button label={t("Hang up")} variant="destructive" size="sm" isLoading={busy === key(call)} clickAction={() => hangUp(call)} /> : undefined}
         />
       ))}
       {ringing.filter((call) => !sessions.has(key(call))).map((call) => (
