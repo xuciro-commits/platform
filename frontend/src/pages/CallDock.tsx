@@ -52,12 +52,24 @@ function callTypes(entities: Api.EntityInfo[]): CallType[] {
   });
 }
 
+function play(speaker: HTMLAudioElement) {
+  speaker.play().catch((problem) => {
+    console.warn("call audio waits for a click or key press", problem);
+    const resume = () => { void speaker.play().catch(() => undefined); };
+    window.addEventListener("pointerdown", resume, { once: true });
+    window.addEventListener("keydown", resume, { once: true });
+  });
+}
+
 async function openSession(key: string): Promise<string> {
   const mic = await navigator.mediaDevices.getUserMedia({ audio: true });
   const pc = new RTCPeerConnection();
   const speaker = new Audio();
   speaker.autoplay = true;
-  pc.ontrack = (event) => { speaker.srcObject = event.streams[0] ?? new MediaStream([event.track]); };
+  pc.ontrack = (event) => {
+    speaker.srcObject = event.streams[0] ?? new MediaStream([event.track]);
+    play(speaker);
+  };
   for (const track of mic.getTracks()) pc.addTrack(track, mic);
   const gathered = new Promise<void>((resolve) => {
     if (pc.iceGatheringState === "complete") resolve();
