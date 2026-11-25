@@ -4,7 +4,7 @@ import { HStack, VStack } from "@astryxdesign/core/Layout";
 import { MoreMenu } from "@astryxdesign/core/MoreMenu";
 import { useToast } from "@astryxdesign/core/Toast";
 import { lazy, type ReactNode, Suspense, useMemo, useRef, useState } from "react";
-import { type Api, type Read, request, useRead } from "../host";
+import { type Api, request, useRead } from "../host";
 import { t } from "../i18n";
 import { useSearch } from "../router";
 import { reasonOf, send, useAct } from "./act";
@@ -31,7 +31,7 @@ export type ListDefinition<Answer, Row> = Omit<ListShape<Answer, Row>, "columns"
   query?: string;
 };
 
-type Later<Answer> = { base?: Read<Answer>; answers: Answer[]; loading: boolean };
+type Later<Answer> = { path?: string; answers: Answer[]; loading: boolean };
 const quoteCell = (cell: string) => `"${cell.replaceAll("\"", "\"\"")}"`;
 
 function nameOf(payload: Values) {
@@ -48,17 +48,30 @@ export function listPage<Answer, Row>(definition: ListDefinition<Answer, Row>) {
     const first = useRead<Answer>(path);
     const unsearched = useRead<Answer>(term ? definition.read : null);
     const [later, setLater] = useState<Later<Answer>>({ answers: [], loading: false });
-    const own = later.base === first;
+    const own = later.path === path;
     const answers = first.status === "ready" ? [first.data, ...(own ? later.answers : [])] : [];
     const next = definition.more && answers.length ? definition.more(answers[answers.length - 1]) : undefined;
-    const rows = answers.flatMap(definition.rows);
+    const rows = useMemo(() => {
+      const seen = new Set<string>();
+      const out: Row[] = [];
+      for (const answer of answers) {
+        for (const row of definition.rows(answer)) {
+          const key = definition.id(row);
+          if (seen.has(key)) continue;
+          seen.add(key);
+          out.push(row);
+        }
+      }
+      return out;
+    }, [first, own, later.answers]);
     const loadMore = () => {
       if (!next || (own && later.loading)) return;
-      setLater({ base: first, answers: own ? later.answers : [], loading: true });
+      const requested = path;
+      setLater({ path: requested, answers: own ? later.answers : [], loading: true });
       request<Answer>(next).then(
-        (answer) => setLater((previous) => (previous.base === first ? { base: first, answers: [...previous.answers, answer], loading: false } : previous)),
+        (answer) => setLater((previous) => (previous.path === requested ? { path: requested, answers: [...previous.answers, answer], loading: false } : previous)),
         (problem: unknown) => {
-          setLater((previous) => ({ ...previous, loading: false }));
+          setLater((previous) => (previous.path === requested ? { ...previous, loading: false } : previous));
           toast({ body: reasonOf(problem), type: "error" });
         },
       );
