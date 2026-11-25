@@ -281,6 +281,7 @@ func (g *Gateway) invite(req *sip.Request, tx sip.ServerTransaction) {
 	call.media = g.media
 	g.mu.Unlock()
 	log := g.log.With("call", call.ID, "trunk", trunk)
+	call.log = log
 	if !g.claim(call) {
 		session.Respond(sip.StatusBusyHere, "Busy Here", nil)
 		session.Close()

@@ -3,6 +3,7 @@ package gateway
 import (
 	"context"
 	"errors"
+	"log/slog"
 	"net"
 	"sync"
 
@@ -51,6 +52,7 @@ type Call struct {
 	Remote    []byte
 
 	media      net.IP
+	log        *slog.Logger
 	bye        func(context.Context) error
 	decided    chan decision
 	settled    chan struct{}

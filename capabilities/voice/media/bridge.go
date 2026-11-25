@@ -41,6 +41,45 @@ type Bridge struct {
 	mu      sync.Mutex
 	started bool
 	pc      *webrtc.PeerConnection
+	stats   counters
+}
+
+type counters struct {
+	fromPhone, strangers, unknownPhone, fromBrowser, unknownBrowser, toPhone atomic.Int64
+	phoneBytes, browserBytes, browserLoud                                    atomic.Int64
+}
+
+// Stats counts what the bridge carried: packets from the phone and the browser,
+// those it dropped (wrong source, payload type not negotiated), and where it sent.
+type Stats struct {
+	Phone          string
+	FromPhone      int64
+	Strangers      int64
+	UnknownPhone   int64
+	FromBrowser    int64
+	UnknownBrowser int64
+	ToPhone        int64
+	Browser        string
+	// PhoneBytes and BrowserBytes are payload bytes; BrowserLoud counts browser
+	// packets large enough to carry speech rather than comfort noise.
+	PhoneBytes   int64
+	BrowserBytes int64
+	BrowserLoud  int64
+}
+
+func (b *Bridge) Stats() Stats {
+	s := Stats{FromPhone: b.stats.fromPhone.Load(), Strangers: b.stats.strangers.Load(), UnknownPhone: b.stats.unknownPhone.Load(),
+		FromBrowser: b.stats.fromBrowser.Load(), UnknownBrowser: b.stats.unknownBrowser.Load(), ToPhone: b.stats.toPhone.Load(),
+		PhoneBytes: b.stats.phoneBytes.Load(), BrowserBytes: b.stats.browserBytes.Load(), BrowserLoud: b.stats.browserLoud.Load()}
+	if p := b.phone.Load(); p != nil {
+		s.Phone = p.String()
+	}
+	b.mu.Lock()
+	if b.pc != nil {
+		s.Browser = b.pc.ConnectionState().String()
+	}
+	b.mu.Unlock()
+	return s
 }
 
 // New opens the phone-side RTP port on address, the one address the phone and the
@@ -253,12 +292,16 @@ func (b *Bridge) fromPhone() {
 			return
 		}
 		if !src.IP.Equal(b.phoneIP) || p.Unmarshal(buf[:n]) != nil {
+			b.stats.strangers.Add(1)
 			continue
 		}
 		pt, ok := b.toWeb[p.PayloadType]
 		if !ok {
+			b.stats.unknownPhone.Add(1)
 			continue
 		}
+		b.stats.fromPhone.Add(1)
+		b.stats.phoneBytes.Add(int64(len(p.Payload)))
 		if cur := b.phone.Load(); cur.Port != src.Port || !cur.IP.Equal(src.IP) {
 			b.phone.Store(src)
 		}
@@ -277,7 +320,13 @@ func (b *Bridge) fromBrowser(t *webrtc.TrackRemote) {
 		}
 		pt, ok := b.toPhone[p.PayloadType]
 		if !ok {
+			b.stats.unknownBrowser.Add(1)
 			continue
+		}
+		b.stats.fromBrowser.Add(1)
+		b.stats.browserBytes.Add(int64(len(p.Payload)))
+		if len(p.Payload) > 20 {
+			b.stats.browserLoud.Add(1)
 		}
 		out := rtp.Packet{Header: plain(p.Header), Payload: p.Payload}
 		out.PayloadType = pt
@@ -285,7 +334,9 @@ func (b *Bridge) fromBrowser(t *webrtc.TrackRemote) {
 		if err != nil {
 			continue
 		}
-		b.conn.WriteToUDP(buf[:n], b.phone.Load())
+		if _, err := b.conn.WriteToUDP(buf[:n], b.phone.Load()); err == nil {
+			b.stats.toPhone.Add(1)
+		}
 	}
 }
 

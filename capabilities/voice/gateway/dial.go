@@ -97,6 +97,7 @@ func (g *Gateway) Dial(ctx context.Context, r DialRequest) (*Call, error) {
 	}
 	call.ID = req.CallID().Value()
 	log = log.With("call", call.ID)
+	call.log = log
 	log.Info("outgoing call dialing", "number", redact(r.Number))
 	waiting, stop := context.WithCancelCause(ctx)
 	defer stop(nil)

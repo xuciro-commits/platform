@@ -3,6 +3,8 @@ package gateway
 import (
 	"context"
 	"net"
+	"strings"
+	"time"
 
 	"platformvoice/media"
 )
@@ -25,8 +27,27 @@ func (c *Call) Connect(ctx context.Context, browserOffer []byte) ([]byte, error)
 		br.Close()
 		return nil, err
 	}
+	c.logSessions(c.Remote, phone)
 	c.join(br)
 	return browser, nil
+}
+
+// logSessions records where each side of the phone leg sends its audio and with which payload types.
+func (c *Call) logSessions(remote, local []byte) {
+	if c.log != nil {
+		c.log.Info("phone media", "phone", sessionLines(remote), "gateway", sessionLines(local))
+	}
+}
+
+func sessionLines(sdp []byte) string {
+	var keep []string
+	for _, line := range strings.Split(strings.ReplaceAll(string(sdp), "\r\n", "\n"), "\n") {
+		if strings.HasPrefix(line, "c=") || strings.HasPrefix(line, "m=") || strings.HasPrefix(line, "a=rtpmap") ||
+			line == "a=sendrecv" || line == "a=sendonly" || line == "a=recvonly" || line == "a=inactive" {
+			keep = append(keep, line)
+		}
+	}
+	return strings.Join(keep, " | ")
 }
 
 // DialBrowser dials out for a browser: the phone is offered the browser's codecs,
@@ -51,6 +72,7 @@ func (g *Gateway) DialBrowser(ctx context.Context, r DialRequest, browserOffer [
 		call.Hangup(context.WithoutCancel(ctx))
 		return call, nil, err
 	}
+	call.logSessions(call.Remote, r.Offer)
 	call.join(br)
 	return call, browser, nil
 }
@@ -59,13 +81,32 @@ func (g *Gateway) DialBrowser(ctx context.Context, r DialRequest, browserOffer [
 // call hangs up when the browser's connection is lost.
 func (c *Call) join(br *media.Bridge) {
 	go func() {
-		select {
-		case <-c.done:
-			br.Close()
-		case <-br.Done():
-			c.Hangup(context.Background())
+		tick := time.NewTicker(5 * time.Second)
+		defer tick.Stop()
+		for {
+			select {
+			case <-c.done:
+				br.Close()
+				c.logMedia("call media closed", br.Stats())
+				return
+			case <-br.Done():
+				c.logMedia("browser media closed", br.Stats())
+				c.Hangup(context.Background())
+				return
+			case <-tick.C:
+				c.logMedia("call media", br.Stats())
+			}
 		}
 	}()
+}
+
+func (c *Call) logMedia(msg string, s media.Stats) {
+	if c.log == nil {
+		return
+	}
+	c.log.Info(msg, "phone", s.Phone, "browser", s.Browser, "fromPhone", s.FromPhone, "strangers", s.Strangers, "unknownPhone", s.UnknownPhone,
+		"fromBrowser", s.FromBrowser, "unknownBrowser", s.UnknownBrowser, "toPhone", s.ToPhone,
+		"phoneBytes", s.PhoneBytes, "browserBytes", s.BrowserBytes, "browserLoud", s.BrowserLoud)
 }
 
 func mediaAddress(host string) net.IP {
