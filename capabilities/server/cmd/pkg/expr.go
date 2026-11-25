@@ -374,6 +374,11 @@ func (s exprScope) resolve(name string) (exprField, string, []string, error) {
 	root, rest := parts[0], parts[1:]
 	var f exprField
 	switch parts[0] {
+	case "caller":
+		if name != "caller.id" && name != "caller.tenant" {
+			return exprField{}, "", nil, fmt.Errorf("%s is not a caller fact; use caller.id or caller.tenant", name)
+		}
+		return exprField{kind: "text"}, name, nil, nil
 	case "input", "step":
 		if len(parts) < 2 {
 			return exprField{}, "", nil, fmt.Errorf("%s needs a name", name)
