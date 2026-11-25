@@ -181,7 +181,7 @@ test("tenants: switching keeps the entry and replaces what the page shows", asyn
 
 
 test("sign-in: a work account signs in by password or single sign-on and lands where it was", async ({ page }) => {
-  await page.route("**/v1/sign-in", (route) => route.fulfill({ json: { issuer: "http://localhost:8497/auth/v1/", client: "platform-web" } }));
+  await page.route("**/v1/sign-in", (route) => route.fulfill({ json: { issuer: new URL("/auth/v1/", page.url()).href, client: "platform-web" } }));
   await page.route("**/auth/v1/oidc/token", (route) => {
     const form = new URLSearchParams(route.request().postData() ?? "");
     const refused = form.get("grant_type") === "password" ? form.get("password") !== "right" : !form.get("code_verifier") || form.get("code") !== "granted";

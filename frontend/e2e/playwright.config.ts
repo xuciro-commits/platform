@@ -4,8 +4,11 @@ import { defineConfig } from "@playwright/test";
 
 const root = fileURLToPath(new URL("../..", import.meta.url));
 const work = `${root}.build/trunk`;
-const host = "http://127.0.0.1:18521";
-const page = "http://localhost:8497";
+const offset = Number(process.env.TRUNK_PORT_OFFSET ?? 0);
+const hostPort = 18521 + offset;
+const pagePort = 8497 + offset;
+const host = `http://127.0.0.1:${hostPort}`;
+const page = `http://localhost:${pagePort}`;
 
 mkdirSync(work, { recursive: true });
 copyFileSync(`${root}scripts/frontend-tenants.json`, `${work}/tenants.json`);
@@ -21,7 +24,7 @@ export default defineConfig({
   use: { baseURL: page, locale: "en-US", channel: "chrome", trace: "retain-on-failure", actionTimeout: 10_000 },
   webServer: [
     {
-      command: `go run ./cmd/platform-server -addr 127.0.0.1:18521 -tenants ${work}/tenants.json -packages ../../deploy/packages -host-admins admin,root -allow-loopback-packages`,
+      command: `go run ./cmd/platform-server -addr 127.0.0.1:${hostPort} -tenants ${work}/tenants.json -packages ../../deploy/packages -host-admins admin,root -allow-loopback-packages`,
       cwd: `${root}capabilities/server`,
       url: `${host}/healthz`,
       timeout: 240_000,
@@ -29,7 +32,7 @@ export default defineConfig({
       env: { GOPROXY: "https://goproxy.cn,direct" },
     },
     {
-      command: "node ../scripts/frontend-seed.mjs && pnpm exec vite --mode trunk --port 8497 --strictPort",
+      command: `node ../scripts/frontend-seed.mjs && pnpm exec vite --mode trunk --port ${pagePort} --strictPort`,
       cwd: `${root}frontend`,
       url: page,
       timeout: 180_000,
