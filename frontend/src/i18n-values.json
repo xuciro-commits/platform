@@ -567,5 +567,9 @@
   "No recent calls": "暂无调用",
   "Recent failures": "近期存在失败",
   "Outcome unknown": "结果不明",
-  "In flight": "调用中"
+  "In flight": "调用中",
+  "Select a member or team and check the roles to grant explicitly. Every role can be revoked later.": "选择成员或团队并勾选要显式授予的角色，所有角色后续均可随时撤销。",
+  "Assign to": "授予对象",
+  "Manage teams": "管理团队",
+  "Granted {count} role(s) to team {team}. You can adjust them anytime under Admin → Access.": "已为团队「{team}」授予 {count} 项角色，随时可在「管理 → 访问控制」调整。"
 }
