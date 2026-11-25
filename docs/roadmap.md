@@ -103,7 +103,9 @@
     `phone.call` 记来电与外呼（振铃、通话、完成、未接、失败；线路、联系人、往来单位、坐席、时长），角色 agent、supervisor、gateway；
     它声明式实现 `call/1`：`dial` 映射到新建，契约要求实现参数与契约完全一致，所以新建只收号码与关于哪条记录，其余字段由新建事务或网关的动作写。
     为它 `pkg` 补了对象 `createTransaction` 的编译，`me()` 改为编成 `$me` 来源（原来编成 text，平台一用就拒）。验收：包的 try 17 步。
-  - B3d 媒体：手机的 RTP 与浏览器的 WebRTC 互转，200 OK 带协商好的 SDP；Go 测试用 pion 对端与模拟手机的 RTP 核对双向包与 DTMF。
+  - B3d 已做：`capabilities/voice/media` 把手机的 RTP 与浏览器的 WebRTC 原样互转，只改负载类型与 SSRC；先选 Opus 再选 PCMU，按键（telephone-event）同路转发。
+    来电 `Call.Connect` 让 200 OK 只带协商好的编解码，外呼 `DialBrowser` 把浏览器的编解码报给中继；通话结束即关媒体，浏览器断线即挂断。
+    媒体端口与 ICE 候选只用网关对中继公布的地址。测试用 pion 对端与模拟手机核对双向语音与按键（`make test-voice`）。
   - B3e 浏览器通话：`src/pages` 的来电横幅与通话条，振铃给有 `agent` 角色的在线成员，先接者得，匹配到的联系人的负责人排在最前；
     联系人与活动上的“拨打”（`uses: call/1#dial`），振铃时浏览器自己放回铃音。trunk 用模拟中继打进来与接外呼、浏览器假媒体通话、核对通话记录。
     之后负责人用真手机在局域网联调。

@@ -3,6 +3,7 @@ package gateway
 import (
 	"context"
 	"errors"
+	"net"
 	"sync"
 
 	"github.com/emiago/sipgo/sip"
@@ -49,6 +50,7 @@ type Call struct {
 	Dialed    string
 	Remote    []byte
 
+	media      net.IP
 	bye        func(context.Context) error
 	decided    chan decision
 	settled    chan struct{}

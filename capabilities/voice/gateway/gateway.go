@@ -50,6 +50,7 @@ type Gateway struct {
 	mu       sync.Mutex
 	regs     map[string]Registration
 	active   map[string]*Call
+	media    net.IP
 }
 
 func New(cfg Config, onCall func(*Call)) (*Gateway, error) {
@@ -110,6 +111,7 @@ func (g *Gateway) Serve(conn net.PacketConn) error {
 	contact := sip.ContactHeader{Address: sip.Uri{Scheme: "sip", User: gatewayUser, Host: host, Port: port}}
 	g.mu.Lock()
 	g.dialogs, g.outgoing = sipgo.NewDialogServerCache(client, contact), sipgo.NewDialogClientCache(client, contact)
+	g.media = mediaAddress(host)
 	g.mu.Unlock()
 	g.log.Info("voice gateway listening", "address", net.JoinHostPort(host, portText), "realm", g.cfg.Realm, "trunks", len(g.cfg.Trunks))
 	return g.server.ServeUDP(conn)
@@ -220,6 +222,9 @@ func (g *Gateway) invite(req *sip.Request, tx sip.ServerTransaction) {
 	call := newCall(Inbound, trunk, Ringing)
 	call.ID, call.Caller, call.Name, call.Dialed, call.Remote = req.CallID().Value(), number, name, req.Recipient.User, req.Body()
 	call.bye = session.Bye
+	g.mu.Lock()
+	call.media = g.media
+	g.mu.Unlock()
 	log := g.log.With("call", call.ID, "trunk", trunk)
 	if !g.claim(call) {
 		session.Respond(sip.StatusBusyHere, "Busy Here", nil)
