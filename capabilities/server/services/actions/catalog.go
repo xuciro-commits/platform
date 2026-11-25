@@ -33,7 +33,7 @@ func (h CatalogHooks) Of(m platform.Member) []platform.Action {
 			}
 			if !slices.ContainsFunc(action.Uses, func(used string) bool {
 				owner, schema, _ := h.Provider(used)
-				return owner == nil || !owner.Manifest().Actions.PermitsAny(m.RolesIn(owner.Manifest().ID), schema)
+				return owner == nil || !owner.Manifest().Actions.PermitsAny(m.RolesFor(owner.Manifest().ID, schema), schema)
 			}) {
 				if version, err := h.SchemaVersion(a, action); err == nil {
 					action.SchemaVersion = &version

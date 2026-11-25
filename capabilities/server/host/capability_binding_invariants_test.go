@@ -16,7 +16,8 @@ import (
 func TestInvariantK41OptionalCapabilityUseDegradesUntilBound(t *testing.T) {
 	const tenant, contract, sender = "invariant-k41", "telephony.fax/1", "invariantproject.sender"
 	admin := runtimeprotocol.Seat{Subjects: []string{"admin"}, Member: platform.Member{ID: "admin", Tenant: tenant, Roles: map[string]string{controlowner.PlatformApp: controlowner.Admin}}}
-	live := newInvariantTenant(t, tenant, admin)
+	agent := runtimeprotocol.Seat{Subjects: []string{"agent"}, Member: platform.Member{ID: "agent", Tenant: tenant, Roles: map[string]string{"invariantproject": ontology.BuilderRole}}}
+	live := newInvariantTenant(t, tenant, admin, agent)
 	try := func(schema, typ, id string, payload any) *platform.Error {
 		t.Helper()
 		_, refusal := live.Submit(live.member(t), live.submission(schema, typ, id, payload), invariantClock)
@@ -87,6 +88,9 @@ func TestInvariantK41OptionalCapabilityUseDegradesUntilBound(t *testing.T) {
 	}
 	if !offered(live) {
 		t.Fatal("an action using a bound capability is offered")
+	}
+	if holder, _ := live.Member("agent"); !slices.ContainsFunc(live.Catalog(holder), func(a platform.Action) bool { return a.Schema == sender+".fax" }) {
+		t.Fatal("a member whose role is in the implementing app is offered the action, as the record itself allows it")
 	}
 	replayed := live.restore(t, live.entries, admin)
 	if !offered(replayed) || !reflect.DeepEqual(replayed.recordImage(t), live.recordImage(t)) {
