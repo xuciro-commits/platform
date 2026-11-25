@@ -30,6 +30,11 @@
             "app": "build",
             "kind": "page",
             "name": "phone.call"
+          },
+          {
+            "app": "build",
+            "kind": "page",
+            "name": "phone.trunk"
           }
         ],
         "body": {
@@ -37,13 +42,20 @@
           "title": "Phone",
           "icon": "phone",
           "pages": [
-            "phone.call"
+            "phone.call",
+            "phone.trunk"
           ],
           "groups": [
             {
               "title": "Calls",
               "pages": [
                 "phone.call"
+              ]
+            },
+            {
+              "title": "Settings",
+              "pages": [
+                "phone.trunk"
               ]
             }
           ],
@@ -195,7 +207,23 @@
               "Ring everyone": "响给所有人",
               "Nobody answered in time for the contact's owner, so the call now rings for every agent.": "联系人负责人没有及时接听，电话改为响给所有坐席。",
               "Someone already took this call.": "这通电话已经有人接了。",
-              "Someone else already took this call, or it is still ringing for the contact's owner.": "这通电话已经有人接了，或者还在优先响给联系人负责人。"
+              "Someone else already took this call, or it is still ringing for the contact's owner.": "这通电话已经有人接了，或者还在优先响给联系人负责人。",
+              "Phone line": "线路",
+              "Phone lines": "线路",
+              "A SIP trunk that registers with the voice gateway, such as a desk phone, a gateway device or a phone running a gateway app. The voice gateway reads these lines and picks up changes without a restart.": "注册到语音网关的 SIP 中继，例如话机、网关设备或装了网关应用的手机。语音网关读这里的线路，改动不用重启就生效。",
+              "Account": "账号",
+              "The SIP user name the trunk registers with; letters, digits and - . _ only.": "中继注册用的 SIP 用户名，只用字母、数字和 - . _。",
+              "Password": "密码",
+              "The SIP password the trunk registers with.": "中继注册用的 SIP 密码。",
+              "In use": "启用",
+              "Turn off to stop the line registering without deleting it.": "关掉后这条线路不能注册，但不删除。",
+              "Number header": "号码头",
+              "A header that repeats the dialed number, for trunks that do not read it from the Request-URI.": "重复被叫号码的消息头，给不从 Request-URI 读号码的中继用。",
+              "Fixed headers": "固定头",
+              "One Name: value per line, sent with every outgoing call, such as the SIM slot to dial from.": "每行一个“名字: 值”，每通外呼都带上，例如用哪张 SIM 卡拨出。",
+              "Another phone line already uses this account.": "已有线路使用这个账号。",
+              "Settings": "设置",
+              "Dialing": "拨号"
             }
           }
         }
@@ -1334,6 +1362,181 @@
       {
         "ref": {
           "app": "build",
+          "kind": "object",
+          "name": "phone.trunk"
+        },
+        "contractVersion": 1,
+        "sourceVersion": "1",
+        "requires": [],
+        "provides": [
+          {
+            "kind": "interface",
+            "name": "phone.trunk",
+            "inputs": {
+              "type": ""
+            },
+            "outputs": {
+              "type": "object",
+              "properties": {
+                "account": {
+                  "type": "string",
+                  "description": "The SIP user name the trunk registers with; letters, digits and - . _ only."
+                },
+                "active": {
+                  "type": "boolean",
+                  "description": "Turn off to stop the line registering without deleting it."
+                },
+                "archived": {
+                  "type": "boolean"
+                },
+                "headers": {
+                  "type": "string",
+                  "description": "One Name: value per line, sent with every outgoing call, such as the SIM slot to dial from."
+                },
+                "id": {
+                  "type": "string"
+                },
+                "notes": {
+                  "type": "string"
+                },
+                "numberheader": {
+                  "type": "string",
+                  "description": "A header that repeats the dialed number, for trunks that do not read it from the Request-URI."
+                },
+                "password": {
+                  "type": "string",
+                  "description": "The SIP password the trunk registers with."
+                },
+                "revision": {
+                  "type": "integer"
+                }
+              },
+              "required": [
+                "id",
+                "revision"
+              ]
+            },
+            "roles": null,
+            "side": "pure"
+          }
+        ],
+        "body": {
+          "name": "trunk",
+          "namespace": "phone",
+          "title": "Phone line",
+          "plural": "Phone lines",
+          "icon": "server",
+          "display": "account",
+          "description": "A SIP trunk that registers with the voice gateway, such as a desk phone, a gateway device or a phone running a gateway app. The voice gateway reads these lines and picks up changes without a restart.",
+          "fields": [
+            {
+              "name": "account",
+              "title": "Account",
+              "type": "text",
+              "required": true,
+              "search": true,
+              "group": "Line",
+              "help": "The SIP user name the trunk registers with; letters, digits and - . _ only."
+            },
+            {
+              "name": "password",
+              "title": "Password",
+              "type": "text",
+              "required": true,
+              "read": [
+                "supervisor",
+                "gateway"
+              ],
+              "group": "Line",
+              "help": "The SIP password the trunk registers with."
+            },
+            {
+              "name": "active",
+              "title": "In use",
+              "type": "boolean",
+              "default": "true",
+              "aside": true,
+              "help": "Turn off to stop the line registering without deleting it."
+            },
+            {
+              "name": "numberheader",
+              "title": "Number header",
+              "type": "text",
+              "group": "Dialing",
+              "help": "A header that repeats the dialed number, for trunks that do not read it from the Request-URI."
+            },
+            {
+              "name": "headers",
+              "title": "Fixed headers",
+              "type": "longtext",
+              "group": "Dialing",
+              "help": "One Name: value per line, sent with every outgoing call, such as the SIM slot to dial from."
+            },
+            {
+              "name": "notes",
+              "title": "Notes",
+              "type": "longtext",
+              "group": "Line"
+            }
+          ],
+          "constraints": [
+            {
+              "name": "account",
+              "kind": "unique",
+              "fields": [
+                "account"
+              ],
+              "message": "Another phone line already uses this account.",
+              "translations": {
+                "zh-CN": "已有线路使用这个账号。"
+              }
+            }
+          ],
+          "access": [
+            {
+              "role": "supervisor",
+              "read": "all",
+              "create": true,
+              "edit": true,
+              "archive": true
+            },
+            {
+              "role": "gateway",
+              "read": "all"
+            }
+          ],
+          "view": {
+            "version": 1,
+            "layout": "table",
+            "columns": [
+              "account",
+              "active",
+              "numberheader",
+              "notes"
+            ],
+            "sort": [
+              {
+                "sortKey": "account",
+                "direction": "ascending"
+              }
+            ],
+            "group": "none",
+            "lanes": "",
+            "filters": [],
+            "search": ""
+          },
+          "type": "phone.trunk",
+          "schemaVersions": [
+            {
+              "version": "schema.sha256.b1a1a5ad65f31b478c7a0a688fa345236c298fed8bf9c42e60d48ae566b2112b",
+              "family": 1
+            }
+          ]
+        }
+      },
+      {
+        "ref": {
+          "app": "build",
           "kind": "page",
           "name": "phone.call"
         },
@@ -1680,6 +1883,236 @@
             ]
           },
           "title": "Calls",
+          "widgetSpec": {
+            "body": {
+              "document": null,
+              "layout": "list-detail",
+              "sections": [
+                {
+                  "binding": "list",
+                  "id": "list",
+                  "triggers": [
+                    "list"
+                  ]
+                },
+                {
+                  "binding": "detail",
+                  "id": "detail",
+                  "triggers": [
+                    "detail"
+                  ]
+                }
+              ]
+            },
+            "format": "platform.page.web.v1"
+          }
+        }
+      },
+      {
+        "ref": {
+          "app": "build",
+          "kind": "page",
+          "name": "phone.trunk"
+        },
+        "contractVersion": 1,
+        "sourceVersion": "1",
+        "requires": [
+          {
+            "app": "build",
+            "kind": "action",
+            "name": "phone.trunk.create"
+          },
+          {
+            "app": "build",
+            "kind": "action",
+            "name": "phone.trunk.edit"
+          },
+          {
+            "app": "build",
+            "kind": "object",
+            "name": "phone.trunk"
+          }
+        ],
+        "body": {
+          "actionTriggers": [
+            {
+              "actions": [
+                {
+                  "app": "build",
+                  "kind": "action",
+                  "name": "phone.trunk.create"
+                },
+                {
+                  "app": "build",
+                  "kind": "action",
+                  "name": "phone.trunk.edit"
+                }
+              ],
+              "binding": "page",
+              "id": "page"
+            },
+            {
+              "binding": "list",
+              "id": "list",
+              "owner": "binding:list"
+            },
+            {
+              "binding": "detail",
+              "id": "detail",
+              "owner": "binding:detail"
+            }
+          ],
+          "dataBindings": [
+            {
+              "fields": [
+                {
+                  "name": "account"
+                },
+                {
+                  "name": "password"
+                },
+                {
+                  "name": "active"
+                },
+                {
+                  "name": "numberheader"
+                },
+                {
+                  "name": "headers"
+                },
+                {
+                  "name": "notes"
+                }
+              ],
+              "id": "list",
+              "kind": "record",
+              "model": {
+                "fields": [
+                  {
+                    "name": "account"
+                  },
+                  {
+                    "name": "password"
+                  },
+                  {
+                    "name": "active"
+                  },
+                  {
+                    "name": "numberheader"
+                  },
+                  {
+                    "name": "headers"
+                  },
+                  {
+                    "name": "notes"
+                  }
+                ],
+                "type": "phone.trunk"
+              },
+              "object": {
+                "app": "build",
+                "kind": "object",
+                "name": "phone.trunk"
+              },
+              "owner": "binding:list",
+              "ports": {
+                "selectionMode": "write",
+                "widget": "table",
+                "parentable": "true"
+              }
+            },
+            {
+              "fields": [
+                {
+                  "name": "account"
+                },
+                {
+                  "name": "password"
+                },
+                {
+                  "name": "active"
+                },
+                {
+                  "name": "numberheader"
+                },
+                {
+                  "name": "headers"
+                },
+                {
+                  "name": "notes"
+                }
+              ],
+              "id": "detail",
+              "kind": "record",
+              "model": {
+                "fields": [
+                  {
+                    "name": "account"
+                  },
+                  {
+                    "name": "password"
+                  },
+                  {
+                    "name": "active"
+                  },
+                  {
+                    "name": "numberheader"
+                  },
+                  {
+                    "name": "headers"
+                  },
+                  {
+                    "name": "notes"
+                  }
+                ],
+                "type": "phone.trunk"
+              },
+              "object": {
+                "app": "build",
+                "kind": "object",
+                "name": "phone.trunk"
+              },
+              "owner": "binding:detail",
+              "ports": {
+                "selectionMode": "read",
+                "widget": "detail"
+              }
+            }
+          ],
+          "format": 4,
+          "inputSchema": {},
+          "name": "phone.trunk",
+          "object": {
+            "app": "build",
+            "kind": "object",
+            "name": "phone.trunk"
+          },
+          "scopeVisibility": {
+            "owners": {
+              "detail": "binding:detail",
+              "list": "binding:list"
+            },
+            "root": "page",
+            "scopes": [
+              {
+                "id": "page",
+                "kind": "page"
+              },
+              {
+                "binding": "list",
+                "id": "binding:list",
+                "kind": "page",
+                "parent": "page"
+              },
+              {
+                "binding": "detail",
+                "id": "binding:detail",
+                "kind": "page",
+                "parent": "page"
+              }
+            ]
+          },
+          "title": "Phone lines",
           "widgetSpec": {
             "body": {
               "document": null,

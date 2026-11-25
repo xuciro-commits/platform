@@ -37,6 +37,19 @@ func newAuthenticator(realm string, trunks map[string]string, now func() time.Ti
 	return &authenticator{realm: realm, trunks: trunks, now: now, nonces: map[string]time.Time{}}
 }
 
+func (a *authenticator) set(trunks map[string]string) {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	a.trunks = trunks
+}
+
+func (a *authenticator) password(trunk string) (string, bool) {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	password, ok := a.trunks[trunk]
+	return password, ok
+}
+
 func (a *authenticator) check(req *sip.Request) (string, verdict) {
 	header := req.GetHeader("Authorization")
 	if header == nil {
@@ -46,7 +59,7 @@ func (a *authenticator) check(req *sip.Request) (string, verdict) {
 	if err != nil || creds.Realm != a.realm {
 		return "", challenge
 	}
-	password, known := a.trunks[creds.Username]
+	password, known := a.password(creds.Username)
 	if !known {
 		return "", forbidden
 	}

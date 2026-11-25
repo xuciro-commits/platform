@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"maps"
 	"net"
 	"slices"
 	"strconv"
@@ -104,19 +105,11 @@ func New(cfg Config, onCall func(*Call)) (*Gateway, error) {
 	if cfg.Realm == "" {
 		return nil, errors.New("voice gateway: a realm is required")
 	}
-	if len(cfg.Trunks) == 0 {
-		return nil, errors.New("voice gateway: at least one trunk account is required")
-	}
 	if onCall == nil {
 		return nil, errors.New("voice gateway: a call handler is required")
 	}
-	for trunk, d := range cfg.Dialing {
-		if _, ok := cfg.Trunks[trunk]; !ok {
-			return nil, fmt.Errorf("voice gateway: dialing settings for %s, which has no account", trunk)
-		}
-		if err := d.check(trunk); err != nil {
-			return nil, err
-		}
+	if err := checkTrunks(cfg.Trunks, cfg.Dialing); err != nil {
+		return nil, err
 	}
 	if cfg.RingTimeout <= 0 {
 		cfg.RingTimeout = defaultRingTimeout
@@ -135,13 +128,59 @@ func New(cfg Config, onCall func(*Call)) (*Gateway, error) {
 		return nil, fmt.Errorf("voice gateway: server: %w", err)
 	}
 	g := &Gateway{cfg: cfg, log: log, now: time.Now, ua: ua, server: server, onCall: onCall, regs: map[string]Registration{}, active: map[string]*Call{}}
-	g.auth = newAuthenticator(cfg.Realm, cfg.Trunks, func() time.Time { return g.now() })
+	g.cfg.Trunks, g.cfg.Dialing = maps.Clone(cfg.Trunks), maps.Clone(cfg.Dialing)
+	g.auth = newAuthenticator(cfg.Realm, g.cfg.Trunks, func() time.Time { return g.now() })
 	server.OnRegister(g.register)
 	server.OnInvite(g.invite)
 	server.OnAck(g.ack)
 	server.OnBye(g.bye)
 	server.OnOptions(g.options)
 	return g, nil
+}
+
+func checkTrunks(trunks map[string]string, dialing map[string]TrunkDialing) error {
+	for trunk, password := range trunks {
+		if !headerName(trunk) || password == "" {
+			return fmt.Errorf("voice gateway: trunk %q needs a plain account name and a password", trunk)
+		}
+	}
+	for trunk, d := range dialing {
+		if _, ok := trunks[trunk]; !ok {
+			return fmt.Errorf("voice gateway: dialing settings for %s, which has no account", trunk)
+		}
+		if err := d.check(trunk); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// SetTrunks replaces the trunk accounts and their dialing settings while the gateway
+// runs. A trunk that is gone or has a new password loses its registration and must
+// register again; calls already on a line go on until they end.
+func (g *Gateway) SetTrunks(trunks map[string]string, dialing map[string]TrunkDialing) error {
+	if err := checkTrunks(trunks, dialing); err != nil {
+		return err
+	}
+	trunks, dialing = maps.Clone(trunks), maps.Clone(dialing)
+	g.mu.Lock()
+	old := g.cfg.Trunks
+	g.cfg.Trunks, g.cfg.Dialing = trunks, dialing
+	for trunk := range g.regs {
+		if password, ok := trunks[trunk]; !ok || password != old[trunk] {
+			delete(g.regs, trunk)
+		}
+	}
+	g.mu.Unlock()
+	g.auth.set(trunks)
+	g.log.Info("trunk accounts updated", "trunks", len(trunks))
+	return nil
+}
+
+func (g *Gateway) dialingFor(trunk string) TrunkDialing {
+	g.mu.Lock()
+	defer g.mu.Unlock()
+	return g.cfg.Dialing[trunk]
 }
 
 func (g *Gateway) Serve(conn net.PacketConn) error {
@@ -167,8 +206,9 @@ func (g *Gateway) Serve(conn net.PacketConn) error {
 	g.mu.Lock()
 	g.dialogs, g.outgoing = sipgo.NewDialogServerCache(client, contact), sipgo.NewDialogClientCache(client, contact)
 	g.media = mediaAddress(host)
+	trunks := len(g.cfg.Trunks)
 	g.mu.Unlock()
-	g.log.Info("voice gateway listening", "address", net.JoinHostPort(host, portText), "realm", g.cfg.Realm, "trunks", len(g.cfg.Trunks))
+	g.log.Info("voice gateway listening", "address", net.JoinHostPort(host, portText), "realm", g.cfg.Realm, "trunks", trunks)
 	return g.server.ServeUDP(conn)
 }
 

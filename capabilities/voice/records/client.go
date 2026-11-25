@@ -24,6 +24,7 @@ import (
 
 const (
 	callType    = "phone.call"
+	trunkType   = "phone.trunk"
 	contactType = "party.contact"
 	answerLimit = 4 << 20
 )
@@ -38,6 +39,7 @@ type Client struct {
 	stream  *http.Client
 	log     *slog.Logger
 	changes chan struct{}
+	lines   chan struct{}
 	owners  []Owner
 
 	mu        sync.Mutex
@@ -51,7 +53,7 @@ func New(base, tenant string, token func() (string, error), log *slog.Logger) *C
 		log = slog.Default()
 	}
 	return &Client{base: strings.TrimRight(base, "/"), tenant: tenant, token: token, log: log,
-		http: &http.Client{Timeout: 15 * time.Second}, stream: &http.Client{}, changes: make(chan struct{}, 1)}
+		http: &http.Client{Timeout: 15 * time.Second}, stream: &http.Client{}, changes: make(chan struct{}, 1), lines: make(chan struct{}, 1)}
 }
 
 // Changes signals each time the platform reports a change to call records.
@@ -114,10 +116,54 @@ func (c *Client) follow(ctx context.Context) error {
 }
 
 func (c *Client) notify() {
+	signal(c.changes)
+	signal(c.lines)
+}
+
+func signal(ch chan struct{}) {
 	select {
-	case c.changes <- struct{}{}:
+	case ch <- struct{}{}:
 	default:
 	}
+}
+
+// LineChanges signals each time the platform reports a change to phone lines.
+func (c *Client) LineChanges() <-chan struct{} { return c.lines }
+
+// Lines reads the phone lines kept on the platform that are in use: each account's
+// password, and the dialing settings of the lines that have any.
+func (c *Client) Lines(ctx context.Context) (map[string]string, map[string]gateway.TrunkDialing, error) {
+	var rows []struct {
+		Account      string `json:"account"`
+		Password     string `json:"password"`
+		Active       *bool  `json:"active"`
+		NumberHeader string `json:"numberheader"`
+		Headers      string `json:"headers"`
+	}
+	if err := c.list(ctx, trunkType, [][]any{}, &rows); err != nil {
+		return nil, nil, err
+	}
+	trunks, dialing := map[string]string{}, map[string]gateway.TrunkDialing{}
+	for _, r := range rows {
+		if r.Active != nil && !*r.Active || r.Account == "" || r.Password == "" {
+			continue
+		}
+		trunks[r.Account] = r.Password
+		d := gateway.TrunkDialing{NumberHeader: strings.TrimSpace(r.NumberHeader)}
+		for _, line := range strings.Split(r.Headers, "\n") {
+			name, value, ok := strings.Cut(line, ":")
+			if name = strings.TrimSpace(name); ok && name != "" {
+				if d.Headers == nil {
+					d.Headers = map[string]string{}
+				}
+				d.Headers[name] = strings.TrimSpace(value)
+			}
+		}
+		if d.NumberHeader != "" || len(d.Headers) > 0 {
+			dialing[r.Account] = d
+		}
+	}
+	return trunks, dialing, nil
 }
 
 // Submit runs a phone.call action through the platform's one write path. It answers

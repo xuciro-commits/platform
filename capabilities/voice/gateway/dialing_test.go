@@ -61,3 +61,45 @@ func TestTrunkDialingSettingsAreChecked(t *testing.T) {
 		}
 	}
 }
+
+func TestTrunkAccountsChangeWhileTheGatewayRuns(t *testing.T) {
+	g, err := New(Config{Realm: testRealm, Trunks: map[string]string{testTrunk: testPassword}, RingTimeout: 5 * time.Second, Logger: slog.New(slog.DiscardHandler)}, func(*Call) {})
+	if err != nil {
+		t.Fatal(err)
+	}
+	conn, port := listen(t)
+	go g.Serve(conn)
+	t.Cleanup(func() {
+		g.Close()
+		conn.Close()
+	})
+	ready(t, g.ua, conn)
+	tr := newTrunk(t, sip.Uri{Scheme: "sip", Host: "127.0.0.1", Port: port})
+	if res := tr.register(t, testPassword, 300); res.StatusCode != sip.StatusOK {
+		t.Fatalf("the trunk does not register: %d", res.StatusCode)
+	}
+	if err := g.SetTrunks(map[string]string{testTrunk: "rotated-secret"}, map[string]TrunkDialing{testTrunk: {NumberHeader: "X-Dial"}}); err != nil {
+		t.Fatal(err)
+	}
+	if regs := g.Registrations(); len(regs) != 0 {
+		t.Fatalf("a trunk whose password changed kept its registration: %v", regs)
+	}
+	if res := tr.register(t, testPassword, 300); res.StatusCode != sip.StatusForbidden {
+		t.Fatalf("the old password still registers: %d", res.StatusCode)
+	}
+	if res := tr.register(t, "rotated-secret", 300); res.StatusCode != sip.StatusOK {
+		t.Fatalf("the new password does not register: %d", res.StatusCode)
+	}
+	if got := g.dialingFor(testTrunk).NumberHeader; got != "X-Dial" {
+		t.Fatalf("the dialing settings were not replaced: %q", got)
+	}
+	if err := g.SetTrunks(map[string]string{}, nil); err != nil {
+		t.Fatal(err)
+	}
+	if res := tr.register(t, "rotated-secret", 300); res.StatusCode != sip.StatusForbidden {
+		t.Fatalf("a removed trunk still registers: %d", res.StatusCode)
+	}
+	if err := g.SetTrunks(map[string]string{"bad name": "x"}, nil); err == nil {
+		t.Fatal("the gateway accepted a trunk account it cannot authenticate")
+	}
+}

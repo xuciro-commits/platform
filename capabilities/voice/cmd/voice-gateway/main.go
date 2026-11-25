@@ -7,6 +7,7 @@ import (
 	"flag"
 	"fmt"
 	"log/slog"
+	"maps"
 	"net"
 	"os"
 	"os/signal"
@@ -69,11 +70,12 @@ func run(ctx context.Context, logger *slog.Logger, o options) error {
 		}
 	}
 	var desk *gateway.Desk
+	var client *records.Client
 	if o.platform != "" {
 		if o.tenant == "" || o.cred == "" {
 			return errors.New("-platform needs -tenant and -token-file")
 		}
-		client := records.New(o.platform, o.tenant, tokenFrom(o.cred), logger)
+		client = records.New(o.platform, o.tenant, tokenFrom(o.cred), logger)
 		client.OwnedBy(s.Owners)
 		desk = gateway.NewDesk(client, logger)
 		desk.PreferFor(time.Duration(s.PreferSecs) * time.Second)
@@ -94,6 +96,7 @@ func run(ctx context.Context, logger *slog.Logger, o options) error {
 	if desk != nil {
 		desk.Attach(g)
 		go desk.Run(ctx)
+		go followLines(ctx, client, g, s, logger)
 	}
 	go func() {
 		<-ctx.Done()
@@ -104,6 +107,48 @@ func run(ctx context.Context, logger *slog.Logger, o options) error {
 		return err
 	}
 	return nil
+}
+
+// followLines keeps the gateway's trunk accounts in step with the phone lines on the
+// platform. Lines from the config file stay; a line on the platform with the same
+// account replaces the file's. A failed read keeps the accounts the gateway has.
+func followLines(ctx context.Context, client *records.Client, g *gateway.Gateway, s settings, logger *slog.Logger) {
+	apply := func() {
+		read, cancel := context.WithTimeout(ctx, 15*time.Second)
+		trunks, dialing, err := client.Lines(read)
+		cancel()
+		if err != nil {
+			logger.Warn("could not read the phone lines", "error", err)
+			return
+		}
+		merged, settings := maps.Clone(s.Trunks), maps.Clone(s.Dialing)
+		if merged == nil {
+			merged = map[string]string{}
+		}
+		if settings == nil {
+			settings = map[string]gateway.TrunkDialing{}
+		}
+		for account, password := range trunks {
+			merged[account] = password
+			delete(settings, account)
+		}
+		maps.Copy(settings, dialing)
+		if err := g.SetTrunks(merged, settings); err != nil {
+			logger.Warn("the phone lines on the platform cannot be used", "error", err)
+		}
+	}
+	apply()
+	tick := time.NewTicker(time.Minute)
+	defer tick.Stop()
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-client.LineChanges():
+		case <-tick.C:
+		}
+		apply()
+	}
 }
 
 func tokenFrom(path string) func() (string, error) {
