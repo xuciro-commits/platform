@@ -203,12 +203,12 @@ func (o *object) has(key string) bool {
 
 func expandAction(action *object, base exprScope, at string) error {
 	s := base
-	s.inputs, s.steps = map[string]string{}, map[string]string{}
+	s.inputs, s.steps = map[string]exprField{}, map[string]string{}
 	list, _ := action.get("inputs")
 	inputs, _ := list.([]any)
 	for _, item := range inputs {
 		if input := asObject(item); input != nil {
-			s.inputs[text(input, "name")] = fieldKind(text(input, "type"))
+			s.inputs[text(input, "name")] = exprField{kind: fieldKind(text(input, "type")), ref: text(input, "ref")}
 		}
 	}
 	value, ok := action.get("transaction")

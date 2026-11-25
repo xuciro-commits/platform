@@ -30,12 +30,11 @@
 
 顺序（负责人 11-25 定）：先过阶段 2 的门槛，再收口两行，扩张的事等第一个客户。原始设计稿在负责人的 Agent Files（`artifacts/platform/extensibility-design.md`）。
 
-1. A4 剩下的转换步骤：`set` 读引用记录的字段。
-2. 动作目录缺 `crm.lead.dial`（见 B3 的缺陷）。
-3. 门槛演示：空租户装 CRM，线索到赢单，换角色核对入口与权限；先自己按 design 的六步走，挡路的当场修，再交负责人。
-4. 2.8 收口：publisher 主干跑通即定为 v1；第二波包挪到阶段 3 以后，按客户需求接。
-5. 2.9 剩余项随用到它的包做：party 的结构化地址随 party 0.2.0，扩展的落点随第一个扩展包。
-6. B3 的难项排在门槛之后；Shizuku 自研手机应用在 `idea/device-runtime`，等第一个客户要用电话。
+1. 动作目录缺 `crm.lead.dial`（见 B3 的缺陷）。
+2. 门槛演示：空租户装 CRM，线索到赢单，换角色核对入口与权限；先自己按 design 的六步走，挡路的当场修，再交负责人。
+3. 2.8 收口：publisher 主干跑通即定为 v1；第二波包挪到阶段 3 以后，按客户需求接。
+4. 2.9 剩余项随用到它的包做：party 的结构化地址随 party 0.2.0，扩展的落点随第一个扩展包。
+5. B3 的难项排在门槛之后；Shizuku 自研手机应用在 `idea/device-runtime`，等第一个客户要用电话。
 
 ## 2.8 开放应用接入
 
@@ -68,7 +67,7 @@
   剩下：party 的地址改为可选的结构化引用（国家、区划、街道），随 A4 的 party 0.2.0 做。
 - A4 迁移已做：helpdesk 0.2.0、hr-core 0.2.0、crm 0.3.0（客户、联系人挂在 party 的单位与人上，删 crm.industry），走 preview 破坏性升级（有数据的旧版拒升级、需卸载重装）；
   平台为人补了 K43。trunk 的 crm 与 official 租户先装夹具 geo 0.1.1、party 0.2.1，再装 crm 0.3.0；三个包随平台 v0.2.9 发。
-  剩：转换步骤的 `set` 读引用记录的字段（如 `input.account.base`），crm 转换时选了已有客户、新建的人才能归到那个单位。验收：crm 包的 try。
+  转换步骤的表达式能从输入与前面步骤顺着引用读字段（如 `input.account.base`）；crm 0.3.2 转换时选了已有客户，新建的人归到那个客户的单位。
 - **A5 包的种类与落点**（[architecture](architecture.md)“扩展”）。一项一次提交，在 crm 0.3.0 之前做：
   - 种类已由 `pkg` 推导进 `catalog.json` 的 `kind`，`pkg check` 指名拒绝反向依赖（`services/devops/descriptor/kind.go`）；
     领域已改名 `domains`，旧名 `capabilities` 再读一个版本。主数据已落进“管理 → 主数据”：应用写 `surface: master-data`，不去应用根，

@@ -13,7 +13,7 @@ type exprField struct{ kind, ref string }
 type exprScope struct {
 	objects map[string]map[string]exprField
 	self    string
-	inputs  map[string]string
+	inputs  map[string]exprField
 	steps   map[string]string
 	sets    map[string]string
 	item    string
@@ -366,52 +366,59 @@ func numberKind(n *exprNode, want string) string {
 	return "integer"
 }
 
-func (s exprScope) resolve(name string) (exprField, []string, error) {
+func (s exprScope) resolve(name string) (exprField, string, []string, error) {
 	if s.json {
-		return exprField{kind: "json"}, nil, nil
+		return exprField{kind: "json"}, name, nil, nil
 	}
 	parts := strings.Split(name, ".")
+	root, rest := parts[0], parts[1:]
+	var f exprField
 	switch parts[0] {
-	case "input":
-		if len(parts) == 2 {
-			if kind, ok := s.inputs[parts[1]]; ok {
-				return exprField{kind: kind}, nil, nil
-			}
+	case "input", "step":
+		if len(parts) < 2 {
+			return exprField{}, "", nil, fmt.Errorf("%s needs a name", name)
 		}
-		return exprField{}, nil, fmt.Errorf("%s is not an input of this action", name)
-	case "step":
-		if len(parts) == 2 {
-			if typ, ok := s.steps[parts[1]]; ok {
-				return exprField{kind: "reference", ref: typ}, nil, nil
-			}
+		var ok bool
+		if parts[0] == "input" {
+			f, ok = s.inputs[parts[1]]
+		} else {
+			f.ref, ok = s.steps[parts[1]]
+			f.kind = "reference"
 		}
-		return exprField{}, nil, fmt.Errorf("%s is not an earlier step", name)
+		if !ok && parts[0] == "input" {
+			return exprField{}, "", nil, fmt.Errorf("%s is not an input of this action", name)
+		}
+		if !ok {
+			return exprField{}, "", nil, fmt.Errorf("%s is not an earlier step", name)
+		}
+		root, rest = parts[0]+"."+parts[1], parts[2:]
 	case "item":
 		if s.item == "" || len(parts) != 2 {
-			return exprField{}, nil, fmt.Errorf("%s is used outside an aggregate", name)
+			return exprField{}, "", nil, fmt.Errorf("%s is used outside an aggregate", name)
 		}
 		f, ok := s.objects[s.item][parts[1]]
 		if !ok {
-			return exprField{}, nil, fmt.Errorf("%s has no field %s", s.item, parts[1])
+			return exprField{}, "", nil, fmt.Errorf("%s has no field %s", s.item, parts[1])
 		}
-		return f, nil, nil
+		return f, name, nil, nil
+	default:
+		var ok bool
+		f, ok = s.objects[s.self][parts[0]]
+		if !ok {
+			return exprField{}, "", nil, fmt.Errorf("%s has no field %s", s.self, parts[0])
+		}
 	}
-	typ := s.self
-	f, ok := s.objects[typ][parts[0]]
-	if !ok {
-		return exprField{}, nil, fmt.Errorf("%s has no field %s", typ, parts[0])
-	}
-	for _, segment := range parts[1:] {
+	for _, segment := range rest {
 		if f.kind != "reference" || f.ref == "" {
-			return exprField{}, nil, fmt.Errorf("%s: %s is not a reference", name, segment)
+			return exprField{}, "", nil, fmt.Errorf("%s: %s is not a reference", name, segment)
 		}
 		next, ok := s.objects[f.ref][segment]
 		if !ok {
-			return exprField{}, nil, fmt.Errorf("%s has no field %s", f.ref, segment)
+			return exprField{}, "", nil, fmt.Errorf("%s has no field %s", f.ref, segment)
 		}
 		f = next
 	}
-	return f, parts[1:], nil
+	return f, root, rest, nil
 }
 
 func (s exprScope) emit(n *exprNode, want string) (*object, string, error) {
@@ -429,7 +436,7 @@ func (s exprScope) emit(n *exprNode, want string) (*object, string, error) {
 		}
 		return s.literal(n, kind), kind, nil
 	case "ref":
-		f, path, err := s.resolve(n.name)
+		f, root, path, err := s.resolve(n.name)
 		if err != nil {
 			return nil, "", err
 		}
@@ -438,7 +445,6 @@ func (s exprScope) emit(n *exprNode, want string) (*object, string, error) {
 			out.set("ref", n.name)
 			return out, f.kind, nil
 		}
-		root := strings.Split(n.name, ".")[0]
 		out := exprObject("path", f.kind)
 		out.set("args", []any{func() *object { r := exprObject("", "reference"); r.set("ref", root); return r }()})
 		segments := []any{}
