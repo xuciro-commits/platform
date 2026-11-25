@@ -25,6 +25,10 @@ export function refusal(status: number, body: Failure | null) {
 
 const inflight = new Map<string, Promise<unknown>>();
 
+export function invalidateRequests() {
+  inflight.clear();
+}
+
 function withAbort<T>(promise: Promise<T>, signal?: AbortSignal): Promise<T> {
   if (!signal) return promise;
   if (signal.aborted) return Promise.reject(signal.reason ?? new DOMException("Aborted", "AbortError"));
@@ -57,7 +61,9 @@ export async function request<Answer>(path: string, options: Options = {}): Prom
     const key = `${session?.tenant ?? ""} ${session?.token ?? ""} ${path}`;
     let shared = inflight.get(key) as Promise<Answer> | undefined;
     if (!shared) {
-      shared = respond(path, {}).then((res) => res.json() as Promise<Answer>).finally(() => { inflight.delete(key); });
+      shared = respond(path, {}).then((res) => res.json() as Promise<Answer>).finally(() => {
+        if (inflight.get(key) === shared) inflight.delete(key);
+      });
       inflight.set(key, shared);
     }
     return withAbort(shared, options.signal);

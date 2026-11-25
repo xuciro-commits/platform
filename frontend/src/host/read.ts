@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState, useSyncExternalStore } from "react";
-import { HostRefusal, request } from "./request";
+import { HostRefusal, invalidateRequests, request } from "./request";
 import { useSession } from "./session";
 
 export type Read<Answer> =
@@ -8,7 +8,7 @@ export type Read<Answer> =
   | { status: "refused"; path?: string | null; reason: string }
   | { status: "error"; path?: string | null; reason: string };
 
-type Cached = { seen: string; data: unknown };
+type Cached = { seen: string; order: number; data: unknown };
 
 const maxCached = 256;
 const listeners = new Set<() => void>();
@@ -16,6 +16,7 @@ const keyVersions = new Map<string, number>();
 const readCache = new Map<string, Cached>();
 const pendingReads = new Map<string, Promise<unknown>>();
 let cacheSession = "";
+let cacheOrder = 0;
 let globalVersion = 0;
 let metaVersion = 0;
 let anyVersion = 0;
@@ -41,8 +42,10 @@ function bump(key: string) {
 function syncSession(sessionKey: string) {
   if (sessionKey === cacheSession) return;
   cacheSession = sessionKey;
+  cacheOrder += 1;
   readCache.clear();
   pendingReads.clear();
+  invalidateRequests();
 }
 
 function cachedRead<Answer>(key: string): Cached | undefined {
@@ -50,16 +53,18 @@ function cachedRead<Answer>(key: string): Cached | undefined {
   if (!entry) return undefined;
   readCache.delete(key);
   readCache.set(key, entry);
-  return entry as { seen: string; data: Answer };
+  return entry as { seen: string; order: number; data: Answer };
 }
 
-function storeRead(key: string, seen: string, data: unknown) {
-  if (readCache.has(key)) readCache.delete(key);
+function storeRead(key: string, seen: string, order: number, data: unknown) {
+  const existing = readCache.get(key);
+  if (existing && existing.order > order) return;
+  if (existing) readCache.delete(key);
   else if (readCache.size >= maxCached) {
     const oldest = readCache.keys().next().value;
     if (oldest !== undefined) readCache.delete(oldest);
   }
-  readCache.set(key, { seen, data });
+  readCache.set(key, { seen, order, data });
 }
 
 function loadRead<Answer>(sessionKey: string, path: string, sent: string | undefined, seen: string): Promise<Answer> {
@@ -69,9 +74,10 @@ function loadRead<Answer>(sessionKey: string, path: string, sent: string | undef
   const flightKey = `${cacheKey}\0${seen}`;
   let shared = pendingReads.get(flightKey) as Promise<Answer> | undefined;
   if (!shared) {
+    const order = ++cacheOrder;
     shared = request<Answer>(path, { body: sent === undefined ? undefined : JSON.parse(sent) })
       .then((data) => {
-        if (sessionKey === cacheSession) storeRead(cacheKey, seen, data);
+        if (sessionKey === cacheSession) storeRead(cacheKey, seen, order, data);
         return data;
       })
       .finally(() => {
@@ -84,6 +90,7 @@ function loadRead<Answer>(sessionKey: string, path: string, sent: string | undef
 
 export function changed() {
   globalVersion += 1;
+  invalidateRequests();
   listeners.forEach((notify) => notify());
 }
 
@@ -94,6 +101,7 @@ export function changedTypes(types?: string[]) {
 export function changedScopes(types?: string[], scopes?: string[]) {
   const hasTypes = Boolean(types && types.length > 0);
   const hasScopes = Boolean(scopes && scopes.length > 0);
+  invalidateRequests();
   if (!hasTypes && !hasScopes) {
     globalVersion += 1;
   } else {
@@ -183,7 +191,11 @@ export function useRead<Answer>(path: string | null, body?: unknown): Read<Answe
     }
     const current = cachedRead<Answer>(cacheKey);
     if (current) {
-      setRead({ status: "ready", path, data: current.data as Answer });
+      setRead((previous) =>
+        previous.status === "ready" && previous.path === path && previous.data === current.data
+          ? previous
+          : { status: "ready", path, data: current.data as Answer },
+      );
       if (current.seen === seen) return;
     } else {
       setRead({ status: "loading", path });
