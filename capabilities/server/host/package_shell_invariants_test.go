@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"net/http"
+	"net/http/httptest"
 	"os"
 	"slices"
 	"strings"
@@ -288,5 +289,110 @@ func TestInvariantK24PackageDemoSeedInstallAndClear(t *testing.T) {
 	}
 	if refusal := submit(packages.SchemaPackageInstall, map[string]any{"id": descriptor.ID, "version": offer.Version}); refusal == nil || refusal.Code != pb.ErrorCode_ERROR_CODE_CONFLICT {
 		t.Fatalf("install with existing user record as seed must be rejected, got %v", refusal)
+	}
+}
+
+func TestInvariantMultiPackageTranslationsScopeByNamespaceAndTranslateFieldGroupsAndLabels(t *testing.T) {
+	adminSeat := protocol.Seat{Subjects: []string{"admin"}, Member: platform.Member{ID: "admin", Roles: map[string]string{"platform": "admin", build.ID: ontology.BuilderRole, "crm": "salesmanager", "party": "steward", "geo": "steward"}}}
+	live := newInvariantTenant(t, "invariant-multi-pkg-i18n", adminSeat)
+	admin, _ := live.Member("admin")
+	for _, fixture := range []string{"geo-0.1.1.json", "party-0.2.1.json", "crm-official-0.3.0.json"} {
+		raw, err := os.ReadFile("../../../scripts/frontend-fixtures/" + fixture)
+		if err != nil {
+			t.Fatal(err)
+		}
+		var offer platform.PackageDescriptor
+		if err := json.Unmarshal(raw, &offer); err != nil {
+			t.Fatal(err)
+		}
+		offer.Blueprint.Seed = nil
+		offer.Blueprint.Setup = nil
+		offer.Blueprint.Assets = slices.DeleteFunc(offer.Blueprint.Assets, func(a platform.ReleaseAsset) bool { return a.Ref.Kind == platform.AssetFlow })
+		for i, a := range offer.Blueprint.Assets {
+			if a.Ref.Kind == platform.AssetApp {
+				var app platform.Application
+				if json.Unmarshal(a.Body, &app) == nil {
+					app.Resources = slices.DeleteFunc(app.Resources, func(r platform.AssetRef) bool { return r.Kind == platform.AssetFlow })
+					offer.Blueprint.Assets[i].Body = platform.Raw(app)
+				}
+			}
+		}
+		preview, err := live.InspectPackage(t.Context(), protocol.PackageInspectRequest{Content: platform.Raw(offer)})
+		if err != nil {
+			t.Fatal(err)
+		}
+		for _, step := range []struct {
+			schema string
+			body   map[string]any
+		}{
+			{packages.SchemaPackageImport, map[string]any{"id": preview.Descriptor.ID, "digest": preview.Digest}},
+			{packages.SchemaPackageInstall, map[string]any{"id": preview.Descriptor.ID, "version": preview.Descriptor.Version}},
+		} {
+			req := live.submission(step.schema, protocol.PackageType, preview.Descriptor.ID, step.body)
+			req.Authority, req.PrincipalId = "platform", admin.ID
+			if _, refusal := live.Submit(admin, req, invariantClock); refusal != nil {
+				t.Fatalf("%s %s: %s %s", fixture, step.schema, refusal.Code, refusal.Message)
+			}
+		}
+	}
+	_, handler := observationHost(live.Tenant)
+	getZh := func(path string) []byte {
+		t.Helper()
+		req, _ := http.NewRequest(http.MethodGet, path, nil)
+		req.Header.Set("Authorization", "Bearer "+observationToken(live.ID, "admin"))
+		req.Header.Set("Platform-Tenant", live.ID)
+		req.Header.Set("Accept-Language", "zh-CN")
+		rec := httptest.NewRecorder()
+		handler.ServeHTTP(rec, req)
+		if rec.Code != http.StatusOK {
+			t.Fatalf("%s: %d %s", path, rec.Code, rec.Body)
+		}
+		return rec.Body.Bytes()
+	}
+	var entities []platform.RecordTypeInfo
+	if err := json.Unmarshal(getZh("/v1/entities"), &entities); err != nil {
+		t.Fatal(err)
+	}
+	fieldOf := func(typ, name string) platform.FieldInfo {
+		t.Helper()
+		idx := slices.IndexFunc(entities, func(e platform.RecordTypeInfo) bool { return e.Type == typ })
+		if idx < 0 {
+			t.Fatalf("missing entity %s", typ)
+		}
+		f, ok := entities[idx].Field(name)
+		if !ok {
+			t.Fatalf("missing field %s.%s", typ, name)
+		}
+		return f
+	}
+	if got := fieldOf("geo.division", "fullname").Title; got != "全称" {
+		t.Fatalf("geo.division.fullname expected 全称, got %q", got)
+	}
+	if got := fieldOf("crm.lead", "fullname").Title; got != "姓名" {
+		t.Fatalf("crm.lead.fullname expected 姓名, got %q", got)
+	}
+	if got := fieldOf("crm.lead", "jobtitle").Title; got != "职务" {
+		t.Fatalf("crm.lead.jobtitle expected 职务, got %q", got)
+	}
+	if got := fieldOf("party.contact", "jobtitle").Title; got != "职位" {
+		t.Fatalf("party.contact.jobtitle expected 职位, got %q", got)
+	}
+	if got := fieldOf("crm.deal", "weighted").Group; got != "预测" {
+		t.Fatalf("crm.deal.weighted group expected 预测, got %q", got)
+	}
+	if got := fieldOf("crm.deal", "nextstep").Group; got != "下一步" {
+		t.Fatalf("crm.deal.nextstep group expected 下一步, got %q", got)
+	}
+	var actions []platform.Action
+	if err := json.Unmarshal(getZh("/v1/actions"), &actions); err != nil {
+		t.Fatal(err)
+	}
+	convIdx := slices.IndexFunc(actions, func(a platform.Action) bool { return a.Schema == "crm.lead.convert" })
+	if convIdx < 0 {
+		t.Fatal("missing action crm.lead.convert")
+	}
+	paramIdx := slices.IndexFunc(actions[convIdx].Payload, func(p platform.Field) bool { return p.Name == "account" })
+	if paramIdx < 0 || actions[convIdx].Payload[paramIdx].Label != "已有客户" {
+		t.Fatalf("crm.lead.convert account label expected 已有客户, got %+v", actions[convIdx].Payload)
 	}
 }

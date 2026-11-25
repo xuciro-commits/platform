@@ -68,10 +68,19 @@ func (x *Translator) InstallApplications(definitions []platform.Definition) {
 			continue
 		}
 		scopes := []string{d.Ref.App}
-		for _, resource := range d.Application.Resources {
-			if scope := scopeOf(d.Ref.App, resource.Name); !slices.Contains(scopes, scope) {
+		addScope := func(scope string) {
+			if scope != "" && !slices.Contains(scopes, scope) {
 				scopes = append(scopes, scope)
 			}
+		}
+		if d.Application.Name != "" {
+			addScope(scopeOf(d.Ref.App, d.Application.Name+"._"))
+		}
+		for _, page := range d.Application.Pages {
+			addScope(scopeOf(d.Ref.App, page))
+		}
+		for _, resource := range d.Application.Resources {
+			addScope(scopeOf(d.Ref.App, resource.Name))
 		}
 		for _, scope := range scopes {
 			merge(scope, d.Application.Languages)
@@ -542,11 +551,32 @@ func ownerOf(x map[string]any, current string) string {
 			return scopeOf(app, name)
 		}
 	}
+	if name, ok := x["name"].(string); ok && name != "" {
+		if _, hasMenu := x["menu"]; hasMenu || ref["kind"] == string(platform.AssetApp) {
+			return scopeOf(app, name+"._")
+		}
+	}
+	if application, ok := x["application"].(map[string]any); ok {
+		if name, ok := application["name"].(string); ok && name != "" {
+			return scopeOf(app, name+"._")
+		}
+	}
 	return app
 }
 
 func WalkTexts(v any, f func(string) string) {
 	walkTextsWithApp(v, "", func(_ string, s string) string { return f(s) })
+}
+
+func translatedKey(x map[string]any, k string) bool {
+	if translated[k] {
+		return true
+	}
+	if k == "group" {
+		_, hasName := x["name"].(string)
+		return hasName
+	}
+	return false
 }
 
 func walkTextsWithApp(v any, currentApp string, f func(string, string) string) {
@@ -557,7 +587,7 @@ func walkTextsWithApp(v any, currentApp string, f func(string, string) string) {
 			if opaquePresentationValue(x, k) {
 				continue
 			}
-			if s, ok := child.(string); ok && translated[k] {
+			if s, ok := child.(string); ok && translatedKey(x, k) {
 				x[k] = f(app, s)
 				continue
 			}
@@ -596,4 +626,4 @@ func (p pattern) splits(s string, limit int) [][]string {
 	return out
 }
 
-var translated = map[string]bool{"title": true, "plural": true, "description": true, "help": true, "synonyms": true}
+var translated = map[string]bool{"title": true, "plural": true, "description": true, "help": true, "synonyms": true, "label": true}
