@@ -17,9 +17,10 @@ import (
 )
 
 type settings struct {
-	Realm       string            `json:"realm"`
-	Trunks      map[string]string `json:"trunks"`
-	RingSeconds int               `json:"ringSeconds"`
+	Realm        string            `json:"realm"`
+	Trunks       map[string]string `json:"trunks"`
+	DialPrefixes []string          `json:"dialPrefixes"`
+	RingSeconds  int               `json:"ringSeconds"`
 }
 
 func main() {
@@ -49,7 +50,7 @@ func run(ctx context.Context, logger *slog.Logger, addr, host, path string) erro
 		return fmt.Errorf("parse %s: %w", path, err)
 	}
 	g, err := gateway.New(gateway.Config{
-		Realm: s.Realm, Host: host, Trunks: s.Trunks, RingTimeout: time.Duration(s.RingSeconds) * time.Second, Logger: logger,
+		Realm: s.Realm, Host: host, Trunks: s.Trunks, DialPrefixes: s.DialPrefixes, RingTimeout: time.Duration(s.RingSeconds) * time.Second, Logger: logger,
 	}, func(c *gateway.Call) {
 		if err := c.Unavailable(context.Background()); err != nil && !errors.Is(err, gateway.ErrDecided) {
 			logger.Warn("could not refuse the call", "call", c.ID, "error", err)

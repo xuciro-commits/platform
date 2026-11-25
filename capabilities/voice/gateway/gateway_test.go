@@ -69,11 +69,19 @@ func startGateway(t *testing.T, ring time.Duration) (*Gateway, sip.Uri, chan *Ca
 	return g, sip.Uri{Scheme: "sip", Host: "127.0.0.1", Port: port}, calls
 }
 
+type offered struct {
+	session *sipgo.DialogServerSession
+	req     *sip.Request
+	done    chan struct{}
+}
+
 type trunk struct {
-	client  *sipgo.Client
-	dialogs *sipgo.DialogClientCache
-	contact sip.ContactHeader
-	gateway sip.Uri
+	client   *sipgo.Client
+	dialogs  *sipgo.DialogClientCache
+	incoming *sipgo.DialogServerCache
+	offers   chan offered
+	contact  sip.ContactHeader
+	gateway  sip.Uri
 }
 
 func newTrunk(t *testing.T, gateway sip.Uri) *trunk {
@@ -93,10 +101,28 @@ func newTrunk(t *testing.T, gateway sip.Uri) *trunk {
 	}
 	contact := sip.ContactHeader{Address: sip.Uri{Scheme: "sip", User: testTrunk, Host: "127.0.0.1", Port: port}}
 	dialogs := sipgo.NewDialogClientCache(client, contact)
-	server.OnBye(func(req *sip.Request, tx sip.ServerTransaction) {
-		if err := dialogs.ReadBye(req, tx); err != nil {
-			tx.Respond(sip.NewResponseFromRequest(req, sip.StatusCallTransactionDoesNotExists, "Call/Transaction Does Not Exist", nil))
+	incoming := sipgo.NewDialogServerCache(client, contact)
+	offers := make(chan offered)
+	server.OnInvite(func(req *sip.Request, tx sip.ServerTransaction) {
+		session, err := incoming.ReadInvite(req, tx)
+		if err != nil {
+			tx.Respond(sip.NewResponseFromRequest(req, sip.StatusBadRequest, "Bad Request", nil))
+			return
 		}
+		o := offered{session: session, req: req, done: make(chan struct{})}
+		select {
+		case offers <- o:
+			<-o.done
+		case <-time.After(5 * time.Second):
+			session.Respond(sip.StatusTemporarilyUnavailable, "Temporarily Unavailable", nil)
+		}
+	})
+	server.OnAck(func(req *sip.Request, tx sip.ServerTransaction) { incoming.ReadAck(req, tx) })
+	server.OnBye(func(req *sip.Request, tx sip.ServerTransaction) {
+		if incoming.ReadBye(req, tx) == nil || dialogs.ReadBye(req, tx) == nil {
+			return
+		}
+		tx.Respond(sip.NewResponseFromRequest(req, sip.StatusCallTransactionDoesNotExists, "Call/Transaction Does Not Exist", nil))
 	})
 	go server.ServeUDP(conn)
 	t.Cleanup(func() {
@@ -104,7 +130,7 @@ func newTrunk(t *testing.T, gateway sip.Uri) *trunk {
 		conn.Close()
 	})
 	ready(t, ua, conn)
-	return &trunk{client: client, dialogs: dialogs, contact: contact, gateway: gateway}
+	return &trunk{client: client, dialogs: dialogs, incoming: incoming, offers: offers, contact: contact, gateway: gateway}
 }
 
 func (tr *trunk) register(t *testing.T, password string, expires int) *sip.Response {
@@ -240,7 +266,7 @@ func TestIncomingCallRingsAndConnects(t *testing.T) {
 	if !slices.Contains(seen, sip.StatusUnauthorized) || !slices.Contains(seen, sip.StatusRinging) || seen[len(seen)-1] != sip.StatusOK {
 		t.Fatalf("the trunk saw %v, want a challenge, ringing and an answer", seen)
 	}
-	if call.Trunk != testTrunk || call.Caller != testCaller || call.Name != "Li Lei" || call.Dialed != "100" || string(call.Offer) != string(offer) {
+	if call.Trunk != testTrunk || call.Caller != testCaller || call.Name != "Li Lei" || call.Dialed != "100" || call.Direction != Inbound || string(call.Remote) != string(offer) {
 		t.Fatalf("the call is described as %+v", call)
 	}
 	if string(session.InviteResponse.Body()) != string(answer) || call.State() != Connected {

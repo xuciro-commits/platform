@@ -22,11 +22,12 @@ const (
 )
 
 type Config struct {
-	Realm       string
-	Host        string
-	Trunks      map[string]string
-	RingTimeout time.Duration
-	Logger      *slog.Logger
+	Realm        string
+	Host         string
+	Trunks       map[string]string
+	DialPrefixes []string
+	RingTimeout  time.Duration
+	Logger       *slog.Logger
 }
 
 type Registration struct {
@@ -37,16 +38,18 @@ type Registration struct {
 }
 
 type Gateway struct {
-	cfg     Config
-	log     *slog.Logger
-	now     func() time.Time
-	auth    *authenticator
-	ua      *sipgo.UserAgent
-	server  *sipgo.Server
-	dialogs *sipgo.DialogServerCache
-	onCall  func(*Call)
-	mu      sync.Mutex
-	regs    map[string]Registration
+	cfg      Config
+	log      *slog.Logger
+	now      func() time.Time
+	auth     *authenticator
+	ua       *sipgo.UserAgent
+	server   *sipgo.Server
+	dialogs  *sipgo.DialogServerCache
+	outgoing *sipgo.DialogClientCache
+	onCall   func(*Call)
+	mu       sync.Mutex
+	regs     map[string]Registration
+	active   map[string]*Call
 }
 
 func New(cfg Config, onCall func(*Call)) (*Gateway, error) {
@@ -75,7 +78,7 @@ func New(cfg Config, onCall func(*Call)) (*Gateway, error) {
 		ua.Close()
 		return nil, fmt.Errorf("voice gateway: server: %w", err)
 	}
-	g := &Gateway{cfg: cfg, log: log, now: time.Now, ua: ua, server: server, onCall: onCall, regs: map[string]Registration{}}
+	g := &Gateway{cfg: cfg, log: log, now: time.Now, ua: ua, server: server, onCall: onCall, regs: map[string]Registration{}, active: map[string]*Call{}}
 	g.auth = newAuthenticator(cfg.Realm, cfg.Trunks, func() time.Time { return g.now() })
 	server.OnRegister(g.register)
 	server.OnInvite(g.invite)
@@ -104,7 +107,10 @@ func (g *Gateway) Serve(conn net.PacketConn) error {
 	if err != nil {
 		return fmt.Errorf("voice gateway: client: %w", err)
 	}
-	g.dialogs = sipgo.NewDialogServerCache(client, sip.ContactHeader{Address: sip.Uri{Scheme: "sip", User: "gateway", Host: host, Port: port}})
+	contact := sip.ContactHeader{Address: sip.Uri{Scheme: "sip", User: gatewayUser, Host: host, Port: port}}
+	g.mu.Lock()
+	g.dialogs, g.outgoing = sipgo.NewDialogServerCache(client, contact), sipgo.NewDialogClientCache(client, contact)
+	g.mu.Unlock()
 	g.log.Info("voice gateway listening", "address", net.JoinHostPort(host, portText), "realm", g.cfg.Realm, "trunks", len(g.cfg.Trunks))
 	return g.server.ServeUDP(conn)
 }
@@ -125,6 +131,30 @@ func (g *Gateway) Registrations() []Registration {
 	}
 	slices.SortFunc(out, func(a, b Registration) int { return strings.Compare(a.Trunk, b.Trunk) })
 	return out
+}
+
+func (g *Gateway) registration(trunk string) (Registration, bool) {
+	g.mu.Lock()
+	defer g.mu.Unlock()
+	reg, ok := g.regs[trunk]
+	return reg, ok && g.now().Before(reg.Expires)
+}
+
+func (g *Gateway) claim(c *Call) bool {
+	g.mu.Lock()
+	defer g.mu.Unlock()
+	if g.active[c.Trunk] != nil {
+		return false
+	}
+	g.active[c.Trunk] = c
+	c.onEnd = func() {
+		g.mu.Lock()
+		defer g.mu.Unlock()
+		if g.active[c.Trunk] == c {
+			delete(g.active, c.Trunk)
+		}
+	}
+	return true
 }
 
 func (g *Gateway) register(req *sip.Request, tx sip.ServerTransaction) {
@@ -187,11 +217,16 @@ func (g *Gateway) invite(req *sip.Request, tx sip.ServerTransaction) {
 		return
 	}
 	number, name := identity(req)
-	call := &Call{
-		ID: req.CallID().Value(), Trunk: trunk, Caller: number, Name: name, Dialed: req.Recipient.User, Offer: req.Body(),
-		session: session, decided: make(chan decision), settled: make(chan struct{}), done: make(chan struct{}), state: Ringing,
-	}
+	call := newCall(Inbound, trunk, Ringing)
+	call.ID, call.Caller, call.Name, call.Dialed, call.Remote = req.CallID().Value(), number, name, req.Recipient.User, req.Body()
+	call.bye = session.Bye
 	log := g.log.With("call", call.ID, "trunk", trunk)
+	if !g.claim(call) {
+		session.Respond(sip.StatusBusyHere, "Busy Here", nil)
+		session.Close()
+		log.Info("incoming call refused: the trunk is on another call")
+		return
+	}
 	if err := session.Respond(sip.StatusTrying, "Trying", nil); err == nil {
 		err = session.Respond(sip.StatusRinging, "Ringing", nil)
 	}
@@ -256,9 +291,10 @@ func (g *Gateway) ack(req *sip.Request, tx sip.ServerTransaction) {
 }
 
 func (g *Gateway) bye(req *sip.Request, tx sip.ServerTransaction) {
-	if err := g.dialogs.ReadBye(req, tx); err != nil {
-		tx.Respond(sip.NewResponseFromRequest(req, sip.StatusCallTransactionDoesNotExists, "Call/Transaction Does Not Exist", nil))
+	if g.dialogs.ReadBye(req, tx) == nil || g.outgoing.ReadBye(req, tx) == nil {
+		return
 	}
+	tx.Respond(sip.NewResponseFromRequest(req, sip.StatusCallTransactionDoesNotExists, "Call/Transaction Does Not Exist", nil))
 }
 
 func (g *Gateway) options(req *sip.Request, tx sip.ServerTransaction) {
