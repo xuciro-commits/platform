@@ -8,10 +8,12 @@ import * as stylex from "@stylexjs/stylex";
 import { useMemo, useState } from "react";
 import { type Api, useRead } from "../../host";
 import { t } from "../../i18n";
-import { navigate, useSearch } from "../../router";
+import { navigate } from "../../router";
 import { PageTitle, useGutter } from "../../pages/frame";
 import { destinationOf, PackagePostInstallPanel } from "../../pages/PackagePostInstallPanel";
 import { PackageReview } from "../../pages/PackageReview";
+
+export const JUST_INSTALLED_KEY = "platform:just-installed";
 
 const styles = stylex.create({
   surface: { backgroundColor: colorVars["--color-background-surface"] },
@@ -23,20 +25,34 @@ function stateColor(state: string): "green" | "orange" | "gray" {
   return "gray";
 }
 
+function readJustInstalled(): string[] {
+  try {
+    const raw = sessionStorage.getItem(JUST_INSTALLED_KEY);
+    if (!raw) return [];
+    const parsed = JSON.parse(raw);
+    return Array.isArray(parsed) ? parsed.filter((item): item is string => typeof item === "string" && item.length > 0) : [];
+  } catch {
+    return [];
+  }
+}
+
 export default function Installations() {
   const packages = useRead<Api.PackageView[]>("/v1/packages");
   const [selected, setSelected] = useState<{ view: Api.PackageView; mode: "install" | "manage" }>();
-  const search = useSearch();
+  const [installedIds, setInstalledIds] = useState<string[]>(readJustInstalled);
   const gutter = useGutter();
   const rows = packages.status === "ready" ? packages.data.filter((view) => view.installed?.version === view.descriptor.version) : [];
 
   const justInstalled = useMemo(() => {
-    const raw = new URLSearchParams(search).get("installed") ?? "";
-    const ids = raw.split(",").map((item) => item.trim()).filter(Boolean);
-    if (!ids.length) return [];
+    if (!installedIds.length) return [];
     const byId = new Map(rows.filter((view) => view.installed?.state === "active").map((view) => [view.descriptor.id, view]));
-    return ids.map((id) => byId.get(id)).filter((view): view is Api.PackageView => Boolean(view));
-  }, [search, rows]);
+    return installedIds.map((id) => byId.get(id)).filter((view): view is Api.PackageView => Boolean(view));
+  }, [installedIds, rows]);
+
+  const dismissBanner = () => {
+    try { sessionStorage.removeItem(JUST_INSTALLED_KEY); } catch {}
+    setInstalledIds([]);
+  };
 
   return (
     <>
@@ -56,7 +72,7 @@ export default function Installations() {
               {justInstalled.length > 0 && (
                 <PackagePostInstallPanel
                   views={justInstalled}
-                  onDismiss={() => navigate("/delivery/installations")}
+                  onDismiss={dismissBanner}
                 />
               )}
               {packages.status === "loading" && <Text type="supporting">{t("Loading…")}</Text>}

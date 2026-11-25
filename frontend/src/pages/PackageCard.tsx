@@ -136,10 +136,12 @@ function packageIcon(id: string, counts: { apps: number; plugins: number }) {
 
 export function PackageCard({
   view,
+  otherVersions = 0,
   onInspect,
   onAction,
 }: {
   view: Api.PackageView;
+  otherVersions?: number;
   onInspect: () => void;
   onAction: () => void;
 }) {
@@ -219,7 +221,7 @@ export function PackageCard({
             )}
             <StackItem size="fill" />
             <Text type="supporting" color="secondary" hasTabularNumbers maxLines={1}>
-              {id} · {version}
+              {id} · {version}{otherVersions > 0 ? ` (+${otherVersions})` : ""}
             </Text>
           </HStack>
         </VStack>

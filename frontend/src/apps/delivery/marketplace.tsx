@@ -16,12 +16,14 @@ import { t } from "../../i18n";
 import { navigate, useSearch } from "../../router";
 import { reasonOf } from "../../pages/act";
 import { PageTitle, useGutter } from "../../pages/frame";
-import { CatalogEntryCard, PackageCard, compareVersions, kindLabel, packageKinds, listingLabel } from "../../pages/PackageCard";
+import { CatalogEntryCard, PackageCard, compareVersions, kindLabel, kindPlace, packageKinds, listingLabel } from "../../pages/PackageCard";
 import { type InitialPackageSource, PackageImportWizard } from "../../pages/PackageImportWizard";
 import { PackageLibraryManager } from "../../pages/PackageLibraryManager";
 import { PackageReview } from "../../pages/PackageReview";
+import { JUST_INSTALLED_KEY } from "./installations";
 
 type Tab = "all" | "available" | "updates" | "installed";
+type LocalCard = { view: Api.PackageView; otherVersions: number };
 
 const LIBRARY_TTL_MS = 5 * 60 * 1000;
 
@@ -36,6 +38,37 @@ function libraryNeedsRefresh(lib: Api.PackageLibraryView) {
   return !Number.isFinite(fetched) || Date.now() - fetched > LIBRARY_TTL_MS;
 }
 
+function rankLocalVersion(view: Api.PackageView): number {
+  if (view.update) return 3;
+  if (view.installed && view.installed.state !== "retired" && view.installed.version === view.descriptor.version) return 2;
+  return 1;
+}
+
+function collapseLocalVersions(list: Api.PackageView[], showAll: boolean): LocalCard[] {
+  if (showAll) return list.map((view) => ({ view, otherVersions: 0 }));
+  const groups = new Map<string, Api.PackageView[]>();
+  for (const view of list) {
+    const key = `${view.source}:${view.descriptor.id}`;
+    const bucket = groups.get(key) ?? [];
+    bucket.push(view);
+    groups.set(key, bucket);
+  }
+  const out: LocalCard[] = [];
+  for (const bucket of groups.values()) {
+    bucket.sort((a, b) => rankLocalVersion(b) - rankLocalVersion(a) || compareVersions(b.descriptor.version, a.descriptor.version));
+    out.push({ view: bucket[0], otherVersions: bucket.length - 1 });
+  }
+  return out;
+}
+
+function finishInstall(installedIds?: string[]) {
+  try {
+    if (installedIds?.length) sessionStorage.setItem(JUST_INSTALLED_KEY, JSON.stringify(installedIds));
+    else sessionStorage.removeItem(JUST_INSTALLED_KEY);
+  } catch {}
+  navigate("/delivery/installations");
+}
+
 export default function Marketplace() {
   const packages = useRead<Api.PackageView[]>("/v1/packages");
   const libraries = useRead<Api.PackageLibraryView[]>("/v1/packages/libraries");
@@ -43,6 +76,7 @@ export default function Marketplace() {
   const [importing, setImporting] = useState(false);
   const [importSource, setImportSource] = useState<InitialPackageSource>();
   const [managingLibraries, setManagingLibraries] = useState(false);
+  const [showAllVersions, setShowAllVersions] = useState(false);
   const [tab, setTab] = useState<Tab>("all");
   const [source, setSource] = useState("all");
   const [industry, setIndustry] = useState("all");
@@ -119,7 +153,7 @@ export default function Marketplace() {
   };
   const isRemoteAvailable = (entry: Api.PackageCatalogEntry) => !installedById.has(entry.id);
 
-  const baseLocal = useMemo(() => {
+  const baseLocalRaw = useMemo(() => {
     const term = query.trim().toLowerCase();
     return rows.filter((view) => {
       if (source !== "all" && view.source !== source) return false;
@@ -129,6 +163,8 @@ export default function Marketplace() {
       return `${view.descriptor.title ?? ""} ${view.descriptor.id} ${view.descriptor.version} ${view.descriptor.description ?? ""}`.toLowerCase().includes(term);
     });
   }, [rows, source, query, classified, kind]);
+
+  const baseLocal = useMemo(() => collapseLocalVersions(baseLocalRaw, showAllVersions), [baseLocalRaw, showAllVersions]);
 
   const baseRemote = useMemo(() => {
     if (source !== "all" && source !== "official" && source !== "third-party") return [];
@@ -149,15 +185,15 @@ export default function Marketplace() {
 
   const counts = useMemo(() => ({
     all: baseLocal.length + baseRemote.length,
-    available: baseLocal.filter(isLocalAvailable).length + baseRemote.filter(({ entry }) => isRemoteAvailable(entry)).length,
-    updates: baseLocal.filter(isLocalUpdate).length + baseRemote.filter(({ entry }) => isRemoteUpdate(entry)).length,
-    installed: baseLocal.filter(isLocalInstalled).length,
+    available: baseLocal.filter(({ view }) => isLocalAvailable(view)).length + baseRemote.filter(({ entry }) => isRemoteAvailable(entry)).length,
+    updates: baseLocal.filter(({ view }) => isLocalUpdate(view)).length + baseRemote.filter(({ entry }) => isRemoteUpdate(entry)).length,
+    installed: baseLocal.filter(({ view }) => isLocalInstalled(view)).length,
   }), [baseLocal, baseRemote, installedById]);
 
   const filtered = useMemo(() => {
-    if (tab === "available") return baseLocal.filter(isLocalAvailable);
-    if (tab === "updates") return baseLocal.filter(isLocalUpdate);
-    if (tab === "installed") return baseLocal.filter(isLocalInstalled);
+    if (tab === "available") return baseLocal.filter(({ view }) => isLocalAvailable(view));
+    if (tab === "updates") return baseLocal.filter(({ view }) => isLocalUpdate(view));
+    if (tab === "installed") return baseLocal.filter(({ view }) => isLocalInstalled(view));
     return baseLocal;
   }, [baseLocal, tab]);
 
@@ -182,6 +218,7 @@ export default function Marketplace() {
   const totalVisible = filtered.length + filteredRemote.length;
   const failedLibraries = libraries.status === "ready" ? libraries.data.filter((lib) => lib.status === "error") : [];
   const libraryProblem = syncFailure || failedLibraries.map((lib) => (lib.error ? `${libraryName(lib)}: ${lib.error}` : libraryName(lib))).join(" · ");
+  const hasCollapsedVersions = baseLocalRaw.length > baseLocal.length;
 
   return (
     <>
@@ -199,6 +236,9 @@ export default function Marketplace() {
                     alignment="end"
                     items={[
                       { id: "refresh-libraries", label: t("Refresh all"), onClick: refreshLibraries },
+                      ...(hasCollapsedVersions || showAllVersions
+                        ? [{ id: "toggle-versions", label: showAllVersions ? t("Group versions by package") : t("Show all versions"), onClick: () => setShowAllVersions((prev) => !prev) }]
+                        : []),
                       { id: "import-package", label: t("Install from URL or file"), onClick: () => { setImportSource(undefined); setImporting(true); } },
                       { id: "manage-library", label: t("Manage library"), onClick: () => setManagingLibraries(true) },
                     ]}
@@ -281,6 +321,9 @@ export default function Marketplace() {
               {libraryProblem && (
                 <Banner status="warning" title={t("Some package libraries could not be synced. Retry from Manage library.")} description={libraryProblem} />
               )}
+              {kind !== "all" && kindPlace(kind) && (
+                <Banner status="info" title={kindLabel(kind)} description={kindPlace(kind)} />
+              )}
               {packages.status === "loading" && (
                 <Grid columns={{ minWidth: 320, max: 3 }} gap={4}>
                   {[0, 1, 2].map((index) => <Skeleton key={index} height={156} index={index} />)}
@@ -295,10 +338,11 @@ export default function Marketplace() {
               )}
               {packages.status !== "loading" && totalVisible > 0 && (
                 <Grid columns={{ minWidth: 320, max: 3 }} gap={4} role="list">
-                  {filtered.map((view) => (
+                  {filtered.map(({ view, otherVersions }) => (
                     <PackageCard
                       key={`${view.descriptor.id}@${view.descriptor.version}`}
                       view={view}
+                      otherVersions={otherVersions}
                       onInspect={() => setSelected({ view, mode: modeOf(view) })}
                       onAction={() => setSelected({ view, mode: modeOf(view) })}
                     />
@@ -329,7 +373,7 @@ export default function Marketplace() {
           close={() => setSelected(undefined)}
           done={(installedIds) => {
             setSelected(undefined);
-            navigate(installedIds?.length ? `/delivery/installations?installed=${encodeURIComponent(installedIds.join(","))}` : "/delivery/installations");
+            finishInstall(installedIds);
           }}
         />
       )}
@@ -340,7 +384,7 @@ export default function Marketplace() {
           onDone={(installedIds) => {
             setImporting(false);
             setImportSource(undefined);
-            navigate(installedIds?.length ? `/delivery/installations?installed=${encodeURIComponent(installedIds.join(","))}` : "/delivery/installations");
+            finishInstall(installedIds);
           }}
         />
       )}

@@ -547,5 +547,7 @@
   "Conformance tests are running in the background…": "一致性测试正在后台运行…",
   "Last conformance test: {passed}/{total} passed": "最近一次一致性测试：通过 {passed}/{total} 项",
   "Passed": "通过",
-  "Failed": "失败"
+  "Failed": "失败",
+  "Group versions by package": "按包合并历史版本",
+  "Show all versions": "显示全部历史版本"
 }
