@@ -1,0 +1,67 @@
+{
+  "id": "call",
+  "version": "0.1.0",
+  "title": "Phone calls",
+  "namespace": "call",
+  "description": "The phone call capability, contract call/1. Apps that place calls declare uses call/1#dial on an action; a tenant administrator binds an implementation in Admin → Capabilities. Until then the entry stays hidden.",
+  "blueprint": {
+    "roots": [
+      {
+        "app": "build",
+        "kind": "contract",
+        "name": "call"
+      }
+    ],
+    "assets": [
+      {
+        "ref": {
+          "app": "build",
+          "kind": "contract",
+          "name": "call"
+        },
+        "contractVersion": 1,
+        "sourceVersion": "1.contract-1",
+        "requires": [],
+        "body": {
+          "name": "call",
+          "major": 1,
+          "title": "Phone calls",
+          "description": "Place an outbound phone call. The implementation answers with its own ID for the call.",
+          "actions": [
+            {
+              "name": "dial",
+              "title": "Dial",
+              "description": "Place a call to a phone number.",
+              "payload": [
+                {
+                  "name": "number",
+                  "label": "Number",
+                  "type": "text",
+                  "required": true
+                },
+                {
+                  "name": "reference",
+                  "label": "About",
+                  "type": "text"
+                }
+              ]
+            }
+          ],
+          "tests": [
+            {
+              "name": "dials",
+              "title": "Places a call and answers with its call ID",
+              "action": "dial",
+              "payload": {
+                "number": "+15550100"
+              },
+              "expect": [
+                "call"
+              ]
+            }
+          ]
+        }
+      }
+    ]
+  }
+}

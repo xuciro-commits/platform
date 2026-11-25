@@ -228,13 +228,17 @@ for (const file of files) {
 
 const tenantPackages = {
   official: { packages: partyPackages, grants: {} },
+  phone: {
+    packages: [...partyPackages, "./frontend-fixtures/call-0.1.0.json", "./frontend-fixtures/phone-0.1.0.json"],
+    grants: { "user-1": [["party", "user"], ["phone", "agent"]], "manager-1": [["phone", "gateway"]] },
+  },
   publisher: {
     packages: [...partyPackages, "./frontend-fixtures/projects-0.1.0.json", "./frontend-fixtures/assets-0.1.0.json"],
     grants: { "admin-1": [["party", "user"], ["projects", "manager"], ["assets", "custodian"]], "user-1": [["party", "user"], ["projects", "member"], ["assets", "staff"]] },
   },
 };
 
-await Promise.all(["blank", "upgrade", "publisher", "official"].map(async (name) => {
+await Promise.all(["blank", "upgrade", "publisher", "official", "phone"].map(async (name) => {
   const empty = await connect(name).catch(() => undefined);
   if (!empty) return;
   const existing = await empty.call("/v1/members");

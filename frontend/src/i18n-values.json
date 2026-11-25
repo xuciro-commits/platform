@@ -571,5 +571,12 @@
   "Select a member or team and check the roles to grant explicitly. Every role can be revoked later.": "选择成员或团队并勾选要显式授予的角色，所有角色后续均可随时撤销。",
   "Assign to": "授予对象",
   "Manage teams": "管理团队",
-  "Granted {count} role(s) to team {team}. You can adjust them anytime under Admin → Access.": "已为团队「{team}」授予 {count} 项角色，随时可在「管理 → 访问控制」调整。"
+  "Granted {count} role(s) to team {team}. You can adjust them anytime under Admin → Access.": "已为团队「{team}」授予 {count} 项角色，随时可在「管理 → 访问控制」调整。",
+  "The call could not be connected": "通话未能接通",
+  "On a call with {name}": "正在与 {name} 通话",
+  "Calling {name}": "正在呼叫 {name}",
+  "Incoming call from {name}": "{name} 来电",
+  "Ringing": "振铃中",
+  "Hang up": "挂断",
+  "Answer call": "接听"
 }

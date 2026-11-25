@@ -17,6 +17,7 @@ import { navigate, useHash, usePath, useSearch } from "../router";
 import { AppRail } from "./AppRail";
 import { setAppearance } from "./appearance";
 import { AppSidebar } from "./AppSidebar";
+import { CallDock } from "../pages/CallDock";
 import { CommandSearch } from "./CommandSearch";
 import { ErrorBoundary } from "./ErrorBoundary";
 import { legacyTarget } from "./legacy";
@@ -123,6 +124,7 @@ export function Shell() {
         ) }}
       >
         <ErrorBoundary resetKey={path}>
+          <ErrorBoundary resetKey="calls"><CallDock /></ErrorBoundary>
           <VStack key={`${app.id}/${item.id}`} xstyle={[motionStyles.pageSlot, motionStyles.contentEnter]}>
             <Suspense fallback={null}>{content}</Suspense>
           </VStack>
