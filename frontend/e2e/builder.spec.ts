@@ -241,6 +241,9 @@ test("gate: a type of the same name in another project is its own type with its 
 
 test("gate: an installed package contributes an app whose record action runs", async () => {
   await open(page, "Delivery", "Marketplace");
+  await expect(page.getByRole("listitem").filter({ hasText: "application.production-provider · 0.1.5" })).toBeVisible();
+  await page.getByRole("button", { name: "More actions", exact: true }).click();
+  await page.getByRole("menuitem", { name: "Show all versions", exact: true }).click();
   const provider = page.getByRole("listitem").filter({ hasText: "application.production-provider · 0.1.4" });
   await provider.getByRole("button", { name: "Install", exact: true }).click();
   const review = page.getByRole("dialog", { name: /Review and install/ });
@@ -473,6 +476,9 @@ test("delivery: a builder publishes a version, which installs beside its source 
   await release.getByRole("button", { name: "Cancel", exact: true }).click();
 
   await page.goto("/delivery/marketplace");
+  await expect(page.getByRole("listitem").filter({ hasText: /crm · 0\.1\.22/ })).toBeVisible();
+  await page.getByRole("button", { name: "More actions", exact: true }).click();
+  await page.getByRole("menuitem", { name: "Show all versions", exact: true }).click();
   await page.getByRole("listitem").filter({ hasText: "crm · 0.1.0" }).getByRole("button", { name: "Install" }).click();
   const review = page.getByRole("dialog");
   const name = review.getByRole("textbox", { name: "Project API name" });

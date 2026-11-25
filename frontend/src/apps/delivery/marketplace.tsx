@@ -60,15 +60,16 @@ function collapseLocalVersions(list: Api.PackageView[], showAll: boolean): Local
   return out;
 }
 
-type RemoteCard = { entry: Api.PackageCatalogEntry; libraryTitle: string; official: boolean; otherVersions: number };
+type RemoteCard = { entry: Api.PackageCatalogEntry; libraryId: string; libraryTitle: string; official: boolean; otherVersions: number };
 
-function collapseRemoteVersions(list: { entry: Api.PackageCatalogEntry; libraryTitle: string; official: boolean }[], showAll: boolean): RemoteCard[] {
+function collapseRemoteVersions(list: { entry: Api.PackageCatalogEntry; libraryId: string; libraryTitle: string; official: boolean }[], showAll: boolean): RemoteCard[] {
   if (showAll) return list.map((item) => ({ ...item, otherVersions: 0 }));
-  const groups = new Map<string, { entry: Api.PackageCatalogEntry; libraryTitle: string; official: boolean }[]>();
+  const groups = new Map<string, { entry: Api.PackageCatalogEntry; libraryId: string; libraryTitle: string; official: boolean }[]>();
   for (const item of list) {
-    const bucket = groups.get(item.entry.id) ?? [];
+    const key = `${item.libraryId}:${item.entry.id}`;
+    const bucket = groups.get(key) ?? [];
     bucket.push(item);
-    groups.set(item.entry.id, bucket);
+    groups.set(key, bucket);
   }
   const out: RemoteCard[] = [];
   for (const bucket of groups.values()) {
@@ -136,13 +137,13 @@ export default function Marketplace() {
     if (packages.status !== "ready" || libraries.status !== "ready") return [];
     const existing = new Set(rows.map((view) => `${view.descriptor.id}@${view.descriptor.version}`));
     const seen = new Set<string>();
-    const out: { entry: Api.PackageCatalogEntry; libraryTitle: string; official: boolean }[] = [];
+    const out: { entry: Api.PackageCatalogEntry; libraryId: string; libraryTitle: string; official: boolean }[] = [];
     for (const lib of libraries.data) {
       for (const entry of lib.entries ?? []) {
         const key = `${entry.id}@${entry.version}`;
         if (existing.has(key) || seen.has(key)) continue;
         seen.add(key);
-        out.push({ entry, libraryTitle: libraryName(lib), official: Boolean(lib.builtin) });
+        out.push({ entry, libraryId: lib.id, libraryTitle: libraryName(lib), official: Boolean(lib.builtin) });
       }
     }
     return out;
