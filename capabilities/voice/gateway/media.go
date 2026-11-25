@@ -106,7 +106,7 @@ func (c *Call) logMedia(msg string, s media.Stats) {
 	}
 	c.log.Info(msg, "phone", s.Phone, "browser", s.Browser, "fromPhone", s.FromPhone, "strangers", s.Strangers, "unknownPhone", s.UnknownPhone,
 		"fromBrowser", s.FromBrowser, "unknownBrowser", s.UnknownBrowser, "toPhone", s.ToPhone,
-		"phoneBytes", s.PhoneBytes, "browserBytes", s.BrowserBytes, "browserLoud", s.BrowserLoud)
+		"phoneBytes", s.PhoneBytes, "browserBytes", s.BrowserBytes, "browserLoud", s.BrowserLoud, "toBrowser", s.ToBrowser)
 }
 
 func mediaAddress(host string) net.IP {

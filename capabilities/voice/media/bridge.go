@@ -46,7 +46,7 @@ type Bridge struct {
 
 type counters struct {
 	fromPhone, strangers, unknownPhone, fromBrowser, unknownBrowser, toPhone atomic.Int64
-	phoneBytes, browserBytes, browserLoud                                    atomic.Int64
+	phoneBytes, browserBytes, browserLoud, toBrowser                         atomic.Int64
 }
 
 // Stats counts what the bridge carried: packets from the phone and the browser,
@@ -59,6 +59,7 @@ type Stats struct {
 	FromBrowser    int64
 	UnknownBrowser int64
 	ToPhone        int64
+	ToBrowser      int64
 	Browser        string
 	// PhoneBytes and BrowserBytes are payload bytes; BrowserLoud counts browser
 	// packets large enough to carry speech rather than comfort noise.
@@ -70,7 +71,7 @@ type Stats struct {
 func (b *Bridge) Stats() Stats {
 	s := Stats{FromPhone: b.stats.fromPhone.Load(), Strangers: b.stats.strangers.Load(), UnknownPhone: b.stats.unknownPhone.Load(),
 		FromBrowser: b.stats.fromBrowser.Load(), UnknownBrowser: b.stats.unknownBrowser.Load(), ToPhone: b.stats.toPhone.Load(),
-		PhoneBytes: b.stats.phoneBytes.Load(), BrowserBytes: b.stats.browserBytes.Load(), BrowserLoud: b.stats.browserLoud.Load()}
+		PhoneBytes: b.stats.phoneBytes.Load(), BrowserBytes: b.stats.browserBytes.Load(), BrowserLoud: b.stats.browserLoud.Load(), ToBrowser: b.stats.toBrowser.Load()}
 	if p := b.phone.Load(); p != nil {
 		s.Phone = p.String()
 	}
@@ -307,7 +308,9 @@ func (b *Bridge) fromPhone() {
 		}
 		h := plain(p.Header)
 		h.PayloadType = pt
-		b.track.write(h, p.Payload)
+		if b.track.write(h, p.Payload) {
+			b.stats.toBrowser.Add(1)
+		}
 	}
 }
 
@@ -378,13 +381,14 @@ func (t *relayTrack) RID() string               { return "" }
 func (t *relayTrack) StreamID() string          { return "call" }
 func (t *relayTrack) Kind() webrtc.RTPCodecType { return webrtc.RTPCodecTypeAudio }
 
-func (t *relayTrack) write(h rtp.Header, payload []byte) {
+func (t *relayTrack) write(h rtp.Header, payload []byte) bool {
 	t.mu.RLock()
 	w, ssrc := t.writer, t.ssrc
 	t.mu.RUnlock()
 	if w == nil {
-		return
+		return false
 	}
 	h.SSRC = uint32(ssrc)
-	w.WriteRTP(&h, payload)
+	_, err := w.WriteRTP(&h, payload)
+	return err == nil
 }
