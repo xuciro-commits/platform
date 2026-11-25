@@ -287,9 +287,12 @@ test("dashboard: the CRM home shows its pipeline numbers and charts, and each bl
   await page.goto("/crm/dashboard");
   const home = page.getByRole("main");
   for (const title of ["Open pipeline", "Weighted forecast", "Won revenue", "Open leads"]) await expect(home.getByRole("link", { name: title, exact: true })).toBeVisible();
+  await expect(home.getByRole("link", { name: "Weighted forecast", exact: true }).locator("..")).toHaveText(/[1-9][\d,]*(\.\d+)? USD$/);
   await expect(home.getByRole("link", { name: "Open leads", exact: true }).locator("..")).toHaveText(/\D\d+$/);
   await expect(home.getByRole("heading", { name: "Dashboard", exact: true })).toBeVisible();
-  for (const title of ["Pipeline by stage", "Pipeline by owner", "Leads by source", "Win rate"]) await expect(home.getByRole("heading", { name: title, exact: true })).toBeVisible();
+  for (const title of ["Pipeline by stage", "Pipeline by owner", "Forecast", "Leads by source", "Win rate"]) await expect(home.getByRole("heading", { name: title, exact: true })).toBeVisible();
+  await expect(home.getByText("You do not have access to this data")).toHaveCount(0);
+  await expect(home.getByRole("link", { name: "Won", exact: true })).toBeVisible();
   await home.locator(".recharts-bar-rectangle").first().click();
   await expect(page).toHaveURL(/\/crm\/crm\.deal\?domain=.*open/);
   await expect(page.getByText("Clear all", { exact: true })).toBeVisible();

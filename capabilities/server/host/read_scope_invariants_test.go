@@ -13,6 +13,7 @@ import (
 	persistence "platformserver/kernel/store"
 	"platformserver/platform"
 	"platformserver/services/actions"
+	"platformserver/services/objects"
 	build "platformserver/services/resources/authoring"
 	enterprisemodel "platformserver/services/security/organization"
 )
@@ -268,5 +269,83 @@ func TestInvariantTeamScopeConsistentAcrossReadsAndAssignment(t *testing.T) {
 	}
 	if _, err := live.RecordOf(t.Context(), repB1, "invariantproject.caseitem", "C2", invariantClock); err == nil {
 		t.Fatal("rep-b1 still read C2 after reassignment out of team")
+	}
+}
+
+func TestInvariantAggregateGroupsByMemberAndNarrowsDerivedFields(t *testing.T) {
+	reader := platform.Member{ID: "rep-1", Tenant: "invariant-aggregate-narrow", Roles: map[string]string{"invariantproject": "salesrep"}}
+	mgr := platform.Member{ID: "mgr-1", Tenant: "invariant-aggregate-narrow", Roles: map[string]string{"invariantproject": "salesmanager"}}
+	live := newInvariantTenant(t, "invariant-aggregate-narrow",
+		protocol.Seat{Subjects: []string{reader.ID}, Member: reader},
+		protocol.Seat{Subjects: []string{mgr.ID}, Member: mgr},
+	)
+	const dealType, lineType = "invariantproject.quotedeal", "invariantproject.quoteline"
+	deal := map[string]any{
+		"name": "quotedeal", "project": invariantProject, "title": "Quote deal", "plural": "Quote deals", "display": "title",
+		"sets":  []map[string]any{{"name": "lines", "object": lineType, "direction": "inverse", "from": "lines", "limit": 200, "order": []map[string]any{{"expr": map[string]any{"op": "", "kind": "text", "ref": "id"}}}}},
+		"reads": map[string]any{"collections": map[string]any{"lines": map[string]any{"app": build.ID, "object": lineType, "policy": "complete", "set": "lines"}}},
+		"fields": []map[string]any{
+			{"name": "title", "title": "Title", "type": "text", "required": true},
+			{"name": "owner", "title": "Owner", "type": "member"},
+			{"name": "amount", "title": "Amount", "type": "integer", "required": true},
+			{"name": "weighted", "title": "Weighted", "type": "integer", "formula": "amount * 2"},
+			{"name": "secretscore", "title": "Secret score", "type": "integer", "formulaExpr": map[string]any{"op": "sum", "kind": "integer", "agg": map[string]any{"source": "lines", "field": []string{"score"}}}},
+		},
+		"access": []map[string]any{
+			{"role": "salesrep", "read": "all"},
+			{"role": "salesmanager", "read": "all", "create": true, "edit": true},
+		},
+	}
+	line := map[string]any{
+		"name": "quoteline", "project": invariantProject, "title": "Quote line", "plural": "Quote lines", "display": "title",
+		"fields": []map[string]any{
+			{"name": "title", "title": "Title", "type": "text", "required": true},
+			{"name": "deal", "title": "Deal", "type": "reference", "ref": dealType, "inverse": "lines", "required": true},
+			{"name": "score", "title": "Score", "type": "integer", "required": true},
+		},
+		"access": []map[string]any{
+			{"role": "salesrep", "read": "none"},
+			{"role": "salesmanager", "read": "all", "create": true, "edit": true},
+		},
+	}
+	live.accept(t, "build.object.create", build.ObjectType, "QLINE", line)
+	live.accept(t, "build.object.create", build.ObjectType, "QDEAL", deal)
+	live.accept(t, "build.object.publish", build.ObjectType, "QLINE", map[string]any{})
+	live.accept(t, "build.object.publish", build.ObjectType, "QDEAL", map[string]any{})
+	live.accept(t, dealType+".create", dealType, "D1", map[string]any{"title": "Alpha", "owner": "rep-1", "amount": 10})
+	live.accept(t, dealType+".create", dealType, "D2", map[string]any{"title": "Beta", "owner": "mgr-1", "amount": 20})
+	live.accept(t, lineType+".create", lineType, "L1", map[string]any{"title": "Line 1", "deal": "D1", "score": 70})
+	live.accept(t, lineType+".create", lineType, "L2", map[string]any{"title": "Line 2", "deal": "D2", "score": 140})
+
+	byOwner, err := live.aggregateObjectSet(reader, objects.ObjectSetRequest{
+		Set:      platform.ObjectSet{Object: dealType},
+		Groups:   []string{"owner"},
+		Measures: []string{"sum:weighted"},
+	}, invariantClock)
+	if err != nil || len(byOwner.Rows) != 2 || byOwner.Rows[0]["owner"] != "mgr-1" || fmt.Sprint(byOwner.Rows[0]["sum:weighted"]) != "40" {
+		t.Fatalf("member grouping and readable derived sum failed: rows=%+v err=%v", byOwner.Rows, err)
+	}
+
+	mgrSecret, err := live.aggregateObjectSet(mgr, objects.ObjectSetRequest{
+		Set:      platform.ObjectSet{Object: dealType},
+		Measures: []string{"sum:secretscore"},
+	}, invariantClock)
+	if err != nil || len(mgrSecret.Rows) != 1 || fmt.Sprint(mgrSecret.Rows[0]["sum:secretscore"]) != "210" {
+		t.Fatalf("manager secret score sum mismatch: rows=%+v err=%v", mgrSecret.Rows, err)
+	}
+
+	repSecret, err := live.aggregateObjectSet(reader, objects.ObjectSetRequest{
+		Set:      platform.ObjectSet{Object: dealType},
+		Measures: []string{"sum:secretscore"},
+	}, invariantClock)
+	if err != nil || len(repSecret.Rows) != 1 || fmt.Sprint(repSecret.Rows[0]["sum:secretscore"]) != "0" {
+		t.Fatalf("salesrep leaked unreadable derived source in aggregate: rows=%+v err=%v", repSecret.Rows, err)
+	}
+
+	if _, probeErr := live.aggregateObjectSet(reader, objects.ObjectSetRequest{
+		Set:      platform.ObjectSet{Object: dealType, Domain: platform.Raw([][]any{{"secretscore", "=", 70}})},
+		Measures: []string{"count"},
+	}, invariantClock); probeErr == nil || probeErr.Code != pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT {
+		t.Fatalf("expected domain filter on narrowable derived field to be rejected, got %v", probeErr)
 	}
 }

@@ -86,14 +86,16 @@ function Block({ block, entity, list }: { block: Api.DashboardBlock; entity?: Ap
     const money = Boolean(read.data.columns.find((column) => column.name === measure)?.money);
     const currencyKey = read.data.columns.find((column) => column.name.endsWith(".currency"))?.name;
     const currency = currencyKey ? String(read.data.rows.find((row) => row[currencyKey])?.[currencyKey] ?? "") : "";
-    const rows = currencyKey ? read.data.rows.filter((row) => !row[currencyKey] || row[currencyKey] === currency) : read.data.rows;
+    const rows = currencyKey ? read.data.rows.filter((row) => (currency ? row[currencyKey] === currency : !row[currencyKey])) : read.data.rows;
     const format = (amount: number) => money
       ? `${(amount / 100).toLocaleString(undefined, { maximumFractionDigits: 0 })} ${currency}`.trim()
       : amount.toLocaleString(undefined, { maximumFractionDigits: 2 });
-    const order = field && !bucket ? (options[field.name]?.map((option) => option.value) ?? field.choices ?? []) : [];
+    const states = field && !bucket && field.name === entity?.lifecycle?.field ? (entity.lifecycle.states ?? []) : [];
+    const order = field && !bucket ? (states.length ? states.map((state) => state.name) : options[field.name]?.map((option) => option.value) ?? field.choices ?? []) : [];
     const labelOf = (value: unknown) => {
       if (value == null || value === "") return t("Not set");
       if (bucket || !field) return String(value);
+      if (states.length) return t(states.find((state) => state.name === String(value))?.title ?? String(value));
       return options[field.name]?.find((option) => option.value === String(value))?.label ?? (present(field, value) || String(value));
     };
     const points = rows.map((row) => {

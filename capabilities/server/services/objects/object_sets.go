@@ -681,7 +681,14 @@ func (t *Owner) AggregateObjectSet(m platform.Member, req ObjectSetRequest, now 
 	var rows []reflect.Value
 	matched := s.VisitPlan(read.view, cs.plans[0], read.visible, func(v reflect.Value) { rows = append(rows, v) })
 	shown := len(rows)
-	out, refusal := s.Aggregate(read.view, options, rows, node.op != "")
+	if len(read.hidden) > 0 || read.entity.Info().HasReadSources() || len(read.entity.Info().VersionPins) > 0 {
+		narrower := t.narrowerIn(s, m, r.now, true)
+		for i, v := range rows {
+			rows[i] = records.Copy(read.entity.Info().Go, r.narrowRecord(read, narrower, v))
+		}
+	}
+	view, _ := ViewOf(m, read.entity)
+	out, refusal := s.Aggregate(view, options, rows, node.op != "")
 	if refusal == nil && options.Window == nil && options.Histogram == nil {
 		out.Partial = matched != shown
 	}
@@ -737,7 +744,7 @@ func (r *setRead) aggregateCollection(req ObjectSetRequest, options records.Aggr
 	if et == nil {
 		return records.Aggregate{}, platform.Refuse(pb.ErrorCode_ERROR_CODE_NOT_FOUND, "Collection object is unavailable")
 	}
-	view := t.AggregateView(m, et)
+	view, _ := ViewOf(m, et)
 	rows := make([]reflect.Value, len(page.Records))
 	for i, raw := range page.Records {
 		value := reflect.New(et.Info().Go).Elem()

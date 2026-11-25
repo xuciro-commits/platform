@@ -204,7 +204,7 @@ func (et *Type) Grouping(name string) (grouping, bool) {
 			if !bucketed {
 				bucket, bucketed = "day", true
 			}
-		case "choice", "reference", "boolean", "integer":
+		case "choice", "reference", "member", "boolean", "integer":
 			if bucketed {
 				return grouping{}, false
 			}
