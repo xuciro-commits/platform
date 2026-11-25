@@ -95,7 +95,8 @@
   网关是受管服务的第一个实例：独立进程 `capabilities/voice`（自有 go.mod，sipgo 与 pion 不进宿主），经宿主公开接口读写，宿主不加代码。
   业务员在浏览器里接听：网关把手机的 RTP 与浏览器的 WebRTC 按双方共有的编解码（Opus 或 PCMU）原样转发，不转码。第一版只做来电、局域网 UDP。
   - B3a 已做：契约 `call/1`（`dial`）在官方包库，外呼时用。
-  - B3b 网关的 SIP 侧：中继注册（摘要鉴权，一个账号）、来电 INVITE 的 100/180、CANCEL、BYE、振铃超时 480；Go 测试里用模拟手机走完整信令。
+  - B3b 已做：`capabilities/voice` 的网关 SIP 侧，中继注册（摘要鉴权，可多个账号）、来电 100/180、接起、CANCEL、BYE、振铃超时 480、拒接 486；
+    测试里用模拟中继走完整信令（`make test-voice`）。`cmd/voice-gateway` 在没有接听方之前一律答 480。
   - B3c `call` 包加通话记录 `call.call`（振铃、已接、未接、结束；主叫、卡槽、匹配的 `party.contact`、接听人、时长）与角色 `agent`；
     网关以服务席位建记录、按号码匹配联系人，接听与挂断以接听人的会话提交。验收：包的 try。
   - B3d 媒体：手机的 RTP 与浏览器的 WebRTC 互转，200 OK 带协商好的 SDP；Go 测试用 pion 对端与模拟手机的 RTP 核对双向包与 DTMF。
