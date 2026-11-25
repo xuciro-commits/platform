@@ -39,7 +39,7 @@ type Call = {
   hangup?: Api.Action;
 };
 
-type Media = { pc: RTCPeerConnection; mic: MediaStream; speaker: HTMLAudioElement; answered: boolean };
+type Media = { pc: RTCPeerConnection; mic: MediaStream; speaker: HTMLAudioElement; answered: boolean; seen: boolean };
 const sessions = new Map<string, Media>();
 
 function callTypes(entities: Api.EntityInfo[]): CallType[] {
@@ -66,7 +66,7 @@ async function openSession(key: string): Promise<string> {
   });
   await pc.setLocalDescription(await pc.createOffer());
   await gathered;
-  sessions.set(key, { pc, mic, speaker, answered: false });
+  sessions.set(key, { pc, mic, speaker, answered: false, seen: false });
   return pc.localDescription?.sdp ?? "";
 }
 
@@ -156,6 +156,7 @@ export function CallDock() {
   useEffect(() => {
     for (const call of mine) {
       const media = sessions.get(key(call));
+      if (media) media.seen = true;
       if (call.state === "ringing" && !call.offer && !media && call.canTake && busy !== key(call)) void take(call);
       if (media && call.answer && !media.answered) {
         media.answered = true;
@@ -164,7 +165,11 @@ export function CallDock() {
       if (call.state === "connected" && !since.has(key(call))) since.set(key(call), Date.now());
     }
     const open = new Set(mine.map(key));
-    for (const held of [...sessions.keys()]) if (!open.has(held) && busy !== held) closeSession(held);
+    const listed = new Set(calls.map(key));
+    for (const [held, media] of [...sessions.entries()]) {
+      if (busy === held || open.has(held)) continue;
+      if (media.seen || !listed.has(held)) closeSession(held);
+    }
   });
 
   const talking = mine.some((call) => call.state === "connected");
