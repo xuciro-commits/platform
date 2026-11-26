@@ -374,5 +374,8 @@
   "Team records": "本团队记录",
   "Unit and below": "本部门及下级",
   "Unit records": "本部门记录",
-  "Value": "值"
+  "Value": "值",
+  "Incompatible shape": "字段形状不兼容",
+  "Shape compatible": "字段形状兼容",
+  "Version range": "版本范围"
 }

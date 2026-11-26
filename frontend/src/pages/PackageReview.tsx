@@ -72,9 +72,18 @@ export function PackageReview({
   const installAction = actions.find((action) => action.schema === installSchema);
   const drainAction = actions.find((action) => action.schema === "platform.package.drain");
   const retireAction = actions.find((action) => action.schema === "platform.package.retire");
+  const reviewExtensions = review.status === "ready"
+    ? ((review.data.extensions?.length ? review.data.extensions : review.data.impact?.extensions) ?? [])
+    : [];
+  const incompatibleExtensions = mode === "install"
+    ? reviewExtensions
+        .filter((ext) => Boolean(ext.issue))
+        .map((ext) => `${ext.project ? `${ext.project} (${ext.type})` : ext.type}: ${ext.issue}`)
+    : [];
   const problems = [...new Set([
     ...(mode === "install" ? [...(view.plan.problems ?? []), ...(view.precheck.problems ?? [])] : []),
     ...(review.status === "ready" ? review.data.problems ?? [] : review.status === "loading" ? [] : [review.reason]),
+    ...incompatibleExtensions,
     ...(mode === "install" && (preparation.status === "error" || preparation.status === "refused") ? [preparation.reason] : []),
   ])];
   const setupNotices = mode === "install" && preparation.status === "ready"

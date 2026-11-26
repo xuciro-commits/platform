@@ -11,6 +11,7 @@ import { useState } from "react";
 import type { Api, Read } from "../host";
 import { t } from "../i18n";
 import { kindLabel, kindPlace, sourceMeta } from "./PackageCard";
+import { comparePackageFields, RecordComparison } from "./RecordComparison";
 
 function changeColor(kind: string): "green" | "blue" | "red" | "gray" {
   const normalized = kind.toLowerCase();
@@ -45,7 +46,9 @@ export function PackageReviewContent({
   const installed = view.installed;
   const impact = review.status === "ready" ? review.data.impact : undefined;
   const changes = review.status === "ready" ? review.data.changes : [];
-  const extensions = review.status === "ready" ? review.data.extensions : [];
+  const extensions = review.status === "ready"
+    ? ((review.data.extensions?.length ? review.data.extensions : review.data.impact?.extensions) ?? [])
+    : [];
   const steps = view.plan.steps ?? [];
   const digest = view.descriptor.artifactDigest || view.sourceDigest || installed?.artifact;
   const apps = preparation.status === "ready" && preparation.data.applications.length
@@ -208,22 +211,36 @@ export function PackageReviewContent({
             <Heading level={4}>{`${t("Resource changes")} (${changes.length})`}</Heading>
             <Text type="supporting" color="secondary">{changeSummary}</Text>
             {notableChanges.length > 0 && (
-              <List header={t("Field changes")} hasDividers>
-                {notableChanges.map((change) => {
-                  const fieldSummary = (change.fields ?? [])
-                    .map((field) => `${field.change === "added" ? "+" : field.change === "removed" ? "-" : "~"} ${field.name}${field.before || field.after ? ` (${field.before ?? ""}${field.before && field.after ? " → " : ""}${field.after ?? ""})` : ""}`)
-                    .join(", ");
-                  const hasIncompatible = (change.fields ?? []).some((field) => field.incompatible);
-                  return (
-                    <ListItem
-                      key={`${change.ref.kind}:${change.ref.name}`}
-                      label={change.ref.name}
-                      description={`${t(change.ref.kind)}${fieldSummary ? ` · ${fieldSummary}` : ""}`}
-                      endContent={<Token label={t(change.change)} color={hasIncompatible ? "red" : changeColor(change.change)} size="sm" />}
-                    />
-                  );
-                })}
-              </List>
+              <VStack gap={3}>
+                <List header={t("Field changes")} hasDividers>
+                  {notableChanges.map((change) => {
+                    const fieldSummary = (change.fields ?? [])
+                      .map((field) => `${field.change === "added" ? "+" : field.change === "removed" ? "-" : "~"} ${field.name}${field.before || field.after ? ` (${field.before ?? ""}${field.before && field.after ? " → " : ""}${field.after ?? ""})` : ""}`)
+                      .join(", ");
+                    const hasIncompatible = (change.fields ?? []).some((field) => field.incompatible);
+                    return (
+                      <ListItem
+                        key={`${change.ref.kind}:${change.ref.name}`}
+                        label={change.ref.name}
+                        description={`${t(change.ref.kind)}${fieldSummary ? ` · ${fieldSummary}` : ""}`}
+                        endContent={<Token label={t(change.change)} color={hasIncompatible ? "red" : changeColor(change.change)} size="sm" />}
+                      />
+                    );
+                  })}
+                </List>
+                {notableChanges
+                  .filter((change) => (change.fields?.length ?? 0) > 0)
+                  .map((change) => (
+                    <VStack key={`comparison:${change.ref.kind}:${change.ref.name}`} gap={1}>
+                      <Text type="body" weight="medium">{change.ref.name}</Text>
+                      <RecordComparison
+                        rows={comparePackageFields(change.fields ?? [])}
+                        beforeHeader={installed?.version ?? t("Before")}
+                        afterHeader={version}
+                      />
+                    </VStack>
+                  ))}
+              </VStack>
             )}
           </VStack>
         </>
@@ -233,14 +250,28 @@ export function PackageReviewContent({
         <>
           <Divider />
           <List header={t("Extensions")} hasDividers>
-            {extensions.map((ext) => (
-              <ListItem
-                key={ext.type}
-                label={ext.type}
-                description={ext.issue || ext.fields.join(", ")}
-                endContent={<Token label={ext.issue ? t("Error") : t("OK")} color={ext.issue ? "red" : "green"} size="sm" />}
-              />
-            ))}
+            {extensions.map((ext) => {
+              const versionDetail = ext.versionRange
+                ? `${t("Version range")}: ${ext.versionRange}`
+                : [
+                    ext.base.sourceVersion ? `${t("Source")}: ${ext.base.sourceVersion}` : "",
+                    ext.issue ? t("Incompatible shape") : t("Shape compatible"),
+                  ].filter(Boolean).join(" · ");
+              const detailParts = [
+                ext.project,
+                versionDetail,
+                ext.fields.length > 0 ? `${t("Fields")}: ${ext.fields.join(", ")}` : "",
+                ext.issue ?? "",
+              ].filter(Boolean);
+              return (
+                <ListItem
+                  key={`${ext.project}:${ext.type}`}
+                  label={ext.project ? `${ext.project} · ${ext.type}` : ext.type}
+                  description={detailParts.join(" · ")}
+                  endContent={<Token label={ext.issue ? t("Error") : t("OK")} color={ext.issue ? "red" : "green"} size="sm" />}
+                />
+              );
+            })}
           </List>
         </>
       )}
