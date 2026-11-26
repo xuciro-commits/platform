@@ -1,6 +1,6 @@
 # studio-3 条件与表达式编辑器
 
-车道：studio    依赖：无（负责人 11-26 定了 CodeMirror 6，用到的 `@codemirror/*` 包加进 scripts/check-frontend.mjs 的 allowedPackages）；studio-2、studio-4 之后
+车道：studio    依赖：无（负责人 11-26 定了 CodeMirror 6，用到的 `@codemirror/*` 包加进 scripts/check-frontend.mjs 的 allowedPackages）
 能改：frontend/src/pages/**、frontend/src/apps/**、frontend/e2e/builder.spec.ts
 不碰：kernel/**；表达式只经宿主的 Expr 求值，界面不复算
 

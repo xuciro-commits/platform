@@ -46,15 +46,15 @@
 | 模块 | 成熟度 | 证据 | 缺什么、归谁 |
 |---|---|---|---|
 | 记录：列表、记录页、行内编辑、视图 | 产品级 | `pages/RecordList.tsx`、`RecordPage.tsx`；records 32 项 | — |
-| CRM 包 | 产品级 | crm 20 项、official 6 项 | 升级后扩展还在：3.3b、3.3c，studio-4 |
+| CRM 包 | 产品级 | crm 20 项、official 6 项 | 升级全链路浏览器用例：ship-4 |
 | 宿主：接受路径、重放、内存与文件存储 | 能用 | `capabilities/server/kernel`；十三组内核不变量；official 停机重启、备份恢复 | — |
-| PostgreSQL 存储 | 能用 | 3.1a、3.1b；trunk-pg 只跑过 official、marketplace | 全量 trunk-pg 剩两项，Build 监听器结果太大：kit-6 |
+| PostgreSQL 存储 | 能用 | 3.1a、3.1b；trunk-pg 只跑过 official、marketplace | 全量 trunk-pg 剩两项，Build 监听器结果太大：kit-6；重启后快照恢复把租户隔离：fire-3 |
 | 格式纪元冻结 | 产品级 | `kernel/store/migration.go`、`scripts/check-epoch.mjs`；K1 纪元拒绝、备份纪元拒绝 | — |
 | 构建：类型、字段、状态、动作、发布 | 能用 | `services/ontology`；builder 12 项 | 条件与表达式只能手写：studio-3 |
 | 条件与表达式编辑器 | 无 | `pages/` 里没有 `ConditionBuilder`、`ExpressionEditor` | studio-3 |
 | 结构化对比、关系图 | 能用（对比） | `RecordComparison`；builder 发布前审阅 | 关系图等客户要 |
-| 客户扩展 | 能用 | `pages/RecordExtensions.tsx`；official “an extension project” | 升级后保留：studio-4 |
-| 市场：安装、升级、卸载、远程包库 | 能用 | `apps/delivery/marketplace.tsx`；marketplace 10 项 | 审阅界面与不兼容时拒绝：studio-4 |
+| 客户扩展 | 能用 | `pages/RecordExtensions.tsx`；official “an extension project” | 升级后保留的浏览器核对：ship-4 |
+| 市场：安装、升级、卸载、远程包库 | 能用 | `apps/delivery/marketplace.tsx`；marketplace 10 项 | 升级全链路与两条失败用例：ship-4 |
 | 授权：角色、ReBAC、临时授权、受限字段 | 能用 | `services/security`；rebac 3 项、crm “roles”、workspace “restricted fields”、official “an extension project” | — |
 | 工作：收件箱、任务、提及、跟进 | 能用 | `pages/InboxPage.tsx`、`services/work`；workspace “inbox”、crm “follow-up” | — |
 | 看板、日历、甘特、仪表盘 | 能用 | `BoardView`、`CalendarView`、`GanttView`、`DashboardPage`；crm、gantt | — |
@@ -71,7 +71,6 @@
 
 阶段 3 要用到的内核能力（同一时间只有一人改内核）：
 
-- 3.3a、3.3c 升级审阅要知道哪些附属对象挂在包的类型上、各自的版本范围：只读查询，A 级，kit-5 提前做。
 - 3.1d 导出与导入已接受条目：导入是否走接受路径、纪元在哪核对是 B 级；ship 先在看板给接口草图，lead 定。
 - 3.4a 冻结格式纪元：已做（lead-2）。
 
@@ -100,7 +99,7 @@
 
 - 3.3a 夹具 crm 0.3.1 → 0.3.2（加一个可选字段、改一个标签），official 租户先装 0.3.1 并做 3.2 的扩展，再在市场升级：审阅列出变化与受影响的扩展。
 - 3.3b 升级后：扩展的字段、动作与它们的数据都在；官方新字段出现；trunk 核对。
-- 3.3c 扩展不兼容（目标对象在新版里被删、版本范围不含新版）时，审阅指名列出并拒绝升级，不做一半。
+- 3.3c 已做（c6d6f314d、60ba7a242）扩展不兼容（目标对象在新版里被删、版本范围不含新版）时，审阅指名列出并拒绝升级，不做一半。
 
 ## 3.4 开通客户
 
