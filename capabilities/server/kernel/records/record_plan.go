@@ -168,7 +168,14 @@ func exprCandidates(image IndexImage, lookup ImageLookup, expr ruleexpr.Expr) ([
 func membership(e ruleexpr.Expr) (string, []string, bool) {
 	switch e.Op {
 	case "=", "in":
-		if len(e.Args) != 2 || e.Args[0].Ref == "" || strings.Contains(e.Args[0].Ref, "#") || e.Args[1].Lit == nil {
+		if len(e.Args) != 2 || e.Args[1].Lit == nil {
+			return "", nil, false
+		}
+		field := e.Args[0].Ref
+		if field == "id#text" {
+			field = "id"
+		}
+		if field == "" || strings.Contains(field, "#") {
 			return "", nil, false
 		}
 		literal := e.Args[1]
@@ -177,13 +184,13 @@ func membership(e ruleexpr.Expr) (string, []string, bool) {
 			if literal.Kind != "text" || json.Unmarshal(literal.Lit.Value, &value) != nil {
 				return "", nil, false
 			}
-			return e.Args[0].Ref, []string{value}, true
+			return field, []string{value}, true
 		}
 		var values []string
 		if literal.Kind != "set" || literal.Lit.Element != "text" || json.Unmarshal(literal.Lit.Value, &values) != nil {
 			return "", nil, false
 		}
-		return e.Args[0].Ref, values, true
+		return field, values, true
 	case "or":
 		var field string
 		var all []string

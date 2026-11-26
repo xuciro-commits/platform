@@ -12,9 +12,7 @@ func (t *Tenant) liveFollow(m platform.Member, mux *http.ServeMux) transport.Liv
 		SharedKey: func(query, version, language string) (string, bool) {
 			return build.PublicLiveKey(m, query, version, language, t.Entity)
 		},
-		Snapshot: func(key string, read func() (int, []byte)) (int, []byte) {
-			return t.viewCache().LiveSnapshot(key, read)
-		}}
+		Cache: t.viewCache()}
 }
 
 func (t *Tenant) liveVersion(query string) string {

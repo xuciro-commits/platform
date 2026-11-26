@@ -12,6 +12,7 @@ type ImageDecision[T, C any] struct {
 	Quarantined func() bool
 	Hold        func() error
 	Unlock      func()
+	Contended   func() bool
 	Unavailable func() bool
 	Load        func() (read func() (T, C, *platform.Error, error), matches func(C) bool)
 	Direct      func() (T, C, *platform.Error, error)
@@ -21,6 +22,14 @@ type ImageDecision[T, C any] struct {
 
 func (r ImageDecision[T, C]) Run(ctx context.Context) (value T, refusal *platform.Error) {
 	conflict := func() *platform.Error { return &platform.Error{Code: pb.ErrorCode_ERROR_CODE_CONFLICT} }
+	direct := func() (T, *platform.Error) {
+		r.Count("fallback")
+		value, decision, refusal, err := r.Direct()
+		if err != nil {
+			return value, refusal
+		}
+		return r.Finish(decision, value, refusal)
+	}
 	for attempt := 0; attempt < 3; attempt++ {
 		if ctx.Err() != nil || r.Stopped() {
 			return value, conflict()
@@ -50,12 +59,15 @@ func (r ImageDecision[T, C]) Run(ctx context.Context) (value T, refusal *platfor
 			}()
 			return value, refusal
 		}
+		if r.Contended() {
+			defer r.Unlock()
+			return direct()
+		}
 		r.Unlock()
 		if attempt < 2 {
 			r.Count("retried")
 		}
 	}
-	r.Count("fallback")
 	if err := r.Hold(); err != nil {
 		return value, conflict()
 	}
@@ -63,9 +75,5 @@ func (r ImageDecision[T, C]) Run(ctx context.Context) (value T, refusal *platfor
 	if r.Unavailable() {
 		return value, conflict()
 	}
-	value, decision, refusal, err := r.Direct()
-	if err != nil {
-		return value, refusal
-	}
-	return r.Finish(decision, value, refusal)
+	return direct()
 }

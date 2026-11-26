@@ -566,20 +566,29 @@ func (j *Postgres) StateChanges(ctx context.Context, tenant, app, key, id string
 }
 
 func stateChanges(ctx context.Context, db stateQueries, tenant, app, key, id string, through int) ([][]byte, error) {
-	// One statement per filter: a single statement with ($4='' or key=$4) gets a generic plan
-	// once cached, which walks the (tenant,app,num) index and filters every row, so a lookup by
-	// key or id reads the whole change history instead of one row.
-	query := `select image from runtime_changes where tenant=$1 and app=$2 and num<=$3`
-	args := []any{tenant, app, through}
-	switch {
-	case key != "" && id != "":
-		query, args = query+` and key=$4 and id=$5`, append(args, key, id)
-	case key != "":
-		query, args = query+` and key=$4`, append(args, key)
-	case id != "":
-		query, args = query+` and id=$4`, append(args, id)
+	if key != "" || id != "" {
+		query := `select num,image from runtime_changes where tenant=$1 and app=$2`
+		args := []any{tenant, app}
+		switch {
+		case key != "" && id != "":
+			query, args = query+` and key=$3 and id=$4`, append(args, key, id)
+		case key != "":
+			query, args = query+` and key=$3`, append(args, key)
+		default:
+			query, args = query+` and id=$3`, append(args, id)
+		}
+		var number int
+		var raw []byte
+		err := db.QueryRow(ctx, query, args...).Scan(&number, &raw)
+		if errors.Is(err, pgx.ErrNoRows) || err == nil && number > through {
+			return nil, nil
+		}
+		if err != nil {
+			return nil, err
+		}
+		return [][]byte{raw}, nil
 	}
-	rows, err := db.Query(ctx, query+` order by num`, args...)
+	rows, err := db.Query(ctx, `select image from runtime_changes where tenant=$1 and app=$2 and num<=$3 order by num`, tenant, app, through)
 	if err != nil {
 		return nil, err
 	}

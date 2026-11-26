@@ -128,6 +128,7 @@ func (t *Owner) readRecordBase(m platform.Member, typ, id string, now time.Time)
 	func() {
 		s.Lock()
 		defer s.Unlock()
+		s.Current().ReusePoint(typ, id)
 		r = et.Rows().Get(id)
 		readable = r != nil && (visible == nil || visible(r.Value))
 	}()

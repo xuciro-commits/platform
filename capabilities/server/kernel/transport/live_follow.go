@@ -10,6 +10,7 @@ import (
 	"net/http"
 	"net/url"
 	"path"
+	"strconv"
 	"strings"
 	"time"
 )
@@ -22,6 +23,19 @@ type LiveQueryResult struct {
 type LiveQueryFrame struct {
 	Sequence int64             `json:"sequence"`
 	Results  []LiveQueryResult `json:"results"`
+}
+
+type liveResult struct {
+	raw    []byte
+	digest [32]byte
+}
+
+func encodeLiveResult(query string, status int, body []byte) liveResult {
+	if !json.Valid(body) {
+		body, _ = json.Marshal(map[string]string{"error": strings.TrimSpace(string(body))})
+	}
+	raw, _ := json.Marshal(LiveQueryResult{Path: query, Status: status, Body: body})
+	return liveResult{raw: raw, digest: sha256.Sum256(raw)}
 }
 
 const liveReadBudget = 8 << 20
@@ -55,7 +69,7 @@ type LiveFollow struct {
 	State     func() (int64, <-chan struct{})
 	Version   func(query string) string
 	SharedKey func(query, version, language string) (string, bool)
-	Snapshot  func(key string, read func() (int, []byte)) (int, []byte)
+	Cache     *ViewCache
 }
 
 func (f LiveFollow) Serve(w http.ResponseWriter, r *http.Request) {
@@ -106,9 +120,17 @@ func (f LiveFollow) Serve(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Cache-Control", "no-cache")
 	digests := make(map[string][32]byte)
 	versions := make(map[string]string)
+	previousSequence := int64(-1)
+	coalesce := 20 * time.Millisecond
 	for {
 		seq, wake := f.State()
-		frame := LiveQueryFrame{Sequence: seq}
+		if previousSequence >= 0 && seq-previousSequence > 1 {
+			coalesce = min(coalesce*2, 100*time.Millisecond)
+		} else {
+			coalesce = 20 * time.Millisecond
+		}
+		previousSequence = seq
+		var frame []byte
 		for _, query := range queries {
 			request := requests[query]
 			version := f.Version(query)
@@ -134,36 +156,41 @@ func (f LiveFollow) Serve(w http.ResponseWriter, r *http.Request) {
 				}
 				return status, body
 			}
-			var status int
-			var body []byte
+			var result liveResult
 			if key, shared := f.SharedKey(query, version, r.Header.Get("Accept-Language")); shared {
-				status, body = f.Snapshot(key, func() (int, []byte) {
-					return captureRead(context.WithoutCancel(r.Context()))
+				result = f.Cache.liveSnapshot(key, func() liveResult {
+					status, body := captureRead(context.WithoutCancel(r.Context()))
+					return encodeLiveResult(query, status, body)
 				})
 			} else {
-				status, body = captureRead(r.Context())
+				status, body := captureRead(r.Context())
+				result = encodeLiveResult(query, status, body)
 			}
-			if !json.Valid(body) {
-				body, _ = json.Marshal(map[string]string{"error": strings.TrimSpace(string(body))})
-			}
-			result := LiveQueryResult{Path: query, Status: status, Body: body}
-			raw, _ := json.Marshal(result)
-			digest := sha256.Sum256(raw)
-			if previous, seen := digests[query]; !seen || previous != digest {
-				frame.Results = append(frame.Results, result)
-				digests[query] = digest
+			if previous, seen := digests[query]; !seen || previous != result.digest {
+				if frame == nil {
+					frame = append(frame, "event: snapshot\ndata: {\"sequence\":"...)
+					frame = strconv.AppendInt(frame, seq, 10)
+					frame = append(frame, ",\"results\":["...)
+				} else {
+					frame = append(frame, ',')
+				}
+				frame = append(frame, result.raw...)
+				digests[query] = result.digest
 			}
 		}
-		if len(frame.Results) > 0 {
-			raw, _ := json.Marshal(frame)
-			fmt.Fprintf(w, "event: snapshot\ndata: %s\n\n", raw)
+		if frame != nil {
+			_, _ = w.Write(append(frame, "]}\n\n"...))
 			flusher.Flush()
 		}
 		select {
 		case <-r.Context().Done():
 			return
 		case <-wake:
-			time.Sleep(150 * time.Millisecond)
+			select {
+			case <-r.Context().Done():
+				return
+			case <-time.After(coalesce):
+			}
 		case <-time.After(25 * time.Second):
 			fmt.Fprint(w, ": keep-alive\n\n")
 			flusher.Flush()

@@ -1,6 +1,7 @@
 package records
 
 import (
+	"bytes"
 	"encoding/json"
 	"fmt"
 	"platformserver/platform"
@@ -17,7 +18,8 @@ type Row struct {
 	History       []RecordChange
 	LoadHistory   func(int) []RecordChange
 	HistoryCount  int
-	Original      json.RawMessage
+	original      json.RawMessage
+	sqlOriginal   json.RawMessage
 	Projection    *Projection
 	Extraction    *Extraction
 }
@@ -128,19 +130,30 @@ func DecodeImage(info platform.RecordTypeInfo, value json.RawMessage, projection
 }
 
 func (r *Row) Image() (json.RawMessage, error) {
-	if len(r.Original) > 0 {
-		return slices.Clone(r.Original), nil
+	if len(r.original) > 0 {
+		return slices.Clone(r.original), nil
 	}
-	return json.Marshal(r.Value.Interface())
+	decoded, err := json.Marshal(r.Value.Interface())
+	if err == nil && len(r.sqlOriginal) > 0 && differentImage(r.sqlOriginal, decoded) {
+		return slices.Clone(r.sqlOriginal), nil
+	}
+	return decoded, err
 }
 
 func (r *Row) RetainOriginal(raw json.RawMessage) {
 	decoded, err := json.Marshal(r.Value.Interface())
-	before, beforeErr := platform.CanonicalDigest(raw)
-	after, afterErr := platform.CanonicalDigest(json.RawMessage(decoded))
-	if err == nil && beforeErr == nil && afterErr == nil && before != after {
-		r.Original = slices.Clone(raw)
+	if err == nil && differentImage(raw, decoded) {
+		r.original = slices.Clone(raw)
 	}
+}
+
+func differentImage(raw, decoded json.RawMessage) bool {
+	if bytes.Equal(raw, decoded) {
+		return false
+	}
+	before, beforeErr := platform.CanonicalDigest(raw)
+	after, afterErr := platform.CanonicalDigest(decoded)
+	return beforeErr == nil && afterErr == nil && before != after
 }
 
 type RecordChange struct {
@@ -280,7 +293,7 @@ func AppendRowHistory(r, prior *Row, changes []RecordChange) error {
 	if prior != nil {
 		prefix := *prior
 		prefix.Value = reflect.Value{}
-		prefix.Original = nil
+		prefix.original, prefix.sqlOriginal = nil, nil
 		prefix.Projection = nil
 		prefix.Extraction = nil
 		r.HistoryParent = &prefix

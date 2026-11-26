@@ -172,16 +172,15 @@ type viewBody struct {
 
 type liveView struct {
 	ready  chan struct{}
-	status int
-	body   []byte
+	result liveResult
 }
 
-func (c *ViewCache) LiveSnapshot(key string, build func() (int, []byte)) (int, []byte) {
+func (c *ViewCache) liveSnapshot(key string, build func() liveResult) liveResult {
 	c.mu.Lock()
 	if saved := c.live[key]; saved != nil {
 		c.mu.Unlock()
 		<-saved.ready
-		return saved.status, saved.body
+		return saved.result
 	}
 	if len(c.live) >= 32 {
 		c.live = map[string]*liveView{}
@@ -193,14 +192,16 @@ func (c *ViewCache) LiveSnapshot(key string, build func() (int, []byte)) (int, [
 	c.live[key] = saved
 	c.mu.Unlock()
 
-	saved.status, saved.body = build()
-	if len(saved.body) > 2<<20 {
+	saved.result = build()
+	if len(saved.result.raw) > 2<<20 {
 		c.mu.Lock()
-		delete(c.live, key)
+		if c.live[key] == saved {
+			delete(c.live, key)
+		}
 		c.mu.Unlock()
 	}
 	close(saved.ready)
-	return saved.status, saved.body
+	return saved.result
 }
 
 func (b *viewBody) compressed() []byte {

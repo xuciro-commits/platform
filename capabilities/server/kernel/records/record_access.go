@@ -312,6 +312,17 @@ type CurrentScope struct {
 	applied         int64
 	position        func() int64
 	info            func(string) platform.RecordTypeInfo
+	point           currentPoint
+}
+
+type currentPoint struct {
+	typ, id string
+	saved   bool
+	row     persistence.StateCurrent
+}
+
+func (s *CurrentScope) ReusePoint(typ, id string) {
+	s.point = currentPoint{typ: typ, id: id}
 }
 
 func NewCurrentScope(info func(string) platform.RecordTypeInfo) *CurrentScope {
@@ -327,7 +338,7 @@ func (s *CurrentScope) Configure(backend persistence.RuntimeState, tenant string
 }
 func (s *CurrentScope) Backend() persistence.RuntimeState   { return s.backend }
 func (s *CurrentScope) View() persistence.StateReadView     { return s.view }
-func (s *CurrentScope) Bind(view persistence.StateReadView) { s.view = view }
+func (s *CurrentScope) Bind(view persistence.StateReadView) { s.view, s.point = view, currentPoint{} }
 func (s *CurrentScope) Tenant() string                      { return s.tenant }
 func (s *CurrentScope) Applied() int64                      { return s.applied }
 func (s *CurrentScope) MarkApplied(position int64)          { s.applied = position }
@@ -352,9 +363,17 @@ func (r *currentRows) view() persistence.StateReadView {
 }
 
 func (r *currentRows) Get(id string) *Row {
+	point := &r.store.point
+	pinned := point.typ == r.typ && point.id == id
+	if pinned && point.saved {
+		return r.decode(id, point.row)
+	}
 	current, err := r.view().StateCurrent(r.store.Context(), r.store.tenant, r.typ, id)
 	if err != nil {
 		panic(fmt.Errorf("record %s/%s: %w", r.typ, id, err))
+	}
+	if pinned {
+		point.row, point.saved = current, true
 	}
 	return r.decode(id, current)
 }
@@ -395,8 +414,7 @@ func (r *currentRows) decode(id string, current persistence.StateCurrent) *Row {
 	if Header(value).ID != id {
 		panic("SQL current record identity differs")
 	}
-	row := &Row{Value: value, Format: image.Format, HistoryCount: current.HistoryCount, HistoryHead: current.HistoryHead, Projection: image.Projection, Extraction: image.Extraction}
-	row.RetainOriginal(image.Value)
+	row := &Row{Value: value, Format: image.Format, HistoryCount: current.HistoryCount, HistoryHead: current.HistoryHead, Projection: image.Projection, Extraction: image.Extraction, sqlOriginal: image.Value}
 	count := current.HistoryCount
 	row.LoadHistory = func(after int) []RecordChange {
 		list, err := r.view().StateHistory(r.store.Context(), r.store.tenant, r.typ, id, after, count)
@@ -435,10 +453,14 @@ func (s *CurrentScope) Open(ctx context.Context) (persistence.StateReadView, err
 	if err != nil {
 		return nil, err
 	}
-	s.view = view
+	s.Bind(view)
 	return view, nil
 }
-func (s *CurrentScope) Detach() persistence.StateReadView { view := s.view; s.view = nil; return view }
+func (s *CurrentScope) Detach() persistence.StateReadView {
+	view := s.view
+	s.Bind(nil)
+	return view
+}
 func (s *CurrentScope) Context() context.Context {
 	if s.ctx != nil {
 		return s.ctx
@@ -472,6 +494,10 @@ func VisitPlan(image IndexImage, lookup ImageLookup, plan Plan, visible func(ref
 		accept(v)
 	}
 	if ids, indexed := plan.candidates(image, lookup); indexed {
+		if len(ids) == 1 {
+			visit(image.Rows.Get(ids[0]))
+			return matched
+		}
 		rows := image.Rows.GetBatch(ids)
 		for _, id := range ids {
 			visit(rows[id])

@@ -39,6 +39,7 @@ func decideOnImage[T any](t *Tenant, ctx context.Context, holder string, prepare
 		Quarantined: t.quarantined,
 		Hold:        func() error { return t.Lane.Hold(ctx, holder) },
 		Unlock:      t.Lane.Unlock,
+		Contended:   func() bool { return t.Lane.State().Waiters > 0 },
 		Unavailable: func() bool { return t.recordReadRefusal() != nil || t.businessStopped() },
 		Load: func() (func() (T, preparedAccepted, *platform.Error, error), func(preparedAccepted) bool) {
 			image := t.readImage.Load()

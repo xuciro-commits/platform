@@ -35,7 +35,7 @@ func (s *Store) InstallImage(record string, image json.RawMessage) error {
 		return err
 	}
 	installed := *et.Rows().Get(id)
-	installed.Value, installed.Original = value, nil
+	installed.Value, installed.original, installed.sqlOriginal = value, nil, nil
 	installed.RetainOriginal(image)
 	et.SetRow(id, &installed)
 	s.TrackWrite(record)

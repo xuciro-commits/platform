@@ -331,6 +331,7 @@ func TestInvariantK13SQLRecordWindowsRespectVisibilityAndPrivateRows(t *testing.
 		private     bool
 		windowIDs   []string
 		windowTotal int
+		point       bool
 	}{
 		{name: "ascending offset", query: platform.Query{Sort: []string{"id"}, Offset: 1, Limit: 2}, windowIDs: []string{"B", "C"}, windowTotal: 4},
 		{name: "descending offset", query: platform.Query{Sort: []string{"-id"}, Offset: 1, Limit: 2}, windowIDs: []string{"C", "B"}, windowTotal: 4},
@@ -343,6 +344,7 @@ func TestInvariantK13SQLRecordWindowsRespectVisibilityAndPrivateRows(t *testing.
 		{name: "unbounded", query: platform.Query{Sort: []string{"id"}}},
 		{name: "private overlay", query: platform.Query{Sort: []string{"id"}, Limit: 20}, private: true},
 		{name: "private filtered IDs", query: platform.Query{Sort: []string{"id"}, Limit: 20, Domain: json.RawMessage(`[["id","in",["A","B","C","F"]]]`)}, private: true},
+		{name: "primary key", query: platform.Query{Limit: 1, Domain: json.RawMessage(`[["id","=","A"]]`)}, point: true},
 	} {
 		t.Run(check.name, func(t *testing.T) {
 			actualStore, expectedStore := live.Projection, memory
@@ -355,6 +357,15 @@ func TestInvariantK13SQLRecordWindowsRespectVisibilityAndPrivateRows(t *testing.
 			actual, actualTotal := read(actualStore, check.query, check.visible)
 			if !slices.Equal(actual, want) || actualTotal != total {
 				t.Fatalf("SQL window differs from the complete visible scan: rows=%v total=%d; want rows=%v total=%d", actual, actualTotal, want, total)
+			}
+			if check.point {
+				actualStore.Current().ReusePoint("invariantproject.alpha", "A")
+				_, _ = read(actualStore, check.query, check.visible)
+				_, _ = read(actualStore, check.query, check.visible)
+				if reads.singles != 2 || len(reads.batches) != 0 || len(reads.windows) != 0 {
+					t.Fatalf("primary key materialization used singles=%d batches=%v windows=%v", reads.singles, reads.batches, reads.windows)
+				}
+				return
 			}
 			if reads.singles != 0 {
 				t.Fatalf("record materialization made %d single-row SQL reads", reads.singles)
