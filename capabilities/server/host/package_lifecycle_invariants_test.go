@@ -9,6 +9,7 @@ import (
 	"io"
 	"net/http"
 	"net/url"
+	"os"
 	"platformserver/kernel/protocol"
 
 	"slices"
@@ -217,6 +218,14 @@ func TestInvariantK9PackageUpgradeFieldReviewAndIncompatibleGate(t *testing.T) {
 		{"name": "note", "title": "Note", "type": "text"}, size,
 		{"name": "channel", "title": "Channel", "type": "text"},
 		{"name": "score", "title": "Score", "type": "integer"},
+		{"name": "related", "title": "Related lead", "type": "reference", "ref": "invariantproject.lead"},
+	})
+	vRequired := publishVersion("1.1.1", []map[string]any{
+		{"name": "note", "title": "Note", "type": "text"}, size,
+		{"name": "channel", "title": "Channel", "type": "text"},
+		{"name": "score", "title": "Score", "type": "integer"},
+		{"name": "related", "title": "Related lead", "type": "reference", "ref": "invariantproject.lead"},
+		{"name": "requiredref", "title": "Required lead", "type": "reference", "ref": "invariantproject.lead", "required": true},
 	})
 	v3BadType := publishVersion("1.2.0", []map[string]any{
 		{"name": "note", "title": "Note", "type": "integer"}, size,
@@ -280,6 +289,76 @@ func TestInvariantK9PackageUpgradeFieldReviewAndIncompatibleGate(t *testing.T) {
 	target.accept(t, "leadpkg.lead.create", "leadpkg.lead", "L1", map[string]any{"note": "Keep lead"})
 
 	importDesc(v2)
+	t.Run("postgres", func(t *testing.T) {
+		url := os.Getenv("PLATFORM_BENCH_DATABASE")
+		if url == "" {
+			t.Skip("requires isolated PostgreSQL")
+		}
+		ctx := t.Context()
+		journal, err := OpenJournal(ctx, url)
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer journal.Close()
+		if _, err := journal.Entries(ctx, target.ID, 0); err != nil {
+			t.Fatal(err)
+		}
+		for _, entry := range target.entries {
+			id, err := acceptedIdentity(entry.Body)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if _, err := journal.AppendAccepted(ctx, target.ID, entry, id.Key, id.Hash); err != nil {
+				t.Fatal(err)
+			}
+		}
+		sql := target.restore(t, target.entries, seat)
+		sql.Files = target.files()
+		if err := sql.MigrateRuntimeState(ctx, journal.Journals, nil, sql.runtimeOwners()); err != nil {
+			t.Fatal(err)
+		}
+		sql.AttachJournal(ctx, journal.Journals)
+		// Package artifact bytes are cached outside the journal. Restore the exact inspected artifacts.
+		for _, descriptor := range []platform.PackageDescriptor{v1, v2} {
+			if _, err := sql.InspectPackage(ctx, protocol.PackageInspectRequest{Content: platform.Raw(descriptor)}); err != nil {
+				t.Fatal(err)
+			}
+		}
+		admin, _ := sql.Member("package-admin")
+		apply := func(schema string, payload any) *platform.Error {
+			req := sql.submission(schema, protocol.PackageType, v1.ID, payload)
+			req.Authority, req.PrincipalId = "platform", admin.ID
+			_, refusal := sql.Submit(admin, req, invariantClock)
+			return refusal
+		}
+		if refusal := apply(packages.SchemaPackageUpgrade, map[string]any{"id": v2.ID, "version": v2.Version}); refusal != nil {
+			t.Fatalf("SQL optional reference upgrade: %#v", refusal)
+		}
+		view, refusal := sql.RecordOf(ctx, sql.member(t), "leadpkg.lead", "L1", invariantClock)
+		if refusal != nil {
+			t.Fatalf("SQL read old record: %#v", refusal)
+		}
+		var rec map[string]any
+		if err := json.Unmarshal(platform.Raw(view.Record), &rec); err != nil || rec["note"] != "Keep lead" || rec["related"] != nil && rec["related"] != "" {
+			t.Fatalf("SQL old record: %#v, %v", rec, err)
+		}
+		sql.accept(t, "leadpkg.lead.create", "leadpkg.lead", "L2", map[string]any{"note": "Related lead", "related": "L1"})
+		// Inspect and import the required-reference candidate after the SQL upgrade.
+		offer, err := sql.InspectPackage(ctx, protocol.PackageInspectRequest{Content: platform.Raw(vRequired)})
+		if err != nil {
+			t.Fatal(err)
+		}
+		if refusal := apply(packages.SchemaPackageImport, map[string]any{"id": vRequired.ID, "digest": offer.Digest}); refusal != nil {
+			t.Fatalf("SQL import required ref candidate: %#v", refusal)
+		}
+		if refusal := apply(packages.SchemaPackageUpgrade, map[string]any{"id": vRequired.ID, "version": vRequired.Version}); refusal == nil {
+			t.Fatal("SQL required reference upgrade must be refused")
+		}
+		if sql.quarantined() {
+			t.Fatal("SQL tenant quarantined")
+		}
+	})
+
 	rev2 := reviewVersion("1.1.0")
 	if len(rev2.Problems) != 0 {
 		t.Fatalf("compatible upgrade review had problems: %+v", rev2.Problems)
@@ -292,7 +371,7 @@ func TestInvariantK9PackageUpgradeFieldReviewAndIncompatibleGate(t *testing.T) {
 			}
 		}
 	}
-	if !slices.Contains(addedFields, "channel") || !slices.Contains(addedFields, "score") {
+	if !slices.Contains(addedFields, "channel") || !slices.Contains(addedFields, "score") || !slices.Contains(addedFields, "related") {
 		t.Fatalf("upgrade review missing added fields: %+v", rev2.Changes)
 	}
 	if refusal := submit(packages.SchemaPackageUpgrade, map[string]any{"id": v2.ID, "version": v2.Version}); refusal != nil {
@@ -305,6 +384,15 @@ func TestInvariantK9PackageUpgradeFieldReviewAndIncompatibleGate(t *testing.T) {
 	var rec map[string]any
 	if json.Unmarshal(platform.Raw(view.Record), &rec) != nil || rec["note"] != "Keep lead" {
 		t.Fatalf("upgrade lost existing record value: %#v", rec)
+	}
+
+	if rec["related"] != nil && rec["related"] != "" {
+		t.Fatalf("optional reference was populated: %#v", rec)
+	}
+	target.accept(t, "leadpkg.lead.create", "leadpkg.lead", "L2", map[string]any{"note": "Related lead", "related": "L1"})
+	importDesc(vRequired)
+	if refusal := submit(packages.SchemaPackageUpgrade, map[string]any{"id": vRequired.ID, "version": vRequired.Version}); refusal == nil {
+		t.Fatal("required reference upgrade must be refused")
 	}
 
 	importDesc(v3BadType)

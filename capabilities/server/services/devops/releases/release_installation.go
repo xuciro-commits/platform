@@ -64,7 +64,7 @@ type ReleaseUpgradePlan struct {
 	Additions   []ReleaseFieldAddition `json:"additions"`
 }
 
-func OptionalStoredAdditions(old, next platform.RecordTypeInfo) []platform.FieldInfo {
+func OptionalStoredAdditions(old, next platform.RecordTypeInfo, known ...map[string]bool) []platform.FieldInfo {
 	if len(next.Fields) <= len(old.Fields) {
 		return nil
 	}
@@ -79,7 +79,9 @@ func OptionalStoredAdditions(old, next platform.RecordTypeInfo) []platform.Field
 		if _, exists := old.Field(field.Name); exists {
 			continue
 		}
-		if field.Required || field.Ref != "" || field.Property != nil || field.ValueType != nil || len(field.Choices) != 0 || !slices.Contains([]string{"text", "longtext", "integer", "decimal", "boolean", "date", "datetime"}, field.Type) {
+		reference := field.Type == "reference" && field.Ref != "" && len(known) > 0 && known[0][field.Ref]
+		primitive := field.Ref == "" && slices.Contains([]string{"text", "longtext", "integer", "decimal", "boolean", "date", "datetime"}, field.Type)
+		if field.Required || field.Property != nil || field.ValueType != nil || len(field.Choices) != 0 || !(reference || primitive) {
 			return nil
 		}
 		added = append(added, field)
@@ -157,13 +159,15 @@ func SelectOwnerDrafts(drafts []ruleprotocol.AssetDraft, context ruleprotocol.As
 type StoredShape struct {
 	Before, After platform.RecordTypeInfo
 	Records       int
+	KnownTypes    map[string]bool
 }
 
 func StoredShapes(before, after *records.Store) []StoredShape {
 	shapes := []StoredShape{}
+	known := after.TypeNames()
 	for typ, old := range before.Types() {
 		if next := after.Type(typ); next != nil {
-			shapes = append(shapes, StoredShape{Before: old.Info(), After: next.Info(), Records: old.Rows().Len()})
+			shapes = append(shapes, StoredShape{Before: old.Info(), After: next.Info(), Records: old.Rows().Len(), KnownTypes: known})
 		}
 	}
 	return shapes
@@ -183,7 +187,7 @@ func UpgradePlan(candidate, active string, shapes []StoredShape) (*ReleaseUpgrad
 		if shape.Records == 0 || SameStoredFields(shape.Before, shape.After) {
 			continue
 		}
-		fields := OptionalStoredAdditions(shape.Before, shape.After)
+		fields := OptionalStoredAdditions(shape.Before, shape.After, shape.KnownTypes)
 		if len(fields) == 0 {
 			return nil, fmt.Errorf("object %s needs an unsupported storage migration", shape.Before.Type)
 		}
@@ -408,7 +412,7 @@ func CheckStorage(shapes []StoredShape, before, after []platform.Definition, upg
 		if SameStoredFields(shape.Before, shape.After) {
 			continue
 		}
-		if upgrade && len(OptionalStoredAdditions(shape.Before, shape.After)) > 0 {
+		if upgrade && len(OptionalStoredAdditions(shape.Before, shape.After, shape.KnownTypes)) > 0 {
 			continue
 		}
 		if allowContraction && CompatibleStoredRemoval(shape.Before, shape.After) {

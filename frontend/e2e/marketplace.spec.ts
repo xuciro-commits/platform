@@ -4,7 +4,7 @@ import { createServer } from "node:http";
 import type { AddressInfo } from "node:net";
 import { fileURLToPath } from "node:url";
 import { type Locator, type Page, expect, test } from "@playwright/test";
-import { open, property, edit, signIn } from "./support";
+import { open, property, edit, signIn, submit } from "./support";
 
 const chooseRole = async (page: Page, pane: Locator, role: RegExp) => {
   await pane.getByRole("combobox", { name: /^Application/ }).click();
@@ -273,6 +273,44 @@ test("upgrade tenant: CRM upgrades to a version with a new optional lead field a
   ]);
   await expect(property(page, "LinkedIn")).toContainText("linkedin.com/in/zhouning");
 });
+
+test("upgrade tenant: upgrading the original party package retains the unstructured address", async ({ page }) => {
+  test.setTimeout(120_000);
+  await signIn(page, "admin-1 · upgrade");
+  const importFixture = async (name: string, version: string, action: "Install package" | "Upgrade package") => {
+    await page.goto("/delivery/marketplace");
+    await page.getByRole("button", { name: "More actions", exact: true }).click();
+    await page.getByRole("menuitem", { name: "Install from URL or file", exact: true }).click();
+    const wizard = page.getByRole("dialog", { name: /Install from URL or file/ });
+    const file = fileURLToPath(new URL(`../../scripts/frontend-fixtures/${name}-${version}.json`, import.meta.url));
+    await wizard.locator('input[type="file"]').setInputFiles(file);
+    await wizard.getByRole("button", { name: "Inspect package", exact: true }).click();
+    await expect(wizard.getByText(`${name} · ${version}`, { exact: true })).toBeVisible();
+    await wizard.getByRole("button", { name: "Add to library", exact: true }).click();
+    await wizard.getByRole("button", { name: "Continue", exact: true }).click({ timeout: 30_000 });
+    await wizard.getByRole("button", { name: action, exact: true }).click();
+    await expect(wizard).toBeHidden({ timeout: 30_000 });
+  };
+  await importFixture("party", "0.1.0", "Install package");
+  await submit(page, "platform.member.grant", "platform.member", "admin-1", { app: "party", role: "user" });
+  await page.goto("/party/party.organization");
+  await page.getByRole("button", { name: "New", exact: true }).click();
+  const form = page.getByRole("dialog");
+  await form.getByRole("textbox", { name: /^Name(?: Required)?$/ }).fill("Legacy address company");
+  await form.getByRole("button", { name: "Create", exact: true }).click();
+  await expect(page.getByRole("heading", { name: "Legacy address company", exact: true }).first()).toBeVisible();
+  const record = page.url();
+  await edit(page, "Address");
+  const address = page.getByRole("textbox", { name: "Address", exact: true });
+  await address.fill("Legacy address 42");
+  await address.press("Tab");
+  await expect(property(page, "Address")).toContainText("Legacy address 42");
+
+  await importFixture("geo", "0.1.2", "Install package");
+  await importFixture("party", "0.2.2", "Upgrade package");
+  await page.goto(record);
+  await expect(property(page, "Other address details")).toContainText("Legacy address 42");
+});
 });
 
 test.describe.serial("library tenant", () => {
@@ -439,4 +477,34 @@ test("publisher tenant: the custodian checks an asset out to a member, who sees 
   await signIn(page, "admin-1 · publisher");
   await page.goto("/assets/assets.asset/demo-asset-2");
   await expect(property(page, "Open work orders")).toContainText("1");
+});
+
+
+test("publisher tenant: a business partner stores country and division references and reads their names", async ({ page }) => {
+  await signIn(page, "admin-1 · publisher");
+  await submit(page, "platform.member.grant", "platform.member", "admin-1", { app: "geo", role: "user" });
+  await page.goto("/party/party.organization");
+  await page.getByRole("button", { name: "New", exact: true }).click();
+  const form = page.getByRole("dialog");
+  await form.getByRole("textbox", { name: /^Name(?: Required)?$/ }).fill("Structured address company");
+  await form.getByRole("button", { name: "Create", exact: true }).click();
+  await expect(page.getByRole("heading", { name: "Structured address company", exact: true }).first()).toBeVisible();
+
+  await edit(page, "Country or region");
+  await page.getByRole("combobox", { name: "Country or region", exact: true }).fill("China");
+  await page.getByRole("option", { name: /^China$/ }).click();
+  await expect(property(page, "Country or region")).toContainText("China");
+  await edit(page, "Region");
+  await page.getByRole("combobox", { name: "Region", exact: true }).fill("110105");
+  await page.getByRole("option", { name: /北京市朝阳区/ }).click();
+  await expect(property(page, "Region")).toContainText("北京市朝阳区");
+  await edit(page, "Street address");
+  const street = page.getByRole("textbox", { name: "Street address", exact: true });
+  await street.fill("1 Jianguo Road");
+  await street.press("Enter");
+  await expect(property(page, "Street address")).toContainText("1 Jianguo Road");
+  await page.reload();
+  await expect(property(page, "Country or region")).toContainText("China");
+  await expect(property(page, "Region")).toContainText("北京市朝阳区");
+  await expect(property(page, "Street address")).toContainText("1 Jianguo Road");
 });
