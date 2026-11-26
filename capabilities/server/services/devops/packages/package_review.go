@@ -182,6 +182,15 @@ type reviewedObjectField struct {
 	Required bool            `json:"required"`
 	Ref      string          `json:"ref"`
 	Choices  json.RawMessage `json:"choices"`
+	Title    json.RawMessage `json:"title"`
+}
+
+func fieldTitle(raw json.RawMessage) string {
+	var title string
+	if json.Unmarshal(raw, &title) == nil {
+		return title
+	}
+	return string(raw)
 }
 
 func diffObjectFields(object string, beforeRaw, afterRaw json.RawMessage, checkUpgrade bool) []protocol.PackageFieldChange {
@@ -222,6 +231,10 @@ func diffObjectFields(object string, beforeRaw, afterRaw json.RawMessage, checkU
 				item.Reason = "Changing field " + object + "." + field.Name + " from " + from + " to " + to + " is incompatible with existing records"
 			}
 			out = append(out, item)
+			continue
+		}
+		if !bytes.Equal(prev.Title, field.Title) {
+			out = append(out, protocol.PackageFieldChange{Name: field.Name, Change: "relabeled", Before: fieldTitle(prev.Title), After: fieldTitle(field.Title)})
 		}
 	}
 	for _, prev := range oldDoc.Fields {
