@@ -165,7 +165,7 @@ func (h TenantSnapshots[Job, Endpoint]) Snapshot(q *Sequence, position func() in
 			_ = read.Close()
 		}
 	}()
-	s, rows, seq, err := h.capture(q, position, true, func() (func(), error) {
+	s, seq, err := h.capture(q, position, true, func() (func(), error) {
 		if q.Projection.Current().View() != nil {
 			read = q.Projection.Current().View()
 			if h.Scopes() {
@@ -195,22 +195,6 @@ func (h TenantSnapshots[Job, Endpoint]) Snapshot(q *Sequence, position func() in
 	}
 	if compatibility.Host != "" {
 		s.Checkpoint = &SnapshotCheckpoint{SnapshotCompatibility: compatibility, Tenant: q.ID, Position: seq, Build: h.Build()}
-	}
-	for typ, list := range rows {
-		saved := make([]records.StoredState, len(list))
-		for i, r := range list {
-			raw, err := r.Image()
-			if err != nil {
-				return nil, 0, err
-			}
-			head, err := r.HistoryDigest()
-			if err != nil {
-				return nil, 0, err
-			}
-			saved[i] = records.StoredState{HistoryHead: head, Value: raw, Format: r.Format, History: r.RecordHistory(), Projection: records.CloneProjection(r.Projection), Extraction: r.Extraction}
-		}
-		slices.SortFunc(saved, func(a, b records.StoredState) int { return strings.Compare(string(a.Value), string(b.Value)) })
-		s.Records[typ] = saved
 	}
 	raw, err := json.Marshal(s)
 	return raw, seq, err
@@ -243,7 +227,7 @@ func (h TenantSnapshots[Job, Endpoint]) SnapshotRuntimePinned(q *Sequence, ctx c
 	var view persistence.StateReadView
 	var viewErr error
 	var ownsRead bool
-	s, _, seq, err := h.capture(q, func() int64 {
+	s, seq, err := h.capture(q, func() int64 {
 		position := j.Position(q.ID)
 		if q.Projection.Current().View() != nil {
 			view = q.Projection.Current().View()
@@ -319,20 +303,20 @@ func (h TenantSnapshots[Job, Endpoint]) Checkpoint(q *Sequence, ctx context.Cont
 	return seq, nil
 }
 
-func (h TenantSnapshots[Job, Endpoint]) capture(q *Sequence, position func() int64, includeRows bool, prepare func() (func(), error)) (TenantImage[Job, Endpoint], map[string][]*records.Row, int64, error) {
+func (h TenantSnapshots[Job, Endpoint]) capture(q *Sequence, position func() int64, includeRows bool, prepare func() (func(), error)) (TenantImage[Job, Endpoint], int64, error) {
 	q.Lane.Lock()
 	defer q.Lane.Unlock()
 	var none TenantImage[Job, Endpoint]
 	if h.Quarantined() {
-		return none, nil, 0, fmt.Errorf("tenant %s is quarantined", q.ID)
+		return none, 0, fmt.Errorf("tenant %s is quarantined", q.ID)
 	}
 	if h.Pending() {
-		return none, nil, 0, fmt.Errorf("tenant %s: events pending", q.ID)
+		return none, 0, fmt.Errorf("tenant %s: events pending", q.ID)
 	}
 	if prepare != nil {
 		cleanup, err := prepare()
 		if err != nil {
-			return none, nil, 0, err
+			return none, 0, err
 		}
 		if cleanup != nil {
 			defer cleanup()
@@ -342,12 +326,12 @@ func (h TenantSnapshots[Job, Endpoint]) capture(q *Sequence, position func() int
 	for _, a := range h.Apps {
 		raw, err := a.Snapshot()
 		if err != nil {
-			return none, nil, 0, fmt.Errorf("tenant %s: app %s: %v", q.ID, a.Manifest().ID, err)
+			return none, 0, fmt.Errorf("tenant %s: app %s: %v", q.ID, a.Manifest().ID, err)
 		}
 		s.Apps[a.Manifest().ID] = raw
 	}
-	rows := map[string][]*records.Row{}
 	if includeRows {
+		rows := map[string][]*records.Row{}
 		func() {
 			q.Projection.Lock()
 			defer q.Projection.Unlock()
@@ -358,15 +342,29 @@ func (h TenantSnapshots[Job, Endpoint]) capture(q *Sequence, position func() int
 				}
 			}
 		}()
-	}
-	if includeRows {
+		for typ, list := range rows {
+			saved := make([]records.StoredState, len(list))
+			for i, r := range list {
+				raw, err := r.Image()
+				if err != nil {
+					return none, 0, err
+				}
+				head, err := r.HistoryDigest()
+				if err != nil {
+					return none, 0, err
+				}
+				saved[i] = records.StoredState{HistoryHead: head, Value: raw, Format: r.Format, History: r.RecordHistory(), Projection: records.CloneProjection(r.Projection), Extraction: r.Extraction}
+			}
+			slices.SortFunc(saved, func(a, b records.StoredState) int { return strings.Compare(string(a.Value), string(b.Value)) })
+			s.Records[typ] = saved
+		}
 		state := q.Committed.SnapshotState()
 		s.DecisionDefinitions, s.SubmissionSchemas, s.CompositeAnswers = state.DecisionDefinitions, state.SubmissionSchemas, state.CompositeAnswers
 		s.Refusals, s.AcceptedAnswers, s.AcceptedInputs, s.Composites = state.Refusals, state.AcceptedAnswers, state.AcceptedInputs, state.Composites
 	}
 	unlock, err := h.Capture(&s)
 	if err != nil {
-		return none, nil, 0, err
+		return none, 0, err
 	}
 	defer unlock()
 	seq := position()
@@ -374,7 +372,7 @@ func (h TenantSnapshots[Job, Endpoint]) capture(q *Sequence, position func() int
 		seq = q.SnapshotPosition
 	}
 	q.SnapshotPosition = seq
-	return s, rows, seq, nil
+	return s, seq, nil
 }
 
 func (h TenantSnapshots[Job, Endpoint]) Restore(q *Sequence, raw json.RawMessage) error {
