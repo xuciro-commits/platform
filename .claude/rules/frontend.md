@@ -1,12 +1,11 @@
 ---
 paths:
   - "frontend/**"
-  - "web/**"
 ---
 
 # 前端
 
-- 只有一个前端：`frontend/`。`web/` 冻结：只修让它起不来或让检查过不去的缺陷，不加功能，不读它当参考。
+- 只有一个前端：`frontend/`。
 - 动手前读 docs/frontend.md，用技能 `platform-design`（设计打磨可配合 `impeccable`）。界面守 docs/ux.md 的十三条不变式、docs/design.md 的“不许出现”与仓库根 `DESIGN.md` / `PRODUCT.md`。
 - 界面由类型生成：契约在 `src/host/`，表现在 `src/pages/`，入口是 `src/apps/<应用>/<入口>.ts` 里的一句声明。
   不为单个类型写界面；入口缺什么，改表现或契约，让所有类型同时得到。

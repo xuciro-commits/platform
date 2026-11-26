@@ -44,9 +44,9 @@ def main():
     scope = staged if staged and not whole else tree
     if not scope:
         return 0
-    targets = ["check"] + [f"check-{side}" for side in ("web", "frontend") if any(f.startswith(side + "/") for f in scope)]
+    targets = ["check"] + [f"check-{side}" for side in ("frontend",) if any(f.startswith(side + "/") for f in scope)]
     state = fingerprint(root, tree) + " " + " ".join(targets)
-    passed = os.path.join(root, ".git", "claude-check-pass")
+    passed = os.path.join(run(["git", "rev-parse", "--absolute-git-dir"], root)[1], "claude-check-pass")
     if os.path.isfile(passed) and open(passed).read() == state:
         return 0
     env = dict(os.environ, GOPROXY="https://goproxy.cn,direct")
