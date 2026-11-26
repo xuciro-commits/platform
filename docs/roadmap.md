@@ -80,10 +80,9 @@
 灵魂：客户的改动在客户自己的项目里，用附属对象挂到官方的名词上；官方包不知道它，升级也不碰它。
 
 - 3.2a–c 已做（5e93120f4）：新建“扩展”项目挂附属对象（`extends` 指向目标类型，`base` 必填），目标记录页按贡献位显示扩展分节与动作、列表可加扩展列，扩展字段按附属对象自己的 `access` 授权并经 trunk 换角色核对。
-- 3.2d 条件与表达式编辑器：构建者在字段的 `when` 上用 `ConditionBuilder` 逐条选字段、比较与值，存成宿主认的表达式，能切到文本看原文；
-  `default` 与规则的表达式用 `ExpressionEditor` 写，有补全与宿主给的报错，报错指到位置。
+- 3.2d 条件编辑器已做（5affb13e4）：字段的 `when` 用 `ConditionBuilder` 按选项、布尔字段与状态挑取值，能切到文本看原文；trunk builder 一步核对条件成立才出现字段。
+  剩表达式编辑器：`default` 与规则的表达式用 `ExpressionEditor` 写，有补全与宿主给的报错，报错指到位置。
   用 CodeMirror 6（负责人 11-26 定），用到的 `@codemirror/*` 加进 `scripts/check-frontend.mjs` 的 allowedPackages。表达式只经宿主的 Expr 求值，界面不复算。
-  trunk：builder 加一步，用条件编辑器写 `when`、发布，记录上条件成立才出现字段。
 
 ### 3.3 升级演练
 
