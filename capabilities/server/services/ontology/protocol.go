@@ -120,10 +120,10 @@ func CheckObjectProtocols(object Object, env ProtocolEnvironment) error {
 				if provision.Protocol.ID() != id {
 					continue
 				}
-				if installed.Type != entity.Type {
-					return fmt.Errorf("Protocol %s is already provided by %s", id, installed.Type)
-				}
 				if err := runtimeprotocol.CheckProtocol(provision.Protocol, actual); err != nil {
+					if installed.Type != entity.Type {
+						return fmt.Errorf("Protocol %s is also provided by %s with a different shape: %w", id, installed.Type, err)
+					}
 					return err
 				}
 			}

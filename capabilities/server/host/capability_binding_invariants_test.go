@@ -197,3 +197,56 @@ func TestInvariantStatelessObjectActionsRespectCapabilityBindings(t *testing.T) 
 		t.Fatal("replay must restore stateless object actions and records")
 	}
 }
+
+func TestInvariantTwoDeclarativeImplementationsInOneAppAreToldApart(t *testing.T) {
+	const tenant, contract = "invariant-two-impls", "telephony.fax/1"
+	admin := runtimeprotocol.Seat{Subjects: []string{"admin"}, Member: platform.Member{ID: "admin", Tenant: tenant, Roles: map[string]string{controlowner.PlatformApp: controlowner.Admin}}}
+	live := newInvariantTenant(t, tenant, admin)
+	bind := func(provider string) *platform.Error {
+		t.Helper()
+		sub := live.submission(controlowner.SchemaProtocolBind, controlowner.ProtocolType, contract, map[string]any{"provider": provider})
+		sub.PrincipalId, sub.Authority = "admin", controlowner.PlatformApp
+		member, _ := live.Member("admin")
+		_, refusal := live.Submit(member, sub, invariantClock)
+		return refusal
+	}
+	for _, name := range []string{"fax", "efax"} {
+		object := invariantObject(name, strings.ToUpper(name))
+		object["protocols"] = []runtimeprotocol.ProtocolBinding{{Name: "telephony.fax", Version: 1, Actions: map[string]string{"send": "edit"}}}
+		live.accept(t, "build.object.create", build.ObjectType, strings.ToUpper(name), object)
+		live.accept(t, "build.object.publish", build.ObjectType, strings.ToUpper(name), map[string]any{})
+	}
+	providers := live.router().Providers(contract)
+	ids := []string{}
+	for _, p := range providers {
+		ids = append(ids, p.ID())
+	}
+	slices.Sort(ids)
+	want := []string{build.ID + "@invariantproject.efax", build.ID + "@invariantproject.fax"}
+	if !reflect.DeepEqual(ids, want) {
+		t.Fatalf("two record types implementing one contract in one app must be two implementations: %v", ids)
+	}
+	listed := slices.IndexFunc(live.router().Protocols(), func(p actions.ProtocolInfo) bool { return p.ID == contract })
+	if listed < 0 || !reflect.DeepEqual(slices.Sorted(slices.Values(live.router().Protocols()[listed].Providers)), want) {
+		t.Fatalf("the protocol listing names both implementations: %+v", live.router().Protocols())
+	}
+	if refusal := bind(build.ID + "@invariantproject.missing"); refusal == nil {
+		t.Fatal("binding an implementation that does not exist must be refused")
+	}
+	for _, chosen := range want {
+		if refusal := bind(chosen); refusal != nil {
+			t.Fatalf("binding %s: %s", chosen, refusal.Message)
+		}
+		bound, ok := live.router().Bound(contract)
+		if !ok || bound.ID() != chosen || build.ID+"@"+bound.EntityType() != chosen || bound.App() != build.ID {
+			t.Fatalf("binding %s chose %s (%s)", chosen, bound.ID(), bound.EntityType())
+		}
+		if info := live.router().Protocols()[listed]; info.Bound != chosen {
+			t.Fatalf("the listing shows %q bound, want %q", info.Bound, chosen)
+		}
+		replayed := live.restore(t, live.entries, admin)
+		if again, ok := replayed.router().Bound(contract); !ok || again.ID() != chosen {
+			t.Fatalf("replay must restore the chosen implementation %s", chosen)
+		}
+	}
+}

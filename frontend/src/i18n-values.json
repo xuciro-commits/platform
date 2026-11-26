@@ -961,5 +961,6 @@
   "Young adult": "青年",
   "Your active clearances": "当前账号已获许可",
   "Your active roles, access requests and temporary colleague delegations.": "查看你当前持有的角色、权限申请进度，或在休假交接时将角色临时委托给同事。",
-  "Youth": "青少年"
+  "Youth": "青少年",
+  "{implementation} in {app}": "{app} 的{implementation}"
 }

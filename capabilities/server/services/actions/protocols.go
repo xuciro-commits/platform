@@ -17,9 +17,20 @@ import (
 type Binding struct {
 	Provider  platform.Service
 	Provision platform.Provision
+	Qualified bool
 }
 
-func (b Binding) ID() string { return b.Provider.Manifest().ID }
+// ID names the implementation: the providing app, or app@type when that app has
+// more than one record type implementing the same contract.
+func (b Binding) ID() string {
+	if b.Qualified {
+		return b.App() + "@" + b.EntityType()
+	}
+	return b.App()
+}
+
+// App is the app that provides the implementation.
+func (b Binding) App() string { return b.Provider.Manifest().ID }
 
 func (b Binding) EntityType() string {
 	for _, schema := range b.Provision.Actions {
@@ -157,28 +168,42 @@ func (r Router) Bound(protocol string) (Binding, bool) {
 	if !ok {
 		return Binding{}, false
 	}
-	provider := r.Host.App(id)
+	app, typ, _ := strings.Cut(id, "@")
+	provider := r.Host.App(app)
 	if provider == nil {
 		return Binding{}, false
 	}
-	if !r.Host.OwnerActive(id) {
+	if !r.Host.OwnerActive(app) {
 		return Binding{Provider: provider}, true
 	}
-	for _, current := range provider.Manifest().Provides {
-		if current.Protocol.ID() == protocol {
-			return Binding{Provider: provider, Provision: current}, true
+	provisions := provisionsOf(provider, protocol)
+	for _, current := range provisions {
+		b := Binding{Provider: provider, Provision: current, Qualified: len(provisions) > 1}
+		if typ == "" || b.EntityType() == typ {
+			return b, true
 		}
 	}
 	return Binding{Provider: provider}, true
 }
 
+func provisionsOf(a platform.Service, protocol string) []platform.Provision {
+	var out []platform.Provision
+	for _, pv := range a.Manifest().Provides {
+		if pv.Protocol.ID() == protocol {
+			out = append(out, pv)
+		}
+	}
+	return out
+}
+
+// Providers lists every declarative implementation of the contract; an app with two
+// record types implementing it offers two, told apart by type.
 func (r Router) Providers(protocol string) []Binding {
 	var out []Binding
 	for _, a := range r.Host.LiveApps() {
-		for _, pv := range a.Manifest().Provides {
-			if pv.Protocol.ID() == protocol {
-				out = append(out, Binding{a, pv})
-			}
+		provisions := provisionsOf(a, protocol)
+		for _, pv := range provisions {
+			out = append(out, Binding{a, pv, len(provisions) > 1})
 		}
 	}
 	return out
@@ -242,7 +267,7 @@ func (r Router) ProtocolProvider(protocol string) (string, bool) {
 	if !ok {
 		return "", false
 	}
-	return b.ID(), true
+	return b.App(), true
 }
 
 func (r Router) Rebind(protocol, provider string) bool {
@@ -278,7 +303,7 @@ func (r Router) Invoke(c platform.Caller, protocol, action, id string, payload [
 	if pinned {
 		ok = false
 		for _, provider := range r.Providers(protocol) {
-			if provider.ID() == original[0] {
+			if provider.ID() == original[0] || !provider.Qualified && provider.App() == original[0] {
 				b, ok = provider, true
 				break
 			}
@@ -294,7 +319,7 @@ func (r Router) Invoke(c platform.Caller, protocol, action, id string, payload [
 		schema := b.Provision.Actions[action]
 		declared, _ := b.Provider.Manifest().Actions.Action(schema)
 		target := &pb.EntityRef{Type: declared.Target, Id: id}
-		called := platform.RouteCaller(c, b.ID())
+		called := platform.RouteCaller(c, b.App())
 		sub := &pb.Submission{TenantId: r.Tenant, PrincipalId: c.ID, Authority: r.Host.AuthorityOf(declared.Target),
 			Target: target, Schema: &pb.SchemaRef{Name: schema, Version: 1}, IdempotencyKey: key, CorrelationId: correlation, Payload: payload}
 		var record *pb.ChangeRecord
@@ -407,10 +432,10 @@ func (r Router) Query(c platform.Caller, protocol, read string, provider ...stri
 	}
 	var out []platform.ProviderResult
 	for _, b := range all {
-		if len(provider) > 0 && b.ID() != provider[0] {
+		if len(provider) > 0 && b.ID() != provider[0] && b.App() != provider[0] {
 			continue
 		}
-		called := platform.RouteCaller(c, b.ID())
+		called := platform.RouteCaller(c, b.App())
 		name, ok := b.Provision.Reads[read]
 		if !ok || !slices.Contains(b.Provision.Protocol.Reads, read) {
 			return nil, &platform.Error{Code: pb.ErrorCode_ERROR_CODE_NOT_FOUND}
@@ -419,7 +444,7 @@ func (r Router) Query(c platform.Caller, protocol, read string, provider ...stri
 		if err != nil {
 			return nil, err
 		}
-		out = append(out, platform.ProviderResult{Provider: b.ID(), Type: b.EntityType(), Result: result})
+		out = append(out, platform.ProviderResult{Provider: b.App(), Type: b.EntityType(), Result: result})
 	}
 	return out, nil
 }
@@ -429,7 +454,7 @@ func (r Router) BoundProvider(c platform.Caller, protocol string) (string, *plat
 		return "", &platform.Error{Code: pb.ErrorCode_ERROR_CODE_POLICY_DENIED}
 	}
 	if b, ok := r.Resolve(protocol); ok {
-		return b.ID(), nil
+		return b.App(), nil
 	}
 	return "", nil
 }
@@ -529,7 +554,8 @@ func (r Router) Protocols() []ProtocolInfo {
 	for _, a := range r.Host.LiveApps() {
 		for _, pv := range a.Manifest().Provides {
 			i := info(pv.Protocol)
-			i.Providers = append(i.Providers, a.Manifest().ID)
+			b := Binding{Provider: a, Provision: pv, Qualified: len(provisionsOf(a, pv.Protocol.ID())) > 1}
+			i.Providers = append(i.Providers, b.ID())
 		}
 	}
 	for _, a := range r.Host.LiveApps() {

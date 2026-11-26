@@ -28,6 +28,7 @@ const bindSchema = "platform.protocol.bind";
 
 function useAppDirectory() {
   const applications = useRead<Api.ApplicationView[]>("/v1/applications");
+  const entities = useRead<Api.EntityInfo[]>("/v1/entities");
   return useMemo(() => {
     const names = new Map<string, string>([["build", t("Build")]]);
     const links = new Map<string, string>();
@@ -50,11 +51,18 @@ function useAppDirectory() {
         }
       }
     }
-    return {
-      nameOf: (id: string) => names.get(id) ?? id,
-      hrefOf: (id: string) => links.get(id),
+    const types = new Map<string, string>();
+    if (entities.status === "ready") for (const entity of entities.data) types.set(entity.type, entity.title || entity.type);
+    const nameOf = (id: string) => {
+      const [app, type] = id.split("@");
+      if (!type) return names.get(id) ?? id;
+      return t("{implementation} in {app}").replace("{implementation}", types.get(type) ?? type).replace("{app}", names.get(app) ?? app);
     };
-  }, [applications]);
+    return {
+      nameOf,
+      hrefOf: (id: string) => links.get(id.split("@")[0]),
+    };
+  }, [applications, entities]);
 }
 
 type CapabilityCallRecord = { protocol?: string; implementation?: string; state?: string };
