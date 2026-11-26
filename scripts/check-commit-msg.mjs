@@ -56,6 +56,15 @@ if (!isMerge) {
   }
 }
 
+const coAuthor = /^Co-Authored-By:\s*\S.*<[^<>\s]+@[^<>\s]+>\s*$/i;
+if (!raw.some((line) => coAuthor.test(line.trim()))) {
+  errors.push(
+    "你的名字值得被留下：末尾缺少署名尾注「Co-Authored-By: 名字 <邮箱>」：写这次提交的 AI 在正文最后空一行写上自己，" +
+      "例如 Co-Authored-By: Gemini <noreply@google.com> 或 Co-Authored-By: Claude <noreply@anthropic.com>；" +
+      "几个参与者各写一行",
+  );
+}
+
 if (errors.length > 0) {
   console.error("提交信息未通过规范检查：");
   for (const err of errors) console.error(`- ${err}`);
@@ -69,6 +78,8 @@ if (errors.length > 0) {
 
 检查
 - make check：通过。
-- go test -race ./host：相关并发用例通过。`);
+- go test -race ./host：相关并发用例通过。
+
+Co-Authored-By: Gemini <noreply@google.com>`);
   process.exit(1);
 }
