@@ -66,6 +66,7 @@ git worktree add .build/studio -b studio main
 | `ask --to <名> --ref <任务号> 文字` | 开一个请求，打印请求号 R# |
 | `take R# 接口草图` | 接下请求；同时接的只有一个成功 |
 | `done R# --sha <main 上的提交> 怎么用` | 请求做完 |
+| `close R# 原因` | 不带提交结束请求（改派、不再需要）；提问方、接手方、lead、owner 能用 |
 | `lock <名>` / `unlock <名>` | 抢锁、放锁：`kernel`、`main`、`open-<号>`；lead 与 owner 能 `--force yes` 收回 |
 | `land --ref <任务号>` | 在自己的分支上：过 `make check`，快进合进 main，推送，通知所有人 |
 | `status` | 没完的请求、锁、最近十条事件、告警 |
@@ -76,7 +77,6 @@ git worktree add .build/studio -b studio main
 2. 每次提交之后 `inbox`。
 3. 宣布卡住或结束本轮之前 `inbox`。
 
-- Claude 会话可以让 Monitor 跑 `board.mjs watch`，工作中途就收到新事件。
 - 手上还有可做的任务就不结束本轮；卡住了换一个做。全做完才停。
 - 已经停下的 Agent 不会自己醒；负责人对它说“看板”，它就去读 `inbox`，负责人不用转述内容。
 - 看板是唯一的事实。Agent 分在不同的应用里跑（Claude、Gemini），会话之间的直接消息只用来叫醒，内容同时写在看板上。
@@ -88,6 +88,7 @@ git worktree add .build/studio -b studio main
 - 不进别人的工作树。交出方把未提交的改动提交成 WIP，建 `handoff/<任务号>` 分支指着它，自己的分支回到 main 接着干别的；
   在看板写明交出的路径，之后不再改它们。
 - 接手方 `take` 请求并 `lock <任务号>`，在自己的树里合入 `handoff/<任务号>`；land 之后删掉这条分支。
+- 跑不了浏览器的车道（Gemini 的沙盒拉不起 Chrome）照这样把浏览器验收交出；交给谁由 lead 按各车道的负荷定，不默认 fire。
 - 两个任务的“能改”重叠时，lead 派任务时写进依赖，定谁先 land；临时撞上的用 `lock shared-<区域>`，例如 `shared-official-spec`。
 - 每条车道手上至少排着下一项任务；车道要下一项时，lead 在同一轮回。
 - 改了大家共用的工具与环境（连接器、shell、端口）的人，在看板写清怎样确认自己用上了新版，lead 核对旧进程确实换掉了。
@@ -138,7 +139,6 @@ lead 每轮读看板时，也找协同里的问题：等错了人、两人做同
 - `frontend/src/i18n/*.json` 与 `i18n.ts`：两边新增的词条都留下。
 - `docs/plan.md`、`docs/roadmap.md`、本文件：只有 lead 改；执行者要改，留言给 lead。
 
-- lead 在主目录的 main 上直接提交并推送；它的提交也会让别人的 land 先 rebase。
 - main 变红（检查不过）时，谁先发现谁在看板 `say --to all --kind block`，fire 先修。
 
 ## 负责人的想法

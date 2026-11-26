@@ -47,7 +47,7 @@
 |---|---|---|---|
 | 记录：列表、记录页、行内编辑、视图 | 产品级 | `pages/RecordList.tsx`、`RecordPage.tsx`；records 32 项 | — |
 | CRM 包 | 产品级 | crm 20 项、official 4 项 | 升级夹具：kit-1 |
-| 宿主：接受路径、重放、内存与文件存储 | 能用 | `capabilities/server/kernel`；十三组内核不变量 | 重启与恢复：3.1c、3.1d（ship） |
+| 宿主：接受路径、重放、内存与文件存储 | 能用 | `capabilities/server/kernel`；十三组内核不变量 | 3.1c、3.1d 宿主侧已合入，浏览器验收：R5 |
 | PostgreSQL 存储 | 能用 | 3.1a、3.1b；trunk-pg 只跑过 official、marketplace | 全量：fire-1 |
 | 格式纪元冻结 | 无 | `make check` 没有这条核对 | 3.4a，B 级：lead-2 |
 | 构建：类型、字段、状态、动作、发布 | 能用 | `services/ontology`；builder 12 项 | 条件与表达式只能手写：studio-3 |
@@ -61,7 +61,7 @@
 | 导入导出 | 能用 | `pages/ImportWizard.tsx`、`objects/record_import.go`；crm “import” | 客户规模与故障注入：3.4b（ship） |
 | 租户、成员、登录、设置、词汇 | 能用 | `apps/admin`；workspace 17 项 | 自助注册：阶段 4 |
 | 主数据：geo、party、uom | 能用 | marketplace “publisher tenant: a master data”；K42、K43 | party 结构化地址：kit-2 |
-| 能力：契约、绑定、连接器 | 能用 | `pages/Capabilities.tsx`；workspace “capabilities”；K40、K41、K45、K46 | 模板、Basic 鉴权、签名与 trunk：kit-3 |
+| 能力：契约、绑定、连接器 | 能用 | `pages/Capabilities.tsx`；workspace “capabilities”；connector 1 项（内存与 pg）；K40、K41、K45、K46 | 商业供应商的适配：等客户选定供应商 |
 | 电话 | 能用 | `capabilities/voice`、`pages/CallDock.tsx`；phone 3 项、`make test-voice` | 本机外放、TLS 与 NAT：等客户要电话 |
 | 自动化与流程 | 占位 | `services/automate` 约 9 千行；`apps/logic` 只是列表；没有 trunk | 阶段 5 的 `FlowCanvas` |
 | 文档渲染、打印 | 无 | — | B4，第一个客户提出打印时排 |
@@ -197,7 +197,7 @@
   - 已做：来电先响联系人负责人，超时再响给所有坐席；中继账号从平台的线路读，改动热更新，不再重启网关。两项还没在真手机上实测。
   - 已做：同一契约的多个声明式实现各有身份，“管理 → 能力”里能在其间选（B2c 挪来）。
   - 之后：TLS 与 SRTP、公网与 NAT、网关改用 B4 的受管服务注册取代服务席位、多中继选线、录音。
-  - 外接云通话供应商时平台连接器还缺：请求体按模板组装、Basic 鉴权、请求签名。
+  - 已做（kit-3）：连接器请求体按模板组装、Basic 鉴权、HMAC-SHA256 签名；结果不明由人重试或标失败；trunk `connector` 用本机 HTTPS 桩，内存与 pg 都过。
 - **B4 受管服务。** 注册、证书、探活、预留与结算；第二个探针 `document.render/1`：把单据渲染成 PDF（无头浏览器或 Typst）。
 - **B5 计量与配额**，并入阶段 4。
 

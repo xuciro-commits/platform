@@ -131,6 +131,16 @@ switch (command) {
     post(field(join(dir, "00-open.md"), "from"), "done", words[0], `${flags.sha} ${text(1)}`);
     break;
   }
+  case "close": {
+    const dir = request(words[0]);
+    const from = field(join(dir, "00-open.md"), "from");
+    const by = field(join(dir, "01-taken.md"), "by");
+    if (![from, by, "lead", "owner"].includes(as)) fail(`only ${from}, ${by ?? "the taker"}, lead or owner may close ${words[0]}`);
+    if (!text(1)) fail("say why it ends without a commit");
+    if (!create(join(dir, "02-done.md"), `by: ${as}\nclosed: ${now()}\n\n${text(1)}\n`)) fail(`${words[0]} is already done`);
+    post("all", "close", words[0], text(1));
+    break;
+  }
   case "show": {
     const dir = request(words[0]);
     for (const name of readdirSync(dir).sort()) console.log(`--- ${name}\n${readFileSync(join(dir, name), "utf8")}`);
@@ -206,6 +216,7 @@ switch (command) {
   ask --to <agent> [--ref task] <text>               open a request; prints its id
   take <R#> <interface sketch>       take a request (only one taker wins)
   done <R#> --sha <commit> <how to use it>
+  close <R#> <why>                   end a request without a commit (asker, taker, lead or owner)
   show <R#>                          the request and its answers
   lock <name> [--ref id]             kernel, main, shared-<area> or a task id; unlock <name> [--force yes]
   land [--ref task] [--push no]      make check, fast-forward main to your branch, push, announce
