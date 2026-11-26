@@ -147,6 +147,8 @@ export type AccessRequest = {
   project?: string;
   app?: string;
   role?: string;
+  unit?: string;
+  structure?: string;
   reason: string;
   until?: string;
   state: string;
@@ -399,6 +401,7 @@ export type AppPermissions = {
   reads: string[];
   everyone: string[];
   roles: RolePermissions[];
+  objects?: ObjectPermissions[];
 };
 
 export type AppSettings = {
@@ -2126,6 +2129,8 @@ export type Explanation = {
   app: string;
   roles: string[];
   allowed: string[];
+  grants?: Grant[];
+  markings?: string[];
   verdict: Verdict;
 };
 
@@ -2228,6 +2233,13 @@ export type FieldIssue = {
   message: string;
   path: string[];
   relatedPaths?: string[][];
+};
+
+export type FieldPermission = {
+  name: string;
+  title: string;
+  read?: string[];
+  write?: string[];
 };
 
 export type FieldRef = {
@@ -3012,6 +3024,8 @@ export type MemberView = {
   timezone?: string;
   subjects: string[];
   profile: Profile;
+  scheduledGrants?: Grant[];
+  expiredGrants?: Grant[];
 };
 
 export type Membership = {
@@ -3297,6 +3311,19 @@ export type ObjectChange = {
   change: "added" | "removed" | "changed";
   from?: unknown;
   to?: unknown;
+};
+
+export type ObjectPermissions = {
+  type: string;
+  title: string;
+  defaultScope?: string;
+  roleScopes?: Record<string, string>;
+  ownerField?: string;
+  unitField?: string;
+  structure?: string;
+  participants?: boolean;
+  through?: boolean;
+  fields?: FieldPermission[];
 };
 
 export type ObjectPublishField = {
@@ -4507,6 +4534,11 @@ export type ProjectPerson = {
   avatar?: string;
 };
 
+export type ProjectSummary = {
+  id: string;
+  title: string;
+};
+
 export type PromotionResult = {
   from: string;
   to: string;
@@ -5545,6 +5577,7 @@ export type TenantRecord = {
   name: string;
   settings: Record<string, string>;
   apps: string[];
+  projects?: ProjectSummary[];
   members: number;
   status: string;
   since?: string;

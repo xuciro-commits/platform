@@ -2,14 +2,18 @@ package host
 
 import (
 	"platformserver/kernel/protocol"
+	"platformserver/kernel/transport"
 	"platformserver/services/actions"
+	"platformserver/services/ontology"
 	"slices"
 	"testing"
 
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
 	"platformserver/platform"
 	build "platformserver/services/resources/authoring"
+	"platformserver/services/security"
 	controlowner "platformserver/services/security/control"
+	enterprisemodel "platformserver/services/security/organization"
 	"platformserver/services/work"
 )
 
@@ -107,5 +111,155 @@ func TestInvariantAccessRequestAppliesGrantOnApproval(t *testing.T) {
 		return item.ID == "REQ2" && item.State == "approved" && item.DecidedBy == "request-admin"
 	}) {
 		t.Fatalf("role request was not retained: %+v", requests)
+	}
+}
+
+func TestInvariantRebacUnitScopedRequestUntilOverrideAndLifecycle(t *testing.T) {
+	seed := platform.OrgSeed{
+		Structures: []platform.Structure{{ID: "reporting", Name: "Reporting", Kind: "reporting"}},
+		Units:      []platform.Unit{{ID: "WEST", Name: "West Region", Kind: "department"}},
+		Edges:      []platform.Edge{{Structure: "reporting", Unit: "WEST"}},
+	}
+	requester := protocol.Seat{Subjects: []string{"rep-1"}, Member: platform.Member{ID: "rep-1"}}
+	colleague := protocol.Seat{Subjects: []string{"rep-2"}, Member: platform.Member{ID: "rep-2"}}
+	adminSeat := protocol.Seat{Subjects: []string{"admin-1"}, Member: platform.Member{ID: "admin-1", Roles: map[string]string{"platform": "admin"}}}
+	tn := newInvariantTenantWithApps(
+		t,
+		"rebac-lifecycle",
+		[]platform.Service{
+			work.New("rebac-lifecycle", actions.NewAuthority),
+			enterprisemodel.New("rebac-lifecycle", actions.NewAuthority, seed),
+		},
+		requester, colleague, adminSeat,
+	)
+
+	tn.accept(t, protocol.AppType+".create", protocol.AppType, "CRM-PROJ", map[string]any{"name": "crm", "title": "CRM"})
+	tn.accept(t, "build.object.create", build.ObjectType, "DEAL", map[string]any{
+		"project": "CRM-PROJ",
+		"name":    "deal",
+		"title":   "Deal",
+		"scope":   map[string]any{"owner": "owner", "unit": "unit", "structure": "reporting"},
+		"fields": []ontology.Field{
+			{Name: "title", Title: "Title", Type: "text", Required: true},
+			{Name: "owner", Title: "Owner", Type: "member"},
+			{Name: "unit", Title: "Unit", Type: "reference", Ref: enterprisemodel.ElementType},
+			{Name: "margin", Title: "Margin", Type: "decimal", Read: []string{"salesmanager"}, Write: []string{"salesmanager"}},
+		},
+		"access": []ontology.Access{
+			{Role: "salesrep", Read: "own", Create: true, Edit: true},
+			{Role: "salesmanager", Read: "below", Create: true, Edit: true, Archive: true},
+		},
+	})
+	tn.accept(t, "build.object.publish", build.ObjectType, "DEAL", nil)
+
+	infos := tn.Apps()
+	if !slices.ContainsFunc(infos, func(info transport.AppInfo) bool {
+		return info.ID == "crm" && slices.Contains(info.Roles, "salesmanager") && slices.Contains(info.Roles, "salesrep")
+	}) {
+		t.Fatalf("declarative space crm was not surfaced in AppInfos: %+v", infos)
+	}
+
+	adminMember, _ := tn.Member("admin-1")
+	customSub := tn.submission(protocol.SchemaRoleSave, protocol.RoleType, "deal-creator", map[string]any{
+		"app":     "crm",
+		"title":   "Deal creator",
+		"actions": []string{"crm.deal.create"},
+	})
+	customSub.Authority, customSub.PrincipalId = "platform", "admin-1"
+	if _, refusal := tn.Submit(adminMember, customSub, invariantClock); refusal != nil {
+		t.Fatalf("save declarative custom role: %s: %s", refusal.Code, refusal.Message)
+	}
+
+	rawPerms, refusal := tn.read(adminMember, "permissions")
+	if refusal != nil {
+		t.Fatalf("read permissions: %v", refusal)
+	}
+	perms := rawPerms.([]security.AppPermissions)
+	crmPermsIdx := slices.IndexFunc(perms, func(entry security.AppPermissions) bool { return entry.App == "crm" })
+	if crmPermsIdx < 0 {
+		t.Fatalf("crm missing from permissions report: %+v", perms)
+	}
+	crmPerms := perms[crmPermsIdx]
+	if !slices.ContainsFunc(crmPerms.Roles, func(r security.RolePermissions) bool { return r.Role == "deal-creator" }) {
+		t.Fatalf("custom role deal-creator missing from crm permissions: %+v", crmPerms.Roles)
+	}
+	if len(crmPerms.Objects) != 1 || crmPerms.Objects[0].RoleScopes["salesmanager"] != "below" || len(crmPerms.Objects[0].Fields) == 0 {
+		t.Fatalf("crm object ReBAC scope matrix incomplete: %+v", crmPerms.Objects)
+	}
+
+	rep1, _ := tn.Member("rep-1")
+	reqSub := tn.submission(controlowner.SchemaAccessRequest, controlowner.AccessRequestType, "REQ-UNIT-1", map[string]any{
+		"scope":     "role",
+		"app":       "crm",
+		"role":      "salesmanager",
+		"unit":      "WEST",
+		"structure": "reporting",
+		"until":     "2027-06-01",
+		"reason":    "Cover West pipeline review",
+	})
+	reqSub.Authority, reqSub.PrincipalId = "platform", "rep-1"
+	if _, refusal := tn.Submit(rep1, reqSub, invariantClock); refusal != nil {
+		t.Fatalf("unit-scoped access request refused: %s: %s", refusal.Code, refusal.Message)
+	}
+
+	approveSub := tn.submission(controlowner.SchemaAccessApprove, controlowner.AccessRequestType, "REQ-UNIT-1", map[string]any{
+		"comment": "Shortened to end of quarter",
+		"until":   "2027-05-01",
+	})
+	approveSub.Authority, approveSub.PrincipalId = "platform", "admin-1"
+	if _, refusal := tn.Submit(adminMember, approveSub, invariantClock); refusal != nil {
+		t.Fatalf("approve with until override refused: %s: %s", refusal.Code, refusal.Message)
+	}
+
+	rep1After, _ := tn.Member("rep-1")
+	if !slices.ContainsFunc(rep1After.Grants, func(g platform.Grant) bool {
+		return g.App == "crm" && g.Role == "salesmanager" && g.Unit == "WEST" && g.Structure == "reporting" && g.Until == "2027-05-01"
+	}) {
+		t.Fatalf("approved unit-scoped grant did not preserve unit and overridden until: %+v", rep1After.Grants)
+	}
+
+	delSub := tn.submission(protocol.SchemaDelegate, controlowner.MemberType, "rep-2", map[string]any{
+		"app":    "crm",
+		"until":  "2027-04-15",
+		"reason": "Vacation handover",
+	})
+	delSub.Authority, delSub.PrincipalId = "platform", "rep-1"
+	if _, refusal := tn.Submit(rep1After, delSub, invariantClock); refusal != nil {
+		t.Fatalf("delegate declarative role refused: %s: %s", refusal.Code, refusal.Message)
+	}
+	rep2After, _ := tn.Member("rep-2")
+	if !rep2After.Holds("crm", "salesmanager") {
+		t.Fatalf("colleague did not receive delegated crm role: %+v", rep2After.Grants)
+	}
+
+	undelSub := tn.submission(protocol.SchemaUndelegate, controlowner.MemberType, "rep-2", map[string]any{"app": "crm"})
+	undelSub.Authority, undelSub.PrincipalId = "platform", "rep-1"
+	if _, refusal := tn.Submit(rep1After, undelSub, invariantClock); refusal != nil {
+		t.Fatalf("undelegate refused: %s: %s", refusal.Code, refusal.Message)
+	}
+	rep2Ended, _ := tn.Member("rep-2")
+	if rep2Ended.Holds("crm", "salesmanager") {
+		t.Fatalf("undelegate did not end delegated role: %+v", rep2Ended.Grants)
+	}
+
+	schedSub := tn.submission(controlowner.SchemaGrant, controlowner.MemberType, "rep-2", map[string]any{
+		"app":    "crm",
+		"role":   "deal-creator",
+		"from":   "2027-07-01",
+		"until":  "2027-08-01",
+		"reason": "Summer launch",
+	})
+	schedSub.Authority, schedSub.PrincipalId = "platform", "admin-1"
+	if _, refusal := tn.Submit(adminMember, schedSub, invariantClock); refusal != nil {
+		t.Fatalf("scheduled grant refused: %s: %s", refusal.Code, refusal.Message)
+	}
+	rawMembers, refusal := tn.read(adminMember, "members")
+	if refusal != nil {
+		t.Fatalf("read members: %v", refusal)
+	}
+	memberViews := rawMembers.([]protocol.MemberView)
+	rep2ViewIdx := slices.IndexFunc(memberViews, func(v protocol.MemberView) bool { return v.ID == "rep-2" })
+	if rep2ViewIdx < 0 || len(memberViews[rep2ViewIdx].ScheduledGrants) != 1 || memberViews[rep2ViewIdx].ScheduledGrants[0].Role != "deal-creator" {
+		t.Fatalf("scheduled grant missing from MemberView: %+v", memberViews[rep2ViewIdx])
 	}
 }

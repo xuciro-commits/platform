@@ -98,7 +98,8 @@ func ConsoleActions(ownerActions []platform.Action) *platform.Catalog {
 		{Schema: SchemaRevoke, Target: MemberType, Capability: "members", Title: "Revoke role",
 			Description: "Remove a member's role in an app: one role, or every role held there.",
 			Payload: []platform.Field{app, {Name: "role", Type: "string", Description: "Only this role; every role when empty"},
-				{Name: "unit", Type: "string", Description: "Only the grant within this unit"}}, Roles: admin},
+				{Name: "unit", Type: "string", Description: "Only the grant within this unit"},
+				{Name: "by", Type: "string", Description: "Only the grant from this source"}}, Roles: admin},
 	}
 	actions = append(actions, profileActions()...)
 	actions = append(actions, lifecycleActions()...)
@@ -462,6 +463,8 @@ func (d *Console) Submit(c platform.Caller, s *pb.Submission, now time.Time) (*p
 				apply, err = d.ConsolePolicies.PrepareAccess(c, s, slices.Collect(maps.Keys(d.members)))
 			case s.GetSchema().GetName() == runtimeprotocol.SchemaDelegate:
 				apply, err = d.decideDelegate(c, s)
+			case s.GetSchema().GetName() == runtimeprotocol.SchemaUndelegate:
+				apply, err = d.decideUndelegate(c, s)
 			case slices.Contains([]string{SchemaInvite, SchemaJoin, SchemaMemberSuspend, SchemaMemberResume, SchemaOffboard}, s.GetSchema().GetName()):
 				apply, err = d.decideLifecycle(c, s)
 			default:
@@ -553,8 +556,8 @@ func (d *Console) Submit(c platform.Caller, s *pb.Submission, now time.Time) (*p
 func (d *Console) decideMember(c platform.Caller, s *pb.Submission) (func(*pb.ChangeRecord), *platform.Error) {
 	invalid := &platform.Error{Code: pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT}
 	var p struct {
-		Subject, App, Role, Unit, Structure, From, Until, Reason string
-		Agent                                                    bool
+		Subject, App, Role, Unit, Structure, From, Until, Reason, By string
+		Agent                                                        bool
 	}
 	if json.Unmarshal(s.GetPayload(), &p) != nil {
 		return nil, invalid
@@ -585,7 +588,7 @@ func (d *Console) decideMember(c platform.Caller, s *pb.Submission) (func(*pb.Ch
 		return func(*pb.ChangeRecord) {
 			d.migrateGrants(m)
 			m.Grants = slices.DeleteFunc(m.Grants, func(g platform.Grant) bool {
-				return g.App == p.App && (p.Role == "" || g.Role == p.Role) && (p.Unit == "" || g.Unit == p.Unit)
+				return g.App == p.App && (p.Role == "" || g.Role == p.Role) && (p.Unit == "" || g.Unit == p.Unit) && (p.By == "" || g.By == p.By)
 			})
 			d.deriveRoles(m, today(m))
 		}, nil
@@ -675,7 +678,19 @@ func (d *Console) Read(c platform.Caller, name string) (any, *platform.Error) {
 	defer d.mu.Unlock()
 	out := []runtimeprotocol.MemberView{}
 	for _, m := range d.members {
-		v := runtimeprotocol.MemberView{Member: d.currentMember(m), Subjects: []string{}, Profile: d.account(m.ID, def).Profile}
+		current := d.currentMember(m)
+		day := current.Today(time.Now())
+		v := runtimeprotocol.MemberView{Member: current, Subjects: []string{}, Profile: d.account(m.ID, def).Profile}
+		if m.Active() {
+			all := append(slices.Clone(m.Grants), d.ConsolePolicies.TeamGrants(m.ID)...)
+			for _, g := range all {
+				if g.From > day && (g.Until == "" || g.From < g.Until) {
+					v.ScheduledGrants = append(v.ScheduledGrants, g)
+				} else if g.Until != "" && day >= g.Until {
+					v.ExpiredGrants = append(v.ExpiredGrants, g)
+				}
+			}
+		}
 		for subject, id := range d.subjects {
 			if id == m.ID {
 				v.Subjects = append(v.Subjects, subject)

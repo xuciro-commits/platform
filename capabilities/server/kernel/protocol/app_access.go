@@ -80,11 +80,17 @@ type Account struct {
 	Subjects []string `json:"subjects"`
 }
 
+type ProjectSummary struct {
+	ID    string `json:"id"`
+	Title string `json:"title"`
+}
+
 type TenantRecord struct {
 	ID       string            `json:"id"`
 	Name     string            `json:"name"`
 	Settings map[string]string `json:"settings"`
 	Apps     []string          `json:"apps"`
+	Projects []ProjectSummary  `json:"projects,omitempty"`
 	Members  int               `json:"members"`
 	Status   string            `json:"status"`
 	Since    time.Time         `json:"since,omitempty"`
@@ -174,8 +180,10 @@ type LoginIdentity struct {
 
 type MemberView struct {
 	platform.Member
-	Subjects []string `json:"subjects"`
-	Profile  Profile  `json:"profile"`
+	Subjects        []string         `json:"subjects"`
+	Profile         Profile          `json:"profile"`
+	ScheduledGrants []platform.Grant `json:"scheduledGrants,omitempty"`
+	ExpiredGrants   []platform.Grant `json:"expiredGrants,omitempty"`
 }
 
 type IdentitySessions interface {
@@ -251,6 +259,9 @@ func AccessActions() []platform.Action {
 			Description: "Give another member the roles you hold in an app, until a day: for an absence or a handover. Only what you hold yourself.",
 			Payload: []platform.Field{{Name: "app", Type: "string", Required: true, Description: "App ID"}, {Name: "until", Type: "string", Required: true, Description: "Until this day, exclusive (YYYY-MM-DD)"},
 				{Name: "reason", Type: "string"}}, Roles: []string{platform.AnyMember}},
+		{Schema: SchemaUndelegate, Target: "platform.member", Capability: "members", Title: "End role delegation",
+			Description: "End a delegation you previously granted to this member in an app.",
+			Payload:     []platform.Field{{Name: "app", Type: "string", Required: true, Description: "App ID"}}, Roles: []string{platform.AnyMember}},
 	}
 }
 
@@ -277,6 +288,7 @@ const (
 	SchemaTeamSave   = "platform.team.save"
 	SchemaTeamRemove = "platform.team.remove"
 	SchemaDelegate   = "platform.member.delegate"
+	SchemaUndelegate = "platform.member.undelegate"
 )
 
 const Auditor = "auditor"
@@ -334,12 +346,33 @@ func ApplicationRoles(hosted func(string) platform.Service, app string) []string
 		return nil
 	}
 	roles := []string{}
-	for _, entity := range owner.Manifest().Entities {
+	mf := owner.Manifest()
+	for _, entity := range mf.Entities {
 		if space, _, _ := strings.Cut(entity.Type, "."); space == app {
 			for role := range entity.Scope.Levels {
 				if role != "builder" && !slices.Contains(roles, role) {
 					roles = append(roles, role)
 				}
+			}
+		}
+	}
+	for _, act := range mf.Actions.All() {
+		if space, _, ok := strings.Cut(act.Target, "."); ok && space == app {
+			for _, role := range act.Roles {
+				if role != "builder" && role != platform.AnyMember && !slices.Contains(roles, role) {
+					roles = append(roles, role)
+				}
+			}
+		}
+	}
+	for _, role := range mf.Actions.Roles() {
+		if !mf.Actions.Custom(role) || slices.Contains(roles, role) {
+			continue
+		}
+		for _, act := range mf.Actions.ForRoles([]string{role}) {
+			if space, _, ok := strings.Cut(act.Target, "."); ok && space == app && !slices.Contains(act.Roles, platform.AnyMember) {
+				roles = append(roles, role)
+				break
 			}
 		}
 	}

@@ -169,6 +169,8 @@ func checkAction(c platform.Caller, manifest platform.Manifest, action platform.
 			result.Message = refusal.Message
 			return result
 		}
+		result.Allowed = true
+		return result
 	}
 	for _, entity := range manifest.Entities {
 		if entity.Type != action.Target || entity.Lifecycle == nil {

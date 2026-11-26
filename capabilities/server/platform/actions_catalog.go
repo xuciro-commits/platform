@@ -67,7 +67,7 @@ func NewCatalog(actions ...Action) *Catalog {
 }
 
 func (c *Catalog) CloneActions() *Catalog {
-	return &Catalog{actions: c.All(), disabled: map[string]bool{}}
+	return c.WithActions(c.All())
 }
 
 func (c *Catalog) WithActions(actions []Action) *Catalog {

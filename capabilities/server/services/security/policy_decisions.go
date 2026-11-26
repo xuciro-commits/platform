@@ -8,6 +8,7 @@ import (
 
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
 	"slices"
+	"strings"
 	"sync"
 	"time"
 )
@@ -31,6 +32,20 @@ func (d *Policies) SnapshotState() platform.AuthorizationState {
 	defer d.mu.Unlock()
 	return platform.AuthorizationState{Roles: maps.Clone(d.roles), Policies: maps.Clone(d.policies), Teams: maps.Clone(d.teams), Projects: maps.Clone(d.projects), Markings: maps.Clone(d.markings)}
 }
+func (d *Policies) resolveActionsOwner(pApp string) (platform.Service, bool) {
+	if d.host == nil || pApp == "" {
+		return nil, false
+	}
+	if app := d.host.App(pApp); app != nil {
+		return app, false
+	}
+	owner := d.host.App(platform.OwnerOfType(pApp + "."))
+	if owner != nil && owner.Manifest().ID != pApp {
+		return owner, true
+	}
+	return nil, false
+}
+
 func (d *Policies) Restore(state platform.AuthorizationState) {
 	d.mu.Lock()
 	defer d.mu.Unlock()
@@ -38,7 +53,7 @@ func (d *Policies) Restore(state platform.AuthorizationState) {
 		for id, role := range d.roles {
 			next := state.Roles[id]
 			if next == nil || next.App != role.App {
-				if app := d.host.App(role.App); app != nil {
+				if app, _ := d.resolveActionsOwner(role.App); app != nil {
 					app.Manifest().Actions.DefineRole(id, nil)
 				}
 			}
@@ -96,12 +111,13 @@ func (d *Policies) decideAccess(c platform.Caller, s *pb.Submission, members []s
 		if json.Unmarshal(s.GetPayload(), &p) != nil || len(p.Actions) == 0 {
 			return nil, invalid
 		}
-		app := d.host.App(p.App)
-		if app == nil || !c.Replaying && slices.Contains(app.Manifest().Actions.Roles(), id) && !app.Manifest().Actions.Custom(id) {
+		app, spaceScoped := d.resolveActionsOwner(p.App)
+		if app == nil || !c.Replaying && slices.Contains(protocol.ApplicationRoles(d.host.App, p.App), id) && !app.Manifest().Actions.Custom(id) {
 			return nil, invalid
 		}
 		for _, schema := range p.Actions {
-			if _, own := app.Manifest().Actions.Action(schema); !own {
+			act, own := app.Manifest().Actions.Action(schema)
+			if !own || spaceScoped && !strings.HasPrefix(act.Target, p.App+".") {
 				return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "No action {action}", schema)
 			}
 		}
@@ -119,7 +135,7 @@ func (d *Policies) decideAccess(c platform.Caller, s *pb.Submission, members []s
 		}
 		return func(*pb.ChangeRecord) {
 			delete(d.roles, id)
-			if app := d.host.App(r.App); app != nil && !c.Staging() {
+			if app, _ := d.resolveActionsOwner(r.App); app != nil && !c.Staging() {
 				app.Manifest().Actions.DefineRole(id, nil)
 			}
 		}, nil
@@ -216,7 +232,7 @@ func (d *Policies) applyAccess() {
 		a.Manifest().Actions.UsePolicies(d.activePolicies)
 	}
 	for _, r := range d.roles {
-		if app := d.host.App(r.App); app != nil {
+		if app, _ := d.resolveActionsOwner(r.App); app != nil {
 			app.Manifest().Actions.DefineRole(r.ID, r.Actions)
 		}
 	}

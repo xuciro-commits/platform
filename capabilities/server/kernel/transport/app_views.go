@@ -3,8 +3,10 @@ package transport
 import (
 	"cmp"
 	"encoding/json"
+	"maps"
 	"platformserver/kernel/protocol"
 	"slices"
+	"strings"
 
 	"platformserver/platform"
 )
@@ -31,11 +33,39 @@ type AppInfo struct {
 	Interfaces   []platform.Interface      `json:"interfaces"`
 }
 
+func spaceTitle(space string) string {
+	switch space {
+	case "crm":
+		return "CRM"
+	case "hr", "hr-core":
+		return "HR"
+	case "ai":
+		return "AI"
+	case "uom":
+		return "Units of measure"
+	case "geo":
+		return "Places"
+	case "party":
+		return "Business partners"
+	}
+	if space == "" {
+		return ""
+	}
+	return strings.ToUpper(space[:1]) + space[1:]
+}
+
 func AppEntries(manifests []platform.Manifest, roles map[string]string) []AppEntry {
 	out := []AppEntry{}
+	seen := map[string]bool{}
 	for _, m := range manifests {
+		seen[m.ID] = true
 		if role := roles[m.ID]; role != "" {
 			out = append(out, AppEntry{ID: m.ID, Title: cmp.Or(m.Title, m.ID), Role: role})
+		}
+	}
+	for _, app := range slices.Sorted(maps.Keys(roles)) {
+		if !seen[app] && roles[app] != "" {
+			out = append(out, AppEntry{ID: app, Title: spaceTitle(app), Role: roles[app]})
 		}
 	}
 	return out
@@ -43,7 +73,10 @@ func AppEntries(manifests []platform.Manifest, roles map[string]string) []AppEnt
 
 func AppInfos(manifests []platform.Manifest) []AppInfo {
 	out := []AppInfo{}
+	seen := map[string]bool{}
+	spaces := map[string][]string{}
 	for _, m := range manifests {
+		seen[m.ID] = true
 		info := AppInfo{ID: m.ID, Title: m.Title, Version: m.Version, Reads: append([]string{}, m.Reads...), Provides: []string{}, Consumes: []string{},
 			Roles: append([]string{}, m.AllRoles()...), Capabilities: append([]platform.CapabilityInfo{}, m.Actions.Capabilities()...), Inputs: []string{}, Uses: []string{}, Subscribes: append([]string{}, m.Subscribes...), Emits: append([]platform.EffectKind{}, m.Emits...), Interfaces: append([]platform.Interface{}, m.Interfaces...)}
 		for input, journaled := range m.Inputs {
@@ -60,8 +93,64 @@ func AppInfos(manifests []platform.Manifest) []AppInfo {
 			for _, used := range action.Uses {
 				info.Uses = append(info.Uses, action.Schema+" → "+used)
 			}
+			if space, _, ok := strings.Cut(action.Target, "."); ok && space != "" && space != m.ID {
+				for _, role := range action.Roles {
+					if role != "builder" && role != platform.AnyMember && !slices.Contains(spaces[space], role) {
+						spaces[space] = append(spaces[space], role)
+					}
+				}
+			}
+		}
+		for _, entity := range m.Entities {
+			space, _, ok := strings.Cut(entity.Type, ".")
+			if !ok || space == "" || space == m.ID {
+				continue
+			}
+			for role := range entity.Scope.Levels {
+				if role != "builder" && !slices.Contains(spaces[space], role) {
+					spaces[space] = append(spaces[space], role)
+				}
+			}
+		}
+		for _, role := range m.Actions.Roles() {
+			if !m.Actions.Custom(role) {
+				continue
+			}
+			spaceSet := map[string]bool{}
+			ownApp := false
+			for _, act := range m.Actions.ForRoles([]string{role}) {
+				if slices.Contains(act.Roles, platform.AnyMember) {
+					continue
+				}
+				if space, _, ok := strings.Cut(act.Target, "."); ok && space != "" && space != m.ID {
+					spaceSet[space] = true
+				} else {
+					ownApp = true
+				}
+			}
+			for space := range spaceSet {
+				if !slices.Contains(spaces[space], role) {
+					spaces[space] = append(spaces[space], role)
+				}
+			}
+			if !ownApp && len(spaceSet) > 0 {
+				info.Roles = slices.DeleteFunc(info.Roles, func(item string) bool { return item == role })
+			}
 		}
 		out = append(out, info)
+	}
+	for _, space := range slices.Sorted(maps.Keys(spaces)) {
+		if seen[space] || len(spaces[space]) == 0 {
+			continue
+		}
+		roles := slices.Clone(spaces[space])
+		slices.Sort(roles)
+		out = append(out, AppInfo{
+			ID: space, Title: spaceTitle(space), Version: "1",
+			Reads: []string{}, Roles: roles, Capabilities: []platform.CapabilityInfo{},
+			Inputs: []string{}, Uses: []string{}, Subscribes: []string{},
+			Provides: []string{}, Consumes: []string{}, Emits: []platform.EffectKind{}, Interfaces: []platform.Interface{},
+		})
 	}
 	return out
 }

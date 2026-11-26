@@ -29,6 +29,8 @@ type AccessRequest struct {
 	Project   string    `json:"project,omitempty"`
 	App       string    `json:"app,omitempty"`
 	Role      string    `json:"role,omitempty"`
+	Unit      string    `json:"unit,omitempty"`
+	Structure string    `json:"structure,omitempty"`
 	Reason    string    `json:"reason"`
 	Until     string    `json:"until,omitempty"`
 	State     string    `json:"state"`
@@ -49,12 +51,17 @@ func AccessRequestActions() []platform.Action {
 				{Name: "project", Type: "string", Description: "The project for a project request"},
 				{Name: "app", Type: "string", Description: "The app for a business-role request"},
 				{Name: "role", Type: "string", Description: "The requested project or business role"},
+				{Name: "unit", Type: "string", Description: "Optional organization unit scope for a role request"},
+				{Name: "structure", Type: "string", Description: "The organization structure of the requested unit"},
 				{Name: "reason", Type: "string", Required: true, Description: "Why you need this access"},
 				{Name: "until", Type: "string", Description: "Access ends before this day (YYYY-MM-DD); project requests default to 30 days"},
 			}, Roles: []string{platform.AnyMember}},
 		{Schema: SchemaAccessApprove, Target: AccessRequestType, Capability: "members", Title: "Approve access request",
 			Description: "Approve a pending access request and apply its grant in the same decision. Current project owners or platform administrators may approve; requesters cannot approve their own request.",
-			Payload:     []platform.Field{{Name: "comment", Type: "string"}}, Roles: []string{platform.AnyMember}},
+			Payload: []platform.Field{
+				{Name: "comment", Type: "string", Description: "Optional decision note"},
+				{Name: "until", Type: "string", Description: "Optional expiration day override (YYYY-MM-DD)"},
+			}, Roles: []string{platform.AnyMember}},
 		{Schema: SchemaAccessReject, Target: AccessRequestType, Capability: "members", Title: "Reject access request",
 			Description: "Reject a pending access request with an optional reason.",
 			Payload:     []platform.Field{{Name: "comment", Type: "string"}}, Roles: []string{platform.AnyMember}},
@@ -97,7 +104,7 @@ func (d *Console) decideAccessRequest(c platform.Caller, s *pb.Submission, now t
 	switch s.GetSchema().GetName() {
 	case SchemaAccessRequest:
 		var p struct {
-			Scope, Project, App, Role, Reason, Until string
+			Scope, Project, App, Role, Unit, Structure, Reason, Until string
 		}
 		if json.Unmarshal(s.GetPayload(), &p) != nil {
 			return nil, nil, invalid
@@ -115,9 +122,16 @@ func (d *Console) decideAccessRequest(c platform.Caller, s *pb.Submission, now t
 				return nil, nil, invalid
 			}
 		}
-		request := AccessRequest{Record: platform.Record{ID: id}, Requester: c.ID, Scope: p.Scope, Project: p.Project, App: p.App, Role: p.Role, Reason: reason, Until: p.Until, State: "pending"}
+		request := AccessRequest{
+			Record: platform.Record{ID: id}, Requester: c.ID, Scope: p.Scope,
+			Project: p.Project, App: p.App, Role: p.Role, Unit: p.Unit, Structure: p.Structure,
+			Reason: reason, Until: p.Until, State: "pending",
+		}
 		switch p.Scope {
 		case "project":
+			if p.Unit != "" || p.Structure != "" {
+				return nil, nil, invalid
+			}
 			project, found := d.project(p.Project)
 			if !found || !slices.Contains(requestableProjectRoles, p.Role) {
 				return nil, nil, invalid
@@ -136,13 +150,25 @@ func (d *Console) decideAccessRequest(c platform.Caller, s *pb.Submission, now t
 			if p.App == "" || p.Role == "" || p.App == PlatformApp && p.Role == Admin {
 				return nil, nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_POLICY_DENIED, "Platform administration is not requested through business access")
 			}
-			if p.Project != "" {
+			if p.Project != "" || p.Unit != "" && p.Structure == "" {
 				return nil, nil, invalid
 			}
 			if !slices.Contains(protocol.ApplicationRoles(d.host.App, p.App), p.Role) {
 				return nil, nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "Application {app} does not declare role {role}", p.App, p.Role)
 			}
-			if c.Holds(p.App, p.Role) {
+			alreadyHolds := false
+			if p.Unit == "" {
+				alreadyHolds = slices.ContainsFunc(c.Grants, func(g platform.Grant) bool {
+					return g.App == p.App && g.Role == p.Role && g.Unit == ""
+				}) || c.Holds(p.App, p.Role) && !slices.ContainsFunc(c.Grants, func(g platform.Grant) bool {
+					return g.App == p.App && g.Role == p.Role && g.Unit != ""
+				})
+			} else {
+				alreadyHolds = slices.ContainsFunc(c.Grants, func(g platform.Grant) bool {
+					return g.App == p.App && g.Role == p.Role && (g.Unit == "" || g.Unit == p.Unit)
+				})
+			}
+			if alreadyHolds {
 				return nil, nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "You already hold {role} in {app}", p.Role, p.App)
 			}
 			request.Approvers = d.platformApprovers(c.ID)
@@ -154,16 +180,23 @@ func (d *Console) decideAccessRequest(c platform.Caller, s *pb.Submission, now t
 		}
 		for _, existing := range d.accessRequests {
 			if existing.State == "pending" && existing.Requester == request.Requester && existing.Scope == request.Scope &&
-				existing.Project == request.Project && existing.App == request.App && existing.Role == request.Role {
+				existing.Project == request.Project && existing.App == request.App && existing.Role == request.Role && existing.Unit == request.Unit {
 				return nil, nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "Access request {request} is already pending", existing.ID)
 			}
 		}
 		request.Created, request.Changed = platform.Stamp{By: c.ID, At: now}, platform.Stamp{By: c.ID, At: now}
-		apply := func(*pb.ChangeRecord) { d.accessRequests[id] = &request }
+		apply := func(r *pb.ChangeRecord) {
+			request.Revision = r.GetRevision()
+			d.accessRequests[id] = &request
+		}
 		after := func(r *pb.ChangeRecord) *platform.Error {
+			untilNote := request.Until
+			if untilNote == "" {
+				untilNote = "no end"
+			}
 			return c.Assign(r, platform.Assignment{
 				Title: "Access request: " + accessRequestTarget(request),
-				Body:  fmt.Sprintf("%s requests %s. Reason: %s. Until: %s.", request.Requester, accessRequestTarget(request), request.Reason, request.Until),
+				Body:  fmt.Sprintf("%s requests %s. Reason: %s. Until: %s.", request.Requester, accessRequestTarget(request), request.Reason, untilNote),
 				Ref:   "read:access-requests",
 				To:    approversAsRecipients(request.Approvers),
 				Key:   "access:" + id,
@@ -178,7 +211,10 @@ func (d *Console) decideAccessRequest(c platform.Caller, s *pb.Submission, now t
 		if request.State != "pending" {
 			return nil, nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "Access request {request} is {state}", id, request.State)
 		}
-		var p struct{ Comment string }
+		var p struct {
+			Comment string `json:"comment"`
+			Until   string `json:"until"`
+		}
 		_ = json.Unmarshal(s.GetPayload(), &p)
 		next := *request
 		next.Approvers = slices.Clone(request.Approvers)
@@ -187,30 +223,47 @@ func (d *Console) decideAccessRequest(c platform.Caller, s *pb.Submission, now t
 				return nil, nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_POLICY_DENIED, "Only the requester may withdraw this request")
 			}
 			next.State, next.DecidedBy, next.DecidedAt, next.Outcome = "withdrawn", c.ID, now, strings.TrimSpace(p.Comment)
-			apply := func(*pb.ChangeRecord) { d.accessRequests[id] = &next }
+			next.Changed = platform.Stamp{By: c.ID, At: now}
+			apply := func(r *pb.ChangeRecord) {
+				next.Revision = r.GetRevision()
+				d.accessRequests[id] = &next
+			}
 			return apply, d.accessRequestClosed(c, next, now, request.Approvers), nil
 		}
 		if request.Requester == c.ID || !slices.Contains(d.accessApprovers(request), c.ID) {
 			return nil, nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_POLICY_DENIED, "Only a current eligible approver may decide this request")
 		}
-		if request.Until != "" && request.Until <= now.UTC().Format(time.DateOnly) {
+		today := now.UTC().Format(time.DateOnly)
+		if p.Until != "" {
+			if _, err := time.Parse(time.DateOnly, p.Until); err != nil || p.Until <= today {
+				return nil, nil, invalid
+			}
+			next.Until = p.Until
+		}
+		if next.Until != "" && next.Until <= today {
 			return nil, nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "Access request {request} has expired", id)
 		}
 		if s.GetSchema().GetName() == SchemaAccessReject {
 			next.State, next.DecidedBy, next.DecidedAt, next.Outcome = "rejected", c.ID, now, strings.TrimSpace(p.Comment)
-			apply := func(*pb.ChangeRecord) { d.accessRequests[id] = &next }
+			next.Changed = platform.Stamp{By: c.ID, At: now}
+			apply := func(r *pb.ChangeRecord) {
+				next.Revision = r.GetRevision()
+				d.accessRequests[id] = &next
+			}
 			return apply, d.accessRequestClosed(c, next, now, []string{request.Requester}), nil
 		}
-		grant, refusal := d.prepareAccessGrant(c, request)
+		grant, refusal := d.prepareAccessGrant(c, &next)
 		if refusal != nil {
 			return nil, nil, refusal
 		}
 		next.State, next.DecidedBy, next.DecidedAt, next.Outcome = "approved", c.ID, now, strings.TrimSpace(p.Comment)
+		next.Changed = platform.Stamp{By: c.ID, At: now}
 		next.Granted = accessRequestTarget(next)
 		apply := func(r *pb.ChangeRecord) {
 			if grant != nil {
 				grant(r)
 			}
+			next.Revision = r.GetRevision()
 			d.accessRequests[id] = &next
 		}
 		return apply, d.accessRequestClosed(c, next, now, []string{request.Requester}), nil
@@ -255,13 +308,14 @@ func (d *Console) prepareAccessGrant(c platform.Caller, request *AccessRequest) 
 		if request.Requester == "" || d.members[request.Requester] == nil || !d.members[request.Requester].Active() {
 			return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "The requester is no longer active")
 		}
-		if member := d.members[request.Requester]; member != nil && member.Holds(request.App, request.Role) {
-			return nil, nil
-		}
 		if !slices.Contains(protocol.ApplicationRoles(d.host.App, request.App), request.Role) {
 			return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "Application {app} no longer declares role {role}", request.App, request.Role)
 		}
-		payload, err := json.Marshal(map[string]string{"app": request.App, "role": request.Role, "until": request.Until, "reason": request.Reason})
+		payload, err := json.Marshal(map[string]string{
+			"app": request.App, "role": request.Role,
+			"unit": request.Unit, "structure": request.Structure,
+			"until": request.Until, "reason": request.Reason,
+		})
 		if err != nil {
 			return nil, &platform.Error{Code: pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT}
 		}
@@ -353,6 +407,9 @@ func approversAsRecipients(approvers []string) []platform.Recipient {
 func accessRequestTarget(request AccessRequest) string {
 	if request.Scope == "project" {
 		return "project " + request.Project + " as " + request.Role
+	}
+	if request.Unit != "" {
+		return request.App + " role " + request.Role + " in " + request.Unit
 	}
 	return request.App + " role " + request.Role
 }

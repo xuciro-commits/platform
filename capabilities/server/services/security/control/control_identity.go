@@ -316,6 +316,16 @@ func (d *Console) TenantRecord() runtimeprotocol.TenantRecord {
 		out.Name = d.tenant
 	}
 	out.Apps = append(out.Apps, h.AppIDs()...)
+	for _, project := range d.ConsolePolicies.ProjectViews() {
+		if !project.Archived {
+			title := project.Title
+			if title == "" {
+				title = project.ID
+			}
+			out.Projects = append(out.Projects, runtimeprotocol.ProjectSummary{ID: project.ID, Title: title})
+		}
+	}
+	slices.SortFunc(out.Projects, func(a, b runtimeprotocol.ProjectSummary) int { return strings.Compare(a.ID, b.ID) })
 	d.mu.Lock()
 	out.Members = len(d.members)
 	d.mu.Unlock()
@@ -525,10 +535,10 @@ func (d *Console) decideDelegate(c platform.Caller, s *pb.Submission) (func(*pb.
 	invalid := &platform.Error{Code: pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT}
 	var p struct{ App, Until, Reason string }
 	to := d.members[s.GetTarget().GetId()]
-	if json.Unmarshal(s.GetPayload(), &p) != nil || to == nil || to.ID == c.ID || d.host == nil || d.host.App(p.App) == nil {
+	if json.Unmarshal(s.GetPayload(), &p) != nil || to == nil || to.ID == c.ID || d.host == nil || runtimeprotocol.ApplicationRoles(d.host.App, p.App) == nil {
 		return nil, invalid
 	}
-	if _, err := time.Parse(time.DateOnly, p.Until); err != nil {
+	if _, err := time.Parse(time.DateOnly, p.Until); err != nil || p.Until <= c.Today(time.Now()) {
 		return nil, invalid
 	}
 	roles := c.RolesIn(p.App)
@@ -541,6 +551,29 @@ func (d *Console) decideDelegate(c platform.Caller, s *pb.Submission) (func(*pb.
 			to.Grants = slices.DeleteFunc(to.Grants, func(g platform.Grant) bool { return g.App == p.App && g.Role == role && g.By == c.ID })
 			to.Grants = append(to.Grants, platform.Grant{App: p.App, Role: role, Until: p.Until, By: c.ID, Reason: strings.TrimSpace("delegated " + p.Reason), At: r.GetRecordedTime().AsTime()})
 		}
+		d.deriveRoles(to, d.currentMember(to).Today(time.Now()))
+	}, nil
+}
+
+func (d *Console) decideUndelegate(c platform.Caller, s *pb.Submission) (func(*pb.ChangeRecord), *platform.Error) {
+	invalid := &platform.Error{Code: pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT}
+	var p struct{ App string }
+	to := d.members[s.GetTarget().GetId()]
+	if json.Unmarshal(s.GetPayload(), &p) != nil || to == nil || p.App == "" {
+		return nil, invalid
+	}
+	admin := c.Holds(PlatformApp, Admin)
+	hasOwn := slices.ContainsFunc(to.Grants, func(g platform.Grant) bool {
+		return g.App == p.App && (g.By == c.ID || admin && strings.HasPrefix(g.Reason, "delegated"))
+	})
+	if !hasOwn {
+		return nil, &platform.Error{Code: pb.ErrorCode_ERROR_CODE_NOT_FOUND}
+	}
+	return func(*pb.ChangeRecord) {
+		d.migrateGrants(to)
+		to.Grants = slices.DeleteFunc(to.Grants, func(g platform.Grant) bool {
+			return g.App == p.App && (g.By == c.ID || admin && g.By != "" && strings.HasPrefix(g.Reason, "delegated"))
+		})
 		d.deriveRoles(to, d.currentMember(to).Today(time.Now()))
 	}, nil
 }
