@@ -1,16 +1,21 @@
 package host
 
 import (
+	"bufio"
 	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
+	"net"
+	"net/http"
 	"os"
+	"path/filepath"
 	"platformserver/kernel/protocol"
 	dataowner "platformserver/services/data"
 	"platformserver/services/data/lineage"
 	"platformserver/services/ontology"
 	branches "platformserver/services/resources/merge"
+	"syscall"
 
 	"reflect"
 	"slices"
@@ -23,8 +28,10 @@ import (
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
 	"platformserver/kernel/acceptedformat"
 	persistence "platformserver/kernel/store"
+	"platformserver/kernel/transport"
 	"platformserver/platform"
 	build "platformserver/services/resources/authoring"
+	"platformserver/services/security/idp"
 )
 
 func TestInvariantK1ReplayIsByteIdentical(t *testing.T) {
@@ -639,5 +646,151 @@ func TestInvariantBranchSaveRejectsSpoofedProject(t *testing.T) {
 	}, invariantClock)
 	if refusal != nil || live.resourceProject(build.ObjectType, "OBJ") != invariantProject {
 		t.Fatalf("authoritative branch project was not retained: project=%q refusal=%v", live.resourceProject(build.ObjectType, "OBJ"), refusal)
+	}
+}
+
+func TestInvariantK1ShutdownWithOpenChangeStreamsWritesSnapshot(t *testing.T) {
+	dir := t.TempDir()
+	keyPath := filepath.Join(dir, "idp.key")
+	if err := idp.MakeKeyFile(keyPath); err != nil {
+		t.Fatal(err)
+	}
+	signer, err := idp.LoadLocal(keyPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	token, err := signer.Mint("builder", time.Hour, Now())
+	if err != nil {
+		t.Fatal(err)
+	}
+	ln, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	addr := ln.Addr().String()
+	_ = ln.Close()
+	live := newInvariantTenantSetup(t, "invariant-k1-shutdown", nil)
+	live.project = invariantProject
+	d := &Deployment{Flags: idp.Flags{Addr: addr, Profile: "lightweight", Data: dir, SnapshotEvery: 10000, TokenTTL: time.Hour}}
+	done := make(chan error, 1)
+	go func() { done <- d.Serve(live.Tenant) }()
+	deadline := time.Now().Add(5 * time.Second)
+	for {
+		resp, reqErr := http.Get("http://" + addr + "/healthz")
+		if reqErr == nil {
+			_ = resp.Body.Close()
+			if resp.StatusCode == http.StatusOK {
+				break
+			}
+		}
+		if time.Now().After(deadline) {
+			t.Fatal("host did not become healthy")
+		}
+		time.Sleep(20 * time.Millisecond)
+	}
+	seedInvariantProject(t, live)
+	live.accept(t, "build.object.create", build.ObjectType, "OBJ1", invariantObject("alpha", "Alpha"))
+	snapsBefore, _ := os.ReadDir(filepath.Join(dir, "journal", "snapshots"))
+	if len(snapsBefore) != 0 {
+		t.Fatalf("snapshots written before shutdown: %d", len(snapsBefore))
+	}
+	openSSE := func(path string) *http.Response {
+		req, reqErr := http.NewRequest(http.MethodGet, "http://"+addr+path, nil)
+		if reqErr != nil {
+			t.Fatal(reqErr)
+		}
+		req.Header.Set("Authorization", "Bearer "+token)
+		req.Header.Set("Platform-Tenant", live.ID)
+		resp, reqErr := http.DefaultClient.Do(req)
+		if reqErr != nil {
+			t.Fatal(reqErr)
+		}
+		if resp.StatusCode != http.StatusOK {
+			_ = resp.Body.Close()
+			t.Fatalf("SSE %s returned %d", path, resp.StatusCode)
+		}
+		line, readErr := bufio.NewReader(resp.Body).ReadString('\n')
+		if readErr != nil || !strings.HasPrefix(line, "event: ") {
+			_ = resp.Body.Close()
+			t.Fatalf("SSE %s initial event: line=%q err=%v", path, line, readErr)
+		}
+		return resp
+	}
+	feed := openSSE("/v1/changes")
+	defer feed.Body.Close()
+	liveFeed := openSSE("/v1/changes?watch=%5B%22%2Fv1%2Fme%22%5D")
+	defer liveFeed.Body.Close()
+	if err := syscall.Kill(os.Getpid(), syscall.SIGTERM); err != nil {
+		t.Fatal(err)
+	}
+	select {
+	case serveErr := <-done:
+		if serveErr != nil {
+			t.Fatalf("Serve failed on SIGTERM with open change streams: %v", serveErr)
+		}
+	case <-time.After(3 * time.Second):
+		t.Fatal("Serve hung on SIGTERM with open change streams")
+	}
+	snapsAfter, err := os.ReadDir(filepath.Join(dir, "journal", "snapshots"))
+	if err != nil || len(snapsAfter) == 0 {
+		t.Fatalf("shutdown snapshot was not written: files=%d err=%v", len(snapsAfter), err)
+	}
+	ln2, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	addr2 := ln2.Addr().String()
+	_ = ln2.Close()
+	inFlightEntered := make(chan struct{})
+	mux := http.NewServeMux()
+	mux.HandleFunc("GET /healthz", func(w http.ResponseWriter, _ *http.Request) { w.WriteHeader(http.StatusOK) })
+	mux.HandleFunc("GET /slow", func(w http.ResponseWriter, _ *http.Request) {
+		close(inFlightEntered)
+		time.Sleep(80 * time.Millisecond)
+		w.WriteHeader(http.StatusAccepted)
+	})
+	wake := make(chan struct{})
+	mux.HandleFunc("GET /v1/changes", func(w http.ResponseWriter, r *http.Request) {
+		transport.FollowChanges(w, r, transport.ChangeFeedSources{State: func() (int64, int64, <-chan struct{}) { return 1, 1, wake }})
+	})
+	done2 := make(chan error, 1)
+	go func() { done2 <- transport.Serve(t.Context(), addr2, mux, func(context.Context) error { return nil }) }()
+	for {
+		resp, reqErr := http.Get("http://" + addr2 + "/healthz")
+		if reqErr == nil {
+			_ = resp.Body.Close()
+			if resp.StatusCode == http.StatusOK {
+				break
+			}
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+	stream2, err := http.Get("http://" + addr2 + "/v1/changes")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer stream2.Body.Close()
+	if _, err := bufio.NewReader(stream2.Body).ReadString('\n'); err != nil {
+		t.Fatal(err)
+	}
+	slowStatus := make(chan int, 1)
+	go func() {
+		resp, reqErr := http.Get("http://" + addr2 + "/slow")
+		if reqErr != nil {
+			slowStatus <- -1
+			return
+		}
+		_ = resp.Body.Close()
+		slowStatus <- resp.StatusCode
+	}()
+	<-inFlightEntered
+	if err := syscall.Kill(os.Getpid(), syscall.SIGTERM); err != nil {
+		t.Fatal(err)
+	}
+	if got := <-slowStatus; got != http.StatusAccepted {
+		t.Fatalf("in-flight request status = %d; want %d", got, http.StatusAccepted)
+	}
+	if err := <-done2; err != nil {
+		t.Fatalf("second Serve shutdown: %v", err)
 	}
 }

@@ -34,6 +34,7 @@ func FollowChanges(w http.ResponseWriter, r *http.Request, src ChangeFeedSources
 	var seenOwners map[string]int64
 	var seenNotices int64 = -1
 	var lastPush time.Time
+	closing := streamClosing(r)
 	for {
 		seq, nextData, wake := src.State()
 		event := "operations"
@@ -81,10 +82,18 @@ func FollowChanges(w http.ResponseWriter, r *http.Request, src ChangeFeedSources
 			select {
 			case <-r.Context().Done():
 				return
+			case <-closing:
+				return
 			case <-wake:
 				waiting = false
 				if since := time.Since(lastPush); since < 150*time.Millisecond {
-					time.Sleep(150*time.Millisecond - since)
+					select {
+					case <-r.Context().Done():
+						return
+					case <-closing:
+						return
+					case <-time.After(150*time.Millisecond - since):
+					}
 				}
 			case <-time.After(25 * time.Second):
 				fmt.Fprint(w, ": keep-alive\n\n")

@@ -122,6 +122,7 @@ func (f LiveFollow) Serve(w http.ResponseWriter, r *http.Request) {
 	versions := make(map[string]string)
 	previousSequence := int64(-1)
 	coalesce := 20 * time.Millisecond
+	closing := streamClosing(r)
 	for {
 		seq, wake := f.State()
 		if previousSequence >= 0 && seq-previousSequence > 1 {
@@ -185,9 +186,13 @@ func (f LiveFollow) Serve(w http.ResponseWriter, r *http.Request) {
 		select {
 		case <-r.Context().Done():
 			return
+		case <-closing:
+			return
 		case <-wake:
 			select {
 			case <-r.Context().Done():
+				return
+			case <-closing:
 				return
 			case <-time.After(coalesce):
 			}
