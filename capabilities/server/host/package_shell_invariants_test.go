@@ -296,7 +296,7 @@ func TestInvariantMultiPackageTranslationsScopeByNamespaceAndTranslateFieldGroup
 	adminSeat := protocol.Seat{Subjects: []string{"admin"}, Member: platform.Member{ID: "admin", Roles: map[string]string{"platform": "admin", build.ID: ontology.BuilderRole, "crm": "salesmanager", "party": "steward", "geo": "steward"}}}
 	live := newInvariantTenant(t, "invariant-multi-pkg-i18n", adminSeat)
 	admin, _ := live.Member("admin")
-	for _, fixture := range []string{"geo-0.1.1.json", "party-0.2.1.json", "crm-official-0.3.0.json"} {
+	for _, fixture := range []string{"geo-0.1.2.json", "party-0.2.2.json", "crm-official-0.3.0.json"} {
 		raw, err := os.ReadFile("../../../scripts/frontend-fixtures/" + fixture)
 		if err != nil {
 			t.Fatal(err)
