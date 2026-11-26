@@ -151,10 +151,11 @@ trunk:
 
 trunk-pg:
 	@set -e; name=platform-trunk-pg-$$$$; port=$$((55432 + $${TRUNK_PORT_OFFSET:-0})); \
-	docker run -d --rm --name $$name -e POSTGRES_HOST_AUTH_METHOD=trust -e POSTGRES_DB=trunk -p 127.0.0.1:$$port:5432 platform-postgres:18-vector >/dev/null; \
+	docker run -d --rm --name $$name -e POSTGRES_HOST_AUTH_METHOD=trust -e POSTGRES_DB=trunk -p 127.0.0.1:$$port:5432 platform-postgres:18-vector -c fsync=off -c full_page_writes=off >/dev/null; \
 	trap 'docker rm -f '$$name' >/dev/null' EXIT; \
 	until docker exec $$name pg_isready -h 127.0.0.1 -U postgres -d trunk >/dev/null 2>&1; do sleep 1; done; \
-	cd frontend && TRUNK_DATABASE="postgres://postgres@127.0.0.1:$$port/trunk?sslmode=disable" node ../scripts/connector-trunk.mjs $(PNPM) exec playwright test -c e2e $(foreach spec,$(SPEC),$(spec).spec.ts) $(if $(HEADED),--headed); \
+	docker exec $$name createdb -U postgres trunk_restore; \
+	cd frontend && TRUNK_DATABASE="postgres://postgres@127.0.0.1:$$port/trunk?sslmode=disable" TRUNK_RESTORE_DATABASE="postgres://postgres@127.0.0.1:$$port/trunk_restore?sslmode=disable" node ../scripts/connector-trunk.mjs $(PNPM) exec playwright test -c e2e $(foreach spec,$(SPEC),$(spec).spec.ts) $(if $(HEADED),--headed); \
 	rows=$$(docker exec $$name psql -U postgres -d trunk -tAc 'select count(*) from journal'); \
 	echo "trunk-pg: $$rows journal entries in PostgreSQL"; test "$$rows" -gt 0
 

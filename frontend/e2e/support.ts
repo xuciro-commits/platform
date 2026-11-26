@@ -271,3 +271,27 @@ export async function submit(page: Page, schema: string, targetType: string, tar
     return answer;
   }, { schema, targetType, targetId, payload, revision });
 }
+
+export async function restartHost(mode: "snapshot" | "replay") {
+  const controlPort = 19521 + Number(process.env.TRUNK_PORT_OFFSET ?? 0);
+  const response = await fetch(`http://127.0.0.1:${controlPort}/restart`, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ snapshotEvery: mode === "replay" ? 0 : 10000 }),
+  });
+  const answer = await response.json() as { log?: string; error?: string };
+  if (!response.ok || answer.error) throw new Error(answer.error ?? `restart failed: ${response.status}`);
+  return answer.log ?? "";
+}
+
+export async function restoreTenantBackup(tenant: string) {
+  const controlPort = 19521 + Number(process.env.TRUNK_PORT_OFFSET ?? 0);
+  const response = await fetch(`http://127.0.0.1:${controlPort}/restore-backup`, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ tenant }),
+  });
+  const answer = await response.json() as { log?: string; error?: string };
+  if (!response.ok || answer.error) throw new Error(answer.error ?? `restore-backup failed: ${response.status}`);
+  return answer.log ?? "";
+}

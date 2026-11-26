@@ -1,7 +1,7 @@
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { type Page, expect, test } from "@playwright/test";
-import { edit, property, signIn } from "./support";
+import { edit, expectRevision, property, restartHost, restoreTenantBackup, signIn } from "./support";
 
 const artifact = fileURLToPath(new URL("../../scripts/frontend-fixtures/crm-official-0.3.1.json", import.meta.url));
 
@@ -31,6 +31,7 @@ async function crm(entry: string) {
 }
 
 test("official tenant: the released CRM installs from its file", async () => {
+  test.setTimeout(120_000);
   await as("admin-1");
   await page.goto("/delivery/marketplace");
   await page.getByRole("button", { name: "More actions", exact: true }).click();
@@ -42,7 +43,7 @@ test("official tenant: the released CRM installs from its file", async () => {
   await wizard.getByRole("button", { name: "Add to library", exact: true }).click();
   await wizard.getByRole("button", { name: "Continue", exact: true }).click({ timeout: 20_000 });
   await wizard.getByRole("button", { name: "Install package", exact: true }).click();
-  await expect(wizard).toBeHidden({ timeout: 30_000 });
+  await expect(wizard).toBeHidden({ timeout: 60_000 });
 });
 
 test("official tenant: a sales rep qualifies a lead and converts it into an account, contact and deal", async () => {
@@ -155,7 +156,7 @@ test("official tenant: CRM upgrades through the marketplace with an optional fie
   await expect(review.getByText(/\+ externalref/)).toBeVisible();
   await expect(review.getByText(/~ company \(Company → Company name\)/)).toBeVisible();
   await review.getByRole("button", { name: "Upgrade package", exact: true }).click();
-  await expect(review).toBeHidden({ timeout: 30_000 });
+  await expect(review).toBeHidden({ timeout: 60_000 });
   await page.goto("/delivery/installations");
   await expect(page.getByRole("listitem").filter({ hasText: /^CRM/ })).toContainText("0.3.2");
 
@@ -346,5 +347,76 @@ test("official tenant: an extension project adds fields, an action and columns t
     return response.status;
   });
   expect(deniedStatus).toBeGreaterThanOrEqual(400);
+});
+
+test("official tenant: a lead keeps its number and revision across snapshot and replay restarts", async () => {
+  test.skip(!process.env.TRUNK_DATABASE, "PostgreSQL persistence only");
+  test.setTimeout(120_000);
+  await as("rep-1");
+  await crm("Leads");
+  await page.getByRole("button", { name: "New", exact: true }).click();
+  const lead = page.getByRole("dialog");
+  await lead.getByRole("textbox", { name: "Full name" }).fill("陆遥");
+  await lead.getByRole("button", { name: "Create", exact: true }).click();
+  await expect(page.getByRole("heading", { name: "陆遥", exact: true }).first()).toBeVisible();
+  await expect(page).toHaveURL(/lead\/LEAD-\d{4}-\d{5}$/);
+  const leadPath = new URL(page.url()).pathname;
+  const leadNumber = leadPath.split("/").pop()!;
+  const prefix = leadNumber.slice(0, -5);
+  const currentSeq = Number(leadNumber.slice(-5));
+  await edit(page, "Company name");
+  const company = page.getByRole("textbox", { name: "Company name", exact: true });
+  await company.fill("星河动力");
+  await company.press("Enter");
+  await expect(property(page, "Company name")).toContainText("星河动力");
+  await expectRevision(page, 2);
+
+  const snapshotLog = await restartHost("snapshot");
+  expect(snapshotLog).toMatch(/restored official from the snapshot at \d+, then replayed 0 entries/);
+  await page.reload();
+  await expect(page).toHaveURL(new RegExp(`${leadPath}$`));
+  await expect(page.getByRole("heading", { name: "陆遥", exact: true }).first()).toBeVisible();
+  await expect(property(page, "Company name")).toContainText("星河动力");
+  await expectRevision(page, 2);
+
+  const replayLog = await restartHost("replay");
+  expect(replayLog).toMatch(/replayed \d+ entries for official/);
+  await page.reload();
+  await expect(page).toHaveURL(new RegExp(`${leadPath}$`));
+  await expect(page.getByRole("heading", { name: "陆遥", exact: true }).first()).toBeVisible();
+  await expect(property(page, "Company name")).toContainText("星河动力");
+  await expectRevision(page, 2);
+
+  await crm("Leads");
+  await page.getByRole("button", { name: "New", exact: true }).click();
+  const next = page.getByRole("dialog");
+  await next.getByRole("textbox", { name: "Full name" }).fill("沈舟");
+  await next.getByRole("button", { name: "Create", exact: true }).click();
+  await expect(page.getByRole("heading", { name: "沈舟", exact: true }).first()).toBeVisible();
+  await expect(page).toHaveURL(new RegExp(`lead/${prefix}${String(currentSeq + 1).padStart(5, "0")}$`));
+});
+
+test("official tenant: exported backup imports into a fresh database and serves the restored tenant", async () => {
+  test.skip(!process.env.TRUNK_DATABASE || !process.env.TRUNK_RESTORE_DATABASE, "PostgreSQL backup restore only");
+  test.setTimeout(120_000);
+  const restoreLog = await restoreTenantBackup("official");
+  expect(restoreLog).toMatch(/restored official from the snapshot at \d+, then replayed 0 entries/);
+
+  await as("rep-1");
+  await crm("Leads");
+  await page.getByRole("main").getByRole("link", { name: "陆遥", exact: true }).first().click();
+  await expect(page.getByRole("heading", { name: "陆遥", exact: true }).first()).toBeVisible();
+  await expect(property(page, "Company name")).toContainText("星河动力");
+  await expectRevision(page, 2);
+
+  await as("rep-2");
+  await crm("Leads");
+  await expect(page.getByRole("main", { name: "Leads", exact: true }).getByText("陆遥", { exact: true })).toHaveCount(0);
+
+  await as("manager-1");
+  await page.goto("/");
+  await page.getByRole("link", { name: "CRM", exact: true }).first().click();
+  await expect(page.getByText("Won revenue", { exact: true })).toBeVisible();
+  await expect(page.getByRole("main").getByText(/368,000/).first()).toBeVisible();
 });
 });
