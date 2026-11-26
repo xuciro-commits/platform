@@ -31,6 +31,7 @@ test("publish: a draft type goes live from its record page and takes records", a
 test("board: dragging a card to another state runs that transition", async ({ page }) => {
   await signIn(page);
   await open(page, "Ontology", "Object types");
+  await page.getByRole("button", { name: "Manage definitions" }).click();
   await page.getByRole("radio", { name: "Board" }).click();
   const draft = page.getByRole("region", { name: "Draft" });
   const published = page.getByRole("region", { name: "Published" });

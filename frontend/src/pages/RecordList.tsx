@@ -2,7 +2,7 @@ import { Banner } from "@astryxdesign/core/Banner";
 import { Button } from "@astryxdesign/core/Button";
 import { HStack, VStack } from "@astryxdesign/core/Layout";
 import { MoreMenu } from "@astryxdesign/core/MoreMenu";
-import { type ComponentType, lazy, Suspense, useCallback, useEffect, useMemo, useState } from "react";
+import { type ComponentType, type ReactNode, lazy, Suspense, useCallback, useEffect, useMemo, useState } from "react";
 import { type Api, type Read, requestBlob, useRead } from "../host";
 import { t } from "../i18n";
 import { navigate, usePath, useSearch } from "../router";
@@ -258,11 +258,11 @@ export function recordList(declared: Declared) {
   }, { recordType: declared.type });
 }
 
-export function Records({ declared, listPath, id, back }: { declared: Declared; listPath: string; id?: string; back?: Back }) {
+export function Records({ declared, listPath, id, back, primaryExtra, initialCreate }: { declared: Declared; listPath: string; id?: string; back?: Back; primaryExtra?: ReactNode; initialCreate?: boolean }) {
   const pending = useMemo<ListShape<Api.RecordPage, Row>>(() => ({ title: declared.title ?? "", about: declared.about, rows: () => [], id: () => "", columns: [] }), [declared]);
   const types = useRead<Api.EntityInfo[]>("/v1/entities");
   const actions = useRead<Api.Action[]>("/v1/actions");
-  const [creating, setCreating] = useState<Record<string, unknown> | false>(false);
+  const [creating, setCreating] = useState<Record<string, unknown> | false>(() => initialCreate ? {} : false);
   const [importing, setImporting] = useState(false);
   const [exportFailure, setExportFailure] = useState("");
   const entity = types.status === "ready" ? types.data.find((candidate) => candidate.type === declared.type) : undefined;
@@ -530,6 +530,7 @@ export function Records({ declared, listPath, id, back }: { declared: Declared; 
         back={back}
         primary={described ? (
           <HStack gap={2} vAlign="center">
+            {primaryExtra}
             {createAllowed && <Button label={t("New")} variant="primary" onClick={() => setCreating({})} />}
             <MoreMenu label={t("More actions")} alignment="end" items={[
               ...(createAllowed ? [{ id: "import-records", label: t("Import"), onClick: () => setImporting(true) }] : []),

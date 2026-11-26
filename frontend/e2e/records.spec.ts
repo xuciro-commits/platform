@@ -468,6 +468,7 @@ test("views: filters, order and visible columns survive refresh and return", asy
 test("list: metadata controls default columns, layout and empty states", async ({ page }) => {
   await signIn(page);
   await open(page, "Ontology", "Object types");
+  await page.getByRole("button", { name: "Manage definitions" }).click();
   const apiName = page.getByRole("columnheader", { name: "API name", exact: true });
   await expect(apiName).toBeVisible();
   await expect(page.getByRole("columnheader", { name: "Plural", exact: true })).toHaveCount(0);
