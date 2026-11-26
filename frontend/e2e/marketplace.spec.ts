@@ -510,7 +510,7 @@ test("publisher tenant: a business partner stores country and division reference
   await expect(property(page, "Street address")).toContainText("1 Jianguo Road");
 });
 
-test.fixme("publisher tenant: CRM 0.3.1 to 0.3.2 review shows RecordComparison diffs, blocks incompatible extensions, and preserves compatible extensions after upgrade", async ({ page }) => {
+test("publisher tenant: CRM 0.3.1 to 0.3.2 review shows RecordComparison diffs, blocks incompatible extensions, and preserves compatible extensions after upgrade", async ({ page }) => {
   test.setTimeout(300_000);
   await signIn(page, "admin-1 · publisher");
 
