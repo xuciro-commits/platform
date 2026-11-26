@@ -75,8 +75,8 @@ func (o *Owner) RestorePages() error {
 		if !ok || p.Archived {
 			continue
 		}
-		if err := o.installPage(platform.Caller{Replaying: true}, was); err != nil {
-			return fmt.Errorf("page %s: %v", p.Name, err)
+		if err := o.env.Host().InstallPage(platform.Caller{Replaying: true}, Descriptor(was, o.env.AppID(), o.env.Version())); err != nil {
+			return fmt.Errorf("page %s: %w", p.Name, err)
 		}
 	}
 	for _, p := range pages {
@@ -96,13 +96,21 @@ func (o *Owner) RestoreApplications() error {
 	if err != nil {
 		return err
 	}
+	var installed []platform.Application
 	for _, a := range applications {
 		was, ok := publication.Read[protocol.Application](a.Published)
 		if !ok || a.Archived {
 			continue
 		}
-		if err := o.installApplication(platform.Caller{Replaying: true}, was); err != nil {
-			return fmt.Errorf("application %s: %v", a.Name, err)
+		app := ApplicationDescriptor(was)
+		if err := o.env.Host().InstallApplication(platform.Caller{Replaying: true}, app); err != nil {
+			return fmt.Errorf("application %s: %w", a.Name, err)
+		}
+		installed = append(installed, app)
+	}
+	for _, app := range installed {
+		if err := o.env.Host().ValidateInstallApplication(app); err != nil {
+			return fmt.Errorf("application %s: %w", app.Name, err)
 		}
 	}
 	return nil
