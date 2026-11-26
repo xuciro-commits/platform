@@ -39,7 +39,7 @@
 | 记录：列表、记录页、行内编辑、视图 | 产品级 | `pages/RecordList.tsx`、`RecordPage.tsx`；records 32 项 | — |
 | CRM 包 | 产品级 | crm 29 项、official 8 项 | 升级全链路浏览器用例：一（3.3b，#12） |
 | 宿主：接受路径、重放、内存与文件存储 | 能用 | `capabilities/server/kernel`；十三组内核不变量；official 停机重启、备份恢复 | — |
-| PostgreSQL 存储 | 能用 | 3.1a–d；crm 与 official trunk-pg 全过 | Build 监听器瘦身（3.1f）、重启快照隔离（3.1e）：一（#12） |
+| PostgreSQL 存储 | 能用 | 3.1a–d；crm 与 official trunk-pg 全过 | Build 监听器瘦身（3.1f）：一（#12） |
 | 格式纪元冻结 | 产品级 | `kernel/store/migration.go`、`scripts/check-epoch.mjs`；K1 纪元拒绝、备份纪元拒绝 | — |
 | 构建：类型、字段、状态、动作、发布 | 能用 | `services/ontology`；builder 12 项 | 条件与表达式只能手写：一（3.2d，#12） |
 | 条件与表达式编辑器 | 无 | `pages/` 里没有 `ConditionBuilder`、`ExpressionEditor` | 一（3.2d，#12） |
@@ -68,10 +68,8 @@
 
 灵魂：客户的数据只落在接受路径写下的条目里；重启、换机、从备份恢复，读回的是同一份记录、修订与编号。
 
+- 3.1e 已做（c38925022）：重启恢复页面与应用不再走发布校验，`loadproject.loaditem` 页与带点号的包页能恢复；K1 用例在 PG 上守住记录、历史逐字节一致。
 - 3.1a–d 已做：临时 `platform-postgres:18-vector` 测试库与 `journal` 核对（`make trunk-pg`、`make test-pg`）；血缘标记按变化计数缓存；official 停机重启（快照与重放各一次，5ad02daac）与按格式纪元备份导出/空库恢复（48580d57f、5ad02daac）均已跑通。
-- 3.1e 重启后恢复快照把租户隔离：`make load-sql`（导入模式，种子 1000 条）后重启宿主，恢复快照在分页重建 `loadproject.loaditem` 时报 `ERROR_CODE_INVALID_ARGUMENT`。
-  先核对保存与恢复两侧对这个对象页的编码；嫌疑 1b5df0dcb（SQL 便携快照）、37699a228（停机快照）、48580d57f（备份导入导出）。修法要动格式就先问负责人。
-  验收：同一场景重启后不隔离，记录、修订、编号一字不差；`make test-pg` 加一条修前红、修后绿的用例。
 - 3.1f Build 监听器的后台结果太大，拖慢 PostgreSQL 主干：每条 0.4–1.6 MB（约 70% changes、30% authorizations），一次启动写 53 条共 39 MB，1.6 MB 一条提交要 4.6–7.8 秒。
   只写增量或引用；嵌套 Batch 已有的授权不重复写；乐观决策失配一次就走锁内完整决策。半成品在 `wip/3.1f`（c81d131b2，未验证）：200 行单 work 693796→477347 字节。
   仍有单条超过 256 KB 时，可按 128 条用 `#next` 分组续跑：每组原子、有自己的幂等键，重启后从下一组接着跑不重做，最终状态与一次跑完一致（加一条不变量用例）。
@@ -99,7 +97,7 @@
 
 - 3.4a 已做（29df42cf1）冻结格式纪元：`FormatEpoch` 之后的任何格式变化只经版本化迁移；`make check` 核对改纪元必须同时带迁移与用例。
 - 3.4b 导入与邀请：界面多表导入与按客户账号邀请授权（ac9bca6a7）、128 行原子批量接受与故障注入及万行并发压测（f5508961c）已合入。
-  待 3.1e 修复后复核 `make load-sql` 导入模式含停机重启无隔离，核对无丢失、无重复、序号连续及 K1 四种重放一致；最终容量门槛见第四块（[plan](plan.md) 阶段 4）。
+  复核 `make load-sql` 导入模式含停机重启无隔离（3.1e 已由 c38925022 修复，11-26 导入 1000 行后重启两次未隔离，记录 2000、位置 2013），核对无丢失、无重复、序号连续及 K1 四种重放一致；最终容量门槛见第四块（[plan](plan.md) 阶段 4）。
 - 3.4c 用满两周：每天遇到的问题加在本行末尾，一项一修；用满后负责人走一次门槛演示。
 
 ## 二、能力底座与受管服务（[#13](https://github.com/xuciro-commits/platform/issues/13)）
