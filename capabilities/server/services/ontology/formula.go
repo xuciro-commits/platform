@@ -13,6 +13,17 @@ func FormulaExpr(fields []Field, f Field) (platform.Expr, error) {
 		}
 		return *f.FormulaExpr, nil
 	}
+	e, err := platform.LowerFormula(f.Formula, FormulaOperands(fields))
+	if err != nil {
+		return e, err
+	}
+	if f.Type == "integer" {
+		e = platform.Expr{Op: "round", Kind: "integer", Args: []platform.Expr{e}}
+	}
+	return e, nil
+}
+
+func FormulaOperands(fields []Field) map[string]string {
 	types := map[string]string{}
 	for _, operand := range fields {
 		if operand.Formula == "" && operand.FormulaExpr == nil && (operand.Type == "integer" || operand.Type == "decimal" || operand.Type == "money") {
@@ -22,14 +33,7 @@ func FormulaExpr(fields []Field, f Field) (platform.Expr, error) {
 			}
 		}
 	}
-	e, err := platform.LowerFormula(f.Formula, types)
-	if err != nil {
-		return e, err
-	}
-	if f.Type == "integer" {
-		e = platform.Expr{Op: "round", Kind: "integer", Args: []platform.Expr{e}}
-	}
-	return e, nil
+	return types
 }
 
 func CheckFormulas(fields []Field) error {

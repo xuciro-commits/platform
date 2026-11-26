@@ -9,6 +9,10 @@ const vendored = (file) => file.startsWith("templates/") || file.startsWith("hos
 const allowedPackages = [
   "@astryxdesign/core",
   "@astryxdesign/theme-neutral",
+  "@codemirror/autocomplete",
+  "@codemirror/lint",
+  "@codemirror/state",
+  "@codemirror/view",
   "@heroicons/react",
   "@stylexjs/stylex",
   "lucide-react",
@@ -25,8 +29,8 @@ const allowedPackages = [
   "typescript",
   "vite",
 ];
-const allowedImports = [/^\.\.?\//, /^react$/, /^react-dom\/client$/, /^@astryxdesign\//, /^@stylexjs\/stylex$/, /^@heroicons\/react\//, /^pdfjs-dist(\/|$)/, /^recharts$/, /^virtual:stylex:/];
-const rawElements = { "router.tsx": ["a"] };
+const allowedImports = [/^\.\.?\//, /^react$/, /^react-dom\/client$/, /^@astryxdesign\//, /^@codemirror\/(autocomplete|lint|state|view)$/, /^@stylexjs\/stylex$/, /^@heroicons\/react\//, /^pdfjs-dist(\/|$)/, /^recharts$/, /^virtual:stylex:/];
+const rawElements = { "router.tsx": ["a"], "pages/ExpressionEditor.tsx": ["div"] };
 const visibleProps = "label|title|description|placeholder|tooltip|heading|subheading|superheading|aria-label|buttonLabel|cancelLabel|actionLabel";
 
 function walk(dir) {

@@ -2151,6 +2151,18 @@ export type Expr = {
   window?: WindowReference;
 };
 
+export type ExpressionIssue = {
+  slot: string;
+  from: number;
+  to: number;
+  message: string;
+};
+
+export type ExpressionOption = {
+  label: string;
+  detail?: string;
+};
+
 export type Field = {
   name: string;
   type: string;
@@ -2181,6 +2193,18 @@ export type FieldChange = {
 export type FieldCondition = {
   field: string;
   in: string[];
+};
+
+export type FieldExpressionCheck = {
+  fields: OntologyField[];
+  field: OntologyField;
+};
+
+export type FieldExpressionDiagnostics = {
+  valid: boolean;
+  issues: ExpressionIssue[];
+  operands: ExpressionOption[];
+  defaults: ExpressionOption[];
 };
 
 export type FieldFormat = {
@@ -3601,6 +3625,36 @@ export type ObservationUnknown = {
   since: string;
   until: string;
   reason: "coverage" | "gap" | "bad" | "uncertain" | "stale" | "late" | "rule";
+};
+
+export type OntologyField = {
+  aiInput?: boolean;
+  sourceType?: "record" | "user-input" | "external-input" | "generated";
+  property?: AssetBinding;
+  valueType?: AssetBinding;
+  format?: FormatRule[];
+  name: string;
+  title: string;
+  group?: string;
+  aside?: boolean;
+  type: "text" | "longtext" | "integer" | "decimal" | "money" | "date" | "datetime" | "boolean" | "choice" | "reference" | "member" | "attachment";
+  choices?: string;
+  ref?: string;
+  stereotype?: string;
+  stereotypes?: string[];
+  inverse?: string;
+  oneOf?: string;
+  required?: boolean;
+  search?: boolean;
+  readOnly?: boolean;
+  aliasOf?: string;
+  when?: string;
+  default?: string;
+  formulaExpr?: Expr;
+  from?: Expr;
+  formula?: string;
+  read?: string[];
+  write?: string[];
 };
 
 export type Operation = {

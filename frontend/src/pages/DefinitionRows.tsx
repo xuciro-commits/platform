@@ -18,6 +18,7 @@ import { AccessDialog, ActionTypeDialog, type ActionTypeRow, TransitionDialog } 
 import type { Described, Values } from "./describe";
 import { useListFlip } from "./motion";
 import { ConditionBuilder, conditionSources } from "./ConditionBuilder";
+import { ExpressionEditor, useFieldExpressions } from "./ExpressionEditor";
 import { ParameterInput, enterable } from "./ParameterInput";
 import { present, shown } from "./values";
 
@@ -26,7 +27,7 @@ type Slot = "fields" | "states" | "actions" | "access";
 const fromStates = "from";
 const slots: Slot[] = ["fields", "states", "actions", "access"];
 const metadata = {
-  fields: { title: "Fields", add: "Add field", show: ["name", "title", "type", "group"], edit: ["name", "title", "type", "choices", "ref", "required", "search", "group", "aside", "when"] },
+  fields: { title: "Fields", add: "Add field", show: ["name", "title", "type", "group"], edit: ["name", "title", "type", "choices", "ref", "required", "search", "group", "aside", "when", "default", "formula"] },
   states: { title: "States", add: "Add state", show: ["name", "title", "tone"], edit: ["name", "title", "tone", "description"] },
   actions: { title: "Transitions", add: "Add transition", show: ["name", "title", fromStates, "to"], edit: ["name", "title", fromStates, "to", "description"] },
   access: { title: "Access", add: "Add access rule", show: ["role", "read", "create", "edit", "archive"], edit: ["role", "read", "create", "edit", "archive"] },
@@ -292,6 +293,8 @@ function DefinitionForm({ slot, row, field, fields, states, entities, subject, t
     return enterable(parameter) ? [parameter] : [];
   });
   const described = { fields: columns } as Api.EntityInfo;
+  const expressions = useFieldExpressions(slot === "fields" ? fields : [], slot === "fields" ? values : {});
+  const written = ["ref", "when", "default", "formula"];
   const stateOptions = states.flatMap((state) => state.name ? [{ value: state.name, label: t(state.title ?? state.name) }] : []);
   const selectedType = entities.find((entity) => entity.type === values.ref);
   const missing = !values.name || !values.title || (slot === "fields" && (!values.type || values.type === "reference" && !values.ref)) ||
@@ -315,7 +318,7 @@ function DefinitionForm({ slot, row, field, fields, states, entities, subject, t
         <LayoutContent padding={4}>
           <FormLayout defaultOptionality="optional">
             {failure && <Banner status="error" title={t("Not saved")} description={failure} />}
-            {inputs.filter((parameter) => parameter.name !== "ref" && parameter.name !== "when").map((parameter) => (
+            {inputs.filter((parameter) => !written.includes(parameter.name)).map((parameter) => (
               <ParameterInput key={parameter.name} parameter={parameter} described={described} value={values[parameter.name]} onChange={(value) => set(parameter.name, value)} />
             ))}
             {slot === "fields" && values.type === "reference" && (
@@ -332,6 +335,11 @@ function DefinitionForm({ slot, row, field, fields, states, entities, subject, t
               <ConditionBuilder label={label("when")} value={typeof values.when === "string" ? values.when : ""}
                 sources={conditionSources(fields, states, values.name)} onChange={(value) => set("when", value)} />
             )}
+            {slot === "fields" && (["default", "formula"] as const).filter((name) => inputs.some((parameter) => parameter.name === name)).map((name) => (
+              <ExpressionEditor key={name} label={label(name)} slot={name} value={typeof values[name] === "string" ? values[name] : ""}
+                options={(name === "formula" ? expressions?.operands : expressions?.defaults) ?? []} issues={expressions?.issues ?? []}
+                onChange={(value) => set(name, value)} />
+            ))}
             {slot === "actions" && (
               <>
                 <MultiSelector label={label(fromStates)} options={stateOptions} value={values.from ?? []} onChange={(value) => set(fromStates, value)} />

@@ -180,6 +180,24 @@ func CompileAccess(o Object, builderRole, userRole string) (platform.Standard, p
 	return std, scope, roles
 }
 
+func DefaultOptions(f Field) []string {
+	switch f.Type {
+	case "date":
+		return []string{"today", "setting:"}
+	case "datetime":
+		return []string{"now", "now+4h", "setting:"}
+	case "member":
+		return []string{"member", "setting:"}
+	case "text":
+		return []string{"member", "today", "now", "setting:"}
+	case "choice":
+		return append(ValueChoices(f.Choices), "setting:")
+	case "boolean":
+		return []string{"true", "false", "setting:"}
+	}
+	return []string{"setting:"}
+}
+
 func NowOffset(value string) (time.Duration, bool) {
 	text, ok := strings.CutPrefix(value, "now+")
 	offset, err := time.ParseDuration(text)

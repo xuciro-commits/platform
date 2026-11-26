@@ -84,6 +84,9 @@ func (h *Host) routesBuild(rt *routes) {
 		}
 		WriteJSON(w, http.StatusOK, protocol.ComputeSDK{Source: string(source)})
 	})
+	rt.authorized(transport.Route{Pattern: "POST /v1/build/fields/expressions/check", Summary: "Check a field's formula and default with the rules publishing applies, pointing at the part of the text that fails, and list the operands and defaults that fit, without saving", Body: build.FieldExpressionCheck{}, Answer: build.FieldExpressionDiagnostics{}}, build.ID, builder, transport.Bounded(256<<10, "a field and the fields of its object are required", func(_ *http.Request, _ platform.Member, _ *Tenant, q build.FieldExpressionCheck) (build.FieldExpressionDiagnostics, *platform.Error) {
+		return build.CheckFieldExpressions(q), nil
+	}))
 	rt.authorized(transport.Route{Pattern: "POST /v1/build/process/check", Summary: "Validate a workflow draft with its owner compiler without executing it", Query: []transport.Param{{Name: "branch", Description: "a branch id: the draft is validated against that branch's staged definitions, where objects that exist only on the branch resolve"}}, Body: protocol.Process{}, Answer: build.ProcessDiagnostics{}}, build.ID, builder, func(w http.ResponseWriter, r *http.Request, m platform.Member, t *Tenant) {
 		var p protocol.Process
 		if !transport.DecodeValueBody(w, r, &p, 128<<10) {

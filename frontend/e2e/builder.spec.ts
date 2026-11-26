@@ -205,6 +205,42 @@ test("object definition: a condition picked field by field shows the field only 
   await expect(property(page, "Strategic discount")).toHaveCount(0);
 });
 
+test("object definition: a formula written in the editor is checked by the host, completes field names and fills the record", async ({ page }) => {
+  await signIn(page);
+  await open(page, "Ontology", "Object types");
+  await page.getByRole("link", { name: "Customer", exact: true }).click();
+  await page.getByRole("button", { name: "Add field", exact: true }).click();
+  const dialog = page.getByRole("dialog");
+  await dialog.getByRole("textbox", { name: /^Name/ }).fill("seats");
+  await dialog.getByRole("textbox", { name: /^Label/ }).fill("Seats needed");
+  await dialog.getByRole("combobox", { name: /^Type/ }).click();
+  await page.getByRole("option", { name: "integer", exact: true }).click();
+  const formula = dialog.getByRole("textbox", { name: /^Formula/ });
+  await formula.click();
+  await page.keyboard.type("employes * 2");
+  await expect(dialog.getByText("undeclared formula field employes").first()).toBeVisible();
+  await page.keyboard.press("ControlOrMeta+a");
+  await page.keyboard.type("emp");
+  await page.getByRole("option", { name: /^employees/ }).click();
+  await page.keyboard.type(" * 2");
+  await expect(formula).toHaveText("employees * 2");
+  await expect(dialog.getByText(/undeclared formula field/)).toHaveCount(0);
+  await dialog.getByRole("button", { name: "Save", exact: true }).click();
+  await expect(dialog).toBeHidden();
+
+  await page.getByRole("button", { name: "Publish", exact: true }).click();
+  const publish = page.getByRole("dialog", { name: /Publish/ });
+  await publish.getByRole("button", { name: "Publish", exact: true }).click();
+  await expect(publish).toBeHidden();
+  await page.getByRole("link", { name: "Open records" }).click();
+  await page.getByRole("link", { name: "港湾货运", exact: true }).click();
+  await edit(page, "Employees");
+  const employees = page.getByRole("spinbutton", { name: "Employees", exact: true });
+  await employees.fill("900");
+  await employees.press("Enter");
+  await expect(property(page, "Employees")).toContainText("900");
+  await expect(property(page, "Seats needed")).toContainText("1,800");
+});
 
 test.describe.serial("gate", () => {
 let page: Page;

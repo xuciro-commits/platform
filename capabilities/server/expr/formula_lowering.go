@@ -6,19 +6,31 @@ import (
 	"strconv"
 	"strings"
 	"unicode"
+	"unicode/utf8"
 )
 
 type formulaNode struct {
 	op          byte
 	value       string
 	field       string
+	pos, end    int
 	left, right *formulaNode
 }
 
+type FormulaError struct {
+	Offset, End int
+	Message     string
+}
+
+func (e *FormulaError) Error() string { return e.Message }
+
+func (e *FormulaError) Span() (int, int) { return e.Offset, e.End }
+
 func parseFormula(text string) (*formulaNode, error) {
-	p := &formulaParser{src: strings.TrimSpace(text)}
+	src := strings.TrimSpace(text)
+	p := &formulaParser{src: src, lead: strings.Index(text, src)}
 	if p.src == "" {
-		return nil, fmt.Errorf("the formula is empty")
+		return nil, p.fail(0, 0, "the formula is empty")
 	}
 	node, err := p.Expr()
 	if err != nil {
@@ -26,14 +38,19 @@ func parseFormula(text string) (*formulaNode, error) {
 	}
 	p.Skip()
 	if p.pos != len(p.src) {
-		return nil, fmt.Errorf("unexpected %q in the formula", p.src[p.pos:])
+		return nil, p.fail(p.pos, len(p.src), fmt.Sprintf("unexpected %q in the formula", p.src[p.pos:]))
 	}
 	return node, nil
 }
 
 type formulaParser struct {
-	src string
-	pos int
+	src  string
+	pos  int
+	lead int
+}
+
+func (p *formulaParser) fail(from, to int, message string) error {
+	return &FormulaError{Offset: p.lead + from, End: p.lead + to, Message: message}
 }
 
 func (p *formulaParser) Skip() {
@@ -91,13 +108,14 @@ func (p *formulaParser) Term() (*formulaNode, error) {
 func (p *formulaParser) Factor() (*formulaNode, error) {
 	switch c := p.Peek(); {
 	case c == '(':
+		open := p.pos
 		p.pos++
 		node, err := p.Expr()
 		if err != nil {
 			return nil, err
 		}
 		if p.Peek() != ')' {
-			return nil, fmt.Errorf("a parenthesis is not closed")
+			return nil, p.fail(open, open+1, "a parenthesis is not closed")
 		}
 		p.pos++
 		return node, nil
@@ -115,7 +133,7 @@ func (p *formulaParser) Factor() (*formulaNode, error) {
 		}
 		_, err := strconv.ParseFloat(p.src[start:p.pos], 64)
 		if err != nil {
-			return nil, fmt.Errorf("%q is not a number", p.src[start:p.pos])
+			return nil, p.fail(start, p.pos, fmt.Sprintf("%q is not a number", p.src[start:p.pos]))
 		}
 		return &formulaNode{op: 'n', value: p.src[start:p.pos]}, nil
 	case c >= 'a' && c <= 'z':
@@ -123,11 +141,12 @@ func (p *formulaParser) Factor() (*formulaNode, error) {
 		for p.pos < len(p.src) && (unicode.IsLower(rune(p.src[p.pos])) || unicode.IsDigit(rune(p.src[p.pos]))) {
 			p.pos++
 		}
-		return &formulaNode{op: 'f', field: p.src[start:p.pos]}, nil
+		return &formulaNode{op: 'f', field: p.src[start:p.pos], pos: p.lead + start, end: p.lead + p.pos}, nil
 	case c == 0:
-		return nil, fmt.Errorf("the formula ends too early")
+		return nil, p.fail(p.pos, p.pos, "the formula ends too early")
 	}
-	return nil, fmt.Errorf("unexpected %q in the formula", string(p.src[p.pos]))
+	r, size := utf8.DecodeRuneInString(p.src[p.pos:])
+	return nil, p.fail(p.pos, p.pos+size, fmt.Sprintf("unexpected %q in the formula", string(r)))
 }
 
 func (n *formulaNode) Fields(into map[string]bool) {
@@ -148,7 +167,7 @@ func (n *formulaNode) Expr(fields map[string]string) (Expr, error) {
 	case 'f':
 		kind, ok := fields[n.field]
 		if !ok {
-			return Expr{}, fmt.Errorf("undeclared formula field %s", n.field)
+			return Expr{}, &FormulaError{Offset: n.pos, End: n.end, Message: fmt.Sprintf("undeclared formula field %s", n.field)}
 		}
 		return RefOf(kind, n.field), nil
 	}
