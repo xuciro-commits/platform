@@ -127,11 +127,7 @@ func (rv Review) Of(views []protocol.PackageView, chosen *protocol.PackageView, 
 	answer.Impact = impact
 	answer.Extensions = impact.Extensions
 	if !uninstall {
-		for _, extension := range impact.Extensions {
-			if extension.Issue != "" {
-				answer.Problems = append(answer.Problems, extension.Issue)
-			}
-		}
+		answer.Problems = append(answer.Problems, ExtensionProblems(impact.Extensions)...)
 	}
 	answer.Removals = make([]PackageRemovalImpact, 0, len(impact.References))
 	for _, ref := range impact.References {

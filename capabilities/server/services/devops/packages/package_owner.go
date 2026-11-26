@@ -636,6 +636,11 @@ func (d *Owner) decide(c platform.Caller, s *pb.Submission) (func(*pb.ChangeReco
 	if descriptor.Blueprint != nil && p.Version == "" {
 		return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "A versioned package requires its exact version")
 	}
+	if issues, err := d.extensionUpgradeIssues(c, descriptor, prior, index); err != nil {
+		return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "Package extensions could not be inspected: {reason}", err.Error())
+	} else if len(issues) != 0 {
+		return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "{reason}", strings.Join(issues, "; "))
+	}
 	pre := d.precheck(descriptor, index)
 	if len(pre.Missing) > 0 {
 		return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_POLICY_DENIED, "The package {package} needs {required} installed first", p.ID, strings.Join(pre.Missing, ", "))
