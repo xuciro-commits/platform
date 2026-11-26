@@ -36,7 +36,7 @@
 2. 2.9 剩余项随用到它的包做：party 的结构化地址随 party 0.2.0，扩展的落点随 3.2。
 3. B3 已收口；Shizuku 自研手机应用在 `idea/device-runtime`，等第一个客户要用电话。
 
-阶段 3 分车道并行（[tasks](../tasks/README.md)）：ship 做 3.1，studio 做 3.2，3.3 等 3.2；3.4 的客户由负责人定，定下之前用 official 租户演练。
+阶段 3 的客户由负责人定，定下之前用 official 租户演练。
 
 ## 功能矩阵（11-25）
 
@@ -46,19 +46,19 @@
 | 模块 | 成熟度 | 证据 | 缺什么、归谁 |
 |---|---|---|---|
 | 记录：列表、记录页、行内编辑、视图 | 产品级 | `pages/RecordList.tsx`、`RecordPage.tsx`；records 32 项 | — |
-| CRM 包 | 产品级 | crm 20 项、official 6 项 | 升级全链路浏览器用例：ship-4 |
+| CRM 包 | 产品级 | crm 20 项、official 6 项 | 升级全链路浏览器用例：3.3b |
 | 宿主：接受路径、重放、内存与文件存储 | 能用 | `capabilities/server/kernel`；十三组内核不变量；official 停机重启、备份恢复 | — |
-| PostgreSQL 存储 | 能用 | 3.1a、3.1b；trunk-pg 只跑过 official、marketplace | 全量 trunk-pg 剩两项，Build 监听器结果太大：kit-6；重启后快照恢复把租户隔离：fire-3 |
+| PostgreSQL 存储 | 能用 | 3.1a、3.1b；trunk-pg 只跑过 official、marketplace | 全量 trunk-pg 剩两项，Build 监听器结果太大：3.1f；重启后快照恢复把租户隔离：3.1e |
 | 格式纪元冻结 | 产品级 | `kernel/store/migration.go`、`scripts/check-epoch.mjs`；K1 纪元拒绝、备份纪元拒绝 | — |
-| 构建：类型、字段、状态、动作、发布 | 能用 | `services/ontology`；builder 12 项 | 条件与表达式只能手写：studio-3 |
-| 条件与表达式编辑器 | 无 | `pages/` 里没有 `ConditionBuilder`、`ExpressionEditor` | studio-3 |
+| 构建：类型、字段、状态、动作、发布 | 能用 | `services/ontology`；builder 12 项 | 条件与表达式只能手写：3.2d |
+| 条件与表达式编辑器 | 无 | `pages/` 里没有 `ConditionBuilder`、`ExpressionEditor` | 3.2d |
 | 结构化对比、关系图 | 能用（对比） | `RecordComparison`；builder 发布前审阅 | 关系图等客户要 |
-| 客户扩展 | 能用 | `pages/RecordExtensions.tsx`；official “an extension project” | 升级后保留的浏览器核对：ship-4 |
-| 市场：安装、升级、卸载、远程包库 | 能用 | `apps/delivery/marketplace.tsx`；marketplace 10 项 | 升级全链路与两条失败用例：ship-4 |
+| 客户扩展 | 能用 | `pages/RecordExtensions.tsx`；official “an extension project” | 升级后保留的浏览器核对：3.3b |
+| 市场：安装、升级、卸载、远程包库 | 能用 | `apps/delivery/marketplace.tsx`；marketplace 10 项 | 升级全链路与两条失败用例：3.3b |
 | 授权：角色、ReBAC、临时授权、受限字段 | 能用 | `services/security`；rebac 3 项、crm “roles”、workspace “restricted fields”、official “an extension project” | — |
 | 工作：收件箱、任务、提及、跟进 | 能用 | `pages/InboxPage.tsx`、`services/work`；workspace “inbox”、crm “follow-up” | — |
 | 看板、日历、甘特、仪表盘 | 能用 | `BoardView`、`CalendarView`、`GanttView`、`DashboardPage`；crm、gantt | — |
-| 导入导出 | 能用 | `pages/ImportWizard.tsx`、`objects/record_import.go`；crm “import” | 批量接受已合入；界面与邀请：ship-3 |
+| 导入导出 | 能用 | `pages/ImportWizard.tsx`、`objects/record_import.go`；crm “import” | 界面与邀请已合入；吞吐：3.4b |
 | 租户、成员、登录、设置、词汇 | 能用 | `apps/admin`；workspace 17 项 | 自助注册：阶段 4 |
 | 主数据：geo、party、uom | 能用 | marketplace “publisher tenant: a master data”；K42、K43 | — |
 | 能力：契约、绑定、连接器 | 能用 | `pages/Capabilities.tsx`；workspace “capabilities”；connector 1 项（内存与 pg）；K40、K41、K45、K46 | 商业供应商的适配：等客户选定供应商 |
@@ -68,11 +68,6 @@
 | 运营观测 | 占位 | `apps/operations`；workspace “dashboards” | 冻结到阶段 4 |
 | 数据接入、管道、血缘 | 占位 | `services/data` 约 1.5 万行；入口只是列表 | 冻结到阶段 5 |
 | 智能体与助手、页面搭建 | 占位 | `services/ai`、`services/apps`；入口只是列表 | 冻结 |
-
-阶段 3 要用到的内核能力（同一时间只有一人改内核）：
-
-- 3.1d 导出与导入已接受条目：导入是否走接受路径、纪元在哪核对是 B 级；ship 先在看板给接口草图，lead 定。
-- 3.4a 冻结格式纪元：已做（lead-2）。
 
 ## 3.1 投产底座
 
@@ -86,6 +81,13 @@
 - 3.1c 已做（5ad02daac）重启不丢：trunk 加一条用例，official 租户建线索后让宿主停机再起（快照与重放各一次），线索的修订与编号不变。
 - 3.1d 已做（48580d57f、5ad02daac）备份与恢复：宿主命令导出一个租户的已接受条目与快照（按格式纪元写明版本），导入到空库时逐条核对身份与纪元，不符的整批拒；
   验收：导出 official → 新库导入 → 新宿主起来后主干的 official 用例照跑。不备份投影表与内存态，它们由重放得到。
+- 3.1e 重启后恢复快照把租户隔离：`make load-sql`（导入模式，种子 1000 条）后重启宿主，恢复快照在分页重建 `loadproject.loaditem` 时报 `ERROR_CODE_INVALID_ARGUMENT`。
+  先核对保存与恢复两侧对这个对象页的编码；嫌疑 1b5df0dcb（SQL 便携快照）、37699a228（停机快照）、48580d57f（备份导入导出）。修法要动格式就先问负责人。
+  验收：同一场景重启后不隔离，记录、修订、编号一字不差；`make test-pg` 加一条修前红、修后绿的用例。
+- 3.1f Build 监听器的后台结果太大，拖慢 PostgreSQL 主干：每条 0.4–1.6 MB（约 70% changes、30% authorizations），一次启动写 53 条共 39 MB，1.6 MB 一条提交要 4.6–7.8 秒。
+  只写增量或引用；嵌套 Batch 已有的授权不重复写；乐观决策失配一次就走锁内完整决策。半成品在 `wip/3.1f`（c81d131b2，未验证）：200 行单 work 693796→477347 字节。
+  仍有单条超过 256 KB 时，可按 128 条用 `#next` 分组续跑：每组原子、有自己的幂等键，重启后从下一组接着跑不重做，最终状态与一次跑完一致（加一条不变量用例）。
+  验收：`make trunk-pg` 全量通过，含空白租户商机看板有列、发布者租户单位页 10 秒内出现 "kg"，原断言不放宽；数字写进提交信息。
 
 ## 3.2 客户扩展
 
@@ -94,11 +96,17 @@
 - 3.2a 已做（5e93120f4）扩展项目：管理员在构建里新建“扩展”项目，选目标应用（如 CRM 的线索），建附属对象（`extends` 指向线索，`base` 必填），加字段并发布。
 - 3.2b 已做（5e93120f4）落点：目标应用的记录页按贡献位显示扩展的字段分节与动作，列表可加扩展字段为列；人员页之外的第一个落点（2.9 挪来）。
 - 3.2c 已做（5e93120f4）授权：扩展字段按附属对象自己的 `access` 判，别的包读不到；销售能填、经理能看，trunk 换角色核对。
+- 3.2d 条件与表达式编辑器：构建者在字段的 `when` 上用 `ConditionBuilder` 逐条选字段、比较与值，存成宿主认的表达式，能切到文本看原文；
+  `default` 与规则的表达式用 `ExpressionEditor` 写，有补全与宿主给的报错，报错指到位置。
+  用 CodeMirror 6（负责人 11-26 定），用到的 `@codemirror/*` 加进 `scripts/check-frontend.mjs` 的 allowedPackages。表达式只经宿主的 Expr 求值，界面不复算。
+  trunk：builder 加一步，用条件编辑器写 `when`、发布，记录上条件成立才出现字段。
 
 ## 3.3 升级演练
 
 - 3.3a 夹具 crm 0.3.1 → 0.3.2（加一个可选字段、改一个标签），official 租户先装 0.3.1 并做 3.2 的扩展，再在市场升级：审阅列出变化与受影响的扩展。
-- 3.3b 升级后：扩展的字段、动作与它们的数据都在；官方新字段出现；trunk 核对。
+- 3.3b 升级后：扩展的字段、动作与它们的数据都在；官方新字段出现；trunk 核对。服务端与审阅界面已在 main（c6d6f314d、60ba7a242）。
+  剩 `marketplace.spec.ts` 里 CRM 0.3.1 → 0.3.2 全链路用例的 `test.fixme`：第三次发布（冲突字段改名后）发布对话框的 Publish 一直不可点，预检 60 秒没放行。
+  另核对 marketplace:159（停用 CRM 停在 draining）与 :223（升级后版本还是 0.1.21）在 main 上是否同样失败。
 - 3.3c 已做（c6d6f314d、60ba7a242）扩展不兼容（目标对象在新版里被删、版本范围不含新版）时，审阅指名列出并拒绝升级，不做一半。
 
 ## 3.4 开通客户
@@ -195,7 +203,7 @@
   - 已做：来电先响联系人负责人，超时再响给所有坐席；中继账号从平台的线路读，改动热更新，不再重启网关。两项还没在真手机上实测。
   - 已做：同一契约的多个声明式实现各有身份，“管理 → 能力”里能在其间选（B2c 挪来）。
   - 之后：TLS 与 SRTP、公网与 NAT、网关改用 B4 的受管服务注册取代服务席位、多中继选线、录音。
-  - 已做（kit-3）：连接器请求体按模板组装、Basic 鉴权、HMAC-SHA256 签名；结果不明由人重试或标失败；trunk `connector` 用本机 HTTPS 桩，内存与 pg 都过。
+  - 已做：连接器请求体按模板组装、Basic 鉴权、HMAC-SHA256 签名；结果不明由人重试或标失败；trunk `connector` 用本机 HTTPS 桩，内存与 pg 都过。
 - **B4 受管服务。** 注册、证书、探活、预留与结算；第二个探针 `document.render/1`：把单据渲染成 PDF（无头浏览器或 Typst）。
 - **B5 计量与配额**，并入阶段 4。
 

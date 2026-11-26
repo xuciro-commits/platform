@@ -1,5 +1,0 @@
-#!/usr/bin/env bash
-top="$(git rev-parse --show-toplevel)"
-case "$(basename "$top")" in ship|studio|kit|fire) ;; *) exit 0 ;; esac
-primary="$(dirname "$(git rev-parse --path-format=absolute --git-common-dir)")"
-node "$primary/scripts/board.mjs" say --as "$(basename "$top")" --to lead --kind commit --ref "$(git branch --show-current)" "$(git log -1 --format='%h %s')" >/dev/null 2>&1 || true

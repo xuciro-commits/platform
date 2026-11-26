@@ -7,8 +7,6 @@ const documents = ["README", "intent", "plan", "roadmap", "architecture", "domai
 const lineBudget = (file) => {
   if (file === "docs/plan.md") return 150;
   if (file === "AGENTS.md") return 120;
-  if (file === "tasks/README.md") return 150;
-  if (file.startsWith("tasks/")) return 60;
   if (file.startsWith(".claude/rules/")) return 40;
   if (file.startsWith(".claude/skills/")) return 150;
   return file.startsWith("docs/") ? 250 : Infinity;
@@ -32,13 +30,7 @@ const guides = [
   "frontend/AGENTS.md",
   ...inside(".claude/rules", (file) => file),
   ...inside(".claude/skills", (file) => `${file}/SKILL.md`),
-  ...inside("tasks", (file) => file),
 ];
-for (const file of guides.filter((file) => file.startsWith("tasks/"))) {
-  if (!/^tasks\/(README|(lead|ship|studio|kit|fire|open)-\d+)\.md$/.test(file)) {
-    problems.push(`${file}: tasks/ holds README.md and one file per task named <lead|ship|studio|kit|fire|open>-<number>.md (see tasks/README.md).`);
-  }
-}
 const files = [...documents.map((document) => `docs/${document}.md`).filter((file) => existsSync(root + file)), ...guides.filter((file) => existsSync(root + file))];
 
 for (const file of files) {

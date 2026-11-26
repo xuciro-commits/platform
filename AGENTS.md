@@ -7,11 +7,10 @@
 
 ## 开工前
 
-1. 认自己：主目录里是 lead，`.build/<名>` 里是那个执行者：ship、studio、kit 或 fire（[tasks](tasks/README.md)）。先跑 `node scripts/board.mjs inbox`。
-2. 看 `git status`。只动自己留下的改动；有别人的未提交改动，在看板上告诉 lead：不接着写，不替别人提交，不整理。
-3. lead 读 [plan](docs/plan.md) 与 [roadmap](docs/roadmap.md) 定下一步并派活；执行者做派给自己的 `tasks/<名>-<号>.md`，一次一项。
-4. 读这一项涉及的文档小节、实现与调用方，再动手。
-5. 读任何未知前，先猜测，think中以形式化的：想必是XXXXX体现出来；读完后核对猜测，自信+分-分；大幅提升自己的猜测能力。
+1. 看 `git status`。只动自己留下的改动；有不是自己的未提交改动，停下告诉负责人：不接着写，不替别人提交，不整理。
+2. 读 [plan](docs/plan.md) 与 [roadmap](docs/roadmap.md)，取当前阶段的下一项；一次一项。
+3. 读这一项涉及的文档小节、实现与调用方，再动手。
+4. 读任何未知前，先猜测，think中以形式化的：想必是XXXXX体现出来；读完后核对猜测，自信+分-分；大幅提升自己的猜测能力。
 
 ## 何时读什么
 
@@ -19,7 +18,6 @@
 |---|---|
 | 做什么、先后、什么先不碰 | [plan](docs/plan.md) |
 | 当前阶段每一行的细目与验收 | [roadmap](docs/roadmap.md) |
-| 谁管哪块、任务文件、看板、卡住怎样求助、怎样合进 main | [tasks](tasks/README.md) |
 | 该不该做、属不属于平台、八个承重决定 | [intent](docs/intent.md)（产品真值见 [PRODUCT.md](PRODUCT.md)） |
 | 写入、读取、发布各走哪条路；并发；版本与纪元；怎样算对 | [architecture](docs/architecture.md) |
 | 资源、类型、对象、动作、权限、产品包 | [domain](docs/domain.md) |
@@ -54,6 +52,12 @@
 - 测试只写两类：内核不变量与主干验收；不为单个函数写单元测试。
 - 界面保留英文与简体中文；业务数据不翻译。
 
+内核（`capabilities/server/kernel/**`、存储格式、接受路径与授权决定路径）：
+
+- 不改已有行为的（加方法、加索引、性能修复、新的只读查询）单独一个提交，标题范围写“内核”；过全量 `make test`、相关 `make test RUN=K…` 与 `make trunk-pg`。
+- 改语义的（存储格式与格式纪元、接受映像、授权决定、协议版本）先问负责人。
+- 不许绕开内核的临时办法，例如在服务里直接写存储。
+
 安全与数据：
 
 - 不提交凭据；应用只保存凭据引用。不读取、不打印 `.build/local/` 中的账号与密码。
@@ -63,7 +67,7 @@
 不留垃圾：
 
 - 未经负责人决定不新建文档；`docs/` 只保留文档地图里的文件，产品进度写在 plan，当前阶段的细目写在 roadmap，做完的删掉。
-- 不写历史、总结与方案；任务分解只写在 roadmap 与 `tasks/`，做完即删。
+- 不写历史、总结与方案；任务分解只写在 roadmap，做完即删。
 - 代码改变了文档写着的行为，同一提交改文档。
 - 仓库里不留临时文件、调试输出、备份副本、空壳和“以后再用”的代码；草稿放系统临时目录。
 - 不改检查脚本来让检查通过；被提交关口拦下时修正后重试，不绕过。
@@ -75,23 +79,22 @@
 | 前端 | `pnpm --dir frontend dev`（http://localhost:8496，代理到 `PLATFORM_HOST`） |
 | 夹具宿主 | `make frontend-host`（内存宿主 http://127.0.0.1:18511，自带示例销售项目） |
 | 整套本地运行 | `make local`（入口 http://localhost:8495 是 `frontend/`；宿主日志 `.build/dev/platform-api.log`） |
-| 快速检查 | `make check`：Go 构建、vet 与格式，包边界与形状，产品包，契约，文案，文档，空白 |
+| 快速检查 | `make check`：Go 构建、vet 与格式，包边界与形状，产品包，契约，文案，文档，纪元，空白 |
 | 前端检查 | `make check-frontend`（改了 `frontend/` 时） |
-| 主干验收 | `make trunk`：自己起宿主、灌数据、起前端，浏览器走一遍演示路径；`HEADED=1` 看着它走 |
+| 主干验收 | `make trunk`：自己起宿主、灌数据、起前端，浏览器走一遍演示路径；`HEADED=1` 看着它走；`SPEC=crm` 只跑一个文件 |
+| PostgreSQL | `make trunk-pg`、`make test-pg`：各起一个用完即删的临时库；`make load-sql` 容量压测 |
 | 宿主类型与契约 | `make contract`（改了宿主类型之后） |
 | 内核不变量 | `make test RUN=K13` 定点跑相关编号；不给 `RUN` 跑全部 |
-| SQL 模式 | `make verify-sql`（隔离的临时 PostgreSQL：写入、重启、读取） |
 | 产品包 | `make packages`（刷新作者态源的锁文件，并把夹具一起装进内存租户检查；顶层制品是发布快照，不重建）；试跑动作用 `pkg try` |
 
 提交钩子（`.githooks/`，通过 `make hooks` 启用）自动跑 `make check`，暂存里有 `frontend/` 时加跑 `make check-frontend`，并用 `scripts/check-commit-msg.mjs` 拦截不合规范的提交信息。
 
 ## 工作方式
 
-- 负责人掌舵；lead 管大局并派活，ship、studio、kit 各管一条车道，fire 救火（[tasks](tasks/README.md)）。负责人看两样东西：plan 里的那一行，和浏览器里的界面。
-- 一项任务由领到它的 Agent 端到端做完：设计、实现、核对、提交。车道内可派子代理查资料、跑检查；不把半截活交给另一个 Agent 接力。
-- 每轮开始、每次提交后、结束本轮前跑 `board inbox`；手上有活就不停，卡住换一项做。
-- 每项做完：检查，提交，`node scripts/board.mjs land` 合进 main 并推送，汇报。提交只暂存自己改的路径，不用 `git add -A` 与 `git commit -a`。
-- 提交信息用详细中文（由 `.githooks/commit-msg` 强制检查）：标题写 `类型: 范围——行为变化`（类型限 `功能/修复/优化/性能/重构/文档/验收/清理/合并`）；正文空一行，必填 `范围与行为变化` 与 `检查` 两节（每节用 `- ` 列具体条目，按需补充 `替代与删除`/`文档`/`性能对比`）；末尾空一行写署名尾注 `Co-Authored-By: 名字 <邮箱>`（例如 `Co-Authored-By: Gemini <noreply@google.com>`），写这次提交的 AI 署自己，几个参与者各写一行。未运行的检查不得写成通过，不写空泛总结。
+- 负责人掌舵，看两样东西：plan 里的那一行，和浏览器里的界面。只有一个 Agent 在主目录的 `main` 上干活。
+- 一项端到端做完：设计、实现、核对、提交。手上有活就不停，卡住换一项做。
+- 每项做完：跑与改动对应的检查，提交，推送 main，汇报。提交只暂存自己改的路径，不用 `git add -A` 与 `git commit -a`。
+- 提交信息用详细中文（由 `.githooks/commit-msg` 强制检查）：标题写 `类型: 范围——行为变化`（类型限 `功能/修复/优化/性能/重构/文档/验收/清理/合并`）；正文空一行，必填 `范围与行为变化` 与 `检查` 两节（每节用 `- ` 列具体条目，按需补充 `替代与删除`/`文档`/`性能对比`）；末尾空一行写署名尾注 `Co-Authored-By: 名字 <邮箱>`，写这次提交的 AI 署自己。未运行的检查不得写成通过，不写空泛总结。
 - 汇报只说三件事：现在能做什么（附能点开的地址）、什么没做或没核对、要负责人决定什么。
 
 ## 易错点
