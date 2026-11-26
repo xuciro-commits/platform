@@ -42,6 +42,7 @@ func (s *Store) Declare(a platform.Service) error {
 		}
 		et := &Type{store: s, info: info, rows: Rows{}, knowledge: KnowledgeBearing(info), formats: formats}
 		s.types[e.Type], s.byGo[info.Go] = et, et
+		s.changed(e.Type)
 		s.generation++
 	}
 	for _, e := range m.Entities {

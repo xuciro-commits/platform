@@ -60,7 +60,8 @@ func (t *Tenant) markingsIn(store *records.Store, held bool) lineage.MarkingInde
 		store.Lock()
 		defer store.Unlock()
 	}
-	return t.markings.Get(store, store.Generation(), store == t.Projection, func() lineage.MarkingIndex {
+	key, cacheable := lineage.MarkingKeyOf(store, t.DataOwner(), t.DefinitionEpoch.Load())
+	return t.markings.Get(key, cacheable, store == t.Projection, func() lineage.MarkingIndex {
 		return lineage.IndexMarkings(lineage.Build(lineage.NewReader(t).Guard(lineage.StoreInput(store)), lineage.Guard), store.Generation())
 	})
 }

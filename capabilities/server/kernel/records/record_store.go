@@ -31,6 +31,8 @@ type Store struct {
 	generation     uint64
 	baseGeneration uint64
 	writes         map[string]bool
+	local          map[string]bool
+	contents       map[string]uint64
 	sealed         bool
 	touched        func(typ, id string)
 	dirty          Index[bool]
@@ -62,7 +64,7 @@ func (s *Store) ForkRecords() *Store {
 
 func (s *Store) ForkRecordsLocked() *Store {
 	s.PrepareUniqueIndexes()
-	draft := &Store{rules: s.rules, liveVersions: maps.Clone(s.liveVersions), uniqueLinks: maps.Clone(s.uniqueLinks), archiveLinks: maps.Clone(s.archiveLinks), parent: s, generation: s.generation, baseGeneration: s.generation, types: make(map[string]*Type, len(s.types)),
+	draft := &Store{rules: s.rules, liveVersions: maps.Clone(s.liveVersions), contents: maps.Clone(s.contents), uniqueLinks: maps.Clone(s.uniqueLinks), archiveLinks: maps.Clone(s.archiveLinks), parent: s, generation: s.generation, baseGeneration: s.generation, types: make(map[string]*Type, len(s.types)),
 		byGo: make(map[reflect.Type]*Type, len(s.byGo)), writes: map[string]bool{},
 		dirty: s.dirty, recentChanges: s.recentChanges.Fork()}
 	draft.current = s.current.Fork(func(typ string) platform.RecordTypeInfo { return draft.types[typ].info })
@@ -127,6 +129,13 @@ func (s *Store) PromoteRecords(draft *Store) error {
 			s.touched(typ, id)
 		}
 	}
+	for typ := range draft.local {
+		s.changed(typ)
+	}
+	for ref := range draft.writes {
+		typ, _, _ := strings.Cut(ref, "/")
+		s.changed(typ)
+	}
 	return nil
 }
 
@@ -166,10 +175,48 @@ func (s *Store) LiveTouched(typ string) {
 	s.liveVersions[typ]++
 }
 
+// changed notes that typ's rows changed. The root counts the change; a draft
+// remembers it, because sibling drafts would otherwise share one count.
+func (s *Store) changed(typ string) {
+	if s.parent == nil {
+		if s.contents == nil {
+			s.contents = map[string]uint64{}
+		}
+		s.contents[typ]++
+		return
+	}
+	if s.local == nil {
+		s.local = map[string]bool{}
+	}
+	s.local[typ] = true
+}
+
+// Fingerprint names the contents of types: the root store, the release and how
+// often each changed there. It is false when this store or a draft it descends from
+// changed one of them.
+func (s *Store) Fingerprint(types ...string) (*Store, string, bool) {
+	cursor := s
+	for cursor.parent != nil {
+		for _, typ := range types {
+			if cursor.local[typ] {
+				return nil, "", false
+			}
+		}
+		cursor = cursor.parent
+	}
+	var key strings.Builder
+	key.WriteString(s.current.Release())
+	for _, typ := range types {
+		fmt.Fprintf(&key, "/%d", s.contents[typ])
+	}
+	return cursor, key.String(), true
+}
+
 func (et *Type) SetRows(rows Index[*Row]) {
 	et.rows, et.fullImage = MemoryRows(rows), true
 	et.indexes.Reset()
 	if et.store != nil {
+		et.store.changed(et.info.Type)
 		for _, other := range et.store.types {
 			other.indexes.ResetUnique()
 		}
@@ -180,6 +227,7 @@ func (et *Type) SetRow(id string, value *Row) {
 	et.indexes.ReplaceReferences(et.info, et.rows, id, value)
 	et.rows.Set(id, value)
 	if et.store != nil {
+		et.store.changed(et.info.Type)
 		et.store.RefreshUniqueIndexes(et.info.Type, id)
 	}
 }
@@ -286,6 +334,7 @@ func (s *Store) UseCurrentRows() {
 		et.rows = SourceRows(s.current.Source(typ, nil))
 		et.indexes.Reset()
 		et.fullImage = false
+		s.changed(typ)
 	}
 }
 
@@ -376,6 +425,7 @@ func (s *Store) Install(info platform.RecordTypeInfo) error {
 		et.rows = SourceRows(s.current.Source(info.Type, nil))
 	}
 	s.types[info.Type], s.byGo[info.Go] = et, et
+	s.changed(info.Type)
 	s.generation++
 	return nil
 }
@@ -409,6 +459,7 @@ func (s *Store) LiveVersions() map[string]uint64 {
 func (s *Store) SetTouched(touched func(string, string)) { s.touched = touched }
 func (s *Store) InheritDecision(base *Store) {
 	s.parent, s.baseGeneration, s.writes = base.parent, base.baseGeneration, maps.Clone(base.writes)
+	s.local = maps.Clone(base.local)
 }
 func (s *Store) Restored()                     { s.generation++ }
 func (et *Type) Info() platform.RecordTypeInfo { return et.info }
@@ -438,7 +489,7 @@ func (s *Store) ExtendDecision(base *Store) {
 	maps.Copy(s.writes, base.writes)
 }
 func (s *Store) Anchor(parent *Store) error {
-	writes := map[string]bool{}
+	writes, local := map[string]bool{}, map[string]bool{}
 	cursor := s
 	var generation uint64
 	for cursor != parent {
@@ -450,10 +501,11 @@ func (s *Store) Anchor(parent *Store) error {
 			return fmt.Errorf("release record predecessor changed")
 		}
 		maps.Copy(writes, cursor.writes)
+		maps.Copy(local, cursor.local)
 		generation = cursor.baseGeneration
 		cursor = predecessor
 	}
-	s.parent, s.baseGeneration, s.writes = parent, generation, writes
+	s.parent, s.baseGeneration, s.writes, s.local = parent, generation, writes, local
 	return nil
 }
 

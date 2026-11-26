@@ -15,6 +15,9 @@ type stateQueries interface {
 	Query(context.Context, string, ...any) (pgx.Rows, error)
 	QueryRow(context.Context, string, ...any) pgx.Row
 }
+
+const pointReadMemory = 4096
+
 type postgresStateRead struct {
 	mu       sync.Mutex
 	tx       pgx.Tx
@@ -23,6 +26,7 @@ type postgresStateRead struct {
 	position int64
 	stop     func() bool
 	closed   bool
+	records  map[[2]string]StateCurrent
 }
 
 func (j *Postgres) BeginStateRead(ctx context.Context, tenant string, expected int64) (StateReadView, error) {
@@ -86,12 +90,47 @@ func readState[T any](v *postgresStateRead, ctx context.Context, tenant string, 
 	}
 	return value, err
 }
+func (v *postgresStateRead) current(ctx context.Context, db stateQueries, typ, id string) (StateCurrent, error) {
+	key := [2]string{typ, id}
+	if current, ok := v.records[key]; ok {
+		return current, nil
+	}
+	current, err := stateCurrent(ctx, db, v.tenant, typ, id)
+	if err == nil && len(v.records) < pointReadMemory {
+		if v.records == nil {
+			v.records = map[[2]string]StateCurrent{}
+		}
+		v.records[key] = current
+	}
+	return current, err
+}
 func (v *postgresStateRead) StateCurrent(ctx context.Context, tenant, typ, id string) (StateCurrent, error) {
-	return readState(v, ctx, tenant, func(db stateQueries) (StateCurrent, error) { return stateCurrent(ctx, db, tenant, typ, id) })
+	return readState(v, ctx, tenant, func(db stateQueries) (StateCurrent, error) { return v.current(ctx, db, typ, id) })
 }
 func (v *postgresStateRead) StateCurrents(ctx context.Context, tenant, typ string, ids []string) (map[string]StateCurrent, error) {
 	return readState(v, ctx, tenant, func(db stateQueries) (map[string]StateCurrent, error) {
-		return stateCurrents(ctx, db, tenant, typ, ids, nil)
+		out := make(map[string]StateCurrent, len(ids))
+		missing := make([]string, 0, len(ids))
+		for _, id := range ids {
+			if current, ok := v.records[[2]string{typ, id}]; ok {
+				if len(current.Image) != 0 {
+					out[id] = current
+				}
+			} else {
+				missing = append(missing, id)
+			}
+		}
+		if len(missing) == 0 {
+			return out, nil
+		}
+		found, err := stateCurrents(ctx, db, tenant, typ, missing, nil)
+		if err != nil {
+			return nil, err
+		}
+		for id, current := range found {
+			out[id] = current
+		}
+		return out, nil
 	})
 }
 func (v *postgresStateRead) StateWindow(ctx context.Context, tenant, typ string, window StateWindow) (StateWindowResult, error) {
@@ -100,7 +139,10 @@ func (v *postgresStateRead) StateWindow(ctx context.Context, tenant, typ string,
 	})
 }
 func (v *postgresStateRead) StateRecord(ctx context.Context, tenant, typ, id string) (json.RawMessage, error) {
-	return readState(v, ctx, tenant, func(db stateQueries) (json.RawMessage, error) { return stateRecord(ctx, db, tenant, typ, id) })
+	return readState(v, ctx, tenant, func(db stateQueries) (json.RawMessage, error) {
+		current, err := v.current(ctx, db, typ, id)
+		return current.Image, err
+	})
 }
 func (v *postgresStateRead) StateHistory(ctx context.Context, tenant, typ, id string, after, through int) ([]json.RawMessage, error) {
 	return readState(v, ctx, tenant, func(db stateQueries) ([]json.RawMessage, error) {

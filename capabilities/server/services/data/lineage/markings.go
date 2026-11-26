@@ -105,7 +105,9 @@ type MarkingCache[K comparable] struct {
 	Image *ImageMarkings
 }
 
-func (c *MarkingCache[K]) Get(key K, generation uint64, image bool, build func() MarkingIndex) MarkingIndex {
+// Get returns the index cached under key, or builds one. An index built for a
+// store that is not cacheable is never kept for other callers.
+func (c *MarkingCache[K]) Get(key K, cacheable, image bool, build func() MarkingIndex) MarkingIndex {
 	var shared *ImageMarkings
 	if image && c.Image != nil {
 		shared = c.Image
@@ -117,11 +119,13 @@ func (c *MarkingCache[K]) Get(key K, generation uint64, image bool, build func()
 	}
 	c.mu.Lock()
 	defer c.mu.Unlock()
-	if c.key == key && c.index.Generation == generation && c.index.built() {
+	if cacheable && c.key == key && c.index.built() {
 		return c.index
 	}
 	index := build()
-	c.key, c.index = key, index
+	if cacheable {
+		c.key, c.index = key, index
+	}
 	if shared != nil {
 		shared.index = index
 	}
