@@ -265,7 +265,7 @@ test("reads: each read list opens, the audit loads its next page, and a marking 
   const main = page.getByRole("main");
   for (const [app, entry] of [
     ["Home", "Proposals"], ["Operations", "Runs"], ["Operations", "Logs"], ["Operations", "Alerts"], ["Operations", "Audit"],
-    ["Admin", "Teams"], ["Admin", "Business roles"], ["Admin", "Markings"], ["Admin", "Credentials"], ["Admin", "Models"],
+    ["Admin", "Teams"], ["Admin", "Roles & permissions"], ["Admin", "Markings"], ["Admin", "Credentials"], ["Admin", "Models"],
     ["Admin", "Support grants"], ["Admin", "Language and vocabulary"], ["Data", "Lineage"], ["AI", "Knowledge"],
   ]) {
     await open(page, app, entry);
@@ -290,41 +290,39 @@ test("reads: each read list opens, the audit loads its next page, and a marking 
   await open(page, "Admin", "Markings");
   await page.getByRole("button", { name: "New", exact: true }).click();
   const dialog = page.getByRole("dialog");
-  await dialog.getByRole("textbox", { name: "title" }).fill("Trunk marking");
-  await dialog.getByRole("button", { name: "Create", exact: true }).click();
+  await dialog.getByRole("textbox", { name: /^Marking title/ }).fill("Trunk marking");
+  await dialog.getByRole("button", { name: "Save marking", exact: true }).click();
   await expect(dialog).toHaveCount(0);
-  await main.getByRole("row", { name: /Trunk marking/ }).click();
-  await page.getByRole("dialog", { name: "Details" }).getByRole("button", { name: "Archive marking", exact: true }).click();
-  await page.getByRole("alertdialog").getByRole("button", { name: "Archive marking", exact: true }).click();
-  await expect(main.getByRole("row", { name: /Trunk marking.*Archived/ })).toBeVisible();
+  const markingRow = main.getByRole("row").filter({ hasText: "Trunk marking" });
+  await markingRow.getByRole("button", { name: "Archive", exact: true }).click();
+  await page.getByRole("alertdialog").getByRole("button", { name: "Archive", exact: true }).click();
+  await expect(main.getByRole("row").filter({ hasText: "Trunk marking" })).toContainText("Archived");
 });
 
 
 test("teams: create a team with two members, open it and remove it", async ({ page }) => {
   await signIn(page);
   await open(page, "Admin", "Teams");
-  await page.getByRole("button", { name: "New", exact: true }).click();
+  await page.getByRole("button", { name: "New", exact: true }).first().click();
   const form = page.getByRole("dialog");
-  await form.getByRole("textbox", { name: /^Name/ }).fill("Trunk review team");
-  const members = form.getByRole("button", { name: /^Members/ });
+  await form.getByRole("textbox", { name: /^Team name/ }).fill("Trunk review team");
+  const members = form.getByRole("combobox", { name: /^Members/ });
   await members.click();
   const options = page.getByRole("listbox");
-  await options.getByRole("option", { name: "韩奥", exact: true }).click();
-  await options.getByRole("option", { name: "田雪", exact: true }).click();
+  await options.getByRole("option", { name: /韩奥/ }).click();
+  await options.getByRole("option", { name: /田雪/ }).click();
   await page.keyboard.press("Escape");
-  await form.getByRole("button", { name: "Create", exact: true }).click();
+  await form.getByRole("button", { name: "Save team", exact: true }).click();
   await expect(form).toBeHidden();
 
-  const team = page.getByRole("row", { name: /Trunk review team/ });
-  await team.click();
-  const details = page.getByRole("dialog", { name: "Details" });
-  await expect(details.getByRole("heading", { name: "Trunk review team" })).toBeVisible();
-  await details.getByRole("button", { name: "Edit", exact: true }).click();
-  await expect(members).toContainText("韩奥");
-  await expect(members).toContainText("田雪");
+  const team = page.getByRole("row").filter({ hasText: "Trunk review team" });
+  await expect(team).toContainText("韩奥");
+  await expect(team).toContainText("田雪");
+  await team.getByRole("button", { name: "Edit", exact: true }).click();
+  await expect(form).toBeVisible();
   await form.getByRole("button", { name: "Cancel", exact: true }).click();
-  await details.getByRole("button", { name: "Remove team", exact: true }).click();
-  await page.getByRole("alertdialog").getByRole("button", { name: "Remove team", exact: true }).click();
+  await team.getByRole("button", { name: "Remove", exact: true }).click();
+  await page.getByRole("alertdialog").getByRole("button", { name: "Remove", exact: true }).click();
   await expect(team).toHaveCount(0);
 });
 

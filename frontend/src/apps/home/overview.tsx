@@ -10,6 +10,7 @@ import { WorkspaceWelcome } from "../../pages/WorkspaceWelcome";
 import { dashboardPage } from "../../pages/DashboardPage";
 import { PageTitle, useGutter } from "../../pages/frame";
 import { iconOf } from "../../pages/icons";
+import { RequestAccessButton } from "../../pages/rebac/RequestAccessDialog";
 import { dateText, t } from "../../i18n";
 
 type Directory = { resources: Api.ResourceEntry[] };
@@ -54,7 +55,7 @@ function BusinessOverview({ apps }: { apps: Api.ApplicationView[] }) {
       content={
         <LayoutContent role="main" padding={0}>
           <VStack gap={6} padding={gutter} paddingBlockStart={3}>
-            <PageTitle title={t("Overview")} />
+            <PageTitle title={t("Overview")} actions={<RequestAccessButton variant="secondary" size="sm" />} />
             <Grid columns={{ minWidth: 280, max: 3 }} gap={4}>
               {apps.map((app) => {
                 const id = app.name || app.app;

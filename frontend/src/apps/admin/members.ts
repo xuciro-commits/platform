@@ -1,5 +1,6 @@
 import { createElement } from "react";
 import type { Api } from "../../host";
+import { t } from "../../i18n";
 import { listPage } from "../../pages/ListEntry";
 import { MemberDirectoryEntry } from "../../pages/MemberDirectoryEntry";
 import { MemberRoles } from "../../pages/MemberRoles";
@@ -21,10 +22,20 @@ const Members = listPage<Api.MemberView[], Api.MemberView>({
           .map(([app, role]) => `${app}: ${role}`)
           .join(", "),
     },
-    { key: "markings", header: "Markings", width: 200, text: (member) => (member.markings ?? []).join(", ") },
+    {
+      key: "temporary",
+      header: "Temporary grants",
+      width: 150,
+      text: (member) => {
+        const count = (member.grants ?? []).filter((g) => Boolean(g.until)).length + (member.scheduledGrants?.length ?? 0);
+        return count > 0 ? t("{count} active").replace("{count}", String(count)) : "";
+      },
+    },
+    { key: "markings", header: "Markings", width: 180, text: (member) => (member.markings ?? []).join(", ") },
     { key: "timezone", header: "Time zone", width: 140, text: (member) => member.timezone ?? "" },
   ],
   groups: [{ key: "status", label: "Status", of: (member) => member.status ?? "active" }],
+  actions: { create: "platform.member.add" },
   detail: (_, member) => (member ? createElement(MemberRoles, { member }) : null),
 });
 

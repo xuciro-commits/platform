@@ -34,6 +34,8 @@ import { type InboxItem, type InboxTab, inTab, inboxTabs, useInbox } from "./inb
 import { motionEases, motionStyles, motionTimings, prefersReducedMotion } from "./motion";
 import { ReferenceLink } from "./ReferenceField";
 import { useRecordHref } from "../apps/entries";
+import { AccessRequestDecisionCard } from "./rebac/AccessRequestDecisionCard";
+import { todayISO, useMemberDirectoryMap, useUnitChoices } from "./rebac/shared";
 
 const base = "/home/inbox";
 const HOVER_INTENT_MS = 90;
@@ -174,6 +176,28 @@ function RelatedRecord({ reference }: { reference: string }) {
   return <ReferenceLink type={type} id={id} name={name} />;
 }
 
+function InboxAccessRequestSection({ requestId }: { requestId: string }) {
+  const requests = useRead<Api.AccessRequest[]>("/v1/access-requests");
+  const apps = useRead<Api.AppInfo[]>("/v1/apps");
+  const catalog = useRead<Api.Action[]>("/v1/actions");
+  const { nameOf: memberName } = useMemberDirectoryMap();
+  const { unitName } = useUnitChoices();
+  if (requests.status !== "ready") return null;
+  const found = requests.data.find((candidate) => candidate.id === requestId);
+  if (!found) return null;
+  const appTitle = (id?: string) => (apps.status === "ready" ? apps.data.find((entry) => entry.id === id)?.title ?? id ?? "" : id ?? "");
+  return (
+    <AccessRequestDecisionCard
+      request={found}
+      appTitle={appTitle}
+      unitLabel={unitName}
+      memberName={memberName}
+      today={todayISO()}
+      actions={catalog.status === "ready" ? catalog.data : []}
+    />
+  );
+}
+
 function ItemPane({ item, act, onClose, isFullWidth, canMarkUnread }: { item: InboxItem; act: Act; onClose: () => void; isFullWidth: boolean; canMarkUnread: boolean }) {
   const marked = useRef(new Set<string>());
   useEffect(() => {
@@ -198,7 +222,8 @@ function ItemPane({ item, act, onClose, isFullWidth, canMarkUnread }: { item: In
       <IconButton variant="ghost" label={t("Close")} tooltip={t("Close")} icon={<Icon icon={XMarkIcon} size="sm" />} onClick={onClose} />
     </HStack>
   );
-  const record = item.ref && !item.ref.startsWith("work.task/") ? item.ref : undefined;
+  const accessRequestId = task?.ref === "read:access-requests" && task.key?.startsWith("access:") ? task.key.slice(7) : undefined;
+  const record = item.ref && !item.ref.startsWith("work.task/") && !item.ref.startsWith("read:") ? item.ref : undefined;
   const recordHref = useRecordHref();
   return (
     <VStack key={item.id} height="100%" xstyle={motionStyles.tabEnter}>
@@ -268,7 +293,8 @@ function ItemPane({ item, act, onClose, isFullWidth, canMarkUnread }: { item: In
               <Button label={t("Open full page")} variant="primary" href={recordHref(item.record.type, item.record.id)} />
             </HStack>
           )}
-          {task?.state === "open" && (
+          {accessRequestId && <InboxAccessRequestSection requestId={accessRequestId} />}
+          {task?.state === "open" && !accessRequestId && (
             <HStack gap={2} wrap="wrap">
               {task.answers?.length ? (
                 task.answers.map((answer, index) => (

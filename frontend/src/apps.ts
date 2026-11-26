@@ -264,7 +264,9 @@ export const apps: App[] = [
       {
         title: "Access",
         items: [
-          { id: "roles", label: "Business roles", icon: KeyIcon },
+          { id: "access-requests", label: "Access requests", icon: InboxIcon },
+          { id: "roles", label: "Roles & permissions", icon: KeyIcon },
+          { id: "policies", label: "Policies & inspector", icon: ShieldCheckIcon },
           { id: "markings", label: "Markings", icon: TagIcon },
           { id: "support-grants", label: "Support grants", icon: LifebuoyIcon },
         ],

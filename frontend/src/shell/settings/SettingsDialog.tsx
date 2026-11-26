@@ -8,20 +8,22 @@ import { HStack, Layout, LayoutContent, StackItem, VStack } from "@astryxdesign/
 import { SideNav, SideNavItem, SideNavSection } from "@astryxdesign/core/SideNav";
 import { Heading, Text } from "@astryxdesign/core/Text";
 import { colorVars, radiusVars, spacingVars } from "@astryxdesign/core/theme/tokens.stylex";
-import { BellIcon, GlobeAltIcon, LockClosedIcon, PaintBrushIcon, UserCircleIcon } from "@heroicons/react/24/outline";
+import { BellIcon, GlobeAltIcon, KeyIcon, LockClosedIcon, PaintBrushIcon, UserCircleIcon } from "@heroicons/react/24/outline";
 import * as stylex from "@stylexjs/stylex";
 import { useId, useState } from "react";
 import { t } from "../../i18n";
 import { useAccount } from "../account";
 import { AppearancePanel, LanguagePanel, NotificationsPanel, ProfilePanel, SecurityPanel } from "./panels";
+import { SelfAccessPanel } from "../../pages/rebac/SelfAccessPanel";
 import { type IconComponent, row } from "../../pages/SettingsRows";
 
-type PanelId = "profile" | "security" | "appearance" | "notifications" | "language";
+type PanelId = "profile" | "access" | "security" | "appearance" | "notifications" | "language";
 type Panel = { id: PanelId; label: string; description: string; icon: IconComponent };
 
 const groups: { label: string; panels: Panel[] }[] = [
   { label: "Account", panels: [
     { id: "profile", label: "Profile", description: "How you appear to everyone else in the workspace.", icon: UserCircleIcon },
+    { id: "access", label: "Access & delegation", description: "Your active roles, access requests and temporary colleague delegations.", icon: KeyIcon },
     { id: "security", label: "Login & security", description: "The devices signed in as you right now.", icon: LockClosedIcon },
   ] },
   { label: "Preferences", panels: [
@@ -42,6 +44,7 @@ const styles = stylex.create({
 
 function PanelBody({ panel, account }: { panel: PanelId; account: ReturnType<typeof useAccount> }) {
   if (panel === "profile") return <ProfilePanel account={account} />;
+  if (panel === "access") return <SelfAccessPanel />;
   if (panel === "security") return <SecurityPanel />;
   if (panel === "appearance") return <AppearancePanel account={account} />;
   if (panel === "notifications") return <NotificationsPanel account={account} />;

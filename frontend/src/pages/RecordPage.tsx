@@ -31,6 +31,8 @@ import { enterable } from "./ParameterInput";
 import { PersonLabel } from "./MemberField";
 import { motionStyles } from "./motion";
 import { PropertyField } from "./PropertyField";
+import { ProjectAccessPanel } from "./rebac/ProjectAccessDialog";
+import { RequestAccessButton } from "./rebac/RequestAccessDialog";
 import { dots, type Instances, Transitions } from "./Transitions";
 import { plain, present } from "./values";
 
@@ -184,9 +186,11 @@ export function RecordPage({ described, id, listPath, listTitle, instances, enti
     if (loaded) search?.remember({ href: base, label: name, type: described.type, id });
   }, [search, loaded, base, name, described.type, id]);
 
+  const isProjectRecord = described.type === "build.app";
   const tabs = [
     { value: "details", label: "Details" },
     ...(definition ? [{ value: "preview", label: "Preview" }] : []),
+    ...(isProjectRecord ? [{ value: "access", label: "Access" }] : []),
     { value: "activity", label: "Activity" },
     ...(changes.length ? [{ value: "changes", label: "Changes" }] : []),
     ...((links.status === "ready" ? relatedGroups(links.data).length > 0 : asked === "links") ? [{ value: "links", label: "Links" }] : []),
@@ -288,6 +292,13 @@ export function RecordPage({ described, id, listPath, listTitle, instances, enti
               headingLevel={2}
               title={t("You cannot see this record")}
               description={read.reason || t("Ask an administrator of this workspace for access.")}
+              actions={
+                <RequestAccessButton
+                  variant="primary"
+                  fixedProject={isProjectRecord ? id : undefined}
+                  fixedApp={!isProjectRecord && described.type.includes(".") ? described.type.split(".")[0] : undefined}
+                />
+              }
             />
           )}
           {kept && (
@@ -330,6 +341,7 @@ export function RecordPage({ described, id, listPath, listTitle, instances, enti
               )}
               {tab === "links" && <RecordLinks read={links} id={id} entities={entities} />}
               {tab === "files" && <RecordFiles read={files} attach={attach} detach={detach} target={`${described.type}/${id}`} />}
+              {tab === "access" && isProjectRecord && <ProjectAccessPanel project={id} title={name} />}
               {tab === "activity" && <RecordActivity described={described} id={id} comments={comments} catalog={catalog} entities={entities} />}
               {tab === "preview" && definition && <ObjectPreview definition={definition} source={detail} catalog={catalog} />}
               {tab === "properties" && <Rail described={body} editor={editor} kept={kept} refs={refs} people={people} restricted={restricted} collaboration={collaboration} />}

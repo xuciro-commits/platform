@@ -1,4 +1,6 @@
+import { createElement } from "react";
 import type { Api } from "../../host";
+import { UnitAccessPanel } from "../../pages/rebac/UnitAccessPanel";
 import { treeList } from "../../pages/TreeList";
 
 type Span = { from?: string; until?: string; periods?: Api.Period[] };
@@ -30,4 +32,5 @@ export default treeList<Api.OrgSeed, Unit>({
     { key: "kind", header: "Kind", width: 140, text: (unit) => unit.kind },
     { key: "people", header: "People", width: 110, kind: "number", text: (unit) => String(unit.people), value: (unit) => unit.people },
   ],
+  detail: (unitId, answer) => createElement(UnitAccessPanel, { unitId, org: answer }),
 });

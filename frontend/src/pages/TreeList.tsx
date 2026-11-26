@@ -2,7 +2,7 @@ import { Banner } from "@astryxdesign/core/Banner";
 import { EmptyState } from "@astryxdesign/core/EmptyState";
 import { Icon } from "@astryxdesign/core/Icon";
 import { IconButton } from "@astryxdesign/core/IconButton";
-import { HStack, Layout, LayoutContent, LayoutHeader, VStack } from "@astryxdesign/core/Layout";
+import { HStack, Layout, LayoutContent, LayoutHeader, LayoutPanel, VStack } from "@astryxdesign/core/Layout";
 import { ScrollableArea } from "@astryxdesign/core/ScrollableArea";
 import { Section } from "@astryxdesign/core/Section";
 import { SegmentedControl, SegmentedControlItem } from "@astryxdesign/core/SegmentedControl";
@@ -15,8 +15,9 @@ import { TextInput } from "@astryxdesign/core/TextInput";
 import { Timestamp } from "@astryxdesign/core/Timestamp";
 import { colorVars } from "@astryxdesign/core/theme/tokens.stylex";
 import { ArrowPathIcon, MagnifyingGlassIcon } from "@heroicons/react/24/outline";
+import { XMarkIcon } from "@heroicons/react/24/outline";
 import * as stylex from "@stylexjs/stylex";
-import { type KeyboardEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { type KeyboardEvent, type ReactNode, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { reread, useRead } from "../host";
 import { dayText, t } from "../i18n";
 import { PageTitle, useGutter } from "./frame";
@@ -41,6 +42,7 @@ export type TreeDefinition<Answer, Row> = {
   nodes: { (answer: Answer, view: string): TreeNode<Row>[] };
   rollup: (row: Row, children: Row[]) => Row;
   columns: TreeColumn<Row>[];
+  detail?: (id: string, answer: Answer, view: string) => ReactNode;
 };
 
 type Item<Row> = { id: string; row: Row; children?: Item<Row>[] } & Record<string, unknown>;
@@ -300,11 +302,23 @@ export function treeList<Answer, Row>(definition: TreeDefinition<Answer, Row>) {
             {data.length > 0 && (
               <ScrollableArea ref={bodyRef} axis="block" role="region" label={t("Records")} height="100%">
                 <VStack paddingInline={gutter} paddingBlockEnd={gutter}>
-                  <Table<Item<Row>> data={visibleData} columns={columns} idKey="id" dividers="rows" hasHover textOverflow="truncate" plugins={{ tree, sort, keyboard }} />
+                  <Table data={visibleData} columns={columns} idKey="id" dividers="rows" hasHover textOverflow="truncate" plugins={{ tree, sort, keyboard }} />
                 </VStack>
               </ScrollableArea>
             )}
           </LayoutContent>
+        }
+        end={
+          read.status === "ready" && focused && definition.detail ? (
+            <LayoutPanel width={360} padding={gutter} hasDivider role="complementary" label={t(definition.title)}>
+              <VStack gap={2}>
+                <HStack hAlign="end">
+                  <IconButton label={t("Close")} tooltip={t("Close")} variant="ghost" size="sm" icon={<Icon icon={XMarkIcon} size="sm" />} onClick={() => setFocused(null)} />
+                </HStack>
+                {definition.detail(focused, read.data, view)}
+              </VStack>
+            </LayoutPanel>
+          ) : undefined
         }
       />
     );

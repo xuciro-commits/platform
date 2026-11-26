@@ -1,14 +1,19 @@
 import { Button } from "@astryxdesign/core/Button";
+import { DateInput } from "@astryxdesign/core/DateInput";
 import { EmptyState } from "@astryxdesign/core/EmptyState";
 import { HStack, Layout, LayoutContent, LayoutHeader, VStack } from "@astryxdesign/core/Layout";
 import { Link } from "@astryxdesign/core/Link";
+import { List, ListItem } from "@astryxdesign/core/List";
 import { MetadataList, MetadataListItem } from "@astryxdesign/core/MetadataList";
+import { Selector } from "@astryxdesign/core/Selector";
 import { Skeleton } from "@astryxdesign/core/Skeleton";
 import { Heading, Text } from "@astryxdesign/core/Text";
+import { TextInput } from "@astryxdesign/core/TextInput";
+import { Token } from "@astryxdesign/core/Token";
 import { useToast } from "@astryxdesign/core/Toast";
 import { useState } from "react";
 import { useRecordHref } from "../apps/entries";
-import { type Api, type Read, useRead } from "../host";
+import { type Api, type Read, reread, useRead } from "../host";
 import { t } from "../i18n";
 import { reasonOf, send } from "./act";
 import { ActionDialog } from "./ActionDialog";
@@ -17,6 +22,7 @@ import { elementHref, elementType, personStereotype } from "./enterprise";
 import { PageTitle, useGutter } from "./frame";
 import { ListView } from "./ListPage";
 import { MemberInput, PersonLabel } from "./MemberField";
+import { asIsoDate } from "./rebac/shared";
 import { present } from "./values";
 
 type Span = { from?: string; until?: string; periods?: Api.Period[] };
@@ -26,6 +32,7 @@ type Write = { (): Promise<void> };
 
 const signsInAs = "SignsInAs";
 const membership = "ActualOrganizationRole";
+const unitStereotype = "ActualOrganization";
 const today = () => new Date().toISOString().slice(0, 10);
 const alive = (span: Span, day: string) =>
   (span.periods?.length ? span.periods : [span]).some((period) => (!period.from || period.from <= day) && (!period.until || day < period.until));
@@ -105,6 +112,7 @@ function AccountSection({ person, model, names, actions }: { person: string; mod
     setBusy(true);
     try {
       await write();
+      reread();
       setPicked("");
     } catch (problem) {
       toast({ body: reasonOf(problem), type: "error" });
@@ -129,6 +137,129 @@ function AccountSection({ person, model, names, actions }: { person: string; mod
           <MemberInput id={picked} label={t("Account that signs in as this person")} onChange={setPicked} />
           <Button label={t("Link account")} variant="secondary" isDisabled={!picked || busy}
             onClick={() => void run(async () => { await send(relate, `signs-${crypto.randomUUID().slice(0, 8)}`, { stereotype: signsInAs, source: `member:${picked}`, target: person }); })} />
+        </HStack>
+      )}
+    </VStack>
+  );
+}
+
+function UnitsSection({ person, account, model, actions }: { person: string; account?: string; model: Api.EnterpriseModel; actions: Api.Action[] }) {
+  const toast = useToast();
+  const day = today();
+  const units = unitsOf(model, person, account, day);
+  const availableUnits = model.elements.filter((el) => el.stereotype === unitStereotype && !el.deleted && alive(el, day));
+  const nameOf = (unitId: string) => model.elements.find((candidate) => candidate.id === unitId)?.name ?? unitId;
+
+  const [selectedUnit, setSelectedUnit] = useState("");
+  const [orgRole, setOrgRole] = useState("member");
+  const [untilDate, setUntilDate] = useState("");
+  const [busy, setBusy] = useState(false);
+
+  const relate = actions.find((action) => action.schema === "enterprise.relationship.add");
+  const end = actions.find((action) => action.schema === "enterprise.relationship.end");
+  const chosenUnit = availableUnits.some((u) => u.id === selectedUnit) ? selectedUnit : availableUnits[0]?.id ?? "";
+
+  const addUnitMembership = async () => {
+    if (!relate || !chosenUnit) return;
+    setBusy(true);
+    try {
+      await send(relate, `orgrole-${crypto.randomUUID().slice(0, 8)}`, {
+        stereotype: membership,
+        source: person,
+        target: chosenUnit,
+        role: orgRole.trim() || "member",
+        ...(untilDate ? { until: untilDate } : {}),
+      });
+      reread();
+      setUntilDate("");
+      toast({ body: t("Unit placement added.") });
+    } catch (problem) {
+      toast({ body: reasonOf(problem), type: "error" });
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const endUnitMembership = async (relId: string) => {
+    if (!end) return;
+    setBusy(true);
+    try {
+      await send(end, relId, { until: day });
+      reread();
+      toast({ body: t("Unit placement ended.") });
+    } catch (problem) {
+      toast({ body: reasonOf(problem), type: "error" });
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <VStack gap={3}>
+      <Heading level={2}>{t("Units")}</Heading>
+      {units.length > 0 ? (
+        <List hasDividers>
+          {units.map((relation) => (
+            <ListItem
+              key={relation.id}
+              label={nameOf(relation.target)}
+              description={[
+                relation.role ? t(relation.role) : t("member"),
+                relation.until ? t("Until {date}").replace("{date}", relation.until) : "",
+              ].filter(Boolean).join(" · ")}
+              endContent={
+                <HStack gap={1.5} vAlign="center">
+                  {relation.until && <Token size="sm" color="blue" label={t("Until {date}").replace("{date}", relation.until)} />}
+                  {end && (
+                    <Button
+                      label={t("End placement")}
+                      variant="secondary"
+                      size="sm"
+                      isDisabled={busy}
+                      onClick={() => void endUnitMembership(relation.id)}
+                    />
+                  )}
+                </HStack>
+              }
+            />
+          ))}
+        </List>
+      ) : (
+        <Text type="supporting" color="secondary">{t("Not placed in any unit.")}</Text>
+      )}
+      {relate && availableUnits.length > 0 && (
+        <HStack gap={2} vAlign="end" wrap="wrap">
+          <Selector
+            label={t("Organization unit")}
+            width={220}
+            hasSearch={availableUnits.length > 8}
+            value={chosenUnit}
+            onChange={setSelectedUnit}
+            options={availableUnits.map((u) => ({ value: u.id, label: u.name || u.id }))}
+          />
+          <TextInput
+            label={t("Position role")}
+            width={160}
+            value={orgRole}
+            placeholder={t("member")}
+            onChange={setOrgRole}
+          />
+          <DateInput
+            label={t("Until")}
+            isOptional
+            hasClear
+            width={170}
+            format="system_date"
+            value={asIsoDate(untilDate)}
+            onChange={(next) => setUntilDate(next ?? "")}
+          />
+          <Button
+            label={t("Place in unit")}
+            variant="secondary"
+            size="sm"
+            isDisabled={busy || !chosenUnit}
+            onClick={() => void addUnitMembership()}
+          />
         </HStack>
       )}
     </VStack>
@@ -171,8 +302,6 @@ export function PersonPage({ id }: { id: string }) {
   }
   const day = today();
   const account = accountOf(model, id, day)?.source.replace(/^member:/, "");
-  const nameOf = (unit: string) => model.elements.find((candidate) => candidate.id === unit)?.name ?? unit;
-  const units = unitsOf(model, id, account, day);
   const groups = references.status === "ready" ? references.data : [];
   const described = entities.status === "ready" ? entities.data : [];
   const facetOf = (group: Api.EnterpriseReferenceGroup) => {
@@ -206,14 +335,7 @@ export function PersonPage({ id }: { id: string }) {
             {directory.status === "ready" && actions.status === "ready" && (
               <AccountSection person={id} model={model} names={directory.data.names} actions={actions.data} />
             )}
-            <VStack gap={3}>
-              <Heading level={2}>{t("Units")}</Heading>
-              {units.length ? (
-                <MetadataList>
-                  {units.map((relation) => <MetadataListItem key={relation.id} label={nameOf(relation.target)}>{t(relation.role ?? "")}</MetadataListItem>)}
-                </MetadataList>
-              ) : <Text type="supporting" color="secondary">{t("Not placed in any unit.")}</Text>}
-            </VStack>
+            <UnitsSection person={id} account={account} model={model} actions={actions.status === "ready" ? actions.data : []} />
             {groups.flatMap((group) => {
               const entity = facetOf(group);
               return entity ? group.records.map((record) => <FacetSection key={`${record.type}/${record.id}`} type={record.type} id={record.id} entity={entity} />) : [];
