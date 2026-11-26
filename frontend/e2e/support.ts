@@ -38,7 +38,7 @@ export async function signIn(page: Page, seat = "admin-1 · acceptance") {
 }
 
 export async function open(page: Page, app: string, entry: string) {
-  await page.getByRole("link", { name: app, exact: true }).click();
+  await page.getByRole("link", { name: app, exact: true }).first().click();
   await page.getByRole("navigation", { name: "Primary navigation" }).getByRole("link", { name: entry, exact: true }).click();
 }
 

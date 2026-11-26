@@ -25,7 +25,7 @@ async function as(seat: string) {
 
 async function crm(entry: string) {
   await page.goto("/");
-  await page.getByRole("link", { name: "CRM", exact: true }).click();
+  await page.getByRole("link", { name: "CRM", exact: true }).first().click();
   await page.getByRole("navigation", { name: "Primary navigation" }).getByRole("link", { name: entry, exact: true }).click();
   await expect(page.getByRole("main", { name: entry, exact: true })).toBeVisible();
 }
@@ -114,7 +114,7 @@ test("official tenant: the deal is won and the CRM home counts its revenue", asy
 
   await as("manager-1");
   await page.goto("/");
-  await page.getByRole("link", { name: "CRM", exact: true }).click();
+  await page.getByRole("link", { name: "CRM", exact: true }).first().click();
   await expect(page.getByText("Won revenue", { exact: true })).toBeVisible();
   await expect(page.getByRole("main").getByText(/368,000/).first()).toBeVisible();
 });

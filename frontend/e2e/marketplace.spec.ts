@@ -54,8 +54,8 @@ test("blank tenant: a package role granted to a member opens CRM for them, its e
 
   await signOut();
   await signIn(page, "user-1 · blank");
-  await expect(page.getByRole("link", { name: "CRM", exact: true })).toBeVisible();
-  await page.getByRole("link", { name: "CRM", exact: true }).click();
+  await expect(page.getByRole("link", { name: "CRM", exact: true }).first()).toBeVisible();
+  await page.getByRole("link", { name: "CRM", exact: true }).first().click();
   await nav.getByRole("link", { name: "Deals", exact: true }).click();
   await page.getByRole("radio", { name: "Board" }).click();
   await expect(page.getByRole("region", { name: "Qualification", exact: true })).toContainText("Nothing in this column yet");
@@ -100,7 +100,7 @@ test("blank tenant: a package role granted to a member opens CRM for them, its e
 test("blank tenant: the sales rep runs a lead to Won and the sales manager sees it on the board and the dashboard", async () => {
   await signOut();
   await signIn(page, "user-1 · blank");
-  await page.getByRole("link", { name: "CRM", exact: true }).click();
+  await page.getByRole("link", { name: "CRM", exact: true }).first().click();
   await nav.getByRole("link", { name: "Leads", exact: true }).click();
   await page.getByRole("link", { name: "林海", exact: true }).click();
   await edit(page, "Organization");
@@ -141,7 +141,7 @@ test("blank tenant: the sales rep runs a lead to Won and the sales manager sees 
 
   await signOut();
   await signIn(page, "manager-1 · blank");
-  await page.getByRole("link", { name: "CRM", exact: true }).click();
+  await page.getByRole("link", { name: "CRM", exact: true }).first().click();
   await nav.getByRole("link", { name: "Deals", exact: true }).click();
   await page.getByRole("radio", { name: "Board" }).click();
   await expect(page.getByRole("region", { name: "Won", exact: true }).getByRole("heading", { level: 4, name: "星海制造", exact: true })).toBeVisible();
@@ -174,8 +174,8 @@ test("blank tenant: retiring CRM removes its entry and keeps the records, reinst
 
   await signOut();
   await signIn(page, "user-1 · blank");
-  await expect(page.getByRole("link", { name: "CRM", exact: true })).toBeVisible();
-  await page.getByRole("link", { name: "CRM", exact: true }).click();
+  await expect(page.getByRole("link", { name: "CRM", exact: true }).first()).toBeVisible();
+  await page.getByRole("link", { name: "CRM", exact: true }).first().click();
   await nav.getByRole("link", { name: "Deals", exact: true }).click();
   await expect(page.getByRole("link", { name: "星海制造", exact: true }).first()).toBeVisible();
 });
@@ -228,7 +228,7 @@ test("upgrade tenant: CRM upgrades to a version with a new optional lead field a
   await page.getByRole("menuitem", { name: "Sign out", exact: true }).click();
   await enter();
   const nav = page.getByRole("navigation", { name: "Primary navigation" });
-  await page.getByRole("link", { name: "CRM", exact: true }).click();
+  await page.getByRole("link", { name: "CRM", exact: true }).first().click();
   await nav.getByRole("link", { name: "Leads", exact: true }).click();
   await page.getByRole("button", { name: "New", exact: true }).click();
   const lead = page.getByRole("dialog");
@@ -375,7 +375,7 @@ test("publisher tenant: a master data package installs under Admin → Master da
   await open(page, "Delivery", "Marketplace");
   await page.getByRole("combobox", { name: "Kind filter", exact: true }).click();
   await page.getByRole("option", { name: "Master data package", exact: true }).click();
-  const card = page.getByRole("listitem").filter({ hasText: "Units of measure" });
+  const card = page.getByRole("listitem").filter({ hasText: "Units of measure" }).filter({ hasText: "Local" });
   await expect(card).toContainText("Master data package");
   await expect(page.getByRole("listitem").filter({ hasText: "Application package" })).toHaveCount(0);
   await card.click();

@@ -508,7 +508,7 @@ test("roles: sales reps see only business menu entries and actions, and see a le
   await page.getByRole("button", { name: "Account", exact: true }).click();
   await page.getByRole("menuitem", { name: "Sign out", exact: true }).click();
   await as(page, "user-1");
-  await page.getByRole("link", { name: "CRM", exact: true }).click();
+  await page.getByRole("link", { name: "CRM", exact: true }).first().click();
   const nav = page.getByRole("navigation", { name: "Primary navigation" });
   await expect(nav.getByRole("link", { name: "Leads", exact: true })).toBeVisible();
   await expect(nav.getByRole("link", { name: "Settings", exact: true })).toHaveCount(0);
