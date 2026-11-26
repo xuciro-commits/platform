@@ -11,6 +11,7 @@ import (
 	"io"
 	"net/url"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"reflect"
 	"slices"
@@ -300,6 +301,66 @@ func TestInvariantK1TenantBackupExportImportAndRejections(t *testing.T) {
 				}
 			}
 
+			if mode == "postgres" {
+				binPath := filepath.Join(t.TempDir(), "platform-server")
+				buildCmd := exec.Command("go", "build", "-o", binPath, "./cmd/platform-server")
+				buildCmd.Dir = ".."
+				if out, err := buildCmd.CombinedOutput(); err != nil {
+					t.Fatalf("build platform-server: %v\n%s", err, out)
+				}
+				cliBackup := filepath.Join(t.TempDir(), "cli.backup.gz")
+				for _, badArgs := range [][]string{
+					{"-database", srcURL, "-export-tenant", live.ID, "-import-tenant", live.ID, "-backup", cliBackup},
+					{"-database", srcURL, "-export-tenant", live.ID},
+					{"-export-tenant", live.ID, "-backup", cliBackup},
+				} {
+					if cmdErr := exec.Command(binPath, badArgs...).Run(); cmdErr == nil {
+						t.Fatalf("expected non-zero exit for flags %v", badArgs)
+					}
+				}
+				exportOut, err := exec.Command(binPath, "-database", srcURL, "-export-tenant", live.ID, "-backup", cliBackup).CombinedOutput()
+				if err != nil {
+					t.Fatalf("CLI export failed: %v\n%s", err, exportOut)
+				}
+				if strings.Contains(string(exportOut), secretNote) {
+					t.Fatalf("CLI export leaked tenant record payload into logs: %s", exportOut)
+				}
+				cliInfo, err := os.Stat(cliBackup)
+				if err != nil || cliInfo.Mode().Perm() != 0o600 {
+					t.Fatalf("CLI backup mode = %o, err = %v; want 0600", cliInfo.Mode().Perm(), err)
+				}
+
+				baseURL := os.Getenv("PLATFORM_BENCH_DATABASE")
+				parsed, _ := url.Parse(baseURL)
+				cliDB := fmt.Sprintf("backup_cli_%d", time.Now().UnixNano())
+				adminConn, err := pgx.Connect(ctx, baseURL)
+				if err != nil {
+					t.Fatal(err)
+				}
+				if _, err := adminConn.Exec(ctx, "create database "+cliDB); err != nil {
+					_ = adminConn.Close(ctx)
+					t.Fatal(err)
+				}
+				_ = adminConn.Close(ctx)
+				defer func() {
+					conn, connErr := pgx.Connect(context.Background(), baseURL)
+					if connErr == nil {
+						_, _ = conn.Exec(context.Background(), "drop database if exists "+cliDB+" with (force)")
+						_ = conn.Close(context.Background())
+					}
+				}()
+				cliParsed := *parsed
+				cliParsed.Path = "/" + cliDB
+				cliURL := cliParsed.String()
+
+				importOut, err := exec.Command(binPath, "-database", cliURL, "-import-tenant", live.ID, "-backup", cliBackup).CombinedOutput()
+				if err != nil {
+					t.Fatalf("CLI import into empty DB failed: %v\n%s", err, importOut)
+				}
+				if cmdErr := exec.Command(binPath, "-database", cliURL, "-import-tenant", live.ID, "-backup", cliBackup).Run(); cmdErr == nil {
+					t.Fatal("CLI repeat import into non-empty DB succeeded; want non-zero exit")
+				}
+			}
 		})
 	}
 }

@@ -26,6 +26,7 @@ func main() {
 	allowLoopback := flag.Bool("allow-loopback-packages", false, "allow HTTP package and catalog addresses on loopback hosts for tests")
 	connectorOrigin := flag.String("test-connector-origin", os.Getenv("PLATFORM_TRUNK_CONNECTOR_ORIGIN"), "exact HTTPS loopback origin of the connector trunk stub")
 	connectorCert := flag.String("test-connector-cert", os.Getenv("PLATFORM_TRUNK_CONNECTOR_CERT"), "certificate of the connector trunk stub")
+	backup := registerBackupFlags()
 	flag.Parse()
 	if err := actions.ConfigureConnectorTrunk(*connectorOrigin, *connectorCert); err != nil {
 		log.Fatal(err)
@@ -33,7 +34,9 @@ func main() {
 	if *allowLoopback {
 		packages.SetAllowLoopback(true)
 	}
-	configureStandalone(deployment, admin)
+	if !backup.active() {
+		configureStandalone(deployment, admin)
+	}
 	deployment.RebuildWithCapabilities = func(id string, services runtimeprotocol.RuntimeCapabilities) (*platformserver.Tenant, error) {
 		return composition.NewTenantWithCapabilities(id, services, deployment.SeatsFor(id)...)
 	}
@@ -50,6 +53,12 @@ func main() {
 		development.Seats = []runtimeprotocol.Seat{{Subjects: []string{*admin}, Member: platform.Member{
 			ID: "builder", Roles: roles,
 		}}}
+	}
+	if backup.active() {
+		if err := backup.run(deployment, development); err != nil {
+			log.Fatal(err)
+		}
+		return
 	}
 	if err := deployment.Run(development); err != nil {
 		log.Fatal(err)
