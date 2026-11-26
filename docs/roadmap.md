@@ -42,9 +42,11 @@
 
 灵魂：客户的数据只落在接受路径写下的条目里；重启、换机、从备份恢复，读回的是同一份记录、修订与编号。
 
-- 3.1a 主干跑在 PostgreSQL 上：`make trunk-pg` 起一个用完即删的 `platform-postgres:18-vector` 容器（本机端口、免密，只供测试），
-  宿主带 `-database` 起，其余与 `make trunk` 相同。验收：`make trunk-pg SPEC=official` 与 `SPEC=marketplace` 通过。
-- 3.1b 宿主的内核不变量跑在 PostgreSQL 上：`make test-pg` 用同一个临时容器给 `PLATFORM_BENCH_DATABASE`，跑 `host` 里带 postgres 模式的用例，不再跳过。
+- 3.1a 已做：`make trunk-pg` 起一个用完即删的 `platform-postgres:18-vector` 容器（本机端口、免密，只供测试），宿主带 `-database` 起，
+  跑完核对 `journal` 表里有条目；`make test-pg` 同样起临时库，给 `PLATFORM_BENCH_DATABASE` 跑 `host` 的测试（K1 的 postgres 模式不再跳过，全部通过）。
+  `make trunk-pg SPEC=official` 4 项通过。
+- 3.1b 待做：PostgreSQL 上的提交慢 5 到 15 倍（crm 车道一次提交 15 秒，初始化每租户约 3 秒），`SPEC=marketplace` 因种子超时或操作超时有 5 项不过；
+  先量出慢在哪（逐条写入还是快照），修到 marketplace 全过，再把 `make trunk-pg` 当作行收尾的全量检查。
 - 3.1c 重启不丢：trunk 加一条用例，official 租户建线索后让宿主停机再起（快照与重放各一次），线索的修订与编号不变。
 - 3.1d 备份与恢复：宿主命令导出一个租户的已接受条目与快照（按格式纪元写明版本），导入到空库时逐条核对身份与纪元，不符的整批拒；
   验收：导出 official → 新库导入 → 新宿主起来后主干的 official 用例照跑。不备份投影表与内存态，它们由重放得到。

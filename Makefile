@@ -12,7 +12,7 @@ GOPROXY ?= https://goproxy.cn,direct
 STEP := bash scripts/make-step.sh
 export GOPROXY
 
-.PHONY: help hooks bootstrap setup local docker infra infra-down build-compute dev dev-light host lite build bundle contract local-update packages check check-frontend verify verify-sql load-sql frontend-host frontend-dev trunk trunk-changed test test-voice
+.PHONY: help hooks bootstrap setup local docker infra infra-down build-compute dev dev-light host lite build bundle contract local-update packages check check-frontend verify verify-sql load-sql frontend-host frontend-dev trunk trunk-pg trunk-changed test test-pg test-voice
 
 help:
 	@bash -c '\
@@ -146,6 +146,22 @@ check-frontend:
 
 trunk:
 	cd frontend && $(PNPM) exec playwright test -c e2e $(foreach spec,$(SPEC),$(spec).spec.ts) $(if $(HEADED),--headed)
+
+trunk-pg:
+	@set -e; name=platform-trunk-pg-$$$$; port=$$((55432 + $${TRUNK_PORT_OFFSET:-0})); \
+	docker run -d --rm --name $$name -e POSTGRES_HOST_AUTH_METHOD=trust -e POSTGRES_DB=trunk -p 127.0.0.1:$$port:5432 platform-postgres:18-vector >/dev/null; \
+	trap 'docker rm -f '$$name' >/dev/null' EXIT; \
+	until docker exec $$name pg_isready -h 127.0.0.1 -U postgres -d trunk >/dev/null 2>&1; do sleep 1; done; \
+	cd frontend && TRUNK_DATABASE="postgres://postgres@127.0.0.1:$$port/trunk?sslmode=disable" $(PNPM) exec playwright test -c e2e $(foreach spec,$(SPEC),$(spec).spec.ts) $(if $(HEADED),--headed); \
+	rows=$$(docker exec $$name psql -U postgres -d trunk -tAc 'select count(*) from journal'); \
+	echo "trunk-pg: $$rows journal entries in PostgreSQL"; test "$$rows" -gt 0
+
+test-pg:
+	@set -e; name=platform-test-pg-$$$$; port=$$((56432 + $${TRUNK_PORT_OFFSET:-0})); \
+	docker run -d --rm --name $$name -e POSTGRES_HOST_AUTH_METHOD=trust -e POSTGRES_DB=bench -p 127.0.0.1:$$port:5432 platform-postgres:18-vector >/dev/null; \
+	trap 'docker rm -f '$$name' >/dev/null' EXIT; \
+	until docker exec $$name pg_isready -h 127.0.0.1 -U postgres -d bench >/dev/null 2>&1; do sleep 1; done; \
+	cd capabilities/server && PLATFORM_BENCH_DATABASE="postgres://postgres@127.0.0.1:$$port/bench?sslmode=disable" $(GO) test -count=1 -run '$(or $(RUN),.)' ./host/
 
 trunk-changed:
 	@specs="$$(node scripts/trunk-affected.mjs $(BASE))"; \
