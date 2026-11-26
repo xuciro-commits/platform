@@ -1,0 +1,6 @@
+title: Send dispatch
+uses: [connectortrial/1#dispatch]
+transaction:
+  steps:
+    - request: connectortrial/1#dispatch
+      with: {destination: destination}

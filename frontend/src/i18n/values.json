@@ -1003,5 +1003,22 @@
   "Your active clearances": "当前账号已获许可",
   "Your active roles, access requests and temporary colleague delegations.": "查看你当前持有的角色、权限申请进度，或在休假交接时将角色临时委托给同事。",
   "Youth": "青少年",
-  "{implementation} in {app}": "{app} 的{implementation}"
+  "{implementation} in {app}": "{app} 的{implementation}",
+  "Authentication": "鉴权方式",
+  "Basic authentication": "Basic 鉴权",
+  "Declared authentication": "声明的鉴权方式",
+  "Request templates": "请求模板",
+  "Request templates must be a JSON object.": "请求模板必须是 JSON 对象。",
+  "Request templates must be valid JSON.": "请求模板必须是有效的 JSON。",
+  "Signs the method, request path and query, idempotency key and SHA-256 body digest.": "签名覆盖请求方法、路径与查询参数、幂等键和请求体的 SHA-256 摘要。",
+  "Use a password credential containing username:password.": "使用包含用户名和密码（username:password）的密码凭据。",
+  "basic": "Basic 鉴权",
+  "hmac-sha256": "HMAC-SHA256",
+  "Map action names to JSON objects. Use {parameter} as a complete value; omit actions to use their default payloads.": "将动作名称映射为 JSON 对象。以 {parameter} 作为完整的值引用参数；未配置的动作沿用默认请求体。",
+  "View all calls": "查看全部调用",
+  "No calls with an unknown outcome.": "没有结果不明的调用。",
+  "Retry call": "重试调用",
+  "Mark failed": "标为失败",
+  "The provider may already have acted. Retry sends the original request with the same idempotency key.": "供应商可能已执行操作。重试将以原幂等键重新发送原请求。",
+  "HMAC-SHA256": "HMAC-SHA256"
 }

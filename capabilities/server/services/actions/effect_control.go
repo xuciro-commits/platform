@@ -49,7 +49,7 @@ func (e EffectControl) DecideEffect(c platform.Caller, s *pb.Submission, now tim
 	case resolve:
 		return e.Resolve(c, id, s.GetPayload(), now)
 	}
-	return e.Retry(id, now)
+	return e.Retry(c, id, now)
 }
 
 func (e EffectControl) RemoveEndpoint(c platform.Caller, id string, now time.Time) (func(*pb.ChangeRecord), *platform.Error) {
@@ -162,18 +162,23 @@ func (e EffectControl) Resolve(c platform.Caller, id string, payload []byte, now
 	}, nil
 }
 
-func (e EffectControl) Retry(id string, now time.Time) (func(*pb.ChangeRecord), *platform.Error) {
+func (e EffectControl) Retry(c platform.Caller, id string, now time.Time) (func(*pb.ChangeRecord), *platform.Error) {
 	x, found, refusal := e.find(id)
 	if refusal != nil {
 		return nil, refusal
 	}
-	if !found || (x.State != "failed" && x.State != "rejected") {
+	unknownConnector := found && x.Event == protocol.CapabilityCallEvent && x.State == "unknown" && !c.Agent
+	if !found || x.Sending || (x.State != "failed" && x.State != "rejected" && !unknownConnector) {
 		return nil, &platform.Error{Code: pb.ErrorCode_ERROR_CODE_NOT_FOUND}
 	}
 	return func(*pb.ChangeRecord) {
 		e.Outbox.Update(id, func(q *Queued) {
 			q.State, q.Due, q.Since = "pending", now, q.Attempts
 			q.CallbackError = ""
+			x = *q
 		})
+		if x.Event == protocol.CapabilityCallEvent {
+			e.Told(x.Effect, platform.Outcome{Effect: x.ID, Result: "retrying", Detail: "Retry requested by " + c.ID}, now, c.Replaying)
+		}
 	}, nil
 }

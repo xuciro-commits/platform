@@ -1,0 +1,11 @@
+name: connectortrial
+major: 1
+title: Connector trial
+actions:
+  - name: dispatch
+    title: Dispatch
+    payload:
+      - {name: destination, label: Destination, type: text, required: true}
+tests:
+  - {name: first, action: dispatch, payload: {destination: first}, expect: [receipt]}
+  - {name: second, action: dispatch, payload: {destination: second}, expect: [receipt]}

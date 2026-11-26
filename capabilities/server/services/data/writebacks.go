@@ -276,6 +276,7 @@ type WritebackRequest struct {
 	Body              map[string]any `json:"body"`
 	Consumer          string         `json:"consumer,omitempty"`
 	Header            string         `json:"header,omitempty"`
+	Auth              string         `json:"auth,omitempty"`
 }
 
 func (r WritebackRequest) CredentialConsumer() string {

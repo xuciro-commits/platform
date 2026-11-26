@@ -5,6 +5,7 @@ import { HStack, StackItem, VStack } from "@astryxdesign/core/Layout";
 import { Link } from "@astryxdesign/core/Link";
 import { Selector } from "@astryxdesign/core/Selector";
 import { Text } from "@astryxdesign/core/Text";
+import { TextArea } from "@astryxdesign/core/TextArea";
 import { Token } from "@astryxdesign/core/Token";
 import { colorVars, radiusVars } from "@astryxdesign/core/theme/tokens.stylex";
 import * as stylex from "@stylexjs/stylex";
@@ -22,6 +23,8 @@ export type ConnectorSetupRecord = {
   implementation: string;
   address?: string;
   secret?: string;
+  auth?: string;
+  templates?: Record<string, unknown>;
   state?: string;
   requested?: boolean;
   last?: ConformanceRun;
@@ -88,6 +91,8 @@ export function ConnectorSetupCard({
   const [expanded, setExpanded] = useState(!setup || connector.state !== "passed");
   const [address, setAddress] = useState(setup?.address || connector.origins[0] || "");
   const [secret, setSecret] = useState(setup?.secret || "");
+  const [auth, setAuth] = useState(setup?.auth || "");
+  const [templates, setTemplates] = useState(JSON.stringify(setup?.templates || {}, null, 2));
   const [creatingCredential, setCreatingCredential] = useState(false);
   const [openDetails, setOpenDetails] = useState<string[]>([]);
   const [busy, setBusy] = useState(false);
@@ -97,12 +102,14 @@ export function ConnectorSetupCard({
   useEffect(() => {
     setAddress(setup?.address || connector.origins[0] || "");
     setSecret(setup?.secret || "");
-  }, [setup?.id, setup?.revision, setup?.address, setup?.secret, connector.origins.join(",")]);
+    setAuth(setup?.auth || "");
+    setTemplates(JSON.stringify(setup?.templates || {}, null, 2));
+  }, [setup?.id, setup?.revision, setup?.address, setup?.secret, setup?.auth, connector.origins.join(",")]);
 
-  const badge = active ? { label: t("Active"), color: "green" as const } : stateLabel(connector.state);
-  const dirty = !setup || address !== (setup.address || "") || secret !== (setup.secret || "");
-  const matchingCredentials = credentials.filter((cred) => !connector.credential || cred.kind === connector.credential);
-  const credentialOptions = (matchingCredentials.length > 0 ? matchingCredentials : credentials).map((cred) => ({
+  const badge = active && connector.state === "passed" ? { label: t("Active"), color: "green" as const } : stateLabel(connector.state);
+  const dirty = !setup || address !== (setup.address || "") || secret !== (setup.secret || "") || auth !== (setup.auth || "") || templates !== JSON.stringify(setup.templates || {}, null, 2);
+  const credentialKind = auth === "basic" ? "password" : auth === "hmac-sha256" ? "api-key" : connector.credential;
+  const credentialOptions = credentials.filter((cred) => cred.state === "active" && (!credentialKind || cred.kind === credentialKind)).map((cred) => ({
     value: cred.id,
     label: cred.title ? `${cred.title} (${cred.id})` : cred.id,
   }));
@@ -115,8 +122,10 @@ export function ConnectorSetupCard({
     const action = setup ? editAction : createAction;
     if (!action) return undefined;
     const id = setup ? setup.id : crypto.randomUUID();
-    const payload: Record<string, unknown> = { implementation: connector.id, address };
-    if (secret) payload.secret = secret;
+    let body: unknown;
+    try { body = JSON.parse(templates); } catch { throw new Error(t("Request templates must be valid JSON.")); }
+    if (!body || typeof body !== "object" || Array.isArray(body)) throw new Error(t("Request templates must be a JSON object."));
+    const payload: Record<string, unknown> = { implementation: connector.id, address, secret, auth, templates: body };
     await send(action, id, payload, setup ? setup.revision : 0);
     return { id, revision: setup ? setup.revision + 1 : 1 };
   };
@@ -182,7 +191,7 @@ export function ConnectorSetupCard({
                   label={t("Enable")}
                   variant="primary"
                   size="sm"
-                  isDisabled={parentBusy || busy || connector.state !== "passed"}
+                  isDisabled={parentBusy || busy || dirty || connector.state !== "passed"}
                   onClick={onEnable}
                 />
               )}
@@ -207,7 +216,13 @@ export function ConnectorSetupCard({
                   onChange={setAddress}
                   options={connector.origins.map((origin) => ({ value: origin, label: origin }))}
                 />
-                {connector.credential && (
+                <Selector
+                  label={t("Authentication")}
+                  value={auth || "declared"}
+                  onChange={(value) => { setAuth(value === "declared" ? "" : value); setSecret(""); }}
+                  options={[{ value: "declared", label: t("Declared authentication") }, { value: "basic", label: t("Basic authentication") }, { value: "hmac-sha256", label: t("HMAC-SHA256") }]}
+                />
+                {credentialKind && (
                   <Selector
                     label={t("Credential")}
                     value={secret}
@@ -215,7 +230,7 @@ export function ConnectorSetupCard({
                     options={credentialOptions}
                   />
                 )}
-                {connector.credential && saveCredentialAction && (
+                {credentialKind && saveCredentialAction && (
                   <Button
                     label={t("New credential")}
                     variant="secondary"
@@ -225,14 +240,18 @@ export function ConnectorSetupCard({
                   />
                 )}
               </HStack>
-              {connector.credential && (
+              {credentialKind && (
                 <HStack gap={2} vAlign="center" wrap="wrap">
                   <Text type="supporting" color="secondary">
-                    {t("Requires a {kind} credential allowing consumer implementation/{id}.").replace("{kind}", connector.credential).replace("{id}", connector.id)}
+                    {t("Requires a {kind} credential allowing consumer implementation/{id}.").replace("{kind}", credentialKind).replace("{id}", connector.id)}
                   </Text>
                   <Link href="/admin/credentials">{t("Manage credentials")}</Link>
                 </HStack>
               )}
+              {auth === "basic" && <Text type="supporting" color="secondary">{t("Use a password credential containing username:password.")}</Text>}
+              {auth === "hmac-sha256" && <Text type="supporting" color="secondary">{t("Signs the method, request path and query, idempotency key and SHA-256 body digest.")}</Text>}
+              <TextArea label={t("Request templates")} rows={4} value={templates} onChange={setTemplates} />
+              <Text type="supporting" color="secondary">{t("Map action names to JSON objects. Use {parameter} as a complete value; omit actions to use their default payloads.")}</Text>
               <HStack gap={2} vAlign="center" wrap="wrap">
                 <Button
                   label={t("Save setup")}
@@ -248,7 +267,7 @@ export function ConnectorSetupCard({
                     variant="primary"
                     size="sm"
                     isLoading={busy}
-                    isDisabled={!address || (Boolean(connector.credential) && !secret)}
+                    isDisabled={!address || (Boolean(credentialKind) && !secret)}
                     onClick={() => void handleTest()}
                   />
                 )}
@@ -297,7 +316,7 @@ export function ConnectorSetupCard({
       {creatingCredential && saveCredentialAction && (
         <InlineCredentialDialog
           saveAction={saveCredentialAction}
-          kind={connector.credential || "bearer"}
+          kind={credentialKind || "bearer"}
           consumer={`implementation/${connector.id}`}
           origin={address}
           managedAvailable={managedAvailable}

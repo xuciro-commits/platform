@@ -167,10 +167,7 @@ func (t *Tenant) effectControl() actions.EffectControl {
 }
 
 func guarded(req *http.Request, allowPrivate bool) (*http.Response, error) {
-	dialer := actions.GuardedDialer(allowPrivate)
-	client := &http.Client{Timeout: 10 * time.Second, Transport: &http.Transport{DialContext: dialer.DialContext, Proxy: nil},
-		CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }}
-	response, err := client.Do(req)
+	response, err := actions.GuardedHTTPClient(req, allowPrivate).Do(req)
 	return controlowner.RedactCredentialFailure(response, req), err
 }
 

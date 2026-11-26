@@ -1,0 +1,319 @@
+{
+  "id": "connectortrial",
+  "version": "0.1.0",
+  "title": "Connector trial",
+  "namespace": "connectortrial",
+  "description": "HTTPS connector acceptance fixture.",
+  "requires": [
+    "connectortrial-contract"
+  ],
+  "blueprint": {
+    "roots": [
+      {
+        "app": "build",
+        "kind": "app",
+        "name": "connectortrial"
+      }
+    ],
+    "assets": [
+      {
+        "ref": {
+          "app": "build",
+          "kind": "app",
+          "name": "connectortrial"
+        },
+        "contractVersion": 1,
+        "sourceVersion": "1",
+        "requires": [
+          {
+            "app": "build",
+            "kind": "page",
+            "name": "connectortrial.dispatch"
+          }
+        ],
+        "body": {
+          "name": "connectortrial",
+          "title": "Connector trial",
+          "icon": "briefcase",
+          "pages": [
+            "connectortrial.dispatch"
+          ]
+        }
+      },
+      {
+        "ref": {
+          "app": "build",
+          "kind": "object",
+          "name": "connectortrial.dispatch"
+        },
+        "contractVersion": 1,
+        "sourceVersion": "1",
+        "requires": [],
+        "provides": [
+          {
+            "kind": "interface",
+            "name": "connectortrial.dispatch",
+            "inputs": {
+              "type": ""
+            },
+            "outputs": {
+              "type": "object",
+              "properties": {
+                "archived": {
+                  "type": "boolean"
+                },
+                "destination": {
+                  "type": "string"
+                },
+                "id": {
+                  "type": "string"
+                },
+                "revision": {
+                  "type": "integer"
+                }
+              },
+              "required": [
+                "id",
+                "revision"
+              ]
+            },
+            "roles": null,
+            "side": "pure"
+          }
+        ],
+        "body": {
+          "name": "dispatch",
+          "namespace": "connectortrial",
+          "title": "Dispatch",
+          "plural": "Dispatches",
+          "display": "destination",
+          "fields": [
+            {
+              "name": "destination",
+              "title": "Destination",
+              "type": "text",
+              "required": true,
+              "search": true
+            }
+          ],
+          "access": [
+            {
+              "role": "user",
+              "read": "all",
+              "create": true,
+              "edit": true
+            }
+          ],
+          "actions": [
+            {
+              "title": "Send dispatch",
+              "uses": [
+                "connectortrial/1#dispatch"
+              ],
+              "transaction": {
+                "steps": [
+                  {
+                    "request": {
+                      "use": "connectortrial/1#dispatch",
+                      "payload": [
+                        {
+                          "field": "destination",
+                          "expr": {
+                            "op": "",
+                            "kind": "text",
+                            "ref": "destination"
+                          }
+                        }
+                      ]
+                    },
+                    "name": "request",
+                    "kind": "request"
+                  }
+                ],
+                "subject": "connectortrial.dispatch"
+              },
+              "name": "send"
+            }
+          ],
+          "type": "connectortrial.dispatch",
+          "schemaVersions": [
+            {
+              "version": "schema.sha256.57842f44b433996ee70493ecd32c39be477c22b6d23da53d898126eb8f187a62",
+              "family": 1
+            }
+          ]
+        }
+      },
+      {
+        "ref": {
+          "app": "build",
+          "kind": "page",
+          "name": "connectortrial.dispatch"
+        },
+        "contractVersion": 1,
+        "sourceVersion": "1",
+        "requires": [
+          {
+            "app": "build",
+            "kind": "action",
+            "name": "connectortrial.dispatch.create"
+          },
+          {
+            "app": "build",
+            "kind": "action",
+            "name": "connectortrial.dispatch.edit"
+          },
+          {
+            "app": "build",
+            "kind": "object",
+            "name": "connectortrial.dispatch"
+          }
+        ],
+        "body": {
+          "actionTriggers": [
+            {
+              "actions": [
+                {
+                  "app": "build",
+                  "kind": "action",
+                  "name": "connectortrial.dispatch.create"
+                },
+                {
+                  "app": "build",
+                  "kind": "action",
+                  "name": "connectortrial.dispatch.edit"
+                }
+              ],
+              "binding": "page",
+              "id": "page"
+            },
+            {
+              "binding": "list",
+              "id": "list",
+              "owner": "binding:list"
+            },
+            {
+              "binding": "detail",
+              "id": "detail",
+              "owner": "binding:detail"
+            }
+          ],
+          "dataBindings": [
+            {
+              "fields": [
+                {
+                  "name": "destination"
+                }
+              ],
+              "id": "list",
+              "kind": "record",
+              "model": {
+                "fields": [
+                  {
+                    "name": "destination"
+                  }
+                ],
+                "type": "connectortrial.dispatch"
+              },
+              "object": {
+                "app": "build",
+                "kind": "object",
+                "name": "connectortrial.dispatch"
+              },
+              "owner": "binding:list",
+              "ports": {
+                "selectionMode": "write",
+                "widget": "table",
+                "parentable": "true"
+              }
+            },
+            {
+              "fields": [
+                {
+                  "name": "destination"
+                }
+              ],
+              "id": "detail",
+              "kind": "record",
+              "model": {
+                "fields": [
+                  {
+                    "name": "destination"
+                  }
+                ],
+                "type": "connectortrial.dispatch"
+              },
+              "object": {
+                "app": "build",
+                "kind": "object",
+                "name": "connectortrial.dispatch"
+              },
+              "owner": "binding:detail",
+              "ports": {
+                "selectionMode": "read",
+                "widget": "detail"
+              }
+            }
+          ],
+          "format": 4,
+          "inputSchema": {},
+          "name": "connectortrial.dispatch",
+          "object": {
+            "app": "build",
+            "kind": "object",
+            "name": "connectortrial.dispatch"
+          },
+          "scopeVisibility": {
+            "owners": {
+              "detail": "binding:detail",
+              "list": "binding:list"
+            },
+            "root": "page",
+            "scopes": [
+              {
+                "id": "page",
+                "kind": "page"
+              },
+              {
+                "binding": "list",
+                "id": "binding:list",
+                "kind": "page",
+                "parent": "page"
+              },
+              {
+                "binding": "detail",
+                "id": "binding:detail",
+                "kind": "page",
+                "parent": "page"
+              }
+            ]
+          },
+          "title": "Dispatches",
+          "widgetSpec": {
+            "body": {
+              "document": null,
+              "layout": "list-detail",
+              "sections": [
+                {
+                  "binding": "list",
+                  "id": "list",
+                  "triggers": [
+                    "list"
+                  ]
+                },
+                {
+                  "binding": "detail",
+                  "id": "detail",
+                  "triggers": [
+                    "detail"
+                  ]
+                }
+              ]
+            },
+            "format": "platform.page.web.v1"
+          }
+        }
+      }
+    ]
+  }
+}

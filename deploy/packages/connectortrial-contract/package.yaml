@@ -1,0 +1,14 @@
+id: connectortrial-contract
+version: 0.1.0
+title: Connector trial contract
+namespace: connectortrial
+description: HTTPS connector acceptance fixture.
+listing:
+  industries: [general]
+  capabilities: [operations]
+  keywords: [connector]
+  stage: test
+  source: {ecosystem: platform, app: fixtures, relation: original}
+roots:
+  - {app: build, kind: contract, name: connectortrial}
+artifact: connectortrial-contract.json

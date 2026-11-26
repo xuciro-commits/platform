@@ -16,9 +16,10 @@ import (
 )
 
 type CheckEnvironment struct {
-	Connection func(dataowner.Connection) (string, error)
-	Credential func(name, consumer, address string) ([]byte, bool)
-	Send       func(*http.Request, bool) (*http.Response, error)
+	Connection      func(dataowner.Connection) (string, error)
+	Credential      func(name, consumer, address string) ([]byte, bool)
+	CredentialValue func(name, consumer, address string) ([]byte, bool)
+	Send            func(*http.Request, bool) (*http.Response, error)
 }
 
 type PendingCheck struct {
@@ -56,7 +57,11 @@ func (p PendingCheck) Run(tenant string, caller platform.Member, env CheckEnviro
 	var credential []byte
 	allowed := false
 	if p.setup.Secret != "" {
-		credential, allowed = env.Credential(p.setup.Secret, "implementation/"+p.setup.Implementation, p.setup.Address)
+		resolve := env.Credential
+		if p.setup.Auth != "" {
+			resolve = env.CredentialValue
+		}
+		credential, allowed = resolve(p.setup.Secret, "implementation/"+p.setup.Implementation, p.setup.Address)
 	}
 	key := fmt.Sprintf("conformance:%s:%s:%d", tenant, p.setup.ID, p.setup.Revision)
 	run := protocol.ConformanceRun{At: now, Passed: len(p.contract.Tests) > 0, Cases: []protocol.ConformanceCase{}}
@@ -65,7 +70,7 @@ func (p PendingCheck) Run(tenant string, caller platform.Member, env CheckEnviro
 		run.Passed = run.Passed && outcome.OK
 		run.Cases = append(run.Cases, outcome)
 	}
-	run.Fingerprint = protocol.ConnectorFingerprint(p.contract, p.implementation, p.setup.Address, p.setup.Secret)
+	run.Fingerprint = connectorSetupFingerprint(p.contract, p.implementation, p.setup)
 	return ConnectorTestedSubmission(tenant, caller, p.setup, run)
 }
 
@@ -77,12 +82,12 @@ func conformanceCase(i protocol.ProtocolImplementation, setup ConnectorSetup, te
 		out.Detail = "the connector has no request for " + test.Action + " at " + setup.Address
 		return out
 	}
-	request, err := connectorWriteback(i, setup.Implementation, setup.Address, setup.Secret, i.Requests[at], test.Payload)
+	request, err := connectorWriteback(i, setup, i.Requests[at], test.Payload)
 	if err != nil {
 		out.Detail = err.Error()
 		return out
 	}
-	if (i.Credential != "" || request.Secret != "") && !allowed {
+	if (connectorCredentialKind(i, setup) != "" || request.Secret != "") && !allowed {
 		out.Detail = "the credential is missing, or its allowed uses do not include this connector at " + setup.Address
 		return out
 	}
@@ -93,11 +98,15 @@ func conformanceCase(i protocol.ProtocolImplementation, setup ConnectorSetup, te
 	}
 	resp, err := send(req, request.AllowPrivate)
 	if err != nil {
-		out.Detail = "no answer: " + err.Error()
+		out.Detail = "The connector did not answer"
 		return out
 	}
 	defer resp.Body.Close()
-	answer, _ := io.ReadAll(io.LimitReader(resp.Body, 64<<10))
+	answer, readErr := io.ReadAll(io.LimitReader(resp.Body, (64<<10)+1))
+	if readErr != nil || len(answer) > 64<<10 {
+		out.Detail = "The connector answer is incomplete or too large"
+		return out
+	}
 	if resp.StatusCode < 200 || resp.StatusCode > 299 {
 		out.Detail = fmt.Sprintf("answered %d", resp.StatusCode)
 		return out

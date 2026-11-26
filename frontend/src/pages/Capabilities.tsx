@@ -17,7 +17,7 @@ import { useEffect, useMemo, useState } from "react";
 import { apps, pathOf } from "../apps";
 import { type Api, reread, useRead } from "../host";
 import { t } from "../i18n";
-import { reasonOf, send } from "./act";
+import { reasonOf, send, useAct } from "./act";
 import { ConnectorSetupCard, type ConnectorSetupRecord } from "./ConnectorSetupCard";
 import { PageTitle, useGutter } from "./frame";
 import { ListView } from "./ListPage";
@@ -65,7 +65,7 @@ function useAppDirectory() {
   }, [applications, entities]);
 }
 
-type CapabilityCallRecord = { protocol?: string; implementation?: string; state?: string };
+type CapabilityCallRecord = { id?: string; protocol?: string; implementation?: string; action?: string; state?: string; effect?: string; detail?: string };
 
 function statusOf(protocol: Api.ProtocolInfo, nameOf: (id: string) => string): { label: string; dot: Dot } {
   const connector = protocol.implementations?.find((candidate) => candidate.id === protocol.bound);
@@ -149,6 +149,8 @@ export function CapabilityPage({ id }: { id: string }) {
   const gutter = useGutter();
   const protocols = useRead<Api.ProtocolInfo[]>("/v1/protocols");
   const actions = useRead<Api.Action[]>("/v1/actions");
+  const calls = useRead<Api.RecordPage>(`/v1/records/build.capabilitycall?limit=100&domain=${encodeURIComponent(JSON.stringify([["protocol", "=", id], ["state", "=", "unknown"]]))}`);
+  const act = useAct();
   const setups = useRead<Api.RecordPage>("/v1/records/build.connectorsetup?limit=200");
   const credentials = useRead<Api.CredentialCatalog>("/v1/credentials");
   const { nameOf, hrefOf } = useAppDirectory();
@@ -191,6 +193,9 @@ export function CapabilityPage({ id }: { id: string }) {
   const title = protocol.title || protocol.id;
   const connectors = protocol.implementations ?? [];
   const setupRows = setups.status === "ready" ? (setups.data.records as ConnectorSetupRecord[]) : [];
+  const pendingCalls = calls.status === "ready" ? (calls.data.records as CapabilityCallRecord[]).filter((call) => call.protocol === id && call.state === "unknown" && call.effect) : [];
+  const retryAction = actions.status === "ready" ? actions.data.find((action) => action.schema === "platform.effect.retry") : undefined;
+  const resolveAction = actions.status === "ready" ? actions.data.find((action) => action.schema === "platform.effect.resolve") : undefined;
   const labelOf = (targetId: string) => connectors.find((connector) => connector.id === targetId)?.title || nameOf(targetId);
 
   const runBind = async (provider: string) => {
@@ -345,6 +350,38 @@ export function CapabilityPage({ id }: { id: string }) {
                 </VStack>
               )}
 
+              {connectors.length > 0 && (
+                <VStack gap={3}>
+                  <HStack gap={3} vAlign="center" hAlign="between" wrap="wrap">
+                    <Heading level={2}>{t("Capability calls")}</Heading>
+                    <Link href="/ontology/capability-calls">{t("View all calls")}</Link>
+                  </HStack>
+                  {pendingCalls.length === 0 ? (
+                    <Text type="supporting" color="secondary">{t("No calls with an unknown outcome.")}</Text>
+                  ) : pendingCalls.map((call) => (
+                    <Card key={call.id} padding={3}>
+                      <VStack gap={2}>
+                        <HStack gap={2} vAlign="center" wrap="wrap">
+                          <Link href={`/ontology/capability-calls/${encodeURIComponent(call.id || "")}`}>{call.action} · {call.id}</Link>
+                          <Token label={t("Outcome unknown")} color="orange" size="sm" />
+                        </HStack>
+                        {call.detail && <Text type="supporting" color="secondary">{call.detail}</Text>}
+                        <HStack gap={2} wrap="wrap">
+                          {retryAction && <Button label={t("Retry call")} variant="secondary" size="sm" isDisabled={act.busy} onClick={() => act.run({
+                            action: retryAction, id: call.effect!, name: call.action || title, label: t("Retry call"),
+                            consequence: t("The provider may already have acted. Retry sends the original request with the same idempotency key."),
+                            danger: true, reversible: false, onRefused: setFailure, onDone: reread,
+                          })} />}
+                          {resolveAction && <Button label={t("Mark failed")} variant="secondary" size="sm" isDisabled={act.busy} onClick={() => act.run({
+                            action: resolveAction, id: call.effect!, name: call.action || title, label: t("Mark failed"),
+                            fixed: { outcome: "rejected" }, only: ["reason"], danger: true, reversible: false, onRefused: setFailure, onDone: reread,
+                          })} />}
+                        </HStack>
+                      </VStack>
+                    </Card>
+                  ))}
+                </VStack>
+              )}
               <VStack gap={3}>
                 <Heading level={2}>{t("Used by")}</Heading>
                 {protocol.consumers.length > 0 ? (
@@ -426,6 +463,7 @@ export function CapabilityPage({ id }: { id: string }) {
           </LayoutContent>
         }
       />
+      {act.element}
       <AlertDialog
         isOpen={confirmUnbind}
         title={t("Disable {capability}?").replace("{capability}", title)}

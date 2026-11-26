@@ -76,17 +76,23 @@ func (b *Build) decideCapability(c platform.Caller, s *pb.Submission, now time.T
 	return nil, nil, false
 }
 
-func connectorWriteback(implementation protocol.ProtocolImplementation, identity, address, secret string, request protocol.ImplementationRequest, payload map[string]any) (dataowner.WritebackRequest, error) {
+func connectorWriteback(implementation protocol.ProtocolImplementation, setup ConnectorSetup, request protocol.ImplementationRequest, payload map[string]any) (dataowner.WritebackRequest, error) {
 	path, err := protocol.ConnectorPath(request.Path, payload)
 	if err != nil {
 		return dataowner.WritebackRequest{}, err
 	}
 	if request.Method == http.MethodGet || request.Method == http.MethodDelete {
 		payload = nil
+	} else if template, found := setup.Templates[request.Action]; found {
+		rendered, err := renderConnectorTemplate(template, payload)
+		if err != nil {
+			return dataowner.WritebackRequest{}, err
+		}
+		payload = rendered.(map[string]any)
 	} else if payload == nil {
 		payload = map[string]any{}
 	}
-	req := dataowner.WritebackRequest{Consumer: "implementation/" + identity, Method: request.Method, Transport: "http", URL: address + path, Secret: secret, Body: payload}
+	req := dataowner.WritebackRequest{Consumer: "implementation/" + setup.Implementation, Method: request.Method, Transport: "http", URL: setup.Address + path, Secret: setup.Secret, Body: payload, Auth: setup.Auth}
 	if implementation.Credential == "api-key" {
 		req.Header = "X-API-Key"
 	}
@@ -107,7 +113,7 @@ func (b *Build) connectorRequest(in capabilityCallInput) (dataowner.WritebackReq
 	if at < 0 || setup < 0 {
 		return dataowner.WritebackRequest{}, fmt.Errorf("%s is not set up", in.Implementation)
 	}
-	return connectorWriteback(implementation, in.Implementation, setups[setup].Address, setups[setup].Secret, implementation.Requests[at], in.Payload)
+	return connectorWriteback(implementation, setups[setup], implementation.Requests[at], in.Payload)
 }
 
 func (b *Build) submitCapabilityCall(c platform.Caller, s *pb.Submission, now time.Time) (*pb.ChangeRecord, *platform.Error) {
@@ -166,7 +172,7 @@ func (b *Build) EventEffects(tenant string, c platform.Caller, e platform.Event,
 }
 
 func (b *Build) answerCapabilityCall(c platform.Caller, effect platform.Effect, out platform.Outcome, now time.Time) *platform.Error {
-	state := map[string]string{"delivered": "answered", "rejected": "failed", "unknown": "unknown", "discarded": "failed"}[out.Result]
+	state := map[string]string{"delivered": "answered", "rejected": "failed", "unknown": "unknown", "discarded": "failed", "retrying": "sent"}[out.Result]
 	if effect.State == "failed" {
 		state = "failed"
 	}
@@ -186,7 +192,7 @@ func (b *Build) submitCapabilityCallAnswered(c platform.Caller, s *pb.Submission
 			Effect, State, Detail, Answer string
 		}
 		call, found := platform.Get[CapabilityCall](c, s.GetTarget().GetId())
-		if !found || json.Unmarshal(s.GetPayload(), &in) != nil || !slices.Contains([]string{"answered", "failed", "unknown"}, in.State) {
+		if !found || json.Unmarshal(s.GetPayload(), &in) != nil || !slices.Contains([]string{"answered", "failed", "unknown", "sent"}, in.State) {
 			return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "The answer has no capability call")
 		}
 		call.Effect, call.State, call.Detail, call.Answer = in.Effect, in.State, in.Detail, in.Answer

@@ -147,14 +147,14 @@ check-frontend:
 	@printf '\033[32m✓ 新前端检查全部通过\033[0m\n\n'
 
 trunk:
-	cd frontend && $(PNPM) exec playwright test -c e2e $(foreach spec,$(SPEC),$(spec).spec.ts) $(if $(HEADED),--headed)
+	cd frontend && node ../scripts/connector-trunk.mjs $(PNPM) exec playwright test -c e2e $(foreach spec,$(SPEC),$(spec).spec.ts) $(if $(HEADED),--headed)
 
 trunk-pg:
 	@set -e; name=platform-trunk-pg-$$$$; port=$$((55432 + $${TRUNK_PORT_OFFSET:-0})); \
 	docker run -d --rm --name $$name -e POSTGRES_HOST_AUTH_METHOD=trust -e POSTGRES_DB=trunk -p 127.0.0.1:$$port:5432 platform-postgres:18-vector >/dev/null; \
 	trap 'docker rm -f '$$name' >/dev/null' EXIT; \
 	until docker exec $$name pg_isready -h 127.0.0.1 -U postgres -d trunk >/dev/null 2>&1; do sleep 1; done; \
-	cd frontend && TRUNK_DATABASE="postgres://postgres@127.0.0.1:$$port/trunk?sslmode=disable" $(PNPM) exec playwright test -c e2e $(foreach spec,$(SPEC),$(spec).spec.ts) $(if $(HEADED),--headed); \
+	cd frontend && TRUNK_DATABASE="postgres://postgres@127.0.0.1:$$port/trunk?sslmode=disable" node ../scripts/connector-trunk.mjs $(PNPM) exec playwright test -c e2e $(foreach spec,$(SPEC),$(spec).spec.ts) $(if $(HEADED),--headed); \
 	rows=$$(docker exec $$name psql -U postgres -d trunk -tAc 'select count(*) from journal'); \
 	echo "trunk-pg: $$rows journal entries in PostgreSQL"; test "$$rows" -gt 0
 
@@ -168,8 +168,8 @@ test-pg:
 trunk-changed:
 	@specs="$$(node scripts/trunk-affected.mjs $(BASE))"; \
 	if [ -z "$$specs" ]; then echo "没有影响主干用例的改动"; \
-	elif [ "$$specs" = all ]; then cd frontend && $(PNPM) exec playwright test -c e2e $(if $(HEADED),--headed); \
-	else echo "只跑：$$specs"; cd frontend && $(PNPM) exec playwright test -c e2e $$specs $(if $(HEADED),--headed); fi
+	elif [ "$$specs" = all ]; then cd frontend && node ../scripts/connector-trunk.mjs $(PNPM) exec playwright test -c e2e $(if $(HEADED),--headed); \
+	else echo "只跑：$$specs"; cd frontend && node ../scripts/connector-trunk.mjs $(PNPM) exec playwright test -c e2e $$specs $(if $(HEADED),--headed); fi
 
 test:
 	node scripts/check-invariants.mjs '$(RUN)'

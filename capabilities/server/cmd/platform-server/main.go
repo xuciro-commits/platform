@@ -3,6 +3,7 @@ package main
 import (
 	"flag"
 	"log"
+	"os"
 	"platformserver/services/security"
 	controlowner "platformserver/services/security/control"
 	_ "time/tzdata"
@@ -11,6 +12,7 @@ import (
 	"platformserver/host/composition"
 	runtimeprotocol "platformserver/kernel/protocol"
 	"platformserver/platform"
+	"platformserver/services/actions"
 	"platformserver/services/ai"
 	"platformserver/services/devops/packages"
 	build "platformserver/services/resources/authoring"
@@ -22,7 +24,12 @@ func main() {
 	tenant := flag.String("tenant", "workspace", "default tenant when -tenants is not configured")
 	admin := flag.String("admin", "", "explicit administrator subject for the default tenant")
 	allowLoopback := flag.Bool("allow-loopback-packages", false, "allow HTTP package and catalog addresses on loopback hosts for tests")
+	connectorOrigin := flag.String("test-connector-origin", os.Getenv("PLATFORM_TRUNK_CONNECTOR_ORIGIN"), "exact HTTPS loopback origin of the connector trunk stub")
+	connectorCert := flag.String("test-connector-cert", os.Getenv("PLATFORM_TRUNK_CONNECTOR_CERT"), "certificate of the connector trunk stub")
 	flag.Parse()
+	if err := actions.ConfigureConnectorTrunk(*connectorOrigin, *connectorCert); err != nil {
+		log.Fatal(err)
+	}
 	if *allowLoopback {
 		packages.SetAllowLoopback(true)
 	}

@@ -1,8 +1,11 @@
 package data
 
 import (
+	"bytes"
 	"context"
+	"crypto/hmac"
 	"crypto/sha256"
+	"encoding/base64"
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
@@ -372,8 +375,10 @@ func (r Client) Check(c Connection) (string, error) {
 
 func (req WritebackRequest) HTTPRequest(key string, credential []byte) (*http.Request, error) {
 	var body io.Reader
+	var raw []byte
 	if req.Consumer == "" || req.Body != nil {
-		raw, err := json.Marshal(req.Body)
+		var err error
+		raw, err = json.Marshal(req.Body)
 		if err != nil {
 			return nil, err
 		}
@@ -388,14 +393,92 @@ func (req WritebackRequest) HTTPRequest(key string, credential []byte) (*http.Re
 	}
 	r.Header.Set("Accept", "application/json")
 	r.Header.Set("Idempotency-Key", key)
-	if len(credential) != 0 {
-		header := req.Header
-		if header == "" {
-			header = "Authorization"
+	if strings.HasPrefix(req.Consumer, "implementation/") {
+		r.Close = true
+		r.GetBody = nil
+	}
+	switch req.Auth {
+	case "basic":
+		user, password, ok := strings.Cut(string(credential), ":")
+		if !ok || user == "" || password == "" {
+			return nil, fmt.Errorf("Basic authentication needs a username:password credential")
 		}
-		r.Header.Set(header, strings.TrimSpace(string(credential)))
+		r.SetBasicAuth(user, password)
+	case "hmac-sha256":
+		if len(credential) == 0 {
+			return nil, fmt.Errorf("HMAC authentication needs a signing credential")
+		}
+		r.Header.Set("X-Platform-Signature", connectorSignature(r, key, raw, credential))
+	case "":
+		if len(credential) != 0 {
+			header := req.Header
+			if header == "" {
+				header = "Authorization"
+			}
+			r.Header.Set(header, strings.TrimSpace(string(credential)))
+		}
+	default:
+		return nil, fmt.Errorf("Unsupported connector authentication")
 	}
 	return r, nil
+}
+
+func connectorSignature(r *http.Request, key string, body, secret []byte) string {
+	digest := sha256.Sum256(body)
+	mac := hmac.New(sha256.New, secret)
+	mac.Write([]byte(r.Method + "\n" + r.URL.RequestURI() + "\n" + key + "\n" + hex.EncodeToString(digest[:])))
+	return "sha256=" + hex.EncodeToString(mac.Sum(nil))
+}
+
+func connectorAnswerSensitive(answer []byte, r *http.Request, credential []byte) bool {
+	if len(credential) == 0 {
+		return false
+	}
+	parts := []string{string(credential), r.Header.Get("Authorization"), r.Header.Get("X-API-Key"), r.Header.Get("X-Platform-Signature"), base64.StdEncoding.EncodeToString(credential)}
+	if value, ok := strings.CutPrefix(r.Header.Get("Authorization"), "Bearer "); ok {
+		parts = append(parts, value)
+	}
+	if value, ok := strings.CutPrefix(r.Header.Get("Authorization"), "Basic "); ok {
+		parts = append(parts, value)
+		if _, password, ok := strings.Cut(string(credential), ":"); ok {
+			parts = append(parts, password)
+		}
+	}
+	if value, ok := strings.CutPrefix(r.Header.Get("X-Platform-Signature"), "sha256="); ok {
+		parts = append(parts, value)
+	}
+	var decoded any
+	_ = json.Unmarshal(answer, &decoded)
+	for _, part := range parts {
+		if part == "" {
+			continue
+		}
+		quoted, _ := json.Marshal(part)
+		if bytes.Contains(answer, []byte(part)) || bytes.Contains(answer, quoted[1:len(quoted)-1]) || containsCredentialValue(decoded, part) {
+			return true
+		}
+	}
+	return false
+}
+
+func containsCredentialValue(value any, part string) bool {
+	switch v := value.(type) {
+	case string:
+		return strings.Contains(v, part)
+	case []any:
+		for _, item := range v {
+			if containsCredentialValue(item, part) {
+				return true
+			}
+		}
+	case map[string]any:
+		for key, item := range v {
+			if strings.Contains(key, part) || containsCredentialValue(item, part) {
+				return true
+			}
+		}
+	}
+	return false
 }
 
 func (c Client) Writeback(x platform.Effect) (out platform.Outcome) {
@@ -410,8 +493,9 @@ func (c Client) Writeback(x platform.Effect) (out platform.Outcome) {
 		out.Result, out.Detail = "rejected", err.Error()
 		return out
 	}
+	connector := strings.HasPrefix(req.Consumer, "implementation/")
 	defer func() {
-		if req.Dispatch != "" && !req.SafeRetry && out.Result == "retry" {
+		if (connector || req.Dispatch != "" && !req.SafeRetry) && out.Result == "retry" {
 			out.Result, out.Detail = "unknown", "This command cannot be resent automatically: "+out.Detail
 		}
 	}()
@@ -434,9 +518,16 @@ func (c Client) Writeback(x platform.Effect) (out platform.Outcome) {
 	var credential []byte
 	if req.Secret != "" {
 		var ok bool
-		credential, ok = c.Credentials.CredentialHeader(req.Secret, req.CredentialConsumer(), req.URL)
+		if req.Auth != "" {
+			credential, ok = c.Credentials.CredentialValue(req.Secret, req.CredentialConsumer(), req.URL)
+		} else {
+			credential, ok = c.Credentials.CredentialHeader(req.Secret, req.CredentialConsumer(), req.URL)
+		}
 		if !ok {
 			out.Result, out.Detail = "retry", "secret "+req.Secret+" missing"
+			if connector {
+				out.Result, out.Detail = "rejected", "Connector credential is unavailable"
+			}
 			return out
 		}
 	}
@@ -451,11 +542,18 @@ func (c Client) Writeback(x platform.Effect) (out platform.Outcome) {
 		out.Result, out.Detail = "rejected", c.Private.Error()
 	case err != nil:
 		out.Result, out.Detail = "unknown", "No delivery answer; reconcile or record a human decision: "+err.Error()
+		if connector {
+			out.Detail = "No connector answer; reconcile or record a human decision"
+		}
 	default:
 		answer, readErr := io.ReadAll(io.LimitReader(resp.Body, (64<<10)+1))
 		resp.Body.Close()
 		if readErr != nil || len(answer) > 64<<10 {
 			out.Result, out.Detail = "unknown", "The delivery answer is incomplete or exceeds its retained evidence budget"
+			return out
+		}
+		if connector && connectorAnswerSensitive(answer, r, credential) {
+			out.Result, out.Detail = "unknown", "Connector answer contained credential material and was not retained"
 			return out
 		}
 		if len(answer) > 0 && !json.Valid(answer) {
@@ -468,8 +566,16 @@ func (c Client) Writeback(x platform.Effect) (out platform.Outcome) {
 			out.Result = "delivered"
 		case code >= 400 && code < 500 && code != 408 && code != 429:
 			out.Result, out.Detail = "rejected", resp.Status+": "+clipDetail(answer)
+			if connector {
+				out.Answer = nil
+				out.Detail = fmt.Sprintf("Connector answered %d", code)
+			}
 		default:
 			out.Result, out.Detail = "retry", resp.Status
+			if connector {
+				out.Answer = nil
+				out.Detail = fmt.Sprintf("Connector answered %d", code)
+			}
 		}
 	}
 	return out

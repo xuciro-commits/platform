@@ -1,0 +1,10 @@
+name: dispatch
+namespace: connectortrial
+title: Dispatch
+plural: Dispatches
+display: destination
+fields:
+  - {name: destination, title: Destination, type: text, required: true, search: true}
+access:
+  - {role: user, read: all, create: true, edit: true}
+actions: [send]

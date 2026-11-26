@@ -1,0 +1,14 @@
+{
+  "format": 2,
+  "package": "connectortrial-contract",
+  "version": "0.1.0",
+  "requires": [],
+  "artifact": "sha256:d6b9a41fb3632b56a03815d16d0d1c597f227ef8f065c86d5bbe4d899b9528d3",
+  "assets": {
+    "contract/connectortrial": {
+      "digest": "sha256:98a84cb79425f7c43b026819d93f7d75ebc6b272c04b293fc833f7e471467160",
+      "contractVersion": 1,
+      "sourceVersion": "1.contract-1"
+    }
+  }
+}
