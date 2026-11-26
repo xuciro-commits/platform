@@ -35,7 +35,7 @@ func decideOnImage[T any](t *Tenant, ctx context.Context, holder string, prepare
 		return
 	}
 	attempts := 0
-	if holder == "import" {
+	if holder == "import" || holder == "work" {
 		attempts = 1
 	}
 	return runtimekernel.ImageDecision[T, preparedAccepted]{

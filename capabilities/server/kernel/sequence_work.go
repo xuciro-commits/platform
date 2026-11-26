@@ -105,6 +105,34 @@ func (d *Decision) WorkDecision(src ResultSources, result *acceptedformat.Work, 
 			return err
 		}
 		result.Changes = changes
+		// The sealed child batch already carries the decision authorization evidence.
+		// Keep only evidence absent from it; refusals and old results remain unchanged.
+		var child struct {
+			Authorizations []acceptedformat.AuthorizationEvidence `json:"authorizations"`
+		}
+		if err := json.Unmarshal(changes, &child); err != nil {
+			return err
+		}
+		seen := map[string]bool{}
+		for _, item := range child.Authorizations {
+			raw, err := json.Marshal(item)
+			if err != nil {
+				return err
+			}
+			seen[string(raw)] = true
+		}
+		var extra []acceptedformat.AuthorizationEvidence
+		for _, item := range result.Authorizations {
+			raw, err := json.Marshal(item)
+			if err != nil {
+				return err
+			}
+			if !seen[string(raw)] {
+				extra = append(extra, item)
+				seen[string(raw)] = true
+			}
+		}
+		result.Authorizations = extra
 	} else if d.Records.WriteCount() > 0 || d.Failure != nil || src.Pending ||
 		len(d.Observations) > 0 || len(d.Allocated) > 0 || len(d.Logs) > 0 || len(d.OperationCancels) > 0 {
 		return fmt.Errorf("work has effects without a decision")
