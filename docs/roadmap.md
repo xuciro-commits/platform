@@ -47,20 +47,20 @@
 |---|---|---|---|
 | 记录：列表、记录页、行内编辑、视图 | 产品级 | `pages/RecordList.tsx`、`RecordPage.tsx`；records 32 项 | — |
 | CRM 包 | 产品级 | crm 20 项、official 6 项 | 升级后扩展还在：3.3b、3.3c，studio-4 |
-| 宿主：接受路径、重放、内存与文件存储 | 能用 | `capabilities/server/kernel`；十三组内核不变量 | 3.1c、3.1d 宿主侧已合入，浏览器验收：ship-1、ship-2 |
-| PostgreSQL 存储 | 能用 | 3.1a、3.1b；trunk-pg 只跑过 official、marketplace | 全量：fire-1 |
+| 宿主：接受路径、重放、内存与文件存储 | 能用 | `capabilities/server/kernel`；十三组内核不变量；official 停机重启、备份恢复 | — |
+| PostgreSQL 存储 | 能用 | 3.1a、3.1b；trunk-pg 只跑过 official、marketplace | 全量 trunk-pg 剩两项，Build 监听器结果太大：kit-6 |
 | 格式纪元冻结 | 无 | `make check` 没有这条核对 | 3.4a，B 级：lead-2 |
 | 构建：类型、字段、状态、动作、发布 | 能用 | `services/ontology`；builder 12 项 | 条件与表达式只能手写：studio-3 |
 | 条件与表达式编辑器 | 无 | `pages/` 里没有 `ConditionBuilder`、`ExpressionEditor` | studio-3 |
-| 结构化对比、关系图 | 无 | 没有 `RecordComparison`、`RelationCanvas` | 对比：studio-2；关系图等客户要 |
+| 结构化对比、关系图 | 能用（对比） | `RecordComparison`；builder 发布前审阅 | 关系图等客户要 |
 | 客户扩展 | 能用 | `pages/RecordExtensions.tsx`；official “an extension project” | 升级后保留：studio-4 |
-| 市场：安装、升级、卸载、远程包库 | 能用 | `apps/delivery/marketplace.tsx`；marketplace 10 项 | 审阅不核对扩展：查询 kit-5，界面 studio-4 |
+| 市场：安装、升级、卸载、远程包库 | 能用 | `apps/delivery/marketplace.tsx`；marketplace 10 项 | 审阅界面与不兼容时拒绝：studio-4 |
 | 授权：角色、ReBAC、临时授权、受限字段 | 能用 | `services/security`；rebac 3 项、crm “roles”、workspace “restricted fields”、official “an extension project” | — |
 | 工作：收件箱、任务、提及、跟进 | 能用 | `pages/InboxPage.tsx`、`services/work`；workspace “inbox”、crm “follow-up” | — |
 | 看板、日历、甘特、仪表盘 | 能用 | `BoardView`、`CalendarView`、`GanttView`、`DashboardPage`；crm、gantt | — |
-| 导入导出 | 能用 | `pages/ImportWizard.tsx`、`objects/record_import.go`；crm “import” | 3.4b：后端 kit-4，界面与邀请 ship-3 |
+| 导入导出 | 能用 | `pages/ImportWizard.tsx`、`objects/record_import.go`；crm “import” | 批量接受已合入；界面与邀请：ship-3 |
 | 租户、成员、登录、设置、词汇 | 能用 | `apps/admin`；workspace 17 项 | 自助注册：阶段 4 |
-| 主数据：geo、party、uom | 能用 | marketplace “publisher tenant: a master data”；K42、K43 | party 结构化地址：kit-2 |
+| 主数据：geo、party、uom | 能用 | marketplace “publisher tenant: a master data”；K42、K43 | — |
 | 能力：契约、绑定、连接器 | 能用 | `pages/Capabilities.tsx`；workspace “capabilities”；connector 1 项（内存与 pg）；K40、K41、K45、K46 | 商业供应商的适配：等客户选定供应商 |
 | 电话 | 能用 | `capabilities/voice`、`pages/CallDock.tsx`；phone 3 项、`make test-voice` | 本机外放、TLS 与 NAT：等客户要电话 |
 | 自动化与流程 | 占位 | `services/automate` 约 9 千行；`apps/logic` 只是列表；没有 trunk | 阶段 5 的 `FlowCanvas` |
@@ -84,17 +84,17 @@
   `make trunk-pg SPEC=official` 4 项通过。
 - 3.1b 已做：慢在授权决定每次提交都重建数据标记索引、把 6 类血缘记录整表读一遍；缓存改按这 6 类的变化计数取，读视图内点读不重复查。
   `make trunk-pg SPEC=marketplace` 10 项通过；之后每行收尾跑 `make trunk-pg` 全量。
-- 3.1c 重启不丢：trunk 加一条用例，official 租户建线索后让宿主停机再起（快照与重放各一次），线索的修订与编号不变。
-- 3.1d 备份与恢复：宿主命令导出一个租户的已接受条目与快照（按格式纪元写明版本），导入到空库时逐条核对身份与纪元，不符的整批拒；
+- 3.1c 已做（5ad02daac）重启不丢：trunk 加一条用例，official 租户建线索后让宿主停机再起（快照与重放各一次），线索的修订与编号不变。
+- 3.1d 已做（48580d57f、5ad02daac）备份与恢复：宿主命令导出一个租户的已接受条目与快照（按格式纪元写明版本），导入到空库时逐条核对身份与纪元，不符的整批拒；
   验收：导出 official → 新库导入 → 新宿主起来后主干的 official 用例照跑。不备份投影表与内存态，它们由重放得到。
 
 ## 3.2 客户扩展
 
 灵魂：客户的改动在客户自己的项目里，用附属对象挂到官方的名词上；官方包不知道它，升级也不碰它。
 
-- 3.2a 扩展项目：管理员在构建里新建“扩展”项目，选目标应用（如 CRM 的线索），建附属对象（`extends` 指向线索，`base` 必填），加字段并发布。
-- 3.2b 落点：目标应用的记录页按贡献位显示扩展的字段分节与动作，列表可加扩展字段为列；人员页之外的第一个落点（2.9 挪来）。
-- 3.2c 授权：扩展字段按附属对象自己的 `access` 判，别的包读不到；销售能填、经理能看，trunk 换角色核对。
+- 3.2a 已做（5e93120f4）扩展项目：管理员在构建里新建“扩展”项目，选目标应用（如 CRM 的线索），建附属对象（`extends` 指向线索，`base` 必填），加字段并发布。
+- 3.2b 已做（5e93120f4）落点：目标应用的记录页按贡献位显示扩展的字段分节与动作，列表可加扩展字段为列；人员页之外的第一个落点（2.9 挪来）。
+- 3.2c 已做（5e93120f4）授权：扩展字段按附属对象自己的 `access` 判，别的包读不到；销售能填、经理能看，trunk 换角色核对。
 
 ## 3.3 升级演练
 
