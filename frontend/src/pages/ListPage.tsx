@@ -159,10 +159,15 @@ export function ListView<Answer, Row>({ definition, read, primary, back, exportR
     onToggleGroup: (key) =>
       setCollapsed((previous) => {
         const next = new Set(previous);
-        if (!next.delete(key)) next.add(key);
+        if (!next.delete(key)) {
+          next.add(key);
+          for (const childKey of grouped.childrenOf(key)) next.add(childKey);
+        }
         return next;
       }),
     getRowKey: (cells) => cells[idKey],
+    firstColumnKey: orderedColumns[0]?.key,
+    hasSelection: Boolean(definition.bulk),
   });
   const isHeader = grouped.isHeader;
 
@@ -213,10 +218,11 @@ export function ListView<Answer, Row>({ definition, read, primary, back, exportR
     if (targetId) { setActive(targetId); setEditing({ id: targetId, key: shift ? editableKeys[editableKeys.length - 1] : editableKeys[0] }); }
   };
 
+  const groupDepth = subGroup ? 2 : group ? 1 : 0;
   const sizedColumns = orderedColumns.map((column, position) => ({
     column,
     position,
-    sizing: columnWidthSpec(column, position, compactSurface),
+    sizing: columnWidthSpec(column, position, compactSurface, groupDepth),
   }));
   const hasFlexColumn = sizedColumns.some((entry) => entry.sizing.flex);
   const columns: TableColumn<Cells>[] = [
@@ -307,14 +313,14 @@ export function ListView<Answer, Row>({ definition, read, primary, back, exportR
     update({ group: primary, subGroup: nextSub });
     setCollapsed(new Set());
   };
-  const allGroupsCollapsed = grouped.l1Keys.length > 0 && grouped.l1Keys.every((key) => collapsed.has(key));
+  const allGroupsCollapsed = grouped.allKeys.length > 0 && grouped.allKeys.every((key) => collapsed.has(key));
   const collapseActions = useMemo(() => ({
     allCollapsed: allGroupsCollapsed,
     hasSubGroups: Boolean(subGroup && grouped.l2Keys.length > 0),
     onExpandAll: () => setCollapsed(new Set()),
     onExpandLevelOne: () => setCollapsed(new Set(grouped.l2Keys)),
-    onCollapseAll: () => setCollapsed(new Set(grouped.l1Keys)),
-  }), [allGroupsCollapsed, subGroup, grouped.l1Keys, grouped.l2Keys]);
+    onCollapseAll: () => setCollapsed(new Set(grouped.allKeys)),
+  }), [allGroupsCollapsed, subGroup, grouped.l2Keys, grouped.allKeys]);
   const bulk = definition.bulk?.(chosen, () => setSelected(new Set()));
   const ready = read.status === "ready";
   const empty = ready && shown.length === 0;

@@ -87,7 +87,19 @@ const styles = stylex.create({
     paddingInlineStart: spacingVars["--spacing-2"],
   },
   cellSecondary: {
-    paddingInlineStart: spacingVars["--spacing-7"],
+    paddingInlineStart: spacingVars["--spacing-8"],
+  },
+  dataIndentOne: {
+    paddingInlineStart: spacingVars["--spacing-10"],
+  },
+  dataIndentTwo: {
+    paddingInlineStart: 64,
+  },
+  dataIndentOneWithSelection: {
+    paddingInlineStart: spacingVars["--spacing-6"],
+  },
+  dataIndentTwoWithSelection: {
+    paddingInlineStart: spacingVars["--spacing-12"],
   },
 });
 
@@ -108,6 +120,8 @@ export function useNestedGroupedRows<Row extends Record<string, unknown>>({
   collapsedGroups,
   onToggleGroup,
   getRowKey,
+  firstColumnKey,
+  hasSelection = false,
 }: {
   data: Row[];
   primary?: NestedGroupSpec<Row>;
@@ -115,10 +129,13 @@ export function useNestedGroupedRows<Row extends Record<string, unknown>>({
   collapsedGroups: ReadonlySet<string>;
   onToggleGroup: (key: string) => void;
   getRowKey: (row: Row) => string;
+  firstColumnKey?: string;
+  hasSelection?: boolean;
 }) {
   const structure = useMemo(() => {
+    const childrenByL1 = new Map<string, string[]>();
     if (!primary || data.length === 0) {
-      return { flattened: data, l1Keys: [] as string[], l2Keys: [] as string[] };
+      return { flattened: data, l1Keys: [] as string[], l2Keys: [] as string[], childrenByL1 };
     }
     const buckets = new Map<string, Row[]>();
     for (const row of data) {
@@ -147,9 +164,11 @@ export function useNestedGroupedRows<Row extends Record<string, unknown>>({
         else subBuckets.set(sub, [row]);
       }
       const orderedSubs = orderKeys([...subBuckets.keys()], secondary.order);
+      const children: string[] = [];
       for (const l2 of orderedSubs) {
         const composite = subGroupKey(l1, l2);
         l2Keys.push(composite);
+        children.push(composite);
         if (l1Collapsed) continue;
         const subRows = subBuckets.get(l2) ?? [];
         flattened.push(makeHeader<Row>(composite, l2, secondary.label, true, subRows.length, 2));
@@ -157,8 +176,9 @@ export function useNestedGroupedRows<Row extends Record<string, unknown>>({
           flattened.push(...subRows);
         }
       }
+      childrenByL1.set(l1, children);
     }
-    return { flattened, l1Keys, l2Keys };
+    return { flattened, l1Keys, l2Keys, childrenByL1 };
   }, [data, primary, secondary, collapsedGroups]);
 
   const idKey = useCallback(
@@ -166,12 +186,27 @@ export function useNestedGroupedRows<Row extends Record<string, unknown>>({
     [getRowKey],
   );
 
+  const hasPrimary = Boolean(primary);
+  const hasSecondary = Boolean(primary && secondary);
+
   const plugin = useMemo<TablePlugin<Row>>(
     () => ({
       rowModel: "grouped",
-      transformBodyCell(props, _column, item) {
-        if (!isGroupHeader(item)) return props;
-        return { ...props, isContentSuppressed: true };
+      transformBodyCell(props, column, item) {
+        if (isGroupHeader(item)) {
+          return { ...props, isContentSuppressed: true };
+        }
+        if (hasPrimary && firstColumnKey && column.key === firstColumnKey) {
+          const indentStyle = hasSecondary
+            ? hasSelection
+              ? styles.dataIndentTwoWithSelection
+              : styles.dataIndentTwo
+            : hasSelection
+              ? styles.dataIndentOneWithSelection
+              : styles.dataIndentOne;
+          return { ...props, xstyle: [...props.xstyle, indentStyle] };
+        }
+        return props;
       },
       transformBodyRow(props, item) {
         if (!isGroupHeader(item)) return props;
@@ -218,7 +253,12 @@ export function useNestedGroupedRows<Row extends Record<string, unknown>>({
         };
       },
     }),
-    [collapsedGroups, onToggleGroup],
+    [collapsedGroups, onToggleGroup, hasPrimary, hasSecondary, firstColumnKey, hasSelection],
+  );
+
+  const childrenOf = useCallback(
+    (key: string) => structure.childrenByL1.get(key) ?? [],
+    [structure.childrenByL1],
   );
 
   return {
@@ -226,6 +266,7 @@ export function useNestedGroupedRows<Row extends Record<string, unknown>>({
     l1Keys: structure.l1Keys,
     l2Keys: structure.l2Keys,
     allKeys: useMemo(() => [...structure.l1Keys, ...structure.l2Keys], [structure.l1Keys, structure.l2Keys]),
+    childrenOf,
     isHeader: isGroupHeader,
     idKey,
     plugin,

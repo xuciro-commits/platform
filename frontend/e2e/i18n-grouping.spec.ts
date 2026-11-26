@@ -1,10 +1,5 @@
-import { mkdirSync } from "node:fs";
-import { resolve } from "node:path";
 import { expect, test } from "@playwright/test";
 import { signIn } from "./support";
-
-const shotsDir = resolve(process.cwd(), "../.build/audit-shots");
-mkdirSync(shotsDir, { recursive: true });
 
 test.describe("i18n completeness, two-level grouping and full-width layout", () => {
   test.use({
@@ -33,7 +28,6 @@ test.describe("i18n completeness, two-level grouping and full-width layout", () 
     for (const leakedEn of ["Create call", "Add notes", "Mark failed", "Mark missed", "Archive call", "Restore call"]) {
       await expect(page.getByText(leakedEn, { exact: true })).toHaveCount(0);
     }
-    await page.screenshot({ path: `${shotsDir}/01-phone-roles-permissions.png` });
 
     // 2. Delivery -> 市场 (Screenshot 2 verification)
     await page.goto("/delivery/marketplace");
@@ -46,7 +40,6 @@ test.describe("i18n completeness, two-level grouping and full-width layout", () 
     await expect(page.getByText(/经平台语音网关接打来电与外呼/)).toBeVisible();
     await expect(page.getByText("Phone calls", { exact: true })).toHaveCount(0);
     await expect(page.getByText("Business partners", { exact: true })).toHaveCount(0);
-    await page.screenshot({ path: `${shotsDir}/02-marketplace-zh.png` });
 
     // 3. Admin -> 语言与词汇: full-width table, localized group header ("地点"), accurate Origin ("应用或产品包"), 2-level grouping + one-click collapse/expand (Screenshots 3 & 4)
     await page.goto("/admin/vocabulary");
@@ -75,7 +68,6 @@ test.describe("i18n completeness, two-level grouping and full-width layout", () 
       return (lastRect.right - tRect.left) / tRect.width;
     });
     expect(widthRatio).toBeGreaterThan(0.95);
-    await page.screenshot({ path: `${shotsDir}/03-vocabulary-full-width.png` });
 
     // Open View options -> Grouping: verify 2-level selectable grouping + Collapse/Expand controls
     await page.getByRole("button", { name: "视图选项", exact: true }).click();
@@ -85,31 +77,47 @@ test.describe("i18n completeness, two-level grouping and full-width layout", () 
     await expect(l1Group).toBeVisible();
     await expect(l2Group).toBeVisible();
     await l2Group.getByRole("radio", { name: "类型", exact: true }).click();
-    await page.screenshot({ path: `${shotsDir}/04-view-options-two-level-grouping.png` });
 
     // Test "展开一级" inside popover so L1 stays open and L2 subgroups collapse into a crisp summary
     await page.getByRole("button", { name: "展开一级", exact: true }).click();
     await page.keyboard.press("Escape");
     await expect(page.getByRole("row", { name: /^折叠分组 应用: 地点/ }).or(page.getByRole("row", { name: /^折叠分组 地点/ }))).toBeVisible();
     await expect(page.getByRole("row", { name: /^展开分组 类型与字段/ })).toBeVisible();
-    await page.screenshot({ path: `${shotsDir}/05-nested-groups-level1-expanded.png` });
 
-    // Test one-click "全部折叠" & "全部展开" right on the main list toolbar
+    // Test one-click "全部折叠": opening L1 must keep L2 subgroups collapsed
     const collapseBtn = page.getByRole("button", { name: "全部折叠", exact: true });
     await expect(collapseBtn).toBeVisible();
     await collapseBtn.click();
-    await expect(page.getByRole("row", { name: /^展开分组 地点/ })).toBeVisible();
+    const placesCollapsed = page.getByRole("row", { name: /^展开分组 地点/ });
+    await expect(placesCollapsed).toBeVisible();
+    await placesCollapsed.click();
+    await expect(page.getByRole("row", { name: /^展开分组 类型与字段/ }).first()).toBeVisible();
+    await expect(page.getByRole("row", { name: /^折叠分组 类型与字段/ })).toHaveCount(0);
 
+    // Test one-click "全部展开" and verify strictly increasing indentation across L1 -> L2 -> data rows
+    await page.getByRole("button", { name: "全部折叠", exact: true }).click();
     const expandBtn = page.getByRole("button", { name: "全部展开", exact: true });
     await expect(expandBtn).toBeVisible();
     await expandBtn.click();
     await expect(page.getByRole("row", { name: /^折叠分组 类型与字段/ }).first()).toBeVisible();
-    await page.screenshot({ path: `${shotsDir}/06-nested-groups-fully-expanded.png` });
+    const indents = await page.evaluate(() => {
+      const rows = Array.from(document.querySelectorAll("tbody tr"));
+      const padOf = (el?: Element | null) => (el ? parseFloat(getComputedStyle(el).paddingInlineStart) : 0);
+      const l1 = rows.find((r) => r.textContent?.includes("应用:"));
+      const l2 = rows.find((r) => r.textContent?.includes("类型:"));
+      const data = rows.find((r) => !r.textContent?.includes("应用:") && !r.textContent?.includes("类型:"));
+      return {
+        l1: padOf(l1?.querySelector("td")),
+        l2: padOf(l2?.querySelector("td")),
+        data: padOf(data?.querySelector("td")),
+      };
+    });
+    expect(indents.l2).toBeGreaterThan(indents.l1);
+    expect(indents.data).toBeGreaterThan(indents.l2);
 
     // 4. Admin -> 组织: verify TreeList unit kind i18n + full width + one-click Collapse/Expand all
     await page.goto("/admin/organization");
     await expect(page.getByRole("heading", { level: 1, name: "组织" })).toBeVisible();
     await expect(page.getByRole("button", { name: /^(全部展开|全部折叠)$/ })).toBeVisible();
-    await page.screenshot({ path: `${shotsDir}/07-organization-tree-zh.png` });
   });
 });

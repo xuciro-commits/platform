@@ -55,7 +55,7 @@ export function stuck(edge: StickyEdge, keys: string[], fromEnd: boolean) {
   return count === 0 ? [] : fromEnd ? keys.slice(-count) : keys.slice(0, count);
 }
 
-export function columnWidthSpec<Row>(column: ListColumn<Row>, position: number, compact: boolean) {
+export function columnWidthSpec<Row>(column: ListColumn<Row>, position: number, compact: boolean, groupDepth = 0) {
   const minHeader = headerWidth(t(column.header));
   if (column.flex != null) {
     return { flex: true, spec: proportional(column.flex, { minWidth: Math.max(column.width ?? 160, minHeader) }) };
@@ -68,7 +68,8 @@ export function columnWidthSpec<Row>(column: ListColumn<Row>, position: number, 
   }
   const kind = column.kind ?? "string";
   if (position === 0) {
-    return { flex: true, spec: proportional(1.6, { minWidth: Math.max(compact ? 128 : 144, minHeader) }) };
+    const indentExtra = groupDepth * 24;
+    return { flex: true, spec: proportional(1.6, { minWidth: Math.max((compact ? 128 : 144) + indentExtra, minHeader + indentExtra) }) };
   }
   if (kind === "string") {
     return { flex: true, spec: proportional(1.4, { minWidth: Math.max(124, minHeader) }) };
