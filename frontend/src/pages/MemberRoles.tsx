@@ -29,6 +29,8 @@ import {
 export function MemberRoles({ member }: { member: Api.MemberView }) {
   const toast = useToast();
   const apps = useRead<Api.AppInfo[]>("/v1/apps");
+  const packages = useRead<Api.PackageView[]>("/v1/packages");
+  const permissions = useRead<Api.AppPermissions[]>("/v1/permissions");
   const catalog = useRead<Api.Action[]>("/v1/actions");
   const { nameOf: memberName } = useMemberDirectoryMap();
   const { choices: unitChoices, unitName } = useUnitChoices();
@@ -47,15 +49,29 @@ export function MemberRoles({ member }: { member: Api.MemberView }) {
   const minUntil = addDaysISO(1, startFrom && startFrom > today ? startFrom : today);
 
   const grantableApps = useMemo(() => {
-    if (apps.status !== "ready") return [];
-    return apps.data
-      .map((entry) => ({
-        id: entry.id,
-        title: entry.title || entry.id,
-        roles: entry.roles.filter((r) => r !== "*"),
-      }))
-      .filter((entry) => entry.roles.length > 0);
-  }, [apps]);
+    const out = new Map<string, { id: string; title: string; roles: string[] }>();
+    if (apps.status === "ready") {
+      for (const entry of apps.data) {
+        const roles = entry.roles.filter((r) => r !== "*");
+        if (roles.length > 0) out.set(entry.id, { id: entry.id, title: entry.title || entry.id, roles });
+      }
+    }
+    if (packages.status === "ready" && permissions.status === "ready") {
+      const installed = new Set<string>();
+      for (const view of packages.data) {
+        if (view.installed?.state !== "active") continue;
+        for (const name of [view.installed.space, view.installed.namespace, view.descriptor.namespace]) {
+          if (name) installed.add(name);
+        }
+      }
+      for (const entry of permissions.data) {
+        if (!installed.has(entry.app) || out.has(entry.app)) continue;
+        const roles = entry.roles.map((item) => item.role).filter((r) => r !== "*");
+        if (roles.length > 0) out.set(entry.app, { id: entry.app, title: entry.title || entry.app, roles });
+      }
+    }
+    return [...out.values()];
+  }, [apps, packages, permissions]);
 
   const titleByApp = useMemo(() => {
     const map = new Map<string, string>();

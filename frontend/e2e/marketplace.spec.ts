@@ -6,6 +6,18 @@ import { fileURLToPath } from "node:url";
 import { type Locator, type Page, expect, test } from "@playwright/test";
 import { open, property, edit, signIn } from "./support";
 
+const chooseRole = async (page: Page, pane: Locator, role: RegExp) => {
+  await pane.getByRole("combobox", { name: /^Application/ }).click();
+  await page.getByRole("option", { name: "CRM", exact: true }).click();
+  await pane.getByRole("combobox", { name: /^Role/ }).click();
+  await page.getByRole("option", { name: role }).click();
+};
+const grantRole = async (page: Page, pane: Locator, role: RegExp) => {
+  await chooseRole(page, pane, role);
+  await pane.getByRole("button", { name: "Grant role", exact: true }).click();
+  await expect(pane.getByRole("listitem").filter({ hasText: role })).toBeVisible();
+};
+
 test.describe.serial("blank tenant", () => {
 let page: Page;
 let nav: Locator;
@@ -44,13 +56,14 @@ test("blank tenant: a package role granted to a member opens CRM for them, its e
   await open(page, "Admin", "Members");
   await page.getByRole("row", { name: /田雪/ }).click();
   const memberPane = page.getByRole("dialog", { name: "Details" }).or(page.getByRole("complementary", { name: "Details" }));
-  await memberPane.getByRole("combobox", { name: "Package role", exact: true }).click();
+  await memberPane.getByRole("combobox", { name: /^Application/ }).click();
+  await page.getByRole("option", { name: "CRM", exact: true }).click();
+  await memberPane.getByRole("combobox", { name: /^Role/ }).click();
   await expect(page.getByRole("option", { name: /salesrep/ })).toBeVisible();
   await expect(page.getByRole("option", { name: /salesmanager/ })).toBeVisible();
   await expect(page.getByRole("option", { name: /admin|builder/i })).toHaveCount(0);
-  await page.getByRole("option", { name: /salesrep/ }).click();
-  await memberPane.getByRole("button", { name: "Grant role", exact: true }).click();
-  await expect(memberPane.getByRole("listitem").filter({ hasText: /salesrep/ })).toBeVisible();
+  await page.keyboard.press("Escape");
+  await grantRole(page, memberPane, /salesrep/);
 
   await signOut();
   await signIn(page, "user-1 · blank");
@@ -85,16 +98,10 @@ test("blank tenant: a package role granted to a member opens CRM for them, its e
   await signIn(page, "admin-1 · blank");
   await open(page, "Admin", "Members");
   await page.getByRole("row", { name: /田雪/ }).click();
-  await memberPane.getByRole("combobox", { name: "Package role", exact: true }).click();
-  await page.getByRole("option", { name: /salesrep/ }).click();
-  await memberPane.getByRole("button", { name: "Grant role", exact: true }).click();
-  await expect(memberPane.getByRole("listitem").filter({ hasText: /salesrep/ })).toBeVisible();
+  await grantRole(page, memberPane, /salesrep/);
 
   await page.getByRole("row", { name: /赵敏/ }).click();
-  await memberPane.getByRole("combobox", { name: "Package role", exact: true }).click();
-  await page.getByRole("option", { name: /salesmanager/ }).click();
-  await memberPane.getByRole("button", { name: "Grant role", exact: true }).click();
-  await expect(memberPane.getByRole("listitem").filter({ hasText: /salesmanager/ })).toBeVisible();
+  await grantRole(page, memberPane, /salesmanager/);
 });
 
 test("blank tenant: the sales rep runs a lead to Won and the sales manager sees it on the board and the dashboard", async () => {
@@ -219,10 +226,7 @@ test("upgrade tenant: CRM upgrades to a version with a new optional lead field a
   await open(page, "Admin", "Members");
   await page.getByRole("row", { name: /王丹/ }).click();
   const memberPane = page.getByRole("dialog", { name: "Details" }).or(page.getByRole("complementary", { name: "Details" }));
-  await memberPane.getByRole("combobox", { name: "Package role", exact: true }).click();
-  await page.getByRole("option", { name: /salesrep/ }).click();
-  await memberPane.getByRole("button", { name: "Grant role", exact: true }).click();
-  await expect(memberPane.getByRole("listitem").filter({ hasText: /salesrep/ })).toBeVisible();
+  await grantRole(page, memberPane, /salesrep/);
 
   await page.getByRole("button", { name: "Account", exact: true }).click();
   await page.getByRole("menuitem", { name: "Sign out", exact: true }).click();
