@@ -85,6 +85,9 @@ test("object definition: add a field, publish it and review a removal", async ({
   await page.getByRole("button", { name: "Publish", exact: true }).click();
   const publish = page.getByRole("dialog", { name: /Publish/ });
   await expect(publish.getByText(/Records reviewed: \d+/)).toBeVisible();
+  const firstComparison = publish.getByRole("table", { name: "Changes", exact: true });
+  await expect(firstComparison.getByRole("row").filter({ hasText: "mobile" })).toContainText("Added");
+  await expect(firstComparison.getByRole("row").filter({ hasText: "mobile" })).toContainText("Mobile · text");
   await publish.getByRole("button", { name: "Publish", exact: true }).click();
   await expect(publish).toBeHidden();
   await expect(page.getByText("Unpublished changes", { exact: true })).toHaveCount(0);
@@ -100,7 +103,24 @@ test("object definition: add a field, publish it and review a removal", async ({
   await row.getByRole("button", { name: /Row actions/ }).click();
   await page.getByRole("menuitem", { name: "Remove", exact: true }).click();
   await page.getByRole("alertdialog").getByRole("button", { name: "Remove", exact: true }).click();
+  await page.getByRole("button", { name: "Add field", exact: true }).click();
+  await edit.getByRole("textbox", { name: /^Name/ }).fill("wechat");
+  await edit.getByRole("textbox", { name: /^Label/ }).fill("WeChat");
+  await edit.getByRole("combobox", { name: /^Type/ }).click();
+  await page.getByRole("option", { name: "text", exact: true }).click();
+  await edit.getByRole("button", { name: "Save", exact: true }).click();
+  await expect(edit).toBeHidden();
+
   await page.getByRole("button", { name: "Publish", exact: true }).click();
+  const comparison = publish.getByRole("table", { name: "Changes", exact: true });
+  const removedRow = comparison.getByRole("row").filter({ hasText: "mobile" });
+  await expect(removedRow).toContainText("Removed");
+  await expect(removedRow).toContainText("Mobile · text");
+  await expect(removedRow).toContainText("Empty");
+  const addedRow = comparison.getByRole("row").filter({ hasText: "wechat" });
+  await expect(addedRow).toContainText("Added");
+  await expect(addedRow).toContainText("Empty");
+  await expect(addedRow).toContainText("WeChat · text");
   await expect(publish.getByText(/mobile · Removed field · 0 records with data/)).toBeVisible();
   await publish.getByRole("button", { name: "Cancel" }).click();
 

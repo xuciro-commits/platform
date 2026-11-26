@@ -24,6 +24,7 @@ import { KeyboardHelp } from "./KeyboardHelp";
 import { type Editor, FieldGroup, useEditor } from "./RecordFields";
 import { RecordFiles, RecordLinks, relatedGroups } from "./RecordAttachments";
 import { Collaboration, RecordActivity } from "./RecordActivity";
+import { compareObjectChanges, RecordComparison } from "./RecordComparison";
 import { type ContributedAction, ExtensionHost, extensionsOf } from "./RecordExtensions";
 import { RecordLines } from "./RecordLines";
 import { ObjectPreview } from "./ObjectPreview";
@@ -35,7 +36,7 @@ import { PropertyField } from "./PropertyField";
 import { ProjectAccessPanel } from "./rebac/ProjectAccessDialog";
 import { RequestAccessButton } from "./rebac/RequestAccessDialog";
 import { dots, type Instances, Transitions } from "./Transitions";
-import { plain, present } from "./values";
+import { plain } from "./values";
 
 type Stamp = { by?: string; at?: string };
 type Kept = { id: string; revision: number; created: Stamp; changed: Stamp; archived?: boolean };
@@ -49,25 +50,6 @@ function Loading() {
       ))}
     </VStack>
   );
-}
-
-function formatChangeValue(described: Described, path: string, value: unknown, refs?: Api.RecordView["refs"]) {
-  if (value == null || value === "") return t("Empty");
-  const field = described.field(path);
-  if (field) {
-    const id = String(value);
-    if (field.type === "reference" && refs?.[field.name]?.[id]) return refs[field.name][id];
-    const formatted = present(field, plain(value));
-    if (formatted !== "") return formatted;
-  }
-  if (typeof value === "string" || typeof value === "number" || typeof value === "boolean") return String(value);
-  if (Array.isArray(value)) {
-    const items = value
-      .map((item) => (typeof item === "object" && item ? String((item as Record<string, unknown>).title ?? (item as Record<string, unknown>).name ?? "") : String(item)))
-      .filter(Boolean);
-    return items.join(", ") || t("Empty");
-  }
-  return t("Structured value");
 }
 
 function CopyId({ id }: { id: string }) {
@@ -342,27 +324,11 @@ export function RecordPage({ described, id, listPath, listTitle, instances, enti
                 <ExtensionHost extensions={extensions} baseId={id} catalog={catalog} showFields={false} onActions={onExtensionActions} />
               )}
               {tab === "changes" && (
-                <VStack gap={4}>
-                  {changes.map((change) => {
-                    const changedField = described.field(change.path);
-                    const fieldLabel = changedField ? t(changedField.title) : change.path;
-                    const beforeText = change.from !== undefined ? formatChangeValue(described, change.path, change.from, refs) : undefined;
-                    const afterText = change.to !== undefined ? formatChangeValue(described, change.path, change.to, refs) : undefined;
-                    return (
-                      <VStack key={change.path} gap={1}>
-                        <HStack gap={2} vAlign="center">
-                          <Text type="body" weight="medium">{fieldLabel}</Text>
-                          <Text type="supporting" color="secondary">{t(change.change === "added" ? "Added" : change.change === "removed" ? "Removed" : "Changed")}</Text>
-                        </HStack>
-                        <HStack gap={2} vAlign="center" wrap="wrap">
-                          {beforeText !== undefined && <Text type="body" color="secondary">{beforeText}</Text>}
-                          {beforeText !== undefined && afterText !== undefined && <Text type="supporting" color="secondary">{"→"}</Text>}
-                          {afterText !== undefined && <Text type="body">{afterText}</Text>}
-                        </HStack>
-                      </VStack>
-                    );
-                  })}
-                </VStack>
+                <RecordComparison
+                  rows={compareObjectChanges(changes, { described, refs, fullPathCode: true })}
+                  beforeHeader={t("Published")}
+                  afterHeader={t("Draft")}
+                />
               )}
               {tab === "links" && <RecordLinks read={links} id={id} entities={entities} />}
               {tab === "files" && <RecordFiles read={files} attach={attach} detach={detach} target={`${described.type}/${id}`} />}
