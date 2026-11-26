@@ -29,23 +29,30 @@ func (t *Tenant) Import(m platform.Member, typ string, data []byte, preview bool
 	if err != nil {
 		return nil, err
 	}
-	return objects.Importer{Tenant: t.ID, Member: m.ID,
-		Submit: func(s *pb.Submission) (*pb.ChangeRecord, *platform.Error, []platform.FieldIssue) {
-			if preview {
-				return t.probeDiagnosed(m, s, now)
-			}
-			return t.submitDiagnosed(m, s, now)
-		},
+	if !preview {
+		return t.importBatches(m, view.Info(), parsed, now)
+	}
+	return t.importRows(m, view.Info(), parsed, now, func(s *pb.Submission) (*pb.ChangeRecord, *platform.Error, []platform.FieldIssue) {
+		return t.probeDiagnosed(m, s, now)
+	}), nil
+}
+
+func (t *Tenant) importRows(m platform.Member, info platform.RecordTypeInfo, parsed objects.ImportFile, now time.Time, submit func(*pb.Submission) (*pb.ChangeRecord, *platform.Error, []platform.FieldIssue)) []protocol.ImportRow {
+	return objects.Importer{Tenant: t.ID, Member: m.ID, Submit: submit,
 		Verb: func(key, id string) string {
 			verb, _ := recordRead(t, context.Background(), func(t *Tenant) (string, *platform.Error) {
-				ledger := t.App(view.Info().App).Authority()
-				if ledger.AcceptedFor(t.ID, key) == nil && (ledger.AcceptedFor(t.ID, key+":edit") != nil || t.readable(m, typ+"/"+id, now)) {
+				app := t.App(info.App)
+				if app == nil {
+					return ".create", nil
+				}
+				ledger := app.Authority()
+				if ledger.AcceptedFor(t.ID, key) == nil && (ledger.AcceptedFor(t.ID, key+":edit") != nil || t.readable(m, info.Type+"/"+id, now)) {
 					return ".edit", nil
 				}
 				return ".create", nil
 			})
 			return verb
-		}}.Rows(view.Info(), parsed), nil
+		}}.Rows(info, parsed)
 }
 
 func (t *Tenant) probeDiagnosed(m platform.Member, s *pb.Submission, now time.Time) (*pb.ChangeRecord, *platform.Error, []platform.FieldIssue) {

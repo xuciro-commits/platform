@@ -35,6 +35,7 @@ type Authority interface {
 	AcceptedFor(tenant, key string) *pb.ChangeRecord
 	ApplyAcceptedChange(record *pb.ChangeRecord) (bool, error)
 	UseChangeArchive(archive ChangeArchive)
+	RetainAcceptedChanges(retain bool)
 	ForkAcceptedChanges() ChangeLog
 	ForkRead() (Authority, error)
 	Snapshot() (json.RawMessage, error)

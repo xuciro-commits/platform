@@ -15,6 +15,7 @@ import (
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
 	acceptedformat "platformserver/kernel/acceptedformat"
 	runtimeprotocol "platformserver/kernel/protocol"
+	persistence "platformserver/kernel/store"
 	"platformserver/platform"
 	"platformserver/services/actions"
 	agentevaluation "platformserver/services/ai/evaluation"
@@ -87,6 +88,14 @@ func newInvariantTenantSetup(tb testing.TB, id string, apps []platform.Service, 
 	tenant.AcceptResult = func(e Entry, _, _ string) ([]byte, error) {
 		live.entries = append(live.entries, e)
 		return e.Body, nil
+	}
+	tenant.AcceptResults = func(batch []persistence.AcceptedAppend) ([][]byte, error) {
+		raw := make([][]byte, len(batch))
+		for i, item := range batch {
+			live.entries = append(live.entries, item.Entry)
+			raw[i] = item.Entry.Body
+		}
+		return raw, nil
 	}
 	return live
 }

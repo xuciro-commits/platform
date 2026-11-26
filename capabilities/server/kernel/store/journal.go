@@ -55,6 +55,7 @@ func DecodeVector(b []byte) []float32 {
 
 type Journals interface {
 	Store
+	BatchJournal
 	Entries(ctx context.Context, tenant string, after int64) ([]Entry, error)
 	Position(tenant string) int64
 	SaveSnapshot(ctx context.Context, tenant string, seq int64, code string, state []byte) error

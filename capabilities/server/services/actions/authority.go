@@ -15,16 +15,17 @@ import (
 )
 
 type authority struct {
-	mu           sync.Mutex
-	tenant       string
-	authority    string
-	declarations []*pb.AuthorityDeclaration
-	archive      platform.ChangeArchive
-	changes      *protocol.ChangeLog
-	authorities  *protocol.Authorities
-	schemaRefs   []*pb.SchemaRef
-	schemas      *protocol.SchemaRegistry
-	catalog      *platform.Catalog
+	mu             sync.Mutex
+	tenant         string
+	authority      string
+	declarations   []*pb.AuthorityDeclaration
+	archive        platform.ChangeArchive
+	retainAccepted bool
+	changes        *protocol.ChangeLog
+	authorities    *protocol.Authorities
+	schemaRefs     []*pb.SchemaRef
+	schemas        *protocol.SchemaRegistry
+	catalog        *platform.Catalog
 }
 
 func NewAuthority(tenant, id string, catalog *platform.Catalog, classes ...string) platform.Authority {
@@ -89,10 +90,16 @@ func (l *authority) ApplyAcceptedChange(record *pb.ChangeRecord) (bool, error) {
 	l.mu.Lock()
 	defer l.mu.Unlock()
 	changed, err := l.changes.ApplyAccepted(record)
-	if err == nil && l.archive != nil {
+	if err == nil && l.archive != nil && !l.retainAccepted {
 		l.changes.Compact(l.archive)
 	}
 	return changed, err
+}
+
+func (l *authority) RetainAcceptedChanges(retain bool) {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	l.retainAccepted = retain
 }
 
 func (l *authority) UseChangeArchive(archive platform.ChangeArchive) {
@@ -114,7 +121,7 @@ func (l *authority) ForkRead() (platform.Authority, error) {
 	registry := protocol.NewSchemaRegistry(l.schemaRefs)
 	fork := &authority{tenant: l.tenant, authority: l.authority, declarations: slices.Clone(l.declarations),
 		schemaRefs: slices.Clone(l.schemaRefs), schemas: registry,
-		changes: l.changes.ForkWithSchemas(registry), archive: l.archive,
+		changes: l.changes.ForkWithSchemas(registry), archive: l.archive, retainAccepted: l.retainAccepted,
 		authorities: protocol.NewAuthorities(), catalog: l.catalog.CloneActions()}
 	for _, declaration := range fork.declarations {
 		if err := fork.authorities.Declare(declaration); err != nil {

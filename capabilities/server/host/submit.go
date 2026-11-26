@@ -68,57 +68,9 @@ func (t *Tenant) submit(m platform.Member, s *pb.Submission, now time.Time, opts
 			return record, refusal
 		}
 	}
-	type answer struct {
-		record *pb.ChangeRecord
-		issues []platform.FieldIssue
-	}
-	result, refusal := decideOnImage(t, context.Background(), "submit", func(t *Tenant) (out answer, err *platform.Error) {
-		if refusal := t.recordReadRefusal(); refusal != nil {
-			return out, refusal
-		}
-		a, refusal := t.ActionOwner(t.App(t.owner["action:"+s.GetSchema().GetName()]), t.App(s.GetAuthority()), s.GetIdempotencyKey())
-		if refusal != nil {
-			return out, refusal
-		}
-		source := opts.source
-		if source != nil {
-			if record, refusal, done := t.PriorOf(a, s.GetIdempotencyKey()).SourceReplay(m.ID, s, source.Deleted); done {
-				return answer{record: record}, refusal
-			}
-		}
-		if err = t.delegatedBound(m, s); err != nil {
-			return out, err
-		}
-		decision := acceptOptions{}
-		if opts.versioned {
-			decision.binding, decision.schemaRefusal = t.SchemaBinding(a, s, opts.contentVersion, t.actionSchemaVersion)
-			if decision.schemaRefusal != nil && decision.schemaRefusal.Code == pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT {
-				return out, decision.schemaRefusal
-			}
-		} else {
-			s = t.CurrentSchema(a, s)
-		}
-		if source != nil {
-			prepared, refusal := t.sourcePreparation().Prepare(m, s, source, now)
-			if refusal != nil {
-				return out, refusal
-			}
-			s, decision.source = prepared.Submission, &runtimekernel.ClaimSet{Origin: prepared.Origin, Claims: prepared.Claims, Restore: prepared.Restore}
-		}
-		end := t.begin("submit "+s.GetSchema().GetName(), trace.SpanContext{}, attribute.String("platform.app", a.Manifest().ID),
-			attribute.String("platform.target", runtimekernel.Target(s)), attribute.String("platform.member", m.ID))
-		defer func() { end(runtimekernel.OutcomeOf(err)) }()
-		out.record, err = t.accept(a, m, s, now, decision)
-		if err == nil {
-			return out, nil
-		}
-		if t.preparedResult != nil && len(t.preparedResult.entry.Body) > 0 {
-			out.issues = t.readableFieldIssues(m, t.preparedResult.issues, now)
-		} else if prior, ok := t.Committed.RefusedIssues(a.Manifest().ID, s, decision.binding); ok {
-			out.issues = t.readableFieldIssues(m, prior, now)
-		}
-		return out, err
-	}, func(t *Tenant, decision preparedAccepted, value answer, refusal *platform.Error) (answer, *platform.Error) {
+	result, refusal := decideOnImage(t, context.Background(), "submit", func(t *Tenant) (diagnosedSubmission, *platform.Error) {
+		return t.prepareSubmission(m, s, now, opts)
+	}, func(t *Tenant, decision preparedAccepted, value diagnosedSubmission, refusal *platform.Error) (diagnosedSubmission, *platform.Error) {
 		value.record, refusal = t.finishPreparedSubmission(m, decision, value.record, refusal)
 		return value, refusal
 	})
@@ -126,6 +78,60 @@ func (t *Tenant) submit(m platform.Member, s *pb.Submission, now time.Time, opts
 		opts.report(refusal, result.issues)
 	}
 	return result.record, refusal
+}
+
+// prepareSubmission uses the same admission, authority, schema and decision path for a single submission and an import batch.
+type diagnosedSubmission struct {
+	record *pb.ChangeRecord
+	issues []platform.FieldIssue
+}
+
+func (t *Tenant) prepareSubmission(m platform.Member, s *pb.Submission, now time.Time, opts submitOptions) (out diagnosedSubmission, err *platform.Error) {
+	if refusal := t.recordReadRefusal(); refusal != nil {
+		return out, refusal
+	}
+	a, refusal := t.ActionOwner(t.App(t.owner["action:"+s.GetSchema().GetName()]), t.App(s.GetAuthority()), s.GetIdempotencyKey())
+	if refusal != nil {
+		return out, refusal
+	}
+	source := opts.source
+	if source != nil {
+		if record, refusal, done := t.PriorOf(a, s.GetIdempotencyKey()).SourceReplay(m.ID, s, source.Deleted); done {
+			return diagnosedSubmission{record: record}, refusal
+		}
+	}
+	if err = t.delegatedBound(m, s); err != nil {
+		return out, err
+	}
+	decision := acceptOptions{}
+	if opts.versioned {
+		decision.binding, decision.schemaRefusal = t.SchemaBinding(a, s, opts.contentVersion, t.actionSchemaVersion)
+		if decision.schemaRefusal != nil && decision.schemaRefusal.Code == pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT {
+			return out, decision.schemaRefusal
+		}
+	} else {
+		s = t.CurrentSchema(a, s)
+	}
+	if source != nil {
+		prepared, refusal := t.sourcePreparation().Prepare(m, s, source, now)
+		if refusal != nil {
+			return out, refusal
+		}
+		s, decision.source = prepared.Submission, &runtimekernel.ClaimSet{Origin: prepared.Origin, Claims: prepared.Claims, Restore: prepared.Restore}
+	}
+	end := t.begin("submit "+s.GetSchema().GetName(), trace.SpanContext{}, attribute.String("platform.app", a.Manifest().ID),
+		attribute.String("platform.target", runtimekernel.Target(s)), attribute.String("platform.member", m.ID))
+	defer func() { end(runtimekernel.OutcomeOf(err)) }()
+	out.record, err = t.accept(a, m, s, now, decision)
+	if err == nil {
+		return out, nil
+	}
+	if t.preparedResult != nil && len(t.preparedResult.entry.Body) > 0 {
+		out.issues = t.readableFieldIssues(m, t.preparedResult.issues, now)
+	} else if prior, ok := t.Committed.RefusedIssues(a.Manifest().ID, s, decision.binding); ok {
+		out.issues = t.readableFieldIssues(m, prior, now)
+	}
+	return out, err
 }
 
 func (t *Tenant) accept(a platform.Service, m platform.Member, s *pb.Submission, now time.Time, opts acceptOptions) (record *pb.ChangeRecord, refusal *platform.Error) {

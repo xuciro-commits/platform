@@ -8,6 +8,7 @@ import (
 )
 
 type ImageDecision[T, C any] struct {
+	Attempts    int
 	Stopped     func() bool
 	Quarantined func() bool
 	Hold        func() error
@@ -30,7 +31,11 @@ func (r ImageDecision[T, C]) Run(ctx context.Context) (value T, refusal *platfor
 		}
 		return r.Finish(decision, value, refusal)
 	}
-	for attempt := 0; attempt < 3; attempt++ {
+	attempts := r.Attempts
+	if attempts <= 0 {
+		attempts = 3
+	}
+	for attempt := 0; attempt < attempts; attempt++ {
 		if ctx.Err() != nil || r.Stopped() {
 			return value, conflict()
 		}
@@ -59,12 +64,12 @@ func (r ImageDecision[T, C]) Run(ctx context.Context) (value T, refusal *platfor
 			}()
 			return value, refusal
 		}
-		if r.Contended() {
+		if r.Contended() || (r.Attempts > 0 && attempt+1 == attempts) {
 			defer r.Unlock()
 			return direct()
 		}
 		r.Unlock()
-		if attempt < 2 {
+		if attempt+1 < attempts {
 			r.Count("retried")
 		}
 	}

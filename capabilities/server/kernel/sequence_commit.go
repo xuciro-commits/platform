@@ -39,6 +39,41 @@ func (s *Sequence) Accept(entry persistence.Entry, key, hash string, delta func(
 	return raw, err
 }
 
+func (s *Sequence) AcceptBatch(batch []persistence.AcceptedAppend, quarantine func(error)) ([][]byte, error) {
+	if len(batch) == 0 {
+		return nil, nil
+	}
+	for i := range batch {
+		batch[i].Entry.Epoch = persistence.FormatEpoch
+	}
+	before := int64(0)
+	if s.RuntimePosition != nil {
+		before = s.RuntimePosition()
+	}
+	if s.AcceptResults == nil {
+		if s.AcceptResult != nil {
+			return nil, fmt.Errorf("storage does not support atomic accepted batches")
+		}
+		raw := make([][]byte, len(batch))
+		for i, item := range batch {
+			if s.Record != nil {
+				s.Record(item.Entry)
+			}
+			raw[i] = item.Entry.Body
+		}
+		return raw, nil
+	}
+	raw, err := s.AcceptResults(batch)
+	if err != nil && (errors.Is(err, persistence.ErrCommitUnknown) || s.RuntimePosition != nil && s.RuntimePosition() > before) {
+		quarantine(fmt.Errorf("accepted batch commit could not be resolved: %w", err))
+	}
+	if err == nil && len(raw) != len(batch) {
+		err = fmt.Errorf("accepted batch returned incomplete results")
+		quarantine(err)
+	}
+	return raw, err
+}
+
 func CommitRefusal(err error) *platform.Error {
 	if err == persistence.ErrAcceptedConflict {
 		return &platform.Error{Code: pb.ErrorCode_ERROR_CODE_IDEMPOTENCY_CONFLICT}

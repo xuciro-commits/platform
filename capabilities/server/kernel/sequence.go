@@ -33,6 +33,7 @@ type Sequence struct {
 	RuntimePosition   func() int64
 	Record            func(persistence.Entry)
 	AcceptResult      func(persistence.Entry, string, string) ([]byte, error)
+	AcceptResults     func([]persistence.AcceptedAppend) ([][]byte, error)
 }
 
 type LaneHold struct {

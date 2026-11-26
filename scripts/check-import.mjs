@@ -24,10 +24,10 @@ if (!tenant || !sizes.length || sizes.some(n => !Number.isInteger(n) || n < 1 ||
 }
 const transport = base.protocol === "https:" ? https : http;
 
-function call(method, path, body, contentType) {
+function call(method, path, body, contentType, extraHeaders = {}) {
   const started = performance.now();
   return new Promise((resolvePromise, reject) => {
-    const headers = { Authorization: `Bearer ${subject}`, "Platform-Tenant": tenant, "Accept-Language": "en", "Accept-Encoding": "gzip" };
+    const headers = { Authorization: `Bearer ${subject}`, "Platform-Tenant": tenant, "Accept-Language": "en", "Accept-Encoding": "gzip", ...extraHeaders };
     if (body !== undefined) Object.assign(headers, { "Content-Type": contentType, "Content-Length": Buffer.byteLength(body) });
     const req = transport.request(new URL(path, base), { method, headers, agent: false }, res => {
       const chunks = [], stream = res.headers["content-encoding"] === "gzip" ? res.pipe(createGunzip()) : res;
@@ -107,6 +107,57 @@ function summarize(rows, elapsedMs, size) {
   };
 }
 
+async function applyWithConcurrentProbes(path, body, fixture, tag) {
+  const enabled = process.env.PLATFORM_LOAD_IMPORT_CONCURRENT === "1";
+  if (!enabled) return { applied: await call("POST", path, body, "text/csv"), probes: null };
+  const me = (await call("GET", "/v1/me")).value;
+  const schema = fixture.object + ".edit";
+  const actions = (await call("GET", "/v1/actions")).value;
+  const version = actions.find(a => a.schema === schema)?.schemaVersion;
+  let running = true, seq = 0;
+  const probes = { reads: 0, edits: 0, errors: [], readMaxMs: 0, editMaxMs: 0 };
+  const samples = { reads: [], edits: [] };
+  const runProbe = async (kind, operation) => {
+    while (running) {
+      try {
+        const start = performance.now();
+        await operation();
+        if (running) { probes[kind]++; samples[kind].push(performance.now() - start); }
+        const key = kind === "reads" ? "readMaxMs" : "editMaxMs";
+        probes[key] = Math.max(probes[key], Math.round(performance.now() - start));
+      } catch (error) {
+        probes.errors.push({ kind, error: String(error.message) });
+        break;
+      }
+      await new Promise(resolve => setTimeout(resolve, 150));
+    }
+  };
+  const request = call("POST", path, body, "text/csv").finally(() => { running = false; });
+  const reader = runProbe("reads", async () => {
+    const result = (await call("GET", `/v1/records/${fixture.object}?limit=1`)).value;
+    if (!result.records?.length) throw Error("missing records during import");
+  });
+  const editor = runProbe("edits", async () => {
+    const current = (await call("GET", `/v1/records/${fixture.object}/${encodeURIComponent(fixture.edit)}`)).value.record;
+    const submission = { tenantId: tenant, principalId: me.principalId, authority: "build", target: { type: fixture.object, id: fixture.edit },
+      schema: { name: schema, version: version?.family ?? 1 }, expectedRevision: current.revision,
+      idempotencyKey: `load-import-probe-${tag}-${seq++}`, payload: Buffer.from(JSON.stringify({ note: "Concurrent import edit" })).toString("base64") };
+    const answer = await call("POST", "/v1/submissions", JSON.stringify(submission), "application/json", version ? { "Platform-Schema-Version": version.version } : {});
+    if (!answer.value.record?.changeId) throw Error("missing accepted edit");
+  });
+  try {
+    const applied = await request;
+    return { applied, probes };
+  } finally {
+    await Promise.all([reader, editor]);
+    for (const kind of ["reads", "edits"]) {
+      const values = samples[kind].sort((a,b)=>a-b);
+      probes[kind+"PercentilesMs"] = Object.fromEntries([50,95,99].map(p=>["p"+p,values.length?Math.round(values[Math.ceil(values.length*p/100)-1]):null]));
+    }
+    process.stdout.write(`concurrent reads=${probes.reads}, edits=${probes.edits}, errors=${JSON.stringify(probes.errors)}, max read/edit=${probes.readMaxMs}/${probes.editMaxMs}ms\n`);
+  }
+}
+
 const fixture = JSON.parse(await readFile(join(directory, "fixture.json"), "utf8"));
 const before = (await call("GET", `/v1/records/${fixture.object}?limit=1`)).value.total;
 const report = {
@@ -129,7 +180,9 @@ for (const [index, size] of sizes.entries()) {
   }
   process.stdout.write(`import ${size} rows: apply…\n`);
   const statsBefore = await tableReads();
-  const applied = await call("POST", path, body, "text/csv");
+  const { applied, probes } = await applyWithConcurrentProbes(path, body, fixture, tag);
+  run.concurrent = probes;
+  if (probes && (!probes.reads || !probes.edits || probes.errors.length)) failed = true;
   run.apply = summarize(applied.value, applied.elapsedMs, size);
   run.sqlReadsPerRow = readsPerRow(statsBefore, await tableReads(), size);
   const after = (await call("GET", `/v1/records/${fixture.object}?limit=1`)).value.total;
@@ -145,7 +198,7 @@ for (const [index, size] of sizes.entries()) {
       process.stdout.write(`import ${size} rows: sql 索引 ${index} 每行 扫描 ${v.indexScans} 次/读 ${v.indexRowsRead} 项\n`);
     }
   }
-  if ((run.apply.outcomes.ok ?? 0) !== size || run.apply.rows !== size) failed = true;
+  if ((run.apply.outcomes.ok ?? 0) !== size || run.apply.rows !== size || after !== before + sizes.slice(0,index+1).reduce((a,b)=>a+b,0)) failed = true;
   report.runs.push(run);
   await writeFile(join(directory, "import.json"), JSON.stringify(report, null, 2));
 }

@@ -64,4 +64,7 @@ func (s *Sequence) AttachJournal(ctx context.Context, journal persistence.Journa
 	s.AcceptResult = func(e persistence.Entry, key, hash string) ([]byte, error) {
 		return journal.AppendAccepted(ctx, id, e, key, hash)
 	}
+	s.AcceptResults = func(entries []persistence.AcceptedAppend) ([][]byte, error) {
+		return journal.AppendAcceptedBatch(ctx, id, entries)
+	}
 }

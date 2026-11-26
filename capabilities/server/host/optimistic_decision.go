@@ -34,7 +34,12 @@ func decideOnImage[T any](t *Tenant, ctx context.Context, holder string, prepare
 		})
 		return
 	}
+	attempts := 0
+	if holder == "import" {
+		attempts = 1
+	}
 	return runtimekernel.ImageDecision[T, preparedAccepted]{
+		Attempts:    attempts,
 		Stopped:     t.businessStopped,
 		Quarantined: t.quarantined,
 		Hold:        func() error { return t.Lane.Hold(ctx, holder) },
