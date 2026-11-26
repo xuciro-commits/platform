@@ -188,7 +188,13 @@ switch (command) {
       const holder = join(board, "locks", name, "holder");
       console.log(`lock ${name}\t${field(holder, "by")}\tsince ${field(holder, "since")}`);
     }
-    for (const line of lines().slice(-10)) console.log(line);
+    const all = lines();
+    for (const line of all.slice(-10)) console.log(line);
+    for (const agent of agents.filter((name) => name !== "owner")) {
+      const last = all.findLast((line) => line.split("\t")[1] === agent);
+      const at = last?.split("\t")[0];
+      console.log(`heard\t${agent}\t${at ? `${at} (${((Date.now() - Date.parse(at)) / 60_000).toFixed(0)}m ago)` : "never"}`);
+    }
     for (const alert of alerts()) console.log(`ALERT\t${alert}`);
     break;
   }
