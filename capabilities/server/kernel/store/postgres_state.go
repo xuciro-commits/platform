@@ -567,15 +567,16 @@ func (j *Postgres) StateChanges(ctx context.Context, tenant, app, key, id string
 
 func stateChanges(ctx context.Context, db stateQueries, tenant, app, key, id string, through int) ([][]byte, error) {
 	if key != "" || id != "" {
-		query := `select num,image from runtime_changes where tenant=$1 and app=$2`
-		args := []any{tenant, app}
-		switch {
-		case key != "" && id != "":
-			query, args = query+` and key=$3 and id=$4`, append(args, key, id)
-		case key != "":
-			query, args = query+` and key=$3`, append(args, key)
-		default:
-			query, args = query+` and id=$3`, append(args, id)
+		column, value := "key", key
+		if key == "" {
+			column, value = "id", id
+		}
+		query := `select num,image from
+			(select id,key,num,image from runtime_changes where tenant=$1 and app=$2 and ` + column + ` >= $3
+			order by ` + column + ` limit 1) point where ` + column + ` = $3`
+		args := []any{tenant, app, value}
+		if key != "" && id != "" {
+			query, args = query+` and id=$4`, append(args, id)
 		}
 		var number int
 		var raw []byte
