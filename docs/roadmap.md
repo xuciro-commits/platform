@@ -34,9 +34,47 @@
 
 1. 2.8 定为黄金路线 v1：publisher 主干已跑通；第二波包挪到阶段 3 以后，按客户需求接。
 2. 2.9 剩余项随用到它的包做：party 的结构化地址随 party 0.2.0，扩展的落点随 3.2。
-3. B3 剩一项难项；Shizuku 自研手机应用在 `idea/device-runtime`，等第一个客户要用电话。
+3. B3 已收口；Shizuku 自研手机应用在 `idea/device-runtime`，等第一个客户要用电话。
 
 阶段 3 分车道并行（[tasks](../tasks/README.md)）：ship 做 3.1，studio 做 3.2，3.3 等 3.2；3.4 的客户由负责人定，定下之前用 official 租户演练。
+
+## 功能矩阵（11-25）
+
+成熟度：无；占位（有代码或入口，没有走通的用例）；能用（trunk 或内核用例走通主路径）；产品级（客户每天用不挡路）。
+证据是代码位置与用例，没有用例的不算能用。用例名是 trunk 的用例标题前缀。
+
+| 模块 | 成熟度 | 证据 | 缺什么、归谁 |
+|---|---|---|---|
+| 记录：列表、记录页、行内编辑、视图 | 产品级 | `pages/RecordList.tsx`、`RecordPage.tsx`；records 32 项 | — |
+| CRM 包 | 产品级 | crm 20 项、official 4 项 | 升级夹具：kit-1 |
+| 宿主：接受路径、重放、内存与文件存储 | 能用 | `capabilities/server/kernel`；十三组内核不变量 | 重启与恢复：3.1c、3.1d（ship） |
+| PostgreSQL 存储 | 能用 | 3.1a、3.1b；trunk-pg 只跑过 official、marketplace | 全量：fire-1 |
+| 格式纪元冻结 | 无 | `make check` 没有这条核对 | 3.4a，B 级：lead-2 |
+| 构建：类型、字段、状态、动作、发布 | 能用 | `services/ontology`；builder 12 项 | 条件与表达式只能手写：studio-3 |
+| 条件与表达式编辑器 | 无 | `pages/` 里没有 `ConditionBuilder`、`ExpressionEditor` | studio-3 |
+| 结构化对比、关系图 | 无 | 没有 `RecordComparison`、`RelationCanvas` | 对比：studio-2；关系图等客户要 |
+| 客户扩展 | 占位 | 只有人员页显示附属对象（workspace “people”） | 3.2：studio-1 |
+| 市场：安装、升级、卸载、远程包库 | 能用 | `apps/delivery/marketplace.tsx`；marketplace 10 项 | 审阅不核对扩展：kit-1、fire-2 |
+| 授权：角色、ReBAC、临时授权、受限字段 | 能用 | `services/security`；rebac 3 项、crm “roles”、workspace “restricted fields” | 扩展字段：3.2c |
+| 工作：收件箱、任务、提及、跟进 | 能用 | `pages/InboxPage.tsx`、`services/work`；workspace “inbox”、crm “follow-up” | — |
+| 看板、日历、甘特、仪表盘 | 能用 | `BoardView`、`CalendarView`、`GanttView`、`DashboardPage`；crm、gantt | — |
+| 导入导出 | 能用 | `pages/ImportWizard.tsx`、`objects/record_import.go`；crm “import” | 客户规模与故障注入：3.4b（ship） |
+| 租户、成员、登录、设置、词汇 | 能用 | `apps/admin`；workspace 17 项 | 自助注册：阶段 4 |
+| 主数据：geo、party、uom | 能用 | marketplace “publisher tenant: a master data”；K42、K43 | party 结构化地址：kit-2 |
+| 能力：契约、绑定、连接器 | 能用 | `pages/Capabilities.tsx`；workspace “capabilities”；K40、K41、K45、K46 | 连接器没有 trunk，等云通话供应商 |
+| 电话 | 能用 | `capabilities/voice`、`pages/CallDock.tsx`；phone 3 项、`make test-voice` | 本机外放、TLS 与 NAT：等客户要电话 |
+| 自动化与流程 | 占位 | `services/automate` 约 9 千行；`apps/logic` 只是列表；没有 trunk | 阶段 5 的 `FlowCanvas` |
+| 文档渲染、打印 | 无 | — | B4，第一个客户提出打印时排 |
+| 运营观测 | 占位 | `apps/operations`；workspace “dashboards” | 冻结到阶段 4 |
+| 数据接入、管道、血缘 | 占位 | `services/data` 约 1.5 万行；入口只是列表 | 冻结到阶段 5 |
+| 智能体与助手、页面搭建 | 占位 | `services/ai`、`services/apps`；入口只是列表 | 冻结 |
+
+阶段 3 要用到的内核能力（同一时间只有一人改内核）：
+
+- 3.2c 扩展字段按附属对象自己的 `access` 判：studio 先核对唯一的授权决定点是否已按附属对象判；不是就是 B 级，归 lead。
+- 3.3a、3.3c 升级审阅要知道哪些附属对象挂在包的类型上、各自的版本范围：只读查询，A 级，fire-2 提前做。
+- 3.1d 导出与导入已接受条目：导入是否走接受路径、纪元在哪核对是 B 级；ship 先在看板给接口草图，lead 定。
+- 3.4a 冻结格式纪元：B 级，lead-2，在开通客户之前做。
 
 ## 3.1 投产底座
 
@@ -157,7 +195,7 @@
     接听经 `take` 写入浏览器的会话描述，网关的答复写回后接上声音，挂断经 `hangup`。trunk `phone` 用例以网关席位模拟来电、接听与结束。
   - CRM 拨打入口已做：线索、联系人与活动均声明“拨打”（`uses: call/1#dial`），平台支持无状态对象声明自定义动作；未绑定通话实现时隐藏入口。
   - 已做：来电先响联系人负责人，超时再响给所有坐席；中继账号从平台的线路读，改动热更新，不再重启网关。两项还没在真手机上实测。
-  - 待做（难）：同一契约的多个声明式实现（B2c 挪来）：实现有独立身份，“管理 → 能力”里能在两个声明式实现之间选。
+  - 已做：同一契约的多个声明式实现各有身份，“管理 → 能力”里能在其间选（B2c 挪来）。
   - 之后：TLS 与 SRTP、公网与 NAT、网关改用 B4 的受管服务注册取代服务席位、多中继选线、录音。
   - 外接云通话供应商时平台连接器还缺：请求体按模板组装、Basic 鉴权、请求签名。
 - **B4 受管服务。** 注册、证书、探活、预留与结算；第二个探针 `document.render/1`：把单据渲染成 PDF（无头浏览器或 Typst）。
