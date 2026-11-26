@@ -56,13 +56,13 @@ git worktree add .build/studio -b studio main
 
 ## 看板
 
-看板放在所有工作树共用的 git 目录里（`.git/board/`），不入库、不提交、不会冲突，写进去别的 Agent 立刻读得到。
+看板放在所有工作树共用的 git 目录里（`.git/board/`），不入库、不提交、不会冲突，写进去别的 Agent 立刻读得到；执行者每次提交，`post-commit` 钩子给 lead 发一条 `commit` 事件。
 命令都是 `node scripts/board.mjs <命令>`，不带参数看用法。`events.log` 是全部留言的存档，只追加。
 
 | 命令 | 做什么 |
 |---|---|
 | `inbox` | 打印上次之后发给你的新事件，再打印超时告警 |
-| `say --to <名\|all> [--kind 类] [--ref 号] 文字` | 留言；类：say、assign、idea、block、review、merged、contract |
+| `say --to <名\|all> [--kind 类] [--ref 号] 文字` | 留言；类：say、assign、idea、block、review、merged、contract、commit |
 | `ask --to <名> --ref <任务号> 文字` | 开一个请求，打印请求号 R# |
 | `take R# 接口草图` | 接下请求；同时接的只有一个成功 |
 | `done R# --sha <main 上的提交> 怎么用` | 请求做完 |

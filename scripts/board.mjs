@@ -4,7 +4,7 @@ import { execFileSync } from "node:child_process";
 import { basename, dirname, join } from "node:path";
 
 const agents = ["lead", "ship", "studio", "kit", "fire", "owner"];
-const kinds = ["say", "assign", "idea", "block", "review", "merged", "contract"];
+const kinds = ["say", "assign", "idea", "block", "review", "merged", "contract", "commit"];
 const git = (...args) => execFileSync("git", args, { encoding: "utf8" }).trim();
 const common = git("rev-parse", "--path-format=absolute", "--git-common-dir");
 const board = process.env.PLATFORM_BOARD ?? join(common, "board");
