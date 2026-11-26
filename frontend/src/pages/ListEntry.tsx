@@ -25,6 +25,8 @@ export type ListDefinition<Answer, Row> = Omit<ListShape<Answer, Row>, "columns"
   columns: EntryColumn<Row>[] | { (answer: Answer): EntryColumn<Row>[] };
   more?: (answer: Answer) => string | undefined;
   actions?: { create?: string; row?: (row: Row) => RowAction[] };
+  createLabel?: string;
+  creator?: (props: { onClose: () => void }) => ReactNode;
   detail?: (id: string, row?: Row) => ReactNode;
   import?: (answer: Answer, action: (schema: string) => Api.Action | undefined) => ImportTarget | undefined;
   export?: string;
@@ -172,14 +174,15 @@ export function listPage<Answer, Row>(definition: ListDefinition<Answer, Row>) {
           exportRef={definition.export ? exportRef : undefined}
           primary={creatable || moreItems.length > 0 ? (
             <HStack gap={2} vAlign="center">
-              {creatable && <Button label={t("New")} variant="primary" onClick={() => setCreating(true)} />}
+              {creatable && <Button label={t(definition.createLabel ?? "New")} variant="primary" onClick={() => setCreating(true)} />}
               {moreItems.length > 0 && <MoreMenu label={t("More actions")} alignment="end" items={moreItems} />}
             </HStack>
           ) : undefined}
         />
         {importing && importTarget && <Suspense fallback={null}><ImportWizard target={importTarget} onClose={() => setImporting(false)} /></Suspense>}
         {act.element}
-        {creating && create && (
+        {creating && create && definition.creator && definition.creator({ onClose: () => setCreating(false) })}
+        {creating && create && !definition.creator && (
           <ActionDialog action={create} heading={t(create.title)} confirm={t("Create")} onClose={() => setCreating(false)} onDone={() => setCreating(false)}
             perform={async (payload) => void (await send(create, typeof payload.id === "string" ? payload.id : nameOf(payload), payload))} />
         )}

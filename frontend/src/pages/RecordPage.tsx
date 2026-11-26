@@ -148,18 +148,22 @@ export function RecordPage({ described, id, listPath, listTitle, instances, enti
   const people = read.status === "ready" ? read.data.people : undefined;
   const restrictedFields = read.status === "ready" ? read.data.restrictedFields : undefined;
   const restricted = new Set(read.status === "ready" ? read.data.restricted : undefined);
-  const detail = useMemo(() => restrictedFields?.length ? describe(withRestrictedFields(described.entity, restrictedFields), catalog) : described, [catalog, described, restrictedFields]);
-  const editor = useEditor(described, id, values, kept?.revision ?? 0);
-  const laneField = statusField(described);
-  const ownerField = described.entity.fields.find((field) => field.type === "member");
+  const editAllowed = Boolean(described.edit) && read.status === "ready" && (read.data.actions ?? []).some((action) => action.schema === described.edit?.schema && action.allowed);
+  const detail = useMemo(() => {
+    const baseDetail = restrictedFields?.length ? describe(withRestrictedFields(described.entity, restrictedFields), catalog) : described;
+    return editAllowed ? baseDetail : { ...baseDetail, edit: undefined, editable: new Set<string>() };
+  }, [catalog, described, restrictedFields, editAllowed]);
+  const editor = useEditor(detail, id, values, kept?.revision ?? 0);
+  const laneField = statusField(detail);
+  const ownerField = detail.entity.fields.find((field) => field.type === "member");
   const heading = kept ? [laneField, ownerField].flatMap((field) => field && !restricted.has(field.name) ? [field] : []) : [];
   const headed = heading.map((field) => field.name).join(",");
   const body = useMemo(() => {
     const rest = (fields: Api.FieldInfo[]) => fields.filter((field) => !headed.split(",").includes(field.name));
     return { ...detail, aside: rest(detail.aside), sections: detail.sections.map((section) => ({ ...section, fields: rest(section.fields) })) };
   }, [detail, headed]);
-  const options = useOptions(described, laneField ? [laneField.name] : []);
-  const parameters = new Map((described.edit?.payload ?? []).filter(enterable).map((parameter) => [parameter.name, parameter]));
+  const options = useOptions(detail, laneField ? [laneField.name] : []);
+  const parameters = new Map((detail.edit?.payload ?? []).filter(enterable).map((parameter) => [parameter.name, parameter]));
   const status = headerStatus(described, values, kept?.archived);
   const name = described.name(values, id);
   const search = useCommandSearch();

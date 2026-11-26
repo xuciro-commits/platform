@@ -1,6 +1,7 @@
 import { createElement } from "react";
 import type { Api } from "../../host";
 import { t } from "../../i18n";
+import { InviteMemberDialog } from "../../pages/InviteMemberDialog";
 import { listPage } from "../../pages/ListEntry";
 import { MemberDirectoryEntry } from "../../pages/MemberDirectoryEntry";
 import { MemberRoles } from "../../pages/MemberRoles";
@@ -40,6 +41,8 @@ const Members = listPage<Api.MemberView[], Api.MemberView>({
     { key: "kind", label: "Type", of: (member) => (member.agent ? t("Agent") : t("Person")) },
   ],
   actions: { create: "platform.member.add" },
+  createLabel: "Invite colleague",
+  creator: ({ onClose }) => createElement(InviteMemberDialog, { onClose }),
   detail: (_, member) => (member ? createElement(MemberRoles, { member }) : null),
 });
 

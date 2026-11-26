@@ -472,9 +472,12 @@ export function Records({ declared, listPath, id, back }: { declared: Declared; 
   const bulk: RecordShape["bulk"] = described && actions.status === "ready" && actions.data.some((action) => action.target === described.type && canBatch(action, described)) && ((ids, clear) => (
     <BatchActions described={described} ids={ids} clear={clear} records={records.answer} />
   )) || undefined;
+  const editRowsAllowed = Boolean(described?.edit) && (kept.length === 0 || kept.some((row) => allowed(String(row.id), described!.edit!.schema)));
+  const createAllowed = Boolean(described?.create) && (kept.length === 0 || !described?.edit || editRowsAllowed);
   const definition = useMemo(() => {
     if (!described) return pending;
-    const baseShape = shape(described, declared, listPath, { board, calendar, gantt, bulk, detail }, options);
+    const effective = editRowsAllowed ? described : { ...described, edit: undefined, editable: new Set<string>() };
+    const baseShape = shape(effective, declared, listPath, { board, calendar, gantt, bulk, detail }, options);
     const extColumns = extensions.length > 0
       ? extensionListColumns(extensions, extPages, new Set(baseShape.columns.map((column) => column.header)))
       : [];
@@ -527,9 +530,9 @@ export function Records({ declared, listPath, id, back }: { declared: Declared; 
         back={back}
         primary={described ? (
           <HStack gap={2} vAlign="center">
-            {create && <Button label={t("New")} variant="primary" onClick={() => setCreating({})} />}
+            {createAllowed && <Button label={t("New")} variant="primary" onClick={() => setCreating({})} />}
             <MoreMenu label={t("More actions")} alignment="end" items={[
-              ...(create ? [{ id: "import-records", label: t("Import"), onClick: () => setImporting(true) }] : []),
+              ...(createAllowed ? [{ id: "import-records", label: t("Import"), onClick: () => setImporting(true) }] : []),
               { id: "export-records", label: t("Export as CSV"), onClick: () => void exportList() },
             ]} />
           </HStack>

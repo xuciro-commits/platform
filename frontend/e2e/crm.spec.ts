@@ -213,17 +213,19 @@ test("crm: a sales rep works only their own leads while the sales manager sees t
 });
 
 
-function workbook(rows: string[][]) {
+function workbookSheets(sheets: { name: string; rows: string[][] }[]) {
   const main = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
   const links = "http://schemas.openxmlformats.org/officeDocument/2006/relationships";
-  const strings = [...new Set(rows.flat().filter(Boolean))];
+  const strings = [...new Set(sheets.flatMap((sheet) => sheet.rows.flat()).filter(Boolean))];
   const cells = (row: string[], r: number) => row.map((text, c) => (text ? `<c r="${String.fromCharCode(65 + c)}${r}" t="s"><v>${strings.indexOf(text)}</v></c>` : "")).join("");
-  const parts = {
-    "xl/workbook.xml": `<workbook xmlns="${main}" xmlns:r="${links}"><sheets><sheet name="Sheet1" sheetId="1" r:id="rId1"/></sheets></workbook>`,
-    "xl/_rels/workbook.xml.rels": `<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="${links}/worksheet" Target="worksheets/sheet1.xml"/></Relationships>`,
+  const parts: Record<string, string> = {
+    "xl/workbook.xml": `<workbook xmlns="${main}" xmlns:r="${links}"><sheets>${sheets.map((sheet, idx) => `<sheet name="${sheet.name}" sheetId="${idx + 1}" r:id="rId${idx + 1}"/>`).join("")}</sheets></workbook>`,
+    "xl/_rels/workbook.xml.rels": `<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">${sheets.map((_, idx) => `<Relationship Id="rId${idx + 1}" Type="${links}/worksheet" Target="worksheets/sheet${idx + 1}.xml"/>`).join("")}</Relationships>`,
     "xl/sharedStrings.xml": `<sst xmlns="${main}">${strings.map((text) => `<si><t>${text}</t></si>`).join("")}</sst>`,
-    "xl/worksheets/sheet1.xml": `<worksheet xmlns="${main}"><sheetData>${rows.map((row, r) => `<row r="${r + 1}">${cells(row, r + 1)}</row>`).join("")}</sheetData></worksheet>`,
   };
+  sheets.forEach((sheet, idx) => {
+    parts[`xl/worksheets/sheet${idx + 1}.xml`] = `<worksheet xmlns="${main}"><sheetData>${sheet.rows.map((row, r) => `<row r="${r + 1}">${cells(row, r + 1)}</row>`).join("")}</sheetData></worksheet>`;
+  });
   const stored: Buffer[] = [];
   const directory: Buffer[] = [];
   let offset = 0;
@@ -254,6 +256,10 @@ function workbook(rows: string[][]) {
   end.writeUInt32LE(directory.reduce((size, part) => size + part.length, 0), 12);
   end.writeUInt32LE(offset, 16);
   return Buffer.concat([...stored, ...directory, end]);
+}
+
+function workbook(rows: string[][]) {
+  return workbookSheets([{ name: "Sheet1", rows }]);
 }
 
 const unique = () => Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
@@ -402,40 +408,96 @@ test("follow-up: new leads without an owner are assigned evenly across the sales
   expect(new Set(owners)).toEqual(new Set(["韩奥", "田雪"]));
 });
 
-test("import: an Excel workbook of leads maps by column title, refused rows are fixed in place and retried, and the list exports what it shows as CSV", async ({ page }) => {
+test("import: an Excel workbook of leads, accounts and contacts maps by column title, resolves contact-to-account references, fixes refused rows without affecting others while another tab views and edits, and exports CSV", async ({ page, context }) => {
+  test.setTimeout(120_000);
   await as(page, "manager-1");
   const tag = unique();
+  const peerLeadId = await lead(page, { fullname: `Concurrent Lead ${tag}`, company: "Before Import", owner: "manager-1" });
+  const peerPage = await context.newPage();
+  await as(peerPage, "manager-1");
+  await peerPage.goto(`/crm/crm.lead/${peerLeadId}`);
+  await expect(peerPage.getByRole("heading", { level: 1, name: `Concurrent Lead ${tag}`, exact: true })).toBeVisible();
+
   await page.goto("/crm/crm.lead");
   await page.getByRole("button", { name: "More actions", exact: true }).click();
   await page.getByRole("menuitem", { name: "Import", exact: true }).click();
-  const wizard = page.getByRole("dialog", { name: "Import · Leads", exact: true });
-  await wizard.locator('input[type="file"]').setInputFiles({
-    name: "leads.xlsx",
+  const opener = page.getByRole("dialog", { name: "Import · Leads", exact: true });
+  await opener.locator('input[type="file"]').setInputFiles({
+    name: "onboarding.xlsx",
     mimeType: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-    buffer: workbook([
-      ["Full name", "Company", "Follow-up stage", "Industry"],
-      [`Ada Lin ${tag}`, "Northwind", "New", "Manufacturing"],
-      [`Bo Chen ${tag}`, "Contoso", "Connected", ""],
-      ["", "Nameless Co", "New", ""],
-      [`Cy Wu ${tag}`, "Fabrikam", "Pending", ""],
+    buffer: workbookSheets([
+      {
+        name: "Leads",
+        rows: [
+          ["Full name", "Company", "Follow-up stage", "Industry"],
+          [`Ada Lin ${tag}`, `Nebula Robotics ${tag}`, "New", "Manufacturing"],
+          [`Bo Chen ${tag}`, `Helios Solar ${tag}`, "Connected", ""],
+          ["", "Nameless Co", "New", ""],
+          [`Cy Wu ${tag}`, "Fabrikam", "Pending", ""],
+        ],
+      },
+      {
+        name: "Contacts",
+        rows: [
+          ["Full name", "Email", "Job title", "Account"],
+          [`Clara Zhou ${tag}`, `clara.${tag}@nebula.example`, "VP Engineering", `Nebula Robotics ${tag}`],
+          [`Derek Sun ${tag}`, `derek.${tag}@helios.example`, "Procurement Lead", `Helios Solar ${tag}`],
+          [`Evan Li ${tag}`, `evan.${tag}@ghost.example`, "Buyer", `Ghost Corp ${tag}`],
+        ],
+      },
+      {
+        name: "Accounts",
+        rows: [
+          ["Account", "Website", "Relationship"],
+          [`Nebula Robotics ${tag}`, "https://nebula.example", "Customer"],
+          [`Helios Solar ${tag}`, "https://helios.example", "Prospect"],
+        ],
+      },
     ]),
   });
-  await expect(wizard.getByText("4 records", { exact: true })).toBeVisible();
+
+  const wizard = page.getByRole("dialog", { name: "Import · Workbook", exact: true });
+  await expect(wizard.getByText("9 records", { exact: true })).toBeVisible();
   await wizard.getByRole("button", { name: "Continue", exact: true }).click();
+  await expect(wizard.getByRole("radio", { name: "Leads (4)", exact: true })).toBeVisible();
+  await wizard.getByRole("radio", { name: "Contacts (3)", exact: true }).click();
+  await expect(wizard.getByRole("combobox", { name: "Fields: Account", exact: true })).toBeVisible();
+  await wizard.getByRole("radio", { name: "Accounts (2)", exact: true }).click();
+  await expect(wizard.getByRole("combobox", { name: "Fields: Account", exact: true })).toBeVisible();
+
   await wizard.getByRole("button", { name: "Continue", exact: true }).click();
-  await expect(wizard.getByText("2 can be imported · 2 need fixing", { exact: true })).toBeVisible();
-  await expect(wizard.getByRole("row", { name: /Row 4 .*Pending.*Choose a readable listed value/ })).toBeVisible();
-  await wizard.getByRole("textbox", { name: "Full name · Row 3", exact: true }).fill(`Fiona Gao ${tag}`);
-  await wizard.getByRole("textbox", { name: "Follow-up stage · Row 4", exact: true }).fill("Connected");
-  await expect(wizard.getByRole("button", { name: "Import 2", exact: true })).toBeDisabled();
+  await expect(wizard.getByText("6 can be imported · 3 need fixing", { exact: true })).toBeVisible();
+  await expect(wizard.getByRole("row", { name: /Pending.*Choose a readable listed value/ })).toBeVisible();
+  await expect(wizard.getByRole("row", { name: /Ghost Corp.*This value cannot be read: Account/ })).toBeVisible();
+
+  const importValid = wizard.getByRole("button", { name: "Import 6", exact: true }).click();
+  await edit(peerPage, "Company");
+  const peerCompany = peerPage.getByRole("textbox", { name: "Company", exact: true });
+  await peerCompany.fill(`Edited During Import ${tag}`);
+  await peerCompany.press("Enter");
+  await expectRevision(peerPage, 2);
+  await importValid;
+  await peerPage.close();
+
+  await expect(wizard.getByText("6 records imported", { exact: true })).toBeVisible();
+  await expect(wizard.getByText("0 can be imported · 3 need fixing", { exact: true })).toBeVisible();
+
+  await wizard.getByRole("textbox", { name: "Full name · Leads · Row 3", exact: true }).fill(`Fiona Gao ${tag}`);
+  await wizard.getByRole("textbox", { name: "Follow-up stage · Leads · Row 4", exact: true }).fill("Connected");
+  await wizard.getByRole("textbox", { name: "Account · Contacts · Row 3", exact: true }).fill(`Nebula Robotics ${tag}`);
+  await expect(wizard.getByRole("button", { name: "Import 0", exact: true })).toBeDisabled();
   await wizard.getByRole("button", { name: "Check", exact: true }).click();
-  await expect(wizard.getByText("4 can be imported · 0 need fixing", { exact: true })).toBeVisible();
-  await wizard.getByRole("button", { name: "Import 4", exact: true }).click();
-  await expect(wizard.getByText("4 records imported", { exact: true })).toBeVisible();
+  await expect(wizard.getByText("3 can be imported · 0 need fixing", { exact: true })).toBeVisible();
+  await wizard.getByRole("button", { name: "Import 3", exact: true }).click();
+  await expect(wizard.getByText("9 records imported", { exact: true })).toBeVisible();
   await wizard.getByRole("button", { name: "Done", exact: true }).click();
   await expect(wizard).toBeHidden();
 
   const search = page.getByRole("textbox", { name: "Search this list" });
+  await search.fill(`Ada Lin ${tag}`);
+  await search.press("Enter");
+  await expect(page.getByRole("link", { name: `Ada Lin ${tag}`, exact: true })).toHaveCount(1);
+
   await search.fill(`Fiona Gao ${tag}`);
   await search.press("Enter");
   await expect(page.getByRole("link", { name: `Fiona Gao ${tag}`, exact: true })).toBeVisible();
@@ -449,6 +511,101 @@ test("import: an Excel workbook of leads maps by column title, refused rows are 
   await page.getByRole("link", { name: `Fiona Gao ${tag}`, exact: true }).click();
   await expect(page).toHaveURL((url) => /^\/crm\/crm\.lead\/LEAD-\d{4}-\d{5}$/.test(url.pathname));
   await expect(property(page, "Lead owner")).toContainText(/韩奥|田雪/, { timeout: 30_000 });
+
+  await page.goto("/crm/crm.contact");
+  const contactSearch = page.getByRole("textbox", { name: "Search this list" });
+  await contactSearch.fill(`Clara Zhou ${tag}`);
+  await contactSearch.press("Enter");
+  await page.getByRole("link", { name: `Clara Zhou ${tag}`, exact: true }).click();
+  await expect(property(page, "Account")).toContainText(`Nebula Robotics ${tag}`);
+
+  await page.goto("/crm/crm.contact");
+  await contactSearch.fill(`Evan Li ${tag}`);
+  await contactSearch.press("Enter");
+  await page.getByRole("link", { name: `Evan Li ${tag}`, exact: true }).click();
+  await expect(property(page, "Account")).toContainText(`Nebula Robotics ${tag}`);
+  await page.getByRole("main").getByRole("link", { name: `Nebula Robotics ${tag}`, exact: true }).first().click();
+  const drawer = page.getByRole("dialog", { name: `Nebula Robotics ${tag}` });
+  await expect(drawer.getByRole("heading", { level: 2, name: `Nebula Robotics ${tag}`, exact: true })).toBeVisible();
+  await expect(drawer).toContainText("Customer");
+});
+
+test("invite: an administrator invites colleagues by customer account and grants editable or read-only CRM roles", async ({ page }) => {
+  test.setTimeout(120_000);
+  await as(page, "manager-1");
+  const tag = unique();
+  const importedLeadName = `Invited Lead ${tag}`;
+  await page.goto("/crm/crm.lead");
+  await page.getByRole("button", { name: "More actions", exact: true }).click();
+  await page.getByRole("menuitem", { name: "Import", exact: true }).click();
+  const importDialog = page.getByRole("dialog", { name: "Import · Leads", exact: true });
+  await importDialog.locator('input[type="file"]').setInputFiles({
+    name: "invite-leads.xlsx",
+    mimeType: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    buffer: workbook([
+      ["Full name", "Company", "Follow-up stage"],
+      [importedLeadName, `Initial Account ${tag}`, "New"],
+    ]),
+  });
+  await expect(importDialog.getByText("1 records", { exact: true })).toBeVisible();
+  await importDialog.getByRole("button", { name: "Continue", exact: true }).click();
+  await importDialog.getByRole("button", { name: "Continue", exact: true }).click();
+  await expect(importDialog.getByText("1 can be imported · 0 need fixing", { exact: true })).toBeVisible();
+  await importDialog.getByRole("button", { name: "Import 1", exact: true }).click();
+  await expect(importDialog.getByText("1 records imported", { exact: true })).toBeVisible();
+  await importDialog.getByRole("button", { name: "Done", exact: true }).click();
+
+  await as(page, "admin-1");
+  await page.goto("/admin/members");
+  await page.getByRole("button", { name: "Invite colleague", exact: true }).click();
+  const inviteEditor = page.getByRole("dialog", { name: "Invite colleague", exact: true });
+  const editorSlug = `lin-${tag}`;
+  await inviteEditor.getByRole("textbox", { name: /^Customer account/ }).fill(`${editorSlug}@northwind.example`);
+  await inviteEditor.getByRole("textbox", { name: "Display name", exact: true }).fill(`Lin Lan ${tag}`);
+  await inviteEditor.getByRole("combobox", { name: "Application", exact: true }).click();
+  await page.getByRole("option", { name: "CRM", exact: true }).click();
+  await inviteEditor.getByRole("combobox", { name: "Role", exact: true }).click();
+  await page.getByRole("option", { name: "salesmanager", exact: true }).click();
+  await inviteEditor.getByRole("button", { name: "Invite", exact: true }).click();
+  await expect(inviteEditor).toBeHidden({ timeout: 30_000 });
+  await expect(page.getByRole("row", { name: new RegExp(`Lin Lan ${tag}`) })).toContainText("crm: salesmanager");
+
+  await page.getByRole("button", { name: "Invite colleague", exact: true }).click();
+  const inviteViewer = page.getByRole("dialog", { name: "Invite colleague", exact: true });
+  const viewerSlug = `zhou-${tag}`;
+  await inviteViewer.getByRole("textbox", { name: /^Customer account/ }).fill(`${viewerSlug}@northwind.example`);
+  await inviteViewer.getByRole("textbox", { name: "Display name", exact: true }).fill(`Zhou Yue ${tag}`);
+  await inviteViewer.getByRole("combobox", { name: "Application", exact: true }).click();
+  await page.getByRole("option", { name: "CRM", exact: true }).click();
+  await inviteViewer.getByRole("combobox", { name: "Role", exact: true }).click();
+  await page.getByRole("option", { name: "salesmanager", exact: true }).click();
+  await inviteViewer.getByRole("radio", { name: "Read-only", exact: true }).click();
+  await inviteViewer.getByRole("button", { name: "Invite", exact: true }).click();
+  await expect(inviteViewer).toBeHidden({ timeout: 30_000 });
+  await expect(page.getByRole("row", { name: new RegExp(`Zhou Yue ${tag}`) })).toContainText("crm: salesmanager");
+
+  await as(page, editorSlug);
+  await page.goto("/crm/crm.lead");
+  const editorSearch = page.getByRole("textbox", { name: "Search this list" });
+  await editorSearch.fill(importedLeadName);
+  await editorSearch.press("Enter");
+  await page.getByRole("link", { name: importedLeadName, exact: true }).click();
+  await edit(page, "Company");
+  const companyInput = page.getByRole("textbox", { name: "Company", exact: true });
+  await companyInput.fill(`Updated By Colleague ${tag}`);
+  await companyInput.press("Enter");
+  await expect(property(page, "Company")).toContainText(`Updated By Colleague ${tag}`);
+
+  await as(page, viewerSlug);
+  await page.goto("/crm/crm.lead");
+  await expect(page.getByRole("button", { name: "New", exact: true })).toHaveCount(0);
+  const viewerSearch = page.getByRole("textbox", { name: "Search this list" });
+  await viewerSearch.fill(importedLeadName);
+  await viewerSearch.press("Enter");
+  await page.getByRole("link", { name: importedLeadName, exact: true }).click();
+  await expect(property(page, "Company")).toContainText(`Updated By Colleague ${tag}`);
+  await expect(page.getByRole("button", { name: /^Edit / })).toHaveCount(0);
+  await expect(page.getByRole("button", { name: "Convert to deal", exact: true })).toHaveCount(0);
 });
 
 test("naming: two new activities get consecutive numbers", async ({ page }) => {
