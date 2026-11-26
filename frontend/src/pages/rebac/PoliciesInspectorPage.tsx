@@ -146,6 +146,7 @@ export function PoliciesInspectorPage() {
         kind,
         type: chosenType || undefined,
         record: recordId.trim() || undefined,
+        fields: kind === "action" ? undefined : entityList.find((item) => item.type === chosenType)?.fields.map((field) => field.name),
         action: kind === "action" ? actionSchema || typeActions[0]?.value : undefined,
       };
       setVerdict(await request<Api.Verdict>("/v1/authz/explain", { body }));

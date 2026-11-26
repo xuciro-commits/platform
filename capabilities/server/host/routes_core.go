@@ -74,7 +74,7 @@ func (h *Host) routesCore(rt *routes) {
 		if !readCapabilityBody(w, r, &request) {
 			return
 		}
-		decision, err := t.ExplainOperation(request, h.Now())
+		decision, err := recordRead(t, r.Context(), func(t *Tenant) (platform.AuthzDecision, *platform.Error) { return t.ExplainOperation(request, h.Now()) })
 		decision, err = t.i18n.TranslateDecision(decision, t.Language(m, r), err)
 		transport.Answer(w, decision, err)
 	})

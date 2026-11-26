@@ -306,7 +306,7 @@ test("teams: create a team with two members, open it and remove it", async ({ pa
   await page.getByRole("button", { name: "New", exact: true }).first().click();
   const form = page.getByRole("dialog");
   await form.getByRole("textbox", { name: /^Team name/ }).fill("Trunk review team");
-  const members = form.getByRole("combobox", { name: /^Members/ });
+  const members = form.getByRole("button", { name: /^Members/ });
   await members.click();
   const options = page.getByRole("listbox");
   await options.getByRole("option", { name: /韩奥/ }).click();

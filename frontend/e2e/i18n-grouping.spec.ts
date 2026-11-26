@@ -14,7 +14,7 @@ test.describe("i18n completeness, two-level grouping and full-width layout", () 
     // 1. Admin -> 角色与权限矩阵 (Screenshot 1 verification)
     await page.goto("/admin/roles");
     await expect(page.getByRole("heading", { level: 1, name: "角色与权限矩阵" })).toBeVisible();
-    const appSelector = page.getByRole("combobox", { name: "应用或产品包空间" });
+    const appSelector = page.getByRole("button", { name: /^应用或产品包空间/ });
     await appSelector.click();
     await page.getByRole("option", { name: /电话 \(phone\)/ }).click();
 
@@ -35,9 +35,9 @@ test.describe("i18n completeness, two-level grouping and full-width layout", () 
     for (const zhTitle of ["语音通话", "地点", "往来单位", "电话"]) {
       await expect(page.getByText(zhTitle, { exact: true }).first()).toBeVisible();
     }
-    await expect(page.getByText(/语音通话能力契约/)).toBeVisible();
-    await expect(page.getByText(/国家和地区及其 ISO 代码/)).toBeVisible();
-    await expect(page.getByText(/经平台语音网关接打来电与外呼/)).toBeVisible();
+    await expect(page.getByText(/语音通话能力契约/).first()).toBeVisible();
+    await expect(page.getByText(/国家和地区及其 ISO 代码/).first()).toBeVisible();
+    await expect(page.getByText(/经平台语音网关接打来电与外呼/).first()).toBeVisible();
     await expect(page.getByText("Phone calls", { exact: true })).toHaveCount(0);
     await expect(page.getByText("Business partners", { exact: true })).toHaveCount(0);
 
@@ -45,15 +45,12 @@ test.describe("i18n completeness, two-level grouping and full-width layout", () 
     await page.goto("/admin/vocabulary");
     await expect(page.getByRole("heading", { level: 1, name: "语言与词汇" })).toBeVisible();
 
-    // Group header must be "地点", NOT "Places"
-    await expect(page.getByRole("row", { name: /^折叠分组 地点/ })).toBeVisible();
-    await expect(page.getByRole("row", { name: /Places/ })).toHaveCount(0);
-
-    // Search "county" and verify Origin is "应用或产品包" (not "平台")
     const searchBox = page.getByRole("textbox", { name: "搜索这个列表" });
     await searchBox.fill("county");
     await searchBox.press("Enter");
-    const countyRow = page.getByRole("row", { name: /county/ });
+    await expect(page.getByRole("row", { name: /^折叠分组 地点/ })).toBeVisible();
+    await expect(page.getByRole("row", { name: /Places/ })).toHaveCount(0);
+    const countyRow = page.getByRole("row", { name: /^county / });
     await expect(countyRow).toContainText("县级");
     await expect(countyRow).toContainText("应用或产品包");
     await page.getByRole("button", { name: "清除全部" }).click();
@@ -82,7 +79,7 @@ test.describe("i18n completeness, two-level grouping and full-width layout", () 
     await page.getByRole("button", { name: "展开一级", exact: true }).click();
     await page.keyboard.press("Escape");
     await expect(page.getByRole("row", { name: /^折叠分组 应用: 地点/ }).or(page.getByRole("row", { name: /^折叠分组 地点/ }))).toBeVisible();
-    await expect(page.getByRole("row", { name: /^展开分组 类型与字段/ })).toBeVisible();
+    await expect(page.getByRole("row", { name: /^展开分组 类型与字段/ }).first()).toBeVisible();
 
     // Test one-click "全部折叠": opening L1 must keep L2 subgroups collapsed
     const collapseBtn = page.getByRole("button", { name: "全部折叠", exact: true });
@@ -116,6 +113,7 @@ test.describe("i18n completeness, two-level grouping and full-width layout", () 
     expect(indents.data).toBeGreaterThan(indents.l2);
 
     // 4. Admin -> 组织: verify TreeList unit kind i18n + full width + one-click Collapse/Expand all
+    await signIn(page, "admin-1 · acceptance");
     await page.goto("/admin/organization");
     await expect(page.getByRole("heading", { level: 1, name: "组织" })).toBeVisible();
     await expect(page.getByRole("button", { name: /^(全部展开|全部折叠)$/ })).toBeVisible();

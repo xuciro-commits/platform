@@ -23,7 +23,7 @@ test.describe.serial("ReBAC governance and self-service lifecycle", () => {
     await settings.getByRole("navigation", { name: "Settings sections" }).getByText("Access & delegation", { exact: true }).click();
     await expect(settings.getByText(/Draft request to withdraw/)).toBeVisible();
     await settings.getByRole("button", { name: "Withdraw", exact: true }).click();
-    await expect(settings.getByText("withdrawn", { exact: false })).toBeVisible();
+    await expect(settings.getByText("withdrawn", { exact: true })).toBeVisible();
 
     await settings.getByRole("button", { name: "Request access", exact: true }).click();
     dialog = page.getByRole("dialog").last();
@@ -34,6 +34,7 @@ test.describe.serial("ReBAC governance and self-service lifecycle", () => {
     await dialog.getByRole("radio", { name: "30 days", exact: true }).click();
     await dialog.getByRole("textbox", { name: /^Business reason/ }).fill("Quarterly SOC2 compliance review");
     await dialog.getByRole("button", { name: "Submit request", exact: true }).click();
+    await expect(page.getByRole("dialog", { name: "Request access" })).toHaveCount(0);
     await settings.getByRole("button", { name: "Close", exact: true }).click();
 
     await signIn(page, "admin-1 · blank");
@@ -44,7 +45,7 @@ test.describe.serial("ReBAC governance and self-service lifecycle", () => {
     await expect(page.getByText("Quarterly SOC2 compliance review", { exact: true })).toBeVisible();
     await page.getByRole("textbox", { name: /^Decision note/ }).fill("Approved via Inbox");
     await page.getByRole("button", { name: "Approve", exact: true }).click();
-    await expect(page.getByText("Access request approved.")).toBeVisible();
+    await expect(page.getByText("Access request approved.").first()).toBeVisible();
 
     await open(page, "Admin", "Access requests");
     await page.getByRole("radio", { name: "Approved", exact: true }).click();
@@ -64,11 +65,11 @@ test.describe.serial("ReBAC governance and self-service lifecycle", () => {
     const settings = page.getByRole("dialog", { name: "Settings" });
     await settings.getByRole("navigation", { name: "Settings sections" }).getByText("Access & delegation", { exact: true }).click();
 
-    await settings.getByRole("combobox", { name: "Colleague", exact: true }).click();
+    await settings.getByRole("button", { name: /^Colleague/ }).click();
     await page.getByRole("option", { name: /user-1/ }).click();
-    await settings.getByRole("textbox", { name: "Handover note", exact: true }).fill("Conference travel");
+    await settings.getByRole("textbox", { name: /^Handover note/ }).fill("Conference travel");
     await settings.getByRole("button", { name: "Delegate roles", exact: true }).click();
-    await expect(page.getByText(/Delegated .* roles until/)).toBeVisible();
+    await expect(page.getByText(/Delegated .* roles until/).first()).toBeVisible();
     await settings.getByRole("button", { name: "Close", exact: true }).click();
 
     await signIn(page, "user-1 · crm");
@@ -84,10 +85,10 @@ test.describe.serial("ReBAC governance and self-service lifecycle", () => {
     await page.getByRole("menuitem", { name: "Settings", exact: true }).click();
     const managerSettings = page.getByRole("dialog", { name: "Settings" });
     await managerSettings.getByRole("navigation", { name: "Settings sections" }).getByText("Access & delegation", { exact: true }).click();
-    await managerSettings.getByRole("combobox", { name: "End an active delegation to", exact: true }).click();
+    await managerSettings.getByRole("button", { name: /^End an active delegation to/ }).click();
     await page.getByRole("option", { name: /user-1/ }).click();
     await managerSettings.getByRole("button", { name: "End delegation", exact: true }).click();
-    await expect(page.getByText("Delegation ended.")).toBeVisible();
+    await expect(page.getByText("Delegation ended.").first()).toBeVisible();
     await managerSettings.getByRole("button", { name: "Close", exact: true }).click();
   });
 
@@ -102,10 +103,10 @@ test.describe.serial("ReBAC governance and self-service lifecycle", () => {
     await expect(orgPanel.getByRole("heading", { name: "Unit-scoped role grants" })).toBeVisible();
 
     await open(page, "Admin", "Roles & permissions");
-    await page.getByRole("combobox", { name: "Application or package space", exact: true }).click();
+    await page.getByRole("button", { name: /^Application or package space/ }).click();
     await page.getByRole("option", { name: /sales/i }).first().click();
     await expect(main.getByRole("heading", { name: "Object relationship scopes (ReBAC)" })).toBeVisible();
-    await expect(main.getByRole("row").filter({ hasText: "sales.opportunity" })).toBeVisible();
+    await expect(main.getByRole("row").filter({ hasText: /sales\.opportunity(?!line)/ })).toBeVisible();
 
     await page.getByRole("tab", { name: /Custom roles/ }).click();
     await page.getByRole("button", { name: "Define custom role", exact: true }).first().click();
@@ -113,7 +114,7 @@ test.describe.serial("ReBAC governance and self-service lifecycle", () => {
     await roleDialog.getByRole("combobox", { name: /^Application/ }).click();
     await page.getByRole("option", { name: /sales/i }).first().click();
     await roleDialog.getByRole("textbox", { name: /^Display title/ }).fill("Opportunity Creator");
-    await roleDialog.getByRole("combobox", { name: /^Allowed actions/ }).click();
+    await roleDialog.getByRole("button", { name: /^Allowed actions/ }).click();
     await page.getByRole("listbox").getByRole("option").first().click();
     await page.keyboard.press("Escape");
     await roleDialog.getByRole("button", { name: "Save role", exact: true }).click();
@@ -130,10 +131,10 @@ test.describe.serial("ReBAC governance and self-service lifecycle", () => {
     await expect(main.getByText(/Owners manage project access/)).toBeVisible();
 
     await open(page, "Admin", "Policies & inspector");
-    await page.getByRole("combobox", { name: "Member", exact: true }).click();
+    await page.getByRole("button", { name: /^Member/ }).click();
     await page.getByRole("option", { name: /田雪|user-1/ }).first().click();
-    await page.getByRole("combobox", { name: "Object type", exact: true }).click();
-    await page.getByRole("option", { name: /sales\.opportunity/ }).click();
+    await page.getByRole("button", { name: /^Object type/ }).click();
+    await page.getByRole("option", { name: /sales\.opportunity\)/ }).click();
     await page.getByRole("textbox", { name: "Record ID", exact: true }).fill("OPP-001");
     await page.getByRole("button", { name: "Evaluate access", exact: true }).click();
     await expect(main.getByText("Access allowed", { exact: true })).toBeVisible();
@@ -144,7 +145,7 @@ test.describe.serial("ReBAC governance and self-service lifecycle", () => {
     const policyDialog = page.getByRole("dialog");
     await policyDialog.getByRole("textbox", { name: /^Policy title/ }).fill("Block opportunity reads");
     await policyDialog.getByRole("textbox", { name: /^Permission schema or prefix/ }).fill("*");
-    await policyDialog.getByRole("combobox", { name: "Restrict to member", exact: true }).click();
+    await policyDialog.getByRole("combobox", { name: "Restrict to member", exact: true }).or(policyDialog.getByRole("button", { name: /^Restrict to member/ })).click();
     await page.getByRole("option", { name: /田雪|user-1/ }).first().click();
     await policyDialog.getByRole("button", { name: "Save policy", exact: true }).click();
     await expect(policyDialog).toBeHidden();

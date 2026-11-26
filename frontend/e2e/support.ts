@@ -2,7 +2,7 @@ import { type Locator, type Page, expect, test } from "@playwright/test";
 
 const sessions = new Map<string, string>();
 export async function signIn(page: Page, seat = "admin-1 · acceptance") {
-  const signedIn = page.getByRole("button", { name: /^(Account|Open navigation)$/ });
+  const signedIn = page.getByRole("button", { name: /^(Account|Open navigation|账户)$/ });
   const cached = sessions.get(seat);
   if (cached) {
     if (!page.url().startsWith("http")) await page.goto("/");
