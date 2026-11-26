@@ -1,8 +1,8 @@
 # studio-4 升级审阅的界面
 
-车道：studio    依赖：studio-2（对比表现）、fire-2（挂在包上的扩展）；改 marketplace.spec.ts 等 kit-1 落地
+车道：studio    依赖：studio-2（对比表现）、kit-5（挂在包上的扩展，可先用假实现）
 能改：frontend/src/apps/delivery/**、frontend/src/pages/**、frontend/e2e/marketplace.spec.ts（先 `board lock shared-marketplace-spec`）
-不碰：capabilities/server/**（审阅数据归 fire-2）；deploy/packages/**、scripts/frontend-fixtures/**（夹具归 kit-1）
+不碰：capabilities/server/**（审阅数据归 kit-5）；deploy/packages/**、scripts/frontend-fixtures/**（夹具归 kit）
 
 ## 要做到
 - 做 roadmap 3.3 的界面：市场升级前的审阅用 `RecordComparison` 列出包的变化（新字段、改标签），并列出受影响的扩展与它们的版本范围。

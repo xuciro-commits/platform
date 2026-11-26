@@ -46,16 +46,16 @@
 | 模块 | 成熟度 | 证据 | 缺什么、归谁 |
 |---|---|---|---|
 | 记录：列表、记录页、行内编辑、视图 | 产品级 | `pages/RecordList.tsx`、`RecordPage.tsx`；records 32 项 | — |
-| CRM 包 | 产品级 | crm 20 项、official 4 项 | 升级夹具：kit-1 |
-| 宿主：接受路径、重放、内存与文件存储 | 能用 | `capabilities/server/kernel`；十三组内核不变量 | 3.1c、3.1d 宿主侧已合入，浏览器验收：R5 |
+| CRM 包 | 产品级 | crm 20 项、official 6 项 | 升级后扩展还在：3.3b、3.3c，studio-4 |
+| 宿主：接受路径、重放、内存与文件存储 | 能用 | `capabilities/server/kernel`；十三组内核不变量 | 3.1c、3.1d 宿主侧已合入，浏览器验收：ship-1、ship-2 |
 | PostgreSQL 存储 | 能用 | 3.1a、3.1b；trunk-pg 只跑过 official、marketplace | 全量：fire-1 |
 | 格式纪元冻结 | 无 | `make check` 没有这条核对 | 3.4a，B 级：lead-2 |
 | 构建：类型、字段、状态、动作、发布 | 能用 | `services/ontology`；builder 12 项 | 条件与表达式只能手写：studio-3 |
 | 条件与表达式编辑器 | 无 | `pages/` 里没有 `ConditionBuilder`、`ExpressionEditor` | studio-3 |
 | 结构化对比、关系图 | 无 | 没有 `RecordComparison`、`RelationCanvas` | 对比：studio-2；关系图等客户要 |
-| 客户扩展 | 占位 | 只有人员页显示附属对象（workspace “people”） | 3.2：studio-1 |
-| 市场：安装、升级、卸载、远程包库 | 能用 | `apps/delivery/marketplace.tsx`；marketplace 10 项 | 审阅不核对扩展：查询 fire-2，界面 studio-4 |
-| 授权：角色、ReBAC、临时授权、受限字段 | 能用 | `services/security`；rebac 3 项、crm “roles”、workspace “restricted fields” | 扩展字段：3.2c |
+| 客户扩展 | 能用 | `pages/RecordExtensions.tsx`；official “an extension project” | 升级后保留：studio-4 |
+| 市场：安装、升级、卸载、远程包库 | 能用 | `apps/delivery/marketplace.tsx`；marketplace 10 项 | 审阅不核对扩展：查询 kit-5，界面 studio-4 |
+| 授权：角色、ReBAC、临时授权、受限字段 | 能用 | `services/security`；rebac 3 项、crm “roles”、workspace “restricted fields”、official “an extension project” | — |
 | 工作：收件箱、任务、提及、跟进 | 能用 | `pages/InboxPage.tsx`、`services/work`；workspace “inbox”、crm “follow-up” | — |
 | 看板、日历、甘特、仪表盘 | 能用 | `BoardView`、`CalendarView`、`GanttView`、`DashboardPage`；crm、gantt | — |
 | 导入导出 | 能用 | `pages/ImportWizard.tsx`、`objects/record_import.go`；crm “import” | 3.4b：后端 kit-4，界面与邀请 ship-3 |
@@ -71,8 +71,7 @@
 
 阶段 3 要用到的内核能力（同一时间只有一人改内核）：
 
-- 3.2c 扩展字段按附属对象自己的 `access` 判：studio 先核对唯一的授权决定点是否已按附属对象判；不是就是 B 级，归 lead。
-- 3.3a、3.3c 升级审阅要知道哪些附属对象挂在包的类型上、各自的版本范围：只读查询，A 级，fire-2 提前做。
+- 3.3a、3.3c 升级审阅要知道哪些附属对象挂在包的类型上、各自的版本范围：只读查询，A 级，kit-5 提前做。
 - 3.1d 导出与导入已接受条目：导入是否走接受路径、纪元在哪核对是 B 级；ship 先在看板给接口草图，lead 定。
 - 3.4a 冻结格式纪元：B 级，lead-2，在开通客户之前做。
 
