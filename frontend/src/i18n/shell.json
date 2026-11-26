@@ -395,5 +395,10 @@
   "Resource catalog": "资源目录",
   "Object relationships": "对象关系",
   "Source object": "来源对象",
-  "Reference field": "引用字段"
+  "Reference field": "引用字段",
+  "Always": "始终",
+  "Values": "取值",
+  "Edit with fields": "按字段编辑",
+  "Edit as text": "按文本编辑",
+  "Another field and the values that make this field apply, as field=value,value": "另一个字段，以及让本字段生效的取值，写作 字段=值,值"
 }

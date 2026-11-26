@@ -168,6 +168,44 @@ test("object definition: create and bind an action type before publishing a tran
 });
 
 
+test("object definition: a condition picked field by field shows the field only where it holds", async ({ page }) => {
+  await signIn(page);
+  await open(page, "Ontology", "Object types");
+  await page.getByRole("link", { name: "Customer", exact: true }).click();
+  await page.getByRole("button", { name: "Add field", exact: true }).click();
+  const edit = page.getByRole("dialog");
+  await edit.getByRole("textbox", { name: /^Name/ }).fill("discount");
+  await edit.getByRole("textbox", { name: /^Label/ }).fill("Strategic discount");
+  await edit.getByRole("combobox", { name: /^Type/ }).click();
+  await page.getByRole("option", { name: "text", exact: true }).click();
+  await edit.getByRole("combobox", { name: /^Only when/ }).click();
+  await page.getByRole("option", { name: "Tier", exact: true }).click();
+  await edit.getByRole("combobox", { name: /^Values/ }).click();
+  await page.getByRole("option", { name: "strategic", exact: true }).click();
+  await page.keyboard.press("Escape");
+  await edit.getByRole("button", { name: "Edit as text", exact: true }).click();
+  await expect(edit.getByRole("textbox", { name: /^Only when/ })).toHaveValue("tier=strategic");
+  await edit.getByRole("button", { name: "Save", exact: true }).click();
+  await expect(edit).toBeHidden();
+
+  await page.getByRole("button", { name: "Publish", exact: true }).click();
+  const publish = page.getByRole("dialog", { name: /Publish/ });
+  await publish.getByRole("button", { name: "Publish", exact: true }).click();
+  await expect(publish).toBeHidden();
+  await page.getByRole("link", { name: "Open records" }).click();
+  await page.getByRole("link", { name: "北风工具", exact: true }).click();
+  await expect(property(page, "Tier")).toBeVisible();
+  const hidden = page.getByRole("button", { name: /^Show empty fields/ });
+  if (await hidden.isVisible()) await hidden.click();
+  await expect(property(page, "Strategic discount")).toBeVisible();
+  await page.getByRole("link", { name: "Customers", exact: true }).click();
+  await page.getByRole("link", { name: "阿特拉斯铸造", exact: true }).click();
+  await expect(property(page, "Tier")).toBeVisible();
+  if (await hidden.isVisible()) await hidden.click();
+  await expect(property(page, "Strategic discount")).toHaveCount(0);
+});
+
+
 test.describe.serial("gate", () => {
 let page: Page;
 test.beforeAll(async ({ browser }) => {

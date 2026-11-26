@@ -17,6 +17,7 @@ import { reasonOf, send } from "./act";
 import { AccessDialog, ActionTypeDialog, type ActionTypeRow, TransitionDialog } from "./DefinitionActions";
 import type { Described, Values } from "./describe";
 import { useListFlip } from "./motion";
+import { ConditionBuilder, conditionSources } from "./ConditionBuilder";
 import { ParameterInput, enterable } from "./ParameterInput";
 import { present, shown } from "./values";
 
@@ -221,7 +222,7 @@ function DefinitionTable({ slot, field, rows, fields: objectFields, states, acce
         />
       )}
       {editing && slot !== "access" && (
-        <DefinitionForm slot={slot} row={editing.row} field={field} states={states} entities={entities} subject={subject}
+        <DefinitionForm slot={slot} row={editing.row} field={field} fields={objectFields} states={states} entities={entities} subject={subject}
           title={editing.index < 0 ? t(schema.add) : t("Edit row")} busy={busy} failure={failure} label={label}
           close={() => !busy && setEditing(undefined)}
           save={(row) => {
@@ -270,8 +271,8 @@ function DefinitionTable({ slot, field, rows, fields: objectFields, states, acce
   );
 }
 
-function DefinitionForm({ slot, row, field, states, entities, subject, title, busy, failure, label, close, save }: {
-  slot: Exclude<Slot, "access">; row: DefinitionRow; field: Api.FieldInfo; states: DefinitionRow[]; entities: Api.EntityInfo[]; subject: string;
+function DefinitionForm({ slot, row, field, fields, states, entities, subject, title, busy, failure, label, close, save }: {
+  slot: Exclude<Slot, "access">; row: DefinitionRow; field: Api.FieldInfo; fields: DefinitionRow[]; states: DefinitionRow[]; entities: Api.EntityInfo[]; subject: string;
   title: string; busy: boolean; failure: string; label: (name: string) => string; close: () => void; save: (row: DefinitionRow) => void;
 }) {
   const [values, setValues] = useState(row);
@@ -314,7 +315,7 @@ function DefinitionForm({ slot, row, field, states, entities, subject, title, bu
         <LayoutContent padding={4}>
           <FormLayout defaultOptionality="optional">
             {failure && <Banner status="error" title={t("Not saved")} description={failure} />}
-            {inputs.filter((parameter) => parameter.name !== "ref").map((parameter) => (
+            {inputs.filter((parameter) => parameter.name !== "ref" && parameter.name !== "when").map((parameter) => (
               <ParameterInput key={parameter.name} parameter={parameter} described={described} value={values[parameter.name]} onChange={(value) => set(parameter.name, value)} />
             ))}
             {slot === "fields" && values.type === "reference" && (
@@ -326,6 +327,10 @@ function DefinitionForm({ slot, row, field, states, entities, subject, title, bu
                   search: (query) => entities.filter((entity) => `${entity.title} ${entity.type}`.toLowerCase().includes(query.toLowerCase()))
                     .map((entity) => ({ id: entity.type, label: t(entity.title) })),
                 }} />
+            )}
+            {slot === "fields" && inputs.some((parameter) => parameter.name === "when") && (
+              <ConditionBuilder label={label("when")} value={typeof values.when === "string" ? values.when : ""}
+                sources={conditionSources(fields, states, values.name)} onChange={(value) => set("when", value)} />
             )}
             {slot === "actions" && (
               <>
