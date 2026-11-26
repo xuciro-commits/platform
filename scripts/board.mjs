@@ -29,7 +29,13 @@ if (!["status", "show", "help", undefined].includes(command) && !agents.includes
   fail(`run inside .build/<name> or pass --as one of ${agents.join(", ")}`);
 }
 
-const now = () => new Date().toISOString().slice(0, 19) + "Z";
+const now = () => {
+  const d = new Date();
+  const offset = -d.getTimezoneOffset();
+  const pad = (n) => String(Math.abs(n)).padStart(2, "0");
+  const local = new Date(d.getTime() + offset * 60_000).toISOString().slice(0, 19);
+  return `${local}${offset >= 0 ? "+" : "-"}${pad(Math.trunc(offset / 60))}:${pad(offset % 60)}`;
+};
 const hours = (file) => (Date.now() - statSync(file).mtimeMs) / 3_600_000;
 const text = (from) => words.slice(from).join(" ").replace(/\s+/g, " ").trim();
 const post = (to, kind, ref, body) => appendFileSync(log, [now(), as, to, kind, ref || "-", body].join("\t") + "\n");
@@ -129,6 +135,7 @@ switch (command) {
     if (!flags.sha) fail("--sha names the commit on main that answers the request");
     if (!create(join(dir, "02-done.md"), `by: ${as}\nsha: ${flags.sha}\ndone: ${now()}\n\n${text(1)}\n`)) fail(`${words[0]} is already done`);
     post(field(join(dir, "00-open.md"), "from"), "done", words[0], `${flags.sha} ${text(1)}`);
+    rmSync(dir, { recursive: true });
     break;
   }
   case "close": {
@@ -139,6 +146,7 @@ switch (command) {
     if (!text(1)) fail("say why it ends without a commit");
     if (!create(join(dir, "02-done.md"), `by: ${as}\nclosed: ${now()}\n\n${text(1)}\n`)) fail(`${words[0]} is already done`);
     post("all", "close", words[0], text(1));
+    rmSync(dir, { recursive: true });
     break;
   }
   case "show": {
