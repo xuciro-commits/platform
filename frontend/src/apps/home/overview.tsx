@@ -22,8 +22,8 @@ const latest = (answer: Directory, kind: string) =>
     .slice(0, 8)
     .map((resource) => ({
       id: resource.id,
-      title: resource.title,
-      owner: resource.ref.app,
+      title: t(resource.title),
+      owner: t(resource.ref.app),
       changed: resource.changed.at ? dateText(resource.changed.at) : "",
     }));
 const columns = [
@@ -56,7 +56,7 @@ function BusinessOverview({ apps }: { apps: Api.ApplicationView[] }) {
         <LayoutContent role="main" padding={0}>
           <VStack gap={6} padding={gutter} paddingBlockStart={3}>
             <PageTitle title={t("Overview")} actions={<RequestAccessButton variant="secondary" size="sm" />} />
-            <Grid columns={{ minWidth: 280, max: 3 }} gap={4}>
+            <Grid columns={{ minWidth: 280, repeat: "fit" }} gap={4}>
               {apps.map((app) => {
                 const id = app.name || app.app;
                 const first = app.dashboard?.length ? "dashboard" : app.menu.flatMap((group) => group.entries)[0]?.name ?? "";

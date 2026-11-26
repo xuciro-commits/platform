@@ -23,11 +23,13 @@ import {
 } from "@heroicons/react/24/outline";
 import * as stylex from "@stylexjs/stylex";
 import type { Api } from "../host";
-import { t } from "../i18n";
+import { t, useLocale } from "../i18n";
 import { useIsDark } from "../shell/appearance";
 
 const styles = stylex.create({
   action: { flexShrink: 0 },
+  badgeGroup: { flexShrink: 0 },
+  slugWrap: { minWidth: 0, textAlign: "end" },
   cover: (src: string, vector: boolean) => ({
     width: "32%",
     minWidth: 88,
@@ -214,15 +216,20 @@ export function PackageCard({
             </StackItem>
           </HStack>
           <StackItem size="fill" />
-          <HStack gap={2} vAlign="center">
-            {view.kind && <Token label={kindLabel(view.kind)} color="gray" size="sm" />}
-            {parts.length > 0 && (
-              <Text type="supporting" color="secondary" maxLines={1}>{parts.join(" · ")}</Text>
-            )}
-            <StackItem size="fill" />
-            <Text type="supporting" color="secondary" hasTabularNumbers maxLines={1}>
-              {id} · {version}{otherVersions > 0 ? ` (+${otherVersions})` : ""}
-            </Text>
+          <HStack gap={2} vAlign="center" hAlign="between">
+            <HStack gap={1.5} vAlign="center" xstyle={styles.badgeGroup}>
+              {view.kind && <Token label={kindLabel(view.kind)} color="gray" size="sm" />}
+              {parts.length > 0 && (
+                <Text type="supporting" color="secondary" maxLines={1}>{parts.join(" · ")}</Text>
+              )}
+            </HStack>
+            <StackItem size="fill">
+              <VStack xstyle={styles.slugWrap}>
+                <Text type="supporting" color="secondary" hasTabularNumbers maxLines={1}>
+                  {id} · {version}{otherVersions > 0 ? ` (+${otherVersions})` : ""}
+                </Text>
+              </VStack>
+            </StackItem>
           </HStack>
         </VStack>
       </ClickableCard>
@@ -245,8 +252,10 @@ export function CatalogEntryCard({
   installed?: Api.InstalledPackage;
   onSelect: () => void;
 }) {
-  const display = t(entry.title || entry.id);
-  const summary = entry.description ? t(entry.description) : `${display} (${entry.id})`;
+  const locale = useLocale();
+  const localized = locale === "zh-CN" ? entry.locales?.["zh-CN"] : undefined;
+  const display = localized?.title || t(entry.title || entry.id);
+  const summary = localized?.description || (entry.description ? t(entry.description) : `${display} (${entry.id})`);
   const dark = useIsDark();
   const icon = packageIcon(entry.id, { apps: 1, plugins: 0 });
   const cover = official ? coverFor(entry.id, "official", dark) : undefined;

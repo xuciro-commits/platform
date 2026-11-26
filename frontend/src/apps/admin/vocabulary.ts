@@ -93,6 +93,7 @@ export default listPage<Api.WordsView, Row>({
     { key: "area", label: "App", of: (row) => t(row.word.area || "Unused") },
     { key: "kind", label: "Kind", of: (row) => t(kinds[row.word.kind] ?? kinds.other), order: Object.values(kinds).map((label) => t(label)) },
     { key: "status", label: "Status", of: (row) => t(status(row)), order: statuses.map((label) => t(label)) },
+    { key: "origin", label: "Source", of: (row) => t(origins[row.said.origin ?? ""]), order: Object.values(origins).map((label) => t(label)) },
   ],
   defaultView: { version: 1, group: "area" },
   actions: {

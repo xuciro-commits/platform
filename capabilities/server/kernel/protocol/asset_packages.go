@@ -122,15 +122,21 @@ type PackageLibrary struct {
 	AddedAt     time.Time `json:"addedAt,omitempty"`
 }
 
+type CatalogLocale struct {
+	Title       string `json:"title,omitempty"`
+	Description string `json:"description,omitempty"`
+}
+
 type PackageCatalogEntry struct {
-	ID          string          `json:"id"`
-	Version     string          `json:"version"`
-	Title       string          `json:"title"`
-	Description string          `json:"description,omitempty"`
-	URL         string          `json:"url"`
-	Sha256      string          `json:"sha256"`
-	Listing     *PackageListing `json:"listing,omitempty"`
-	Kind        string          `json:"kind,omitempty"`
+	ID          string                   `json:"id"`
+	Version     string                   `json:"version"`
+	Title       string                   `json:"title"`
+	Description string                   `json:"description,omitempty"`
+	URL         string                   `json:"url"`
+	Sha256      string                   `json:"sha256"`
+	Listing     *PackageListing          `json:"listing,omitempty"`
+	Kind        string                   `json:"kind,omitempty"`
+	Locales     map[string]CatalogLocale `json:"locales,omitempty"`
 }
 
 type PackageListing struct {

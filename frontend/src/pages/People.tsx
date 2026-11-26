@@ -314,7 +314,7 @@ export function PersonPage({ id }: { id: string }) {
   return (
     <Layout
       height="fill"
-      contentWidth={1260}
+      contentWidth={1600}
       header={
         <LayoutHeader padding={0} hasDivider>
           <VStack padding={gutter} paddingBlockStart={3} paddingBlockEnd={4}>

@@ -61,6 +61,8 @@ export function RolesPermissionsPage() {
   const currentApp = permList.find((entry) => entry.app === chosenApp);
   const objects = currentApp?.objects ?? [];
   const activeSpotlight = currentApp?.roles.some((r) => r.role === spotlitRole) ? spotlitRole : "";
+  const roleLabels = useMemo(() => new Map((currentApp?.roles ?? []).map((item) => [item.role, item.title ? t(item.title) : roleTitle(item.role)])), [currentApp]);
+  const displayRole = (role: string) => roleLabels.get(role) ?? roleTitle(role);
 
   const summaryMetrics = useMemo(() => {
     const rolesCount = currentApp?.roles.filter((r) => r.role !== "*").length ?? 0;
@@ -103,7 +105,7 @@ export function RolesPermissionsPage() {
             {entries.map(([role, scope]) => (
               <ScopeDepthMeter
                 key={role}
-                roleLabel={roleTitle(role)}
+                roleLabel={displayRole(role)}
                 scope={scope}
                 isSpotlit={activeSpotlight === role}
               />
@@ -117,9 +119,14 @@ export function RolesPermissionsPage() {
       header: t("Relationship anchors"),
       width: proportional(1.1),
       renderCell: (obj) => {
+        const fieldTitle = (name: string) => {
+          const restricted = obj.fields?.find((f) => f.name === name);
+          if (restricted?.title) return t(restricted.title);
+          return roleLabels.get(name) ?? t(name);
+        };
         const tags: string[] = [];
-        if (obj.ownerField) tags.push(`${t("Owner")}: ${obj.ownerField}`);
-        if (obj.unitField) tags.push(`${t("Unit")}: ${obj.unitField}`);
+        if (obj.ownerField) tags.push(`${t("Owner")}: ${fieldTitle(obj.ownerField)}`);
+        if (obj.unitField) tags.push(`${t("Unit")}: ${fieldTitle(obj.unitField)}`);
         if (obj.participants) tags.push(t("Participants"));
         if (obj.through) tags.push(t("Inherited from parent"));
         return tags.length > 0 ? (
@@ -145,7 +152,7 @@ export function RolesPermissionsPage() {
                 key={field.name}
                 size="sm"
                 color="orange"
-                label={`${t(field.title || field.name)}${field.write?.length ? ` (${field.write.join(", ")})` : ""}`}
+                label={`${t(field.title || field.name)}${field.write?.length ? ` (${field.write.map(displayRole).join(", ")})` : ""}`}
               />
             ))}
             {fields.length > 3 && <Token size="sm" color="gray" label={`+${fields.length - 3}`} />}
@@ -340,7 +347,7 @@ export function RolesPermissionsPage() {
                           </Text>
                         </HStack>
                         {currentApp.roles.length > 0 ? (
-                          <Grid columns={{ minWidth: 270, max: 3 }} gap={3}>
+                          <Grid columns={{ minWidth: 270, repeat: "fit" }} gap={3}>
                             {currentApp.roles.map((roleEntry) => {
                               const isCustom = customIds.has(`${currentApp.app}:${roleEntry.role}`);
                               const isWildcard = roleEntry.role === "*";
@@ -348,7 +355,7 @@ export function RolesPermissionsPage() {
                               return (
                                 <SelectableCard
                                   key={roleEntry.role}
-                                  label={roleTitle(roleEntry.role)}
+                                  label={displayRole(roleEntry.role)}
                                   isSelected={selected}
                                   onChange={() => setSpotlitRole(selected ? "" : roleEntry.role)}
                                   padding={4}
@@ -356,7 +363,7 @@ export function RolesPermissionsPage() {
                                   <VStack gap={2}>
                                     <HStack gap={2} vAlign="center" hAlign="between" wrap="wrap">
                                       <HStack gap={1.5} vAlign="center">
-                                        <Heading level={4}>{roleTitle(roleEntry.role)}</Heading>
+                                        <Heading level={4}>{displayRole(roleEntry.role)}</Heading>
                                         {isCustom && <Token size="sm" color="purple" label={t("Custom")} />}
                                       </HStack>
                                       {isWildcard ? (

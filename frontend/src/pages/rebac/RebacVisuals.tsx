@@ -237,7 +237,7 @@ export function ProvenanceFlowCard({
                         key={`${grant.app}:${grant.role}:${index}`}
                         size="sm"
                         color={origin.kind === "delegated" ? "orange" : origin.kind === "team" ? "purple" : "default"}
-                        label={`${grant.app}:${roleTitle(grant.role)}${grant.unit ? `@${unitName(grant.unit)}` : ""}`}
+                        label={`${t(grant.app)}:${roleTitle(grant.role)}${grant.unit ? `@${unitName(grant.unit)}` : ""}`}
                       />
                     );
                   })}
@@ -248,7 +248,7 @@ export function ProvenanceFlowCard({
               )}
               {markings.length > 0 && (
                 <HStack gap={1} wrap="wrap">
-                  {markings.map((marking) => <Token key={marking} size="sm" color="teal" label={marking} />)}
+                  {markings.map((marking) => <Token key={marking} size="sm" color="teal" label={t(marking)} />)}
                 </HStack>
               )}
             </VStack>

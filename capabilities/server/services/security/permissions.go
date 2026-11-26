@@ -14,8 +14,16 @@ import (
 
 type RolePermissions struct {
 	Role    string             `json:"role"`
+	Title   string             `json:"title,omitempty"`
 	Holders int                `json:"holders"`
 	Actions []PermissionAction `json:"actions"`
+}
+
+func roleDisplayTitle(role string) string {
+	if role == platform.AnyMember {
+		return "Everyone"
+	}
+	return role
 }
 
 type PermissionAction struct {
@@ -162,7 +170,7 @@ func (p PermissionsReport) Permissions() []AppPermissions {
 					continue
 				}
 			}
-			rp := RolePermissions{Role: role, Holders: p.Holders(m.ID, role), Actions: []PermissionAction{}}
+			rp := RolePermissions{Role: role, Title: roleDisplayTitle(role), Holders: p.Holders(m.ID, role), Actions: []PermissionAction{}}
 			for _, act := range m.Actions.ForRoles([]string{role}) {
 				if space, _, ok := strings.Cut(act.Target, "."); ok && space != "" && space != m.ID && m.ID == "build" {
 					continue
@@ -227,7 +235,7 @@ func (p PermissionsReport) Permissions() []AppPermissions {
 		slices.SortFunc(ap.Objects, func(a, b ObjectPermissions) int { return strings.Compare(a.Type, b.Type) })
 		ownerManifest, hasOwner := spaceOwners[space]
 		for _, role := range roles {
-			rp := RolePermissions{Role: role, Holders: p.Holders(space, role), Actions: []PermissionAction{}}
+			rp := RolePermissions{Role: role, Title: roleDisplayTitle(role), Holders: p.Holders(space, role), Actions: []PermissionAction{}}
 			if hasOwner && ownerManifest.Actions != nil && ownerManifest.Actions.Custom(role) {
 				for _, act := range ownerManifest.Actions.ForRoles([]string{role}) {
 					if targetSpace, _, ok := strings.Cut(act.Target, "."); ok && targetSpace == space {

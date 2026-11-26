@@ -1,3 +1,4 @@
+import { t } from "../../i18n";
 import type { Api } from "../../host";
 import { listPage } from "../../pages/ListEntry";
 
@@ -13,9 +14,13 @@ export default listPage<Api.AuditPage, Api.AuditEntry>({
   columns: [
     { key: "action", header: "Action", kind: "code", text: (entry) => entry.action },
     { key: "member", header: "Member", width: 160, kind: "member", text: (entry) => entry.member },
-    { key: "app", header: "App", width: 120, kind: "code", text: (entry) => entry.app },
+    { key: "app", header: "App", width: 120, text: (entry) => t(entry.app) },
     { key: "target", header: "Target", kind: "code", text: (entry) => entry.target ?? "" },
     { key: "at", header: "When", width: 140, kind: "time", text: (entry) => entry.at },
   ],
-  groups: [{ key: "app", label: "App", of: (entry) => entry.app }],
+  groups: [
+    { key: "app", label: "App", of: (entry) => t(entry.app) },
+    { key: "action", label: "Action", of: (entry) => entry.action },
+    { key: "member", label: "Member", of: (entry) => entry.member },
+  ],
 });

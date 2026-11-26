@@ -272,7 +272,26 @@ func (b *Build) Manifest() platform.Manifest {
 	if pages == nil {
 		pages = b.buildManifestPages()
 	}
-	return platform.Manifest{ID: ID, Title: platform.BuiltinManifestTitle(ID), Version: ValueDefinitionVersion, Sequences: sequences, Actions: catalog, Entities: entities, Roles: roles, Settings: b.settings(), Jobs: buildManifestJobs, Provides: provisions, Consumes: b.consumedProtocols(), Reads: reads, ReadSources: readSources, Queries: b.queries.Declarations(), Functions: b.functions.Declarations(), Agents: b.agent.Declarations(), Operations: b.functions.OperationDeclarations(), Pages: pages, Subscribes: []string{ontology.SchemaPublish}}
+	var languages platform.Languages
+	for _, contract := range b.ProtocolContracts() {
+		for lang, dict := range contract.Languages {
+			if len(dict) == 0 {
+				continue
+			}
+			if languages == nil {
+				languages = platform.Languages{}
+			}
+			if languages[lang] == nil {
+				languages[lang] = map[string]string{}
+			}
+			for k, v := range dict {
+				if v != "" && languages[lang][k] == "" {
+					languages[lang][k] = v
+				}
+			}
+		}
+	}
+	return platform.Manifest{ID: ID, Title: platform.BuiltinManifestTitle(ID), Version: ValueDefinitionVersion, Sequences: sequences, Actions: catalog, Entities: entities, Roles: roles, Settings: b.settings(), Jobs: buildManifestJobs, Provides: provisions, Consumes: b.consumedProtocols(), Reads: reads, ReadSources: readSources, Queries: b.queries.Declarations(), Functions: b.functions.Declarations(), Agents: b.agent.Declarations(), Operations: b.functions.OperationDeclarations(), Pages: pages, Languages: languages, Subscribes: []string{ontology.SchemaPublish}}
 }
 
 func (b *Build) Interested(names []string, e platform.Event) bool {

@@ -64,8 +64,10 @@ func (h *Host) routesCore(rt *routes) {
 		refusal = t.i18n.Said(refusal, t.Language(m, r))
 		Reply(w, record, refusal, localized...)
 	})
-	rt.authorized(transport.Route{Pattern: "GET /v1/authz/explain", Summary: "Why a member may or may not exercise a permission: their roles, the roles it names, the engine's verdict (administrators, auditors)", Answer: security.Explanation{}, Query: []transport.Param{{Name: "member", Description: "the member to ask about"}, {Name: "permission", Description: "an action's schema, or <app>:read:<name>"}}}, controlowner.PlatformApp, []string{controlowner.Admin, protocol.Auditor}, transport.Answering(func(r *http.Request, _ platform.Member, t *Tenant) (security.Explanation, *platform.Error) {
-		return t.Explain(r.URL.Query().Get("member"), r.URL.Query().Get("permission"))
+	rt.authorized(transport.Route{Pattern: "GET /v1/authz/explain", Summary: "Why a member may or may not exercise a permission: their roles, the roles it names, the engine's verdict (administrators, auditors)", Answer: security.Explanation{}, Query: []transport.Param{{Name: "member", Description: "the member to ask about"}, {Name: "permission", Description: "an action's schema, or <app>:read:<name>"}}}, controlowner.PlatformApp, []string{controlowner.Admin, protocol.Auditor}, transport.Answering(func(r *http.Request, m platform.Member, t *Tenant) (security.Explanation, *platform.Error) {
+		exp, err := t.Explain(r.URL.Query().Get("member"), r.URL.Query().Get("permission"))
+		exp.Verdict, err = t.i18n.TranslateDecision(exp.Verdict, t.Language(m, r), err)
+		return exp, err
 	}))
 	rt.authorized(transport.Route{Pattern: "POST /v1/authz/explain", Summary: "Explain the ordered owner authorization decision for a record, fields and source", Body: platform.AuthzRequest{}, Answer: platform.AuthzDecision{}}, controlowner.PlatformApp, []string{controlowner.Admin, protocol.Auditor}, func(w http.ResponseWriter, r *http.Request, m platform.Member, t *Tenant) {
 		var request platform.AuthzRequest
@@ -73,6 +75,7 @@ func (h *Host) routesCore(rt *routes) {
 			return
 		}
 		decision, err := t.ExplainOperation(request, h.Now())
+		decision, err = t.i18n.TranslateDecision(decision, t.Language(m, r), err)
 		transport.Answer(w, decision, err)
 	})
 	rt.handle(transport.Route{Pattern: "GET /v1/sessions", Summary: "The caller's sessions: the credentials the host has seen act as them, the current one marked", Answer: []protocol.Session{}}, func(w http.ResponseWriter, r *http.Request, m platform.Member, t *Tenant) {

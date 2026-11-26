@@ -104,6 +104,14 @@ const reorderStyles = stylex.create({
   active: { cursor: "grabbing", touchAction: "none" },
 });
 
+export type GroupCollapseActions = {
+  allCollapsed: boolean;
+  hasSubGroups: boolean;
+  onExpandAll: () => void;
+  onExpandLevelOne: () => void;
+  onCollapseAll: () => void;
+};
+
 type ListOptionsProps = {
   view: ViewState;
   update: (next: Partial<ViewState>) => void;
@@ -111,11 +119,12 @@ type ListOptionsProps = {
   locked: string;
   defaults: string[];
   groups: { key: string; label: string }[];
-  onGroup: (key: string) => void;
+  onGroups: (primary: string, secondary: string) => void;
+  collapseActions?: GroupCollapseActions;
   compact: boolean;
 };
 
-export function ListOptions({ view, update, columns, locked, defaults, groups, onGroup, compact }: ListOptionsProps) {
+export function ListOptions({ view, update, columns, locked, defaults, groups, onGroups, collapseActions, compact }: ListOptionsProps) {
   const [section, setSection] = useState<Pane>("columns");
   const [open, setOpen] = useState(false);
   const [reorder, setReorderState] = useState<Reorder | null>(null);
@@ -360,17 +369,87 @@ export function ListOptions({ view, update, columns, locked, defaults, groups, o
             ))}
           </VStack>
         );
-      case "grouping":
+      case "grouping": {
+        const pickPrimary = (raw: string) => {
+          if (raw === "none") {
+            onGroups("none", "none");
+            return;
+          }
+          if (raw === view.subGroup) {
+            onGroups(raw, view.group !== "none" ? view.group : "none");
+            return;
+          }
+          onGroups(raw, view.subGroup);
+        };
+        const pickSecondary = (raw: string) => {
+          if (raw === "none") {
+            onGroups(view.group, "none");
+            return;
+          }
+          if (view.group === "none") {
+            onGroups(raw, "none");
+            return;
+          }
+          if (raw === view.group) {
+            onGroups(view.subGroup !== "none" ? view.subGroup : raw, view.subGroup !== "none" ? raw : "none");
+            return;
+          }
+          onGroups(view.group, raw);
+        };
         return (
-          <VStack gap={0} paddingInline={4} paddingBlockEnd={4}>
-            <RadioList label={t("Grouping")} isLabelHidden value={view.group} onChange={(value) => onGroup(String(value))}>
-              <RadioListItem value="none" label={t("None")} />
-              {groups.map((group) => (
-                <RadioListItem key={group.key} value={group.key} label={t(group.label)} />
-              ))}
-            </RadioList>
+          <VStack gap={0} minHeight={0} xstyle={styles.root}>
+            {view.group !== "none" && collapseActions && (
+              <HStack gap={2} vAlign="center" hAlign="end" paddingBlock={2} xstyle={[styles.header, styles.padStart, styles.padEnd]}>
+                <Button label={t("Expand all")} variant="ghost" size="sm" xstyle={styles.headerAction} onClick={collapseActions.onExpandAll} />
+                {collapseActions.hasSubGroups && (
+                  <Button label={t("Expand level 1")} variant="ghost" size="sm" xstyle={styles.headerAction} onClick={collapseActions.onExpandLevelOne} />
+                )}
+                <Button label={t("Collapse all")} variant="ghost" size="sm" xstyle={styles.headerAction} onClick={collapseActions.onCollapseAll} />
+              </HStack>
+            )}
+            <HStack gap={0} minHeight={0} xstyle={styles.panels}>
+              <VStack gap={0} role="group" aria-labelledby={`${hintId}-group-l1`} xstyle={styles.half}>
+                <HStack gap={2} vAlign="center" hAlign="between" paddingBlock={2} xstyle={[styles.header, styles.padStart]}>
+                  <Text id={`${hintId}-group-l1`} type="label" color="secondary">
+                    {t("Primary group")}
+                  </Text>
+                </HStack>
+                <VStack gap={0} paddingInline={4} paddingBlock={2} xstyle={styles.body}>
+                  <RadioList label={t("Primary group")} isLabelHidden value={view.group} onChange={(value) => pickPrimary(String(value))}>
+                    <RadioListItem value="none" label={t("None")} />
+                    {groups.map((group) => (
+                      <RadioListItem key={group.key} value={group.key} label={t(group.label)} />
+                    ))}
+                  </RadioList>
+                </VStack>
+              </VStack>
+              <VStack gap={0} role="group" aria-labelledby={`${hintId}-group-l2`} xstyle={[styles.half, styles.divider]}>
+                <HStack gap={2} vAlign="center" hAlign="between" paddingBlock={2} xstyle={[styles.header, styles.padEnd]}>
+                  <Text id={`${hintId}-group-l2`} type="label" color="secondary">
+                    {t("Secondary group")}
+                  </Text>
+                </HStack>
+                <VStack gap={0} paddingInline={4} paddingBlock={2} xstyle={styles.body}>
+                  {groups.length < 2 ? (
+                    <VStack gap={0} vAlign="center" hAlign="center" minHeight="100%" paddingBlock={4} xstyle={styles.empty}>
+                      <Text type="supporting" color="secondary">
+                        {t("This list has only one grouping field.")}
+                      </Text>
+                    </VStack>
+                  ) : (
+                    <RadioList label={t("Secondary group")} isLabelHidden value={view.subGroup} onChange={(value) => pickSecondary(String(value))}>
+                      <RadioListItem value="none" label={t("No subgroup")} />
+                      {groups.map((group) => (
+                        <RadioListItem key={group.key} value={group.key} label={t(group.label)} />
+                      ))}
+                    </RadioList>
+                  )}
+                </VStack>
+              </VStack>
+            </HStack>
           </VStack>
         );
+      }
     }
   };
   const visible = sections.filter((candidate) => candidate.key !== "grouping" || groups.length > 0);

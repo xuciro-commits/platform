@@ -11,6 +11,8 @@ resources:
     name: productionbatches
 languages:
   zh-CN:
+    Production batch provider: 生产批次协同（供应端）
+    "Independent declarative production batch example. Install and publish using platform capabilities; configure external cooperation after installation. Quantities are local facts, and cross-system receipts remain independent.": 独立声明式生产批次协同示例。依托平台能力安装发布，安装后按需配置外部协作；数量为本地真实事实，跨系统收发回执保持独立核对。
     Accept production batch: 接收生产批次
     Acceptance status: 接收状态
     Batch identity: 批次标识

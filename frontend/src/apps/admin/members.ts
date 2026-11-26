@@ -4,6 +4,7 @@ import { t } from "../../i18n";
 import { listPage } from "../../pages/ListEntry";
 import { MemberDirectoryEntry } from "../../pages/MemberDirectoryEntry";
 import { MemberRoles } from "../../pages/MemberRoles";
+import { roleTitle } from "../../pages/rebac/shared";
 import { useSearch } from "../../router";
 
 const Members = listPage<Api.MemberView[], Api.MemberView>({
@@ -19,7 +20,7 @@ const Members = listPage<Api.MemberView[], Api.MemberView>({
       header: "Roles",
       text: (member) =>
         Object.entries(member.roles)
-          .map(([app, role]) => `${app}: ${role}`)
+          .map(([app, role]) => `${t(app)}: ${roleTitle(role)}`)
           .join(", "),
     },
     {
@@ -31,10 +32,13 @@ const Members = listPage<Api.MemberView[], Api.MemberView>({
         return count > 0 ? t("{count} active").replace("{count}", String(count)) : "";
       },
     },
-    { key: "markings", header: "Markings", width: 180, text: (member) => (member.markings ?? []).join(", ") },
+    { key: "markings", header: "Markings", width: 180, text: (member) => (member.markings ?? []).map((marking) => t(marking)).join(", ") },
     { key: "timezone", header: "Time zone", width: 140, text: (member) => member.timezone ?? "" },
   ],
-  groups: [{ key: "status", label: "Status", of: (member) => member.status ?? "active" }],
+  groups: [
+    { key: "status", label: "Status", of: (member) => t(member.status ?? "active") },
+    { key: "kind", label: "Type", of: (member) => (member.agent ? t("Agent") : t("Person")) },
+  ],
   actions: { create: "platform.member.add" },
   detail: (_, member) => (member ? createElement(MemberRoles, { member }) : null),
 });

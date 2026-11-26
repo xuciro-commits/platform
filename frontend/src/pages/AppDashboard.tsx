@@ -54,7 +54,7 @@ export function AppDashboard({ title, blocks, listOf }: { title: string; blocks:
             <Grid columns={{ minWidth: 200, max: 4 }} gap={4}>
               {metrics.map((block) => <ErrorBoundary key={block.title} compact><Block block={block} entity={entityOf(block)} list={listOf(block.object)} /></ErrorBoundary>)}
             </Grid>
-            <Grid columns={{ minWidth: 360, max: 2 }} gap={4}>
+            <Grid columns={{ minWidth: 360, repeat: "fit" }} gap={4}>
               {charts.map((block) => (
                 <GridSpan key={block.title} columns={block.kind === "line" ? "full" : 1}>
                   <ErrorBoundary compact><Block block={block} entity={entityOf(block)} list={listOf(block.object)} /></ErrorBoundary>

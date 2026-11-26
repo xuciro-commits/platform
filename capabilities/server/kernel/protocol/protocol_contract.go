@@ -23,6 +23,7 @@ type ProtocolContract struct {
 	Reads       []string                 `json:"reads,omitempty"`
 	Events      []platform.ProtocolEvent `json:"events,omitempty"`
 	Tests       []ContractTest           `json:"tests,omitempty"`
+	Languages   platform.Languages       `json:"languages,omitempty"`
 }
 
 type ContractTest struct {

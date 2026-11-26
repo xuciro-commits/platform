@@ -1209,6 +1209,11 @@ export type CapabilityResult = {
   result?: unknown;
 };
 
+export type CatalogLocale = {
+  title?: string;
+  description?: string;
+};
+
 export type CatalogModel = {
   id: string;
   name?: string;
@@ -3694,6 +3699,7 @@ export type PackageCatalogEntry = {
   sha256: string;
   listing?: PackageListing;
   kind?: string;
+  locales?: Record<string, CatalogLocale>;
 };
 
 export type PackageConnection = {
@@ -3726,6 +3732,7 @@ export type PackageDescriptor = {
   contributions?: PackageContribution[];
   artifactDigest?: string;
   description?: string;
+  languages?: Record<string, Record<string, string>>;
 };
 
 export type PackageFieldChange = {
@@ -5066,6 +5073,7 @@ export type RetainedRecordLink = {
 
 export type RolePermissions = {
   role: string;
+  title?: string;
   holders: number;
   actions: PermissionAction[];
 };

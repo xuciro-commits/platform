@@ -4,6 +4,18 @@
   "title": "Phone calls",
   "namespace": "call",
   "description": "The phone call capability, contract call/1. Apps that place calls declare uses call/1#dial on an action; a tenant administrator binds an implementation in Admin → Capabilities. Until then the entry stays hidden.",
+  "languages": {
+    "zh-CN": {
+      "Phone calls": "语音通话",
+      "The phone call capability, contract call/1. Apps that place calls declare uses call/1#dial on an action; a tenant administrator binds an implementation in Admin → Capabilities. Until then the entry stays hidden.": "语音通话能力契约（call/1）。需要外呼的应用在动作上声明 uses call/1#dial，由管理员在“管理 → 能力连接器”中绑定实现；绑定前外呼入口自动隐藏。",
+      "Place an outbound phone call. The implementation answers with its own ID for the call.": "发起外呼电话，由所绑定的通话实现返回通话记录编号。",
+      "Dial": "拨打",
+      "Place a call to a phone number.": "向指定号码发起外呼。",
+      "Number": "号码",
+      "About": "关联记录",
+      "Places a call and answers with its call ID": "拨出电话并返回通话记录编号"
+    }
+  },
   "blueprint": {
     "roots": [
       {
@@ -59,7 +71,19 @@
                 "call"
               ]
             }
-          ]
+          ],
+          "languages": {
+            "zh-CN": {
+              "Phone calls": "语音通话",
+              "The phone call capability, contract call/1. Apps that place calls declare uses call/1#dial on an action; a tenant administrator binds an implementation in Admin → Capabilities. Until then the entry stays hidden.": "语音通话能力契约（call/1）。需要外呼的应用在动作上声明 uses call/1#dial，由管理员在“管理 → 能力连接器”中绑定实现；绑定前外呼入口自动隐藏。",
+              "Place an outbound phone call. The implementation answers with its own ID for the call.": "发起外呼电话，由所绑定的通话实现返回通话记录编号。",
+              "Dial": "拨打",
+              "Place a call to a phone number.": "向指定号码发起外呼。",
+              "Number": "号码",
+              "About": "关联记录",
+              "Places a call and answers with its call ID": "拨出电话并返回通话记录编号"
+            }
+          }
         }
       }
     ]

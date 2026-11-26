@@ -26,8 +26,8 @@ type PackageDescriptor struct {
 	Contributions  []PackageContribution           `json:"contributions,omitempty"`
 	ArtifactDigest string                          `json:"artifactDigest,omitempty"`
 	Description    string                          `json:"description,omitempty"`
+	Languages      Languages                       `json:"languages,omitempty"`
 }
-
 type PackageBlueprint struct {
 	Roots  []AssetRef        `json:"roots"`
 	Assets []ReleaseAsset    `json:"assets"`

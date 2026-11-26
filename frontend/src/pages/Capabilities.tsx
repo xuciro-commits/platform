@@ -118,7 +118,7 @@ export function CapabilitiesList() {
         id: (item) => item.id,
         link: (item) => `/admin/capabilities/${encodeURIComponent(item.id)}`,
         columns: [
-          { key: "title", header: "Capability", text: (item) => item.title || item.id },
+          { key: "title", header: "Capability", text: (item) => t(item.title || item.id) },
           {
             key: "status",
             header: "Status",
@@ -222,7 +222,7 @@ export function CapabilityPage({ id }: { id: string }) {
     <>
       <Layout
         height="fill"
-        contentWidth={1260}
+        contentWidth={1600}
         header={
           <LayoutHeader padding={0} hasDivider>
             <VStack gap={2} padding={gutter} paddingBlockStart={3} paddingBlockEnd={4}>

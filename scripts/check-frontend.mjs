@@ -27,7 +27,7 @@ const allowedPackages = [
 ];
 const allowedImports = [/^\.\.?\//, /^react$/, /^react-dom\/client$/, /^@astryxdesign\//, /^@stylexjs\/stylex$/, /^@heroicons\/react\//, /^pdfjs-dist(\/|$)/, /^recharts$/, /^virtual:stylex:/];
 const rawElements = { "router.tsx": ["a"] };
-const visibleProps = "label|title|description|placeholder|tooltip|heading|subheading|superheading|aria-label|buttonLabel";
+const visibleProps = "label|title|description|placeholder|tooltip|heading|subheading|superheading|aria-label|buttonLabel|cancelLabel|actionLabel";
 
 function walk(dir) {
   return readdirSync(dir).flatMap((name) => {
@@ -57,13 +57,27 @@ for (const name of Object.keys({ ...manifest.dependencies, ...manifest.devDepend
 }
 
 const dictionary = readFileSync(join(src, "i18n.ts"), "utf8");
-const valueDictionary = JSON.parse(readFileSync(join(src, "i18n-values.json"), "utf8"));
-const translated = new Set([
-  ...[...dictionary.matchAll(/^\s+(?:"([^"]+)"|([A-Za-z_]\w*)): "/gm)].map((match) => match[1] ?? match[2]),
-  ...Object.keys(valueDictionary),
-]);
+const i18nDir = join(src, "i18n");
+const layerOwner = new Map();
+const translated = new Set(
+  [...dictionary.matchAll(/^\s+(?:"([^"]+)"|([A-Za-z_]\w*)): "/gm)].map((match) => match[1] ?? match[2]),
+);
+for (const entry of readdirSync(i18nDir).filter((name) => name.endsWith(".json")).sort()) {
+  const layer = JSON.parse(readFileSync(join(i18nDir, entry), "utf8"));
+  for (const [key, value] of Object.entries(layer)) {
+    if (typeof value !== "string" || value.trim() === "") {
+      report(`i18n/${entry}`, 1, `translation for "${key}" is empty.`);
+    }
+    if (layerOwner.has(key)) {
+      report(`i18n/${entry}`, 1, `duplicate i18n key "${key}" already defined in i18n/${layerOwner.get(key)}. Keep each L1 layer disjoint.`);
+    } else {
+      layerOwner.set(key, entry);
+    }
+    translated.add(key);
+  }
+}
 const needsTranslation = (file, line, text) => {
-  if (!translated.has(text)) report(file, line, `"${text}" has no zh-CN entry. Add it to zhCN in src/i18n.ts.`);
+  if (!translated.has(text)) report(file, line, `"${text}" has no zh-CN entry. Add it to the appropriate JSON layer under src/i18n/.`);
 };
 
 const menu = new Set();
@@ -78,7 +92,8 @@ for (const text of readFileSync(join(src, "apps.ts"), "utf8").split("\n")) {
 for (const path of walk(src)) {
   const file = relative(src, path);
   if (vendored(file) || !/\.(ts|tsx)$/.test(file) || file.endsWith(".d.ts")) continue;
-  const lines = readFileSync(path, "utf8").split("\n");
+  const content = readFileSync(path, "utf8");
+  const lines = content.split("\n");
   const entry = file.match(/^apps\/([^/]+\/[^/]+)\.tsx?$/);
   if (entry && !menu.has(entry[1])) {
     report(file, 1, `"${entry[1]}" is not an entry in src/apps.ts. Name the file after the entry on your task card (apps/<app>/<entry>.ts); put helper files in a subfolder.`);
@@ -87,6 +102,9 @@ for (const path of walk(src)) {
     report(file, 1, "an entry file must default-export its page, for example: export default listPage({ ... }).");
   }
   if (lines.length > 600) report(file, 1, `${lines.length} lines. Keep a file under 600 lines: split it by responsibility.`);
+  if (file === "main.tsx" && (!content.includes("@astryxdesign/core/locales/zh-CN.generated.js") || !/<InternationalizationProvider[^>]*\bmessages=/.test(content))) {
+    report(file, 1, "main.tsx must wire @astryxdesign/core/locales/zh-CN.generated.js into <InternationalizationProvider messages={...}> (L0 i18n layer).");
+  }
   lines.forEach((text, index) => {
     const line = index + 1;
     const trimmed = text.trim();
@@ -126,6 +144,9 @@ for (const path of walk(src)) {
       if (between && between[1].trim()) report(file, line, `visible text "${between[1].trim()}" is not translated. Write it as {t("${between[1].trim()}")}.`);
     }
     for (const match of text.matchAll(/\bt\("([^"]+)"\)/g)) needsTranslation(file, line, match[1]);
+    if (/\bt\(`[^`]*\$\{/.test(text)) {
+      report(file, line, "dynamic template literal inside t(`...`). Use a static pattern string like t(\"Open {app}\").replace(\"{app}\", value).");
+    }
     if (file === "apps.ts" || file.startsWith("apps/") || file.startsWith("pages/")) {
       for (const match of text.matchAll(/\b(?:label|title|header|about): "([^"]+)"/g)) needsTranslation(file, line, match[1]);
     }

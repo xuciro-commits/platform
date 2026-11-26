@@ -6,6 +6,7 @@ import (
 	"path/filepath"
 	"slices"
 	"strings"
+	"unicode"
 
 	"platformserver/platform"
 	packagedesc "platformserver/services/devops/descriptor"
@@ -448,7 +449,7 @@ func readLocales(dir string) (map[string]*object, error) {
 	return out, nil
 }
 
-func expand(dir string, resources []resource, released bool, external map[string]map[string]exprField) ([]resource, error) {
+func expand(dir string, manifest *object, resources []resource, released bool, external map[string]map[string]exprField) ([]resource, error) {
 	types := map[string]map[string]exprField{}
 	for name, fields := range external {
 		types[name] = fields
@@ -474,6 +475,7 @@ func expand(dir string, resources []resource, released bool, external map[string
 	pages := map[string]bool{}
 	objects := map[string]*object{}
 	var apps []*object
+	var contracts []*object
 	for _, r := range out {
 		body := asObject(r.body)
 		if icon := text(body, "icon"); !released && icon != "" && (r.ref.Kind == "object" || r.ref.Kind == "app") && !slices.Contains(packagedesc.Icons, icon) {
@@ -495,6 +497,8 @@ func expand(dir string, resources []resource, released bool, external map[string
 			pages[r.ref.Name] = true
 		case "app":
 			apps = append(apps, body)
+		case "contract":
+			contracts = append(contracts, body)
 		}
 	}
 	for objectDir := range definitions {
@@ -518,42 +522,86 @@ func expand(dir string, resources []resource, released bool, external map[string
 		return nil, err
 	}
 	if len(locales) > 0 {
-		if len(apps) != 1 {
-			return nil, fmt.Errorf("%s: translations need exactly one application in the package", localesDir)
-		}
-		languages := asObject(apps[0].values["languages"])
-		if languages == nil {
-			languages = &object{}
-		}
 		names := make([]string, 0, len(locales))
 		for name := range locales {
 			names = append(names, name)
 		}
 		slices.Sort(names)
 		wanted := map[string]bool{}
+		if manifest != nil {
+			for _, key := range []string{"title", "description"} {
+				if s := strings.TrimSpace(text(manifest, key)); s != "" {
+					wanted[s] = true
+				}
+			}
+		}
 		for _, r := range out {
 			wording(r.body, "", "", wanted)
 		}
+		pkgLanguages := &object{}
+		if manifest != nil {
+			if existing := asObject(manifest.values["languages"]); existing != nil {
+				pkgLanguages = existing
+			}
+		}
 		for _, name := range names {
-			if languages.has(name) {
-				return nil, fmt.Errorf("%s/%s.yaml and the application both translate %s", localesDir, name, name)
+			if pkgLanguages.has(name) {
+				return nil, fmt.Errorf("%s/%s.yaml and package.yaml both translate %s", localesDir, name, name)
 			}
 			var missing []string
-			for text := range wanted {
-				if !locales[name].has(text) {
-					missing = append(missing, text)
+			for src := range wanted {
+				if !localeHas(locales[name], src) {
+					missing = append(missing, src)
 				}
 			}
 			if len(missing) > 0 {
 				slices.Sort(missing)
 				return nil, fmt.Errorf("%s/%s.yaml has no translation for %d texts: %q", localesDir, name, len(missing), missing)
 			}
-			languages.set(name, locales[name])
+			pkgLanguages.set(name, locales[name])
 		}
-		apps[0].set("languages", languages)
+		if manifest != nil {
+			manifest.set("languages", pkgLanguages)
+		}
+		for _, app := range apps {
+			languages := asObject(app.values["languages"])
+			if languages == nil {
+				languages = &object{}
+			}
+			for _, name := range names {
+				if languages.has(name) {
+					return nil, fmt.Errorf("%s/%s.yaml and the application both translate %s", localesDir, name, name)
+				}
+				languages.set(name, locales[name])
+			}
+			app.set("languages", languages)
+		}
+		if len(apps) == 0 {
+			for _, contract := range contracts {
+				languages := asObject(contract.values["languages"])
+				if languages == nil {
+					languages = &object{}
+				}
+				for _, name := range names {
+					languages.set(name, locales[name])
+				}
+				contract.set("languages", languages)
+			}
+		}
 	}
 	sortResources(out)
 	return out, nil
+}
+
+func localeHas(words *object, src string) bool {
+	if !strings.ContainsFunc(src, unicode.IsLetter) {
+		return true
+	}
+	if strings.TrimSpace(text(words, src)) != "" {
+		return true
+	}
+	upper := strings.ToUpper(src[:1]) + src[1:]
+	return strings.TrimSpace(text(words, upper)) != ""
 }
 
 func literalSource(value any) string {
@@ -577,11 +625,21 @@ func sortResources(list []resource) {
 	slices.SortFunc(list, func(a, b resource) int { return publication.CompareAssetRef(a.ref, b.ref) })
 }
 
-var worded = map[string]bool{"title": true, "plural": true, "description": true, "help": true, "oneOf": true, "message": true, "body": true, "exit": true}
+var (
+	worded      = map[string]bool{"title": true, "plural": true, "description": true, "help": true, "oneOf": true, "message": true, "body": true, "exit": true, "label": true}
+	systemRoles = map[string]bool{"": true, "*": true, "builder": true, "admin": true, "auditor": true}
+)
 
 func wording(value any, key, within string, into map[string]bool) {
 	switch v := value.(type) {
 	case *object:
+		if key == "levels" && within != "levels" {
+			for _, role := range v.order() {
+				if !systemRoles[role] {
+					into[role] = true
+				}
+			}
+		}
 		for _, k := range v.order() {
 			wording(v.values[k], k, within, into)
 		}
@@ -590,13 +648,21 @@ func wording(value any, key, within string, into map[string]bool) {
 			wording(item, key, key, into)
 		}
 	case string:
+		trimmed := strings.TrimSpace(v)
 		switch {
-		case (worded[key] || key == "group" && within == "fields") && strings.TrimSpace(v) != "":
+		case (worded[key] || key == "group" && within == "fields") && trimmed != "":
 			into[v] = true
+		case (within == "roles" || within == "read" || within == "write" || key == "role" && (within == "access" || within == "levels")) && !systemRoles[trimmed]:
+			into[trimmed] = true
 		case key == "choices":
 			for _, choice := range strings.Split(v, ",") {
-				if _, label, ok := strings.Cut(choice, ":"); ok && label != "" {
-					into[label] = true
+				choice = strings.TrimSpace(choice)
+				if _, label, ok := strings.Cut(choice, ":"); ok {
+					if strings.TrimSpace(label) != "" {
+						into[strings.TrimSpace(label)] = true
+					}
+				} else if choice != "" {
+					into[choice] = true
 				}
 			}
 		}

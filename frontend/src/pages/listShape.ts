@@ -6,6 +6,7 @@ export type ListColumn<Row> = {
   key: string;
   header: string;
   width?: number;
+  flex?: number;
   text: (row: Row) => string;
   kind?: "string" | "enum" | "number" | "date" | "time" | "code" | "member" | "person" | "email" | "phone";
   choices?: string[];

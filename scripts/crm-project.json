@@ -214,7 +214,7 @@
   },
   "install": {
     "tenant": "crm",
-    "requires": ["./frontend-fixtures/geo-0.1.1.json", "./frontend-fixtures/party-0.2.1.json"],
+    "requires": ["./frontend-fixtures/geo-0.1.2.json", "./frontend-fixtures/party-0.2.2.json"],
     "package": "./frontend-fixtures/crm-official-0.3.0.json",
     "members": {
       "root": "系统管理员",

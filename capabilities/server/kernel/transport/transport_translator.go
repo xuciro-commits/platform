@@ -1,7 +1,9 @@
 package transport
 
 import (
+	"cmp"
 	"encoding/json"
+	"platformserver/kernel/protocol"
 	"platformserver/platform"
 	"regexp"
 	"slices"
@@ -194,15 +196,28 @@ func (x *Translator) Reset() {
 	x.dictionaries = nil
 }
 
+func dictMatches(dict map[string]string, s, said string) bool {
+	if len(dict) == 0 || s == "" {
+		return false
+	}
+	if dict[s] == said {
+		return true
+	}
+	return dict[strings.ToUpper(s[:1])+s[1:]] == said
+}
+
 func (x *Translator) Origin(scope, lang, s, said string) (string, bool) {
 	x.mu.Lock()
 	conflict, packaged := x.conflicts[scope][lang][s] != "" && x.applications[scope][lang][s] == "", false
 	for _, languages := range x.applications {
-		packaged = packaged || languages[lang][s] == said
+		packaged = packaged || dictMatches(languages[lang], s, said)
 	}
 	x.mu.Unlock()
-	if x.tenant != nil && x.tenant()[lang][s] != "" {
-		return "workspace", conflict
+	if x.tenant != nil {
+		tenantWords := x.tenant()[lang]
+		if tenantWords[s] != "" || (s != "" && tenantWords[strings.ToUpper(s[:1])+s[1:]] != "") {
+			return "workspace", conflict
+		}
 	}
 	if said == s {
 		return "", conflict
@@ -217,19 +232,254 @@ func (x *Translator) SayInApp(app, lang, s string) string {
 	return x.say(app, lang, s, 0)
 }
 
-var (
-	declarationReads = map[string]bool{"settings": true, "flows": true, "agents": true}
-	messageReads     = map[string]bool{"notifications": true, "inbox": true, "requests": true, "timeline": true}
+type ReadTranslationPolicy string
+
+const (
+	ReadTranslateDeclaration ReadTranslationPolicy = "declaration"
+	ReadTranslateMessages    ReadTranslationPolicy = "messages"
+	ReadTranslatePackages    ReadTranslationPolicy = "packages"
+	ReadTranslateRawData     ReadTranslationPolicy = "raw"
 )
 
+var ReadTranslationPolicies = map[string]ReadTranslationPolicy{
+	"settings":             ReadTranslateDeclaration,
+	"flows":                ReadTranslateDeclaration,
+	"agents":               ReadTranslateDeclaration,
+	"permissions":          ReadTranslateDeclaration,
+	"contributions":        ReadTranslateDeclaration,
+	"connectors":           ReadTranslateDeclaration,
+	"ai-providers":         ReadTranslateDeclaration,
+	"ai-models":            ReadTranslateDeclaration,
+	"enterprise-metamodel": ReadTranslateDeclaration,
+	"notifications":        ReadTranslateMessages,
+	"inbox":                ReadTranslateMessages,
+	"requests":             ReadTranslateMessages,
+	"timeline":             ReadTranslateMessages,
+	"packages":             ReadTranslatePackages,
+	"members":              ReadTranslateRawData,
+	"member-directory":     ReadTranslateRawData,
+	"tenant":               ReadTranslateRawData,
+	"account":              ReadTranslateRawData,
+	"audit":                ReadTranslateRawData,
+	"deliveries":           ReadTranslateRawData,
+	"work":                 ReadTranslateRawData,
+	"endpoints":            ReadTranslateRawData,
+	"effects":              ReadTranslateRawData,
+	"health":               ReadTranslateRawData,
+	"personal-reads":       ReadTranslateRawData,
+	"access":               ReadTranslateRawData,
+	"access-requests":      ReadTranslateRawData,
+	"credentials":          ReadTranslateRawData,
+	"markings":             ReadTranslateRawData,
+	"support-grants":       ReadTranslateRawData,
+	"ai-usage":             ReadTranslateRawData,
+	"ai-limits":            ReadTranslateRawData,
+	"ai-training":          ReadTranslateRawData,
+	"runs":                 ReadTranslateRawData,
+	"memories":             ReadTranslateRawData,
+	"agent-overview":       ReadTranslateRawData,
+	"monitoring-views":     ReadTranslateRawData,
+	"release-profile":      ReadTranslateRawData,
+	"organization":         ReadTranslateRawData,
+	"enterprise":           ReadTranslateRawData,
+	"enterprise-published": ReadTranslateRawData,
+	"links":                ReadTranslateRawData,
+	"views":                ReadTranslateRawData,
+}
+
 func (x *Translator) ForRead(name string, out any, lang string) any {
-	if declarationReads[name] {
+	switch ReadTranslationPolicies[name] {
+	case ReadTranslateDeclaration:
 		out = x.Translate(out, lang)
-	}
-	if messageReads[name] {
+	case ReadTranslateMessages:
 		out = x.TranslateMessages(out, lang)
+	case ReadTranslatePackages:
+		out = x.TranslatePackages(out, lang)
 	}
 	return out
+}
+
+func dictGet(dict map[string]string, s string) string {
+	if len(dict) == 0 || s == "" {
+		return ""
+	}
+	if tr := dict[s]; tr != "" {
+		return tr
+	}
+	return dict[strings.ToUpper(s[:1])+s[1:]]
+}
+
+func descriptorDict(d platform.PackageDescriptor, lang string) map[string]string {
+	out := map[string]string{}
+	for k, v := range d.Languages[lang] {
+		if v != "" {
+			out[k] = v
+		}
+	}
+	if d.Blueprint != nil {
+		for _, asset := range d.Blueprint.Assets {
+			if asset.Ref.Kind == "app" || asset.Ref.Kind == protocol.AssetContract {
+				var holder struct {
+					Languages platform.Languages `json:"languages"`
+				}
+				if json.Unmarshal(asset.Body, &holder) == nil {
+					for k, v := range holder.Languages[lang] {
+						if v != "" && out[k] == "" {
+							out[k] = v
+						}
+					}
+				}
+			}
+		}
+	}
+	return out
+}
+
+func (x *Translator) translateDescriptor(d platform.PackageDescriptor, lang string) (platform.PackageDescriptor, func(string) string) {
+	pkgWords := descriptorDict(d, lang)
+	space := cmp.Or(d.Namespace, d.ID)
+	sayPkg := func(s string) string {
+		if lang == "" || s == "" {
+			return s
+		}
+		if x.tenant != nil {
+			if tr := dictGet(x.tenant()[lang], s); tr != "" {
+				return tr
+			}
+		}
+		if tr := dictGet(pkgWords, s); tr != "" {
+			return tr
+		}
+		return x.SayInApp(space, lang, s)
+	}
+	d.Title = sayPkg(d.Title)
+	d.Description = sayPkg(d.Description)
+	if len(d.Contributions) > 0 {
+		d.Contributions = slices.Clone(d.Contributions)
+		for i := range d.Contributions {
+			d.Contributions[i].Title = sayPkg(d.Contributions[i].Title)
+		}
+	}
+	return d, sayPkg
+}
+
+func (x *Translator) translatePrecheck(pre protocol.Precheck, lang string) protocol.Precheck {
+	if len(pre.Problems) > 0 {
+		pre.Problems = slices.Clone(pre.Problems)
+		for i := range pre.Problems {
+			pre.Problems[i] = x.Say(lang, pre.Problems[i])
+		}
+	}
+	return pre
+}
+
+func (x *Translator) TranslatePackages(v any, lang string) any {
+	if lang == "" {
+		return v
+	}
+	switch typed := v.(type) {
+	case []protocol.PackageView:
+		out := slices.Clone(typed)
+		for i := range out {
+			desc, sayPkg := x.translateDescriptor(out[i].Descriptor, lang)
+			out[i].Descriptor = desc
+			out[i].Precheck = x.translatePrecheck(out[i].Precheck, lang)
+			if out[i].Installed != nil {
+				cp := *out[i].Installed
+				cp.Title = sayPkg(cp.Title)
+				if len(cp.Contributions) > 0 {
+					cp.Contributions = slices.Clone(cp.Contributions)
+					for j := range cp.Contributions {
+						cp.Contributions[j].Title = sayPkg(cp.Contributions[j].Title)
+					}
+				}
+				out[i].Installed = &cp
+			}
+			if len(out[i].Plan.Steps) > 0 {
+				out[i].Plan.Steps = slices.Clone(out[i].Plan.Steps)
+				for j := range out[i].Plan.Steps {
+					step := &out[i].Plan.Steps[j]
+					if step.ID == desc.ID {
+						step.Title = sayPkg(step.Title)
+					} else {
+						step.Title = x.SayInApp(step.ID, lang, step.Title)
+					}
+					step.Problem = x.Say(lang, step.Problem)
+				}
+			}
+			if len(out[i].Plan.Problems) > 0 {
+				out[i].Plan.Problems = slices.Clone(out[i].Plan.Problems)
+				for j := range out[i].Plan.Problems {
+					out[i].Plan.Problems[j] = x.Say(lang, out[i].Plan.Problems[j])
+				}
+			}
+			if out[i].Removal != nil && len(out[i].Removal.Blockers) > 0 {
+				rm := *out[i].Removal
+				rm.Blockers = slices.Clone(rm.Blockers)
+				for j := range rm.Blockers {
+					rm.Blockers[j] = x.Say(lang, rm.Blockers[j])
+				}
+				out[i].Removal = &rm
+			}
+		}
+		return out
+	case protocol.PackagePreview:
+		desc, _ := x.translateDescriptor(typed.Descriptor, lang)
+		typed.Descriptor = desc
+		typed.Precheck = x.translatePrecheck(typed.Precheck, lang)
+		return typed
+	}
+	return v
+}
+
+func (x *Translator) TranslatePackageLibraries(views []protocol.PackageLibraryView, lang string) []protocol.PackageLibraryView {
+	if lang == "" || len(views) == 0 {
+		return views
+	}
+	out := slices.Clone(views)
+	for i := range out {
+		out[i].Title = x.Say(lang, out[i].Title)
+		out[i].Error = x.Say(lang, out[i].Error)
+		if len(out[i].Entries) == 0 {
+			continue
+		}
+		out[i].Entries = slices.Clone(out[i].Entries)
+		for j := range out[i].Entries {
+			entry := &out[i].Entries[j]
+			loc := entry.Locales[lang]
+			sayEntry := func(src, fromLocale string) string {
+				if src == "" {
+					return ""
+				}
+				if x.tenant != nil {
+					if tr := dictGet(x.tenant()[lang], src); tr != "" {
+						return tr
+					}
+				}
+				if fromLocale != "" {
+					return fromLocale
+				}
+				return x.SayInApp(entry.ID, lang, src)
+			}
+			entry.Title = sayEntry(entry.Title, loc.Title)
+			entry.Description = sayEntry(entry.Description, loc.Description)
+		}
+	}
+	return out
+}
+
+func (x *Translator) TranslateDecision(d platform.AuthzDecision, lang string, err *platform.Error) (platform.AuthzDecision, *platform.Error) {
+	if lang == "" {
+		return d, err
+	}
+	d.Reason = x.Say(lang, d.Reason)
+	if len(d.Layers) > 0 {
+		d.Layers = slices.Clone(d.Layers)
+		for i := range d.Layers {
+			d.Layers[i].Reason = x.Say(lang, d.Layers[i].Reason)
+		}
+	}
+	return d, x.Said(err, lang)
 }
 
 func (x *Translator) Translate(v any, lang string) any {
@@ -546,9 +796,16 @@ func ownerOf(x map[string]any, current string) string {
 	} else if schema, ok := x["schema"].(string); ok && schema != "" && strings.Contains(schema, ".") {
 		app, _, _ = strings.Cut(schema, ".")
 	}
-	for _, id := range []any{x["type"], x["object"], x["target"], x["schema"], ref["name"]} {
+	for _, id := range []any{ref["name"], x["object"], x["target"], x["schema"], x["type"]} {
 		if name, ok := id.(string); ok && strings.Contains(name, ".") {
 			return scopeOf(app, name)
+		}
+	}
+	if ref != nil {
+		for _, sub := range []any{x["managedBy"], x["project"], ref["name"]} {
+			if s, ok := sub.(string); ok && s != "" && !strings.Contains(s, ":") && s != "workspace" && s != "platform" {
+				return scopeOf(app, s+"._")
+			}
 		}
 	}
 	if name, ok := x["name"].(string); ok && name != "" {

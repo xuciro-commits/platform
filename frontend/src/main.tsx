@@ -1,5 +1,6 @@
 import "./globals.css";
 import { InternationalizationProvider } from "@astryxdesign/core/i18n";
+import astryxZhCN from "@astryxdesign/core/locales/zh-CN.generated.js";
 import { LayerProvider } from "@astryxdesign/core/Layer";
 import { LinkProvider } from "@astryxdesign/core/Link";
 import { Theme } from "@astryxdesign/core/theme";
@@ -21,6 +22,7 @@ const styles = stylex.create({
   sortHint: { opacity: { default: 0.65, [stylex.when.ancestor(":not(:hover):not(:focus-within)")]: 0 } },
 });
 
+const astryxMessages = { "zh-CN": astryxZhCN };
 const base = themes[defaultThemeSlug];
 const theme = { ...base, icons: { ...base.icons, arrowsUpDown: <ArrowUpIcon {...stylex.props(styles.sortHint)} /> } };
 
@@ -32,7 +34,7 @@ function Root() {
     document.documentElement.lang = locale;
   }, [locale]);
   return (
-    <InternationalizationProvider locale={locale}>
+    <InternationalizationProvider locale={locale} messages={astryxMessages}>
       <Theme theme={theme} mode={useAppearance()}>
         <LayerProvider>
           <LinkProvider component={RouterLink}>

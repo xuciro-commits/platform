@@ -216,7 +216,7 @@ export function RecordPage({ described, id, listPath, listTitle, instances, enti
   return (
     <Layout
       height="fill"
-      contentWidth={1260}
+      contentWidth={1600}
       header={
         <LayoutHeader padding={0} hasDivider>
           <VStack gap={4} padding={gutter} paddingBlockStart={3} paddingBlockEnd={0}>

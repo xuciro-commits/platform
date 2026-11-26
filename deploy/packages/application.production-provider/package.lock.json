@@ -3,10 +3,10 @@
   "package": "application.production-provider",
   "version": "0.1.5",
   "requires": [],
-  "artifact": "sha256:8d993bf52655f2aa4363312dfb5ae803a19d79febbcca4dc2675f6384a5284d9",
+  "artifact": "sha256:bdb9b5bcd17b95c21e5bfc9597bc5ae772f6dc8cdfc6a27d5ec12bb4e79d979c",
   "assets": {
     "app/productionprovider": {
-      "digest": "sha256:0136e1173fe8f8dc5d8a9cad5d8b575b3cf245d4bdb7f36201ffa0323ad40255",
+      "digest": "sha256:3d5cd297cdbaf41a4a15104d50e6705057eefcec23a34168e7cf7e4ad22d077d",
       "contractVersion": 1,
       "sourceVersion": "1"
     },

@@ -10,12 +10,12 @@ import { ProgressBar } from "@astryxdesign/core/ProgressBar";
 import { Section } from "@astryxdesign/core/Section";
 import { SegmentedControl, SegmentedControlItem } from "@astryxdesign/core/SegmentedControl";
 import { Skeleton } from "@astryxdesign/core/Skeleton";
-import { Table, pixel, proportional, useTableGroupedRows, useTableSelection, useTableSelectionState, useTableSortable, useTableStickyColumns } from "@astryxdesign/core/Table";
+import { Table, proportional, useTableSelection, useTableSelectionState, useTableSortable, useTableStickyColumns } from "@astryxdesign/core/Table";
 import type { TableColumn, TablePlugin } from "@astryxdesign/core/Table";
 import { ToggleButton } from "@astryxdesign/core/ToggleButton";
 import { useMediaQuery } from "@astryxdesign/core/hooks";
 import { colorVars } from "@astryxdesign/core/theme/tokens.stylex";
-import { AdjustmentsHorizontalIcon, ArrowPathIcon, Bars3BottomLeftIcon, CalendarDaysIcon, MagnifyingGlassIcon, TableCellsIcon, ViewColumnsIcon } from "@heroicons/react/24/outline";
+import { AdjustmentsHorizontalIcon, ArrowPathIcon, ArrowsPointingInIcon, ArrowsPointingOutIcon, Bars3BottomLeftIcon, CalendarDaysIcon, MagnifyingGlassIcon, TableCellsIcon, ViewColumnsIcon } from "@heroicons/react/24/outline";
 import { AdjustmentsHorizontalIcon as AdjustmentsHorizontalSolidIcon } from "@heroicons/react/24/solid";
 import * as stylex from "@stylexjs/stylex";
 import { lazy, type ReactNode, Suspense, useEffect, useMemo, useState } from "react";
@@ -25,13 +25,15 @@ import { navigate, usePath, useSearch } from "../router";
 import { PageTitle, useGutter } from "./frame";
 import { motionStyles } from "./motion";
 import { useListWindow } from "./ListWindow";
-import { type CellEdit, CellProperty } from "./PropertyField";
-import { type Chip, FilterBar } from "./ListFilters";
+import { CellProperty } from "./PropertyField";
+import { FilterBar } from "./ListFilters";
 import { ListOptions } from "./ListOptions";
-import { type Cells, dotOf, idKey, ListCell, ListDetail, targetOf, typeOf } from "./ListDetail";
+import { type Cells, idKey, ListCell, ListDetail } from "./ListDetail";
+import { buildFilterChips, columnWidthSpec, formatFilterLabel, prepareRows, type RawRow, sortPreparedRows, stuck } from "./listModel";
 import { useSavedViews } from "./SavedViews";
 import type { Dot } from "./Transitions";
-import { type Density, type GanttScale, newView, readView, hasFilters, shownMonth, type StickyEdge, type ViewSort, type ViewState } from "./view";
+import { useNestedGroupedRows } from "./useNestedGroupedRows";
+import { type GanttScale, newView, readView, hasFilters, shownMonth, type ViewSort, type ViewState } from "./view";
 
 import type { ListShape } from "./listShape";
 export type { ListColumn, ListGroup, ListShape, Move } from "./listShape";
@@ -40,26 +42,9 @@ const BoardView = lazy(() => import("./BoardView").then((module) => ({ default: 
 const CalendarView = lazy(() => import("./CalendarView").then((module) => ({ default: module.CalendarView })));
 const GanttView = lazy(() => import("./GanttView").then((module) => ({ default: module.GanttView })));
 
-type Raw = Record<string, unknown>;
-const compare = (left: unknown, right: unknown) =>
-  left instanceof Date && right instanceof Date ? left.getTime() - right.getTime()
-  : typeof left === "number" && typeof right === "number" ? left - right
-  : String(left ?? "").localeCompare(String(right ?? ""));
 const textKey = "__text";
 const fillKey = "__fill";
-const parseDay = (value: string) => {
-  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(value.trim());
-  return match ? new Date(Number(match[1]), Number(match[2]) - 1, Number(match[3])) : new Date(value);
-};
-const widthOf: Record<string, number> = { string: 148, person: 140, email: 212, phone: 144, code: 150, enum: 112, member: 116, number: 148, date: 116, time: 116, boolean: 96 };
-const headerWidth = (text: string) => [...text].reduce((sum, letter) => sum + (letter.charCodeAt(0) > 0x2e7f ? 14 : 8), 48);
-const groupPrefix = "__group_";
 const compactQuery = "(max-width: 768px), (max-width: 1024px) and (pointer: coarse) and (hover: none)";
-const operators: Record<string, string> = { is: "is", is_any_of: "is any of", greater_than_or_equal: "≥", less_than_or_equal: "≤", after: "after", before: "before", contains: "contains", is_true: "is yes", is_false: "is no" };
-const stuck = (edge: StickyEdge, keys: string[], fromEnd: boolean) => {
-  const count = edge === "one" ? 1 : edge === "two" ? 2 : 0;
-  return count === 0 ? [] : fromEnd ? keys.slice(-count) : keys.slice(0, count);
-};
 
 const styles = stylex.create({
   headerWrap: { position: "relative" },
@@ -116,6 +101,10 @@ export function ListView<Answer, Row>({ definition, read, primary, back, exportR
     setFailure(refused.message);
   };
   const group = definition.groups?.find((candidate) => candidate.key === view.group);
+  const subGroup = group && view.subGroup !== "none" && view.subGroup !== group.key ? definition.groups?.find((candidate) => candidate.key === view.subGroup) : undefined;
+  const activeGroup = group?.key ?? "none";
+  const activeSubGroup = subGroup?.key ?? "none";
+  const effectiveView = useMemo(() => ({ ...view, group: activeGroup, subGroup: activeSubGroup }), [view, activeGroup, activeSubGroup]);
   const lanes = definition.board;
   const board = view.layout === "board" ? lanes : undefined;
   const calendar = view.layout === "calendar" && definition.calendar?.fields.length ? definition.calendar : undefined;
@@ -123,24 +112,11 @@ export function ListView<Answer, Row>({ definition, read, primary, back, exportR
   const dateField = calendar ? (calendar.fields.find((field) => field.key === view.dates) ?? calendar.fields[0]).key : "";
   const orderedColumns = useMemo(() => {
     const ordered = view.columns.flatMap((key) => definition.columns.find((column) => column.key === key) ?? []);
-    const shownColumns = ordered.filter((column, position) => position === 0 || column.key !== view.group);
+    const shownColumns = ordered.filter((column, position) => position === 0 || (column.key !== activeGroup && column.key !== activeSubGroup));
     return shownColumns.length ? shownColumns : definition.columns.slice(0, 1);
-  }, [definition.columns, view.columns, view.group]);
+  }, [definition.columns, view.columns, activeGroup, activeSubGroup]);
 
-  const chips = useMemo<Chip[]>(
-    () =>
-      orderedColumns.flatMap((column): Chip[] => {
-        const base = { key: column.key, label: column.header };
-        if (column.chip === false) return [];
-        if (column.options) return [{ ...base, kind: "many", options: column.options }];
-        if (column.boolean) return [{ ...base, kind: "boolean", options: [] }];
-        if (column.kind === "enum" && column.choices?.length) return [{ ...base, kind: "many", options: column.choices.map((choice) => ({ value: choice, label: t(choice) })) }];
-        if (column.kind === "number") return [{ ...base, kind: "range", options: [] }];
-        if (column.kind === "time" || column.kind === "date") return [{ ...base, kind: "date", options: [] }];
-        return [];
-      }),
-    [orderedColumns],
-  );
+  const chips = useMemo(() => buildFilterChips(orderedColumns), [orderedColumns]);
   const fields = useMemo(
     () =>
       definition.columns
@@ -159,72 +135,26 @@ export function ListView<Answer, Row>({ definition, read, primary, back, exportR
   const textField = config.fields.find((field) => field.key === textKey);
   const textOperator = textField?.defaultOperator ?? textField?.operators[0]?.key ?? "";
   const tokens = view.search ? [...view.filters, { field: textKey, operator: textOperator, value: { type: "string" as const, value: view.search } }] : view.filters;
-  const filterLabel = (filter: PowerSearchFilter) => {
-    const column = definition.columns.find((candidate) => candidate.key === filter.field);
-    const raw = filter.value as { value?: unknown; unixSeconds?: number };
-    const name = (value: unknown) => column?.options?.find((option) => option.value === String(value))?.label ?? t(String(value ?? ""));
-    const value =
-      typeof raw.unixSeconds === "number" ? new Date(raw.unixSeconds * 1000).toLocaleDateString()
-      : Array.isArray(raw.value) ? raw.value.map(name).join(", ")
-      : raw.value == null ? ""
-      : typeof raw.value === "number" ? raw.value.toLocaleString()
-      : name(raw.value);
-    return `${t(column?.header ?? filter.field)} ${t(operators[filter.operator] ?? filter.operator)} ${value}`.trim();
-  };
+  const filterLabel = (filter: PowerSearchFilter) => formatFilterLabel(definition.columns, filter);
 
-  const all = useMemo(() => {
-    if (read.status !== "ready") return [];
-    return definition.rows(read.data).map((row) => {
-      const href = definition.link?.(row) ?? "";
-      const params = new URLSearchParams(currentSearch);
-      if (definition.carryView) params.set("view", JSON.stringify(view));
-      const cells: Cells = { [idKey]: definition.id(row), __group: group ? group.of(row) : "", __lane: board ? board.of(row) : "", __day: calendar ? calendar.of(row, dateField) : "", __start: gantt ? gantt.startOf(row) : "", __end: gantt ? gantt.endOf(row) : "", __after: gantt?.afterOf ? gantt.afterOf(row) : "", __ganttDot: gantt?.dotOf?.(row) ?? "", __href: href && definition.carryView ? href + "?" + params : href };
-      const raw: Raw = { [idKey]: cells[idKey] };
-      for (const column of definition.columns) {
-        cells[column.key] = column.text(row);
-        const dot = column.dot?.(row);
-        if (dot) cells[dotOf(column.key)] = dot;
-        const reference = cells[column.key] ? column.reference?.(row) : undefined;
-        if (reference) [cells[typeOf(column.key)], cells[targetOf(column.key)]] = [reference.type, reference.id];
-        const value = column.value ? column.value(row) : column.boolean ? cells[column.key] === t("Yes") : cells[column.key];
-        raw[column.key] = column.kind === "date" ? (value ? parseDay(String(value)) : undefined) : column.kind === "time" ? (value ? new Date(String(value)) : undefined) : value;
-      }
-      if (board?.related) cells.__related = board.related(row) ?? "";
-      if (board?.total) {
-        const amount = board.total.value(row);
-        if (amount) {
-          cells.__amount = String(amount.amount);
-          cells.__currency = amount.currency ?? "";
-        }
-      }
-      return { cells, raw, row };
-    });
-  }, [read, definition, group, board, calendar, gantt, dateField, currentSearch, view]);
+  const all = useMemo(
+    () => (read.status === "ready" ? prepareRows({ data: read.data, definition, group, subGroup, board, calendar, gantt, dateField, currentSearch, view }) : []),
+    [read, definition, group, subGroup, board, calendar, gantt, dateField, currentSearch, view],
+  );
   const rowOf = useMemo(() => new Map(all.map((entry) => [entry.cells[idKey], entry.row])), [all]);
 
   const shown = useMemo(() => {
-    if (definition.remote === "all") return all.map((entry) => entry.cells);
+    if (definition.remote === "all") return sortPreparedRows(all, view.sort, group?.order, subGroup?.order);
     const query = definition.remote === "search" ? "" : view.search.trim().toLowerCase();
     const searched = query ? all.filter((entry) => definition.columns.some((column) => (entry.cells[column.key] ?? "").toLowerCase().includes(query))) : all;
-    const passing = new Set((applyFilters(view.filters, searched.map((entry) => entry.raw) as never) as Raw[]).map((raw) => raw[idKey]));
-    const kept = searched.filter((entry) => passing.has(entry.cells[idKey]));
-    const order = group?.order;
-    if (!order && view.sort.length === 0) return kept.map((entry) => entry.cells);
-    return [...kept]
-      .sort((a, b) => {
-        if (order && a.cells.__group !== b.cells.__group) return order.indexOf(a.cells.__group) - order.indexOf(b.cells.__group);
-        for (const { sortKey, direction } of view.sort) {
-          const difference = compare(a.raw[sortKey], b.raw[sortKey]);
-          if (difference !== 0) return direction === "ascending" ? difference : -difference;
-        }
-        return 0;
-      })
-      .map((entry) => entry.cells);
-  }, [all, view.filters, view.search, view.sort, group, applyFilters, definition.columns, definition.remote]);
+    const passing = new Set((applyFilters(view.filters, searched.map((entry) => entry.raw) as never) as RawRow[]).map((raw) => raw[idKey]));
+    return sortPreparedRows(searched.filter((entry) => passing.has(entry.cells[idKey])), view.sort, group?.order, subGroup?.order);
+  }, [all, view.filters, view.search, view.sort, group, subGroup, applyFilters, definition.columns, definition.remote]);
   if (exportRef) exportRef.current = () => ({ headers: orderedColumns.map((column) => t(column.header)), rows: shown.map((cells) => orderedColumns.map((column) => cells[column.key] ?? "")) });
-  const grouped = useTableGroupedRows<Cells>({
+  const grouped = useNestedGroupedRows<Cells>({
     data: shown,
-    groupBy: (cells) => cells.__group,
+    primary: group ? { label: group.label, of: (cells) => cells.__group, order: group.order } : undefined,
+    secondary: subGroup ? { label: subGroup.label, of: (cells) => cells.__subGroup, order: subGroup.order } : undefined,
     collapsedGroups: collapsed,
     onToggleGroup: (key) =>
       setCollapsed((previous) => {
@@ -233,9 +163,8 @@ export function ListView<Answer, Row>({ definition, read, primary, back, exportR
         return next;
       }),
     getRowKey: (cells) => cells[idKey],
-    groupOrder: group?.order,
   });
-  const isHeader = (cells: Cells) => grouped.idKey(cells).startsWith(groupPrefix);
+  const isHeader = grouped.isHeader;
 
   const { selectionConfig } = useTableSelectionState<Cells>({ data: shown, idKey, selectedKeys: selected, setSelectedKeys: setSelected });
   const selection = useTableSelection<Cells>({ ...selectionConfig, getRowLabel: (cells) => cells[orderedColumns[0]?.key] || cells[idKey], hasRowHighlight: false });
@@ -284,11 +213,17 @@ export function ListView<Answer, Row>({ definition, read, primary, back, exportR
     if (targetId) { setActive(targetId); setEditing({ id: targetId, key: shift ? editableKeys[editableKeys.length - 1] : editableKeys[0] }); }
   };
 
+  const sizedColumns = orderedColumns.map((column, position) => ({
+    column,
+    position,
+    sizing: columnWidthSpec(column, position, compactSurface),
+  }));
+  const hasFlexColumn = sizedColumns.some((entry) => entry.sizing.flex);
   const columns: TableColumn<Cells>[] = [
-    ...orderedColumns.map((column, position): TableColumn<Cells> => ({
+    ...sizedColumns.map(({ column, position, sizing }): TableColumn<Cells> => ({
       key: column.key,
       header: t(column.header),
-      width: pixel(Math.max(column.width ?? (position === 0 ? (compactSurface ? 132 : widthOf[column.kind ?? "string"]) : widthOf[column.boolean ? "boolean" : column.kind ?? "string"]), headerWidth(t(column.header)))),
+      width: sizing.spec,
       sortable: true,
       align: column.kind === "number" || column.kind === "time" || column.kind === "date" ? "end" : undefined,
       renderCell: (cells) => {
@@ -299,7 +234,7 @@ export function ListView<Answer, Row>({ definition, read, primary, back, exportR
           : <ListCell column={column} cells={cells} first={position === 0} />;
       },
     })),
-    { key: fillKey, header: "", width: proportional(1, { minWidth: 0 }), renderCell: () => null },
+    ...(hasFlexColumn ? [] : [{ key: fillKey, header: "", width: proportional(1, { minWidth: 0 }), renderCell: () => null }]),
   ];
   const sortIndicator: TablePlugin<Cells> = {
     transformHeaderCell: (props) => ({ ...props, xstyle: [...props.xstyle, stylex.defaultMarker()] }),
@@ -367,10 +302,19 @@ export function ListView<Answer, Row>({ definition, read, primary, back, exportR
       compact={compactSurface}
     />
   );
-  const onGroup = (key: string) => {
-    update({ group: key });
+  const onGroups = (primary: string, secondary: string) => {
+    const nextSub = primary === "none" || secondary === primary ? "none" : secondary;
+    update({ group: primary, subGroup: nextSub });
     setCollapsed(new Set());
   };
+  const allGroupsCollapsed = grouped.l1Keys.length > 0 && grouped.l1Keys.every((key) => collapsed.has(key));
+  const collapseActions = useMemo(() => ({
+    allCollapsed: allGroupsCollapsed,
+    hasSubGroups: Boolean(subGroup && grouped.l2Keys.length > 0),
+    onExpandAll: () => setCollapsed(new Set()),
+    onExpandLevelOne: () => setCollapsed(new Set(grouped.l2Keys)),
+    onCollapseAll: () => setCollapsed(new Set(grouped.l1Keys)),
+  }), [allGroupsCollapsed, subGroup, grouped.l1Keys, grouped.l2Keys]);
   const bulk = definition.bulk?.(chosen, () => setSelected(new Set()));
   const ready = read.status === "ready";
   const empty = ready && shown.length === 0;
@@ -420,8 +364,17 @@ export function ListView<Answer, Row>({ definition, read, primary, back, exportR
                               {Boolean(definition.gantt) && <SegmentedControlItem value="gantt" label={t("Gantt")} icon={<Icon icon={Bars3BottomLeftIcon} size="sm" />} />}
                             </SegmentedControl>
                           )}
+                          {group && grouped.l1Keys.length > 0 && view.layout === "table" && (
+                            <Button
+                              label={allGroupsCollapsed ? t("Expand all") : t("Collapse all")}
+                              variant="ghost"
+                              size="sm"
+                              icon={<Icon icon={allGroupsCollapsed ? ArrowsPointingOutIcon : ArrowsPointingInIcon} size="sm" />}
+                              onClick={allGroupsCollapsed ? collapseActions.onExpandAll : collapseActions.onCollapseAll}
+                            />
+                          )}
                           <ListOptions view={view} update={update} columns={definition.columns} locked={orderedColumns[0]?.key ?? ""} defaults={fallback.columns}
-                            groups={definition.groups ?? []} onGroup={onGroup} compact={compactSurface} />
+                            groups={definition.groups ?? []} onGroups={onGroups} collapseActions={collapseActions} compact={compactSurface} />
                           {definition.savedViews && (
                             <>
                               {saved.createButton}

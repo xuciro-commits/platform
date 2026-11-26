@@ -21,7 +21,7 @@ export default dashboardPage<Api.TenantHealth>({
         { key: "state", header: "State" },
       ],
       rows: (answer) => [
-        { id: "tenant", name: t("Tenant"), state: answer.status },
+        { id: "tenant", name: t("Tenant"), state: t(answer.status) },
         ...answer.readiness.map((check) => ({
           id: check.name,
           name: t(check.name),
@@ -40,7 +40,7 @@ export default dashboardPage<Api.TenantHealth>({
       ],
       rows: (answer) => (answer.queues ?? []).map((queue) => ({
         id: queue.app,
-        app: String(queue.app),
+        app: t(String(queue.app)),
         depth: String(queue.depth),
         oldest: String(queue.oldestSeconds),
       })),

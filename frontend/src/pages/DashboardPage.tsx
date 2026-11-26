@@ -76,7 +76,7 @@ export function dashboardPage<Answer>(definition: DashboardDefinition<Answer>) {
                     const columns: TableColumn<Cells>[] = table.columns.map((column) => ({
                       key: column.key,
                       header: t(column.header),
-                      width: column.width ? pixel(column.width) : proportional(1),
+                      width: column.width ? pixel(column.width) : proportional(1, { minWidth: 68 }),
                       renderCell: (cells) => (
                         <Text type="body" maxLines={1}>
                           {cells[column.key] ?? ""}

@@ -351,7 +351,7 @@ export default function Marketplace() {
                 <Banner status="info" title={kindLabel(kind)} description={kindPlace(kind)} />
               )}
               {packages.status === "loading" && (
-                <Grid columns={{ minWidth: 320, max: 3 }} gap={4}>
+                <Grid columns={{ minWidth: 320, repeat: "fit" }} gap={4}>
                   {[0, 1, 2].map((index) => <Skeleton key={index} height={156} index={index} />)}
                 </Grid>
               )}
@@ -363,7 +363,7 @@ export default function Marketplace() {
                 />
               )}
               {packages.status !== "loading" && totalVisible > 0 && (
-                <Grid columns={{ minWidth: 320, max: 3 }} gap={4} role="list">
+                <Grid columns={{ minWidth: 320, repeat: "fit" }} gap={4} role="list">
                   {filtered.map(({ view, otherVersions }) => (
                     <PackageCard
                       key={`${view.descriptor.id}@${view.descriptor.version}`}

@@ -247,6 +247,8 @@ export function roleTitle(role: string): string {
       return t("Publisher");
     case "integrator":
       return t("Integrator");
+    case "user":
+      return t("Member");
     default:
       return t(role);
   }

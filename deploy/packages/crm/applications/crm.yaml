@@ -1,6 +1,9 @@
 icon: users
 languages:
   zh-CN:
+    "Leads, deals, organizations, contacts, tasks and notes, with lead-to-deal conversion. Built in the crm project and released through Delivery.": 线索跟进、商机转化、客户与联系人档案、任务与纪要，开箱即用的销售协作套件。
+    salesrep: 销售代表
+    salesmanager: 销售主管
     1-10: 1–10 人
     1000+: 1000 人以上
     11-50: 11–50 人

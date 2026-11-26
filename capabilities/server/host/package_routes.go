@@ -31,11 +31,11 @@ func (h *Host) routesPackages(rt *routes) {
 		} else if preview, err := t.InspectPackage(r.Context(), req); err != nil {
 			WriteJSON(w, http.StatusBadRequest, map[string]string{"error": t.Say(t.Language(m, r), err.Error())})
 		} else {
-			WriteJSON(w, http.StatusOK, preview)
+			WriteJSON(w, http.StatusOK, t.i18n.TranslatePackages(preview, t.Language(m, r)))
 		}
 	})
-	rt.authorized(transport.Route{Pattern: "GET /v1/packages/libraries", Summary: "List configured remote package libraries and their cached catalog entries", Answer: []protocol.PackageLibraryView{}}, controlowner.PlatformApp, []string{controlowner.Admin}, func(w http.ResponseWriter, r *http.Request, _ platform.Member, t *Tenant) {
-		WriteJSON(w, http.StatusOK, packages.ReadLibraries(r.Context(), t.ID, packages.EffectiveLibraries(readOnly(t, func(t *Tenant) []protocol.PackageLibrary { return t.PackageOwner.PackageLibraries() })), t.files()))
+	rt.authorized(transport.Route{Pattern: "GET /v1/packages/libraries", Summary: "List configured remote package libraries and their cached catalog entries", Answer: []protocol.PackageLibraryView{}}, controlowner.PlatformApp, []string{controlowner.Admin}, func(w http.ResponseWriter, r *http.Request, m platform.Member, t *Tenant) {
+		WriteJSON(w, http.StatusOK, t.i18n.TranslatePackageLibraries(packages.ReadLibraries(r.Context(), t.ID, packages.EffectiveLibraries(readOnly(t, func(t *Tenant) []protocol.PackageLibrary { return t.PackageOwner.PackageLibraries() })), t.files()), t.Language(m, r)))
 	})
 	rt.authorized(transport.Route{Pattern: "POST /v1/packages/libraries/refresh", Summary: "Refresh one or all configured remote package libraries", Body: protocol.PackageLibraryRefreshRequest{}, Answer: []protocol.PackageLibraryView{}}, controlowner.PlatformApp, []string{controlowner.Admin}, func(w http.ResponseWriter, r *http.Request, m platform.Member, t *Tenant) {
 		var req protocol.PackageLibraryRefreshRequest
@@ -44,7 +44,7 @@ func (h *Host) routesPackages(rt *routes) {
 		if views, err := packages.RefreshLibraries(r.Context(), t.ID, libs, req.ID, t.sender(), t.files()); err != nil {
 			WriteJSON(w, http.StatusBadRequest, map[string]string{"error": t.Say(t.Language(m, r), err.Error())})
 		} else {
-			WriteJSON(w, http.StatusOK, views)
+			WriteJSON(w, http.StatusOK, t.i18n.TranslatePackageLibraries(views, t.Language(m, r)))
 		}
 	})
 	h.routesComposition(rt)

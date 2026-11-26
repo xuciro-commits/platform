@@ -69,7 +69,7 @@ async function installPackage(session, path) {
   return descriptor;
 }
 
-const partyPackages = ["./frontend-fixtures/geo-0.1.1.json", "./frontend-fixtures/party-0.2.1.json"];
+const partyPackages = ["./frontend-fixtures/geo-0.1.2.json", "./frontend-fixtures/party-0.2.2.json"];
 
 async function members(session, sample) {
   for (const [id, entry] of Object.entries(sample.members ?? {})) {
@@ -229,12 +229,12 @@ for (const file of files) {
 const tenantPackages = {
   official: { packages: partyPackages, grants: {} },
   phone: {
-    packages: [...partyPackages, "./frontend-fixtures/call-0.1.0.json", "./frontend-fixtures/phone-0.1.1.json", "./frontend-fixtures/crm-official-0.3.1.json"],
+    packages: [...partyPackages, "./frontend-fixtures/call-0.1.0.json", "./frontend-fixtures/phone-0.1.1.json", "./frontend-fixtures/crm-official-0.3.3.json"],
     grants: { "user-1": [["party", "user"], ["phone", "agent"], ["crm", "salesrep"]], "manager-1": [["party", "user"], ["phone", "gateway"]] },
     bind: ["call/1"],
   },
   publisher: {
-    packages: [...partyPackages, "./frontend-fixtures/projects-0.1.0.json", "./frontend-fixtures/assets-0.1.0.json"],
+    packages: [...partyPackages, "./frontend-fixtures/projects-0.1.1.json", "./frontend-fixtures/assets-0.1.0.json"],
     grants: { "admin-1": [["party", "user"], ["projects", "manager"], ["assets", "custodian"]], "user-1": [["party", "user"], ["projects", "member"], ["assets", "staff"]] },
   },
 };

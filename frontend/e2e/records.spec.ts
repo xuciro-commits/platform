@@ -627,7 +627,7 @@ test("views: a published type opens with its declared default view", async ({ pa
   await expect(page.getByRole("columnheader", { name: "Region", exact: true })).toHaveCount(0);
   await page.getByRole("button", { name: "View options", exact: true }).click();
   await page.getByRole("button", { name: "Grouping", exact: true }).click();
-  await expect(page.getByRole("radio", { name: "Region", exact: true })).toBeChecked();
+  await expect(page.getByRole("radiogroup", { name: "Primary group", exact: true }).getByRole("radio", { name: "Region", exact: true })).toBeChecked();
   await page.keyboard.press("Escape");
   await expect.poll(() => requests.at(-1)?.get("sort")).toBe("company");
   const rows = page.getByRole("table").locator("tbody tr").filter({ has: page.getByRole("link") });

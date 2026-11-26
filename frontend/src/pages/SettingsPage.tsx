@@ -35,7 +35,7 @@ const icons: Record<string, IconComponent> = { boolean: PowerIcon, choice: ListB
 function Control({ setting, onCommit }: { setting: SettingItem; onCommit: (value: string) => void }) {
   if (setting.type === "boolean") return <Switch label={setting.title} isLabelHidden value={setting.value === "true"} onChange={(on) => onCommit(String(on))} />;
   if (setting.choices?.length) {
-    return <Selector label={setting.title} isLabelHidden size="sm" width={controlWidth} value={setting.value} options={setting.choices.map((choice) => ({ value: choice, label: choice }))} onChange={onCommit} />;
+    return <Selector label={setting.title} isLabelHidden size="sm" width={controlWidth} value={setting.value} options={setting.choices.map((choice) => ({ value: choice, label: t(choice) }))} onChange={onCommit} />;
   }
   return <TextSetting label={setting.title} value={setting.value} onCommit={onCommit} />;
 }
@@ -146,7 +146,7 @@ export function settingsPage<Answer>(definition: SettingsDefinition<Answer>) {
     return (
       <Layout
         height="fill"
-        contentWidth={1200}
+        contentWidth={1560}
         start={narrow ? undefined : <LayoutPanel hasDivider padding={0}>{nav}</LayoutPanel>}
         content={
           <LayoutContent role="main" padding={gutter} label={t(definition.title)}>

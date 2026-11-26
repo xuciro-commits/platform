@@ -198,7 +198,7 @@ export function SettingsTables({ title, types }: { title: string; types: string[
   return (
     <Layout
       height="auto"
-      contentWidth={1200}
+      contentWidth={1560}
       xstyle={styles.wash}
       header={
         <LayoutHeader padding={0}>

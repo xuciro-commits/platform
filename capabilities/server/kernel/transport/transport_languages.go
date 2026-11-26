@@ -157,20 +157,31 @@ func WordsOf(x *Translator, manifests []platform.Manifest, definitions []platfor
 				if d.Action != nil {
 					area = cmp.Or(area, projects[d.Action.Target])
 				}
+				if area != "" {
+					area = x.SayInApp(scopeOf(d.Ref.App, d.Ref.Name), lang, area)
+				}
 				collect(d.Ref.App, area, kind, d)
 			}
 		}
 	}
 	definitionsOf(true)
 	for _, info := range infos {
-		collect(info.App, projects[info.Type], "type", info)
+		area := projects[info.Type]
+		if area != "" {
+			area = x.SayInApp(scopeOf(info.App, info.Type), lang, area)
+		}
+		collect(info.App, area, "type", info)
 	}
 	definitionsOf(false)
 	for _, m := range manifests {
 		collect(m.ID, "", "page", map[string]any{"title": m.Title})
 		if m.Actions != nil {
 			for _, a := range m.Actions.All() {
-				collect(m.ID, projects[a.Target], "action", a)
+				area := projects[a.Target]
+				if area != "" {
+					area = x.SayInApp(scopeOf(m.ID, a.Target), lang, area)
+				}
+				collect(m.ID, area, "action", a)
 			}
 		}
 		collect(m.ID, "", "page", m.Pages)

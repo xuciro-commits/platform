@@ -7,6 +7,11 @@ const levels = ["debug", "info", "warn", "error"];
 const sources = ["request", "submit", "run", "worker", "data", "app"];
 const dots: Record<string, Dot> = { debug: "neutral", info: "accent", warn: "warning", error: "error" };
 const read = "/v1/monitoring/logs?limit=50";
+const formatLogMessage = (message: string) => {
+  const statusMatch = /^Request completed with status (\d+)$/.exec(message);
+  if (statusMatch) return `${t("Request completed with status")} ${statusMatch[1]}`;
+  return t(message);
+};
 
 export default listPage<Api.ObservationPage, Api.Observation>({
   title: "Logs",
@@ -16,14 +21,14 @@ export default listPage<Api.ObservationPage, Api.Observation>({
   more: (answer) => (answer.hasMore && answer.nextCursor ? `${read}&cursor=${encodeURIComponent(answer.nextCursor)}` : undefined),
   id: (entry) => entry.id,
   columns: [
-    { key: "message", header: "Message", text: (entry) => entry.message },
+    { key: "message", header: "Message", text: (entry) => formatLogMessage(entry.message) },
     { key: "level", header: "Level", width: 110, kind: "enum", choices: levels, text: (entry) => t(entry.level), value: (entry) => entry.level, dot: (entry) => dots[entry.level] },
     { key: "source", header: "Source", width: 110, kind: "enum", choices: sources, text: (entry) => t(entry.source), value: (entry) => entry.source },
     { key: "at", header: "When", width: 140, kind: "time", text: (entry) => entry.at },
     { key: "member", header: "Member", width: 140, kind: "member", text: (entry) => entry.member ?? "" },
     { key: "route", header: "Route", width: 220, kind: "code", text: (entry) => entry.route ?? "" },
     { key: "outcome", header: "Outcome", width: 110, hiddenByDefault: true, text: (entry) => (entry.outcome ? t(entry.outcome) : "") },
-    { key: "app", header: "App", width: 110, kind: "code", hiddenByDefault: true, text: (entry) => entry.app ?? "" },
+    { key: "app", header: "App", width: 110, hiddenByDefault: true, text: (entry) => (entry.app ? t(entry.app) : "") },
     { key: "trace", header: "Trace", kind: "code", hiddenByDefault: true, text: (entry) => entry.traceId ?? "" },
     { key: "request", header: "Request", kind: "code", hiddenByDefault: true, text: (entry) => entry.requestId ?? "" },
     { key: "attributes", header: "Attributes", kind: "code", hiddenByDefault: true, text: (entry) => Object.entries(entry.attributes ?? {}).map(([name, value]) => `${name}=${value}`).join(" ") },

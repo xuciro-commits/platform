@@ -1,8 +1,9 @@
 import { Banner } from "@astryxdesign/core/Banner";
+import { Button } from "@astryxdesign/core/Button";
 import { EmptyState } from "@astryxdesign/core/EmptyState";
 import { Icon } from "@astryxdesign/core/Icon";
 import { IconButton } from "@astryxdesign/core/IconButton";
-import { HStack, Layout, LayoutContent, LayoutHeader, LayoutPanel, VStack } from "@astryxdesign/core/Layout";
+import { HStack, Layout, LayoutContent, LayoutHeader, LayoutPanel, StackItem, VStack } from "@astryxdesign/core/Layout";
 import { ScrollableArea } from "@astryxdesign/core/ScrollableArea";
 import { Section } from "@astryxdesign/core/Section";
 import { SegmentedControl, SegmentedControlItem } from "@astryxdesign/core/SegmentedControl";
@@ -14,7 +15,7 @@ import { Text } from "@astryxdesign/core/Text";
 import { TextInput } from "@astryxdesign/core/TextInput";
 import { Timestamp } from "@astryxdesign/core/Timestamp";
 import { colorVars } from "@astryxdesign/core/theme/tokens.stylex";
-import { ArrowPathIcon, MagnifyingGlassIcon } from "@heroicons/react/24/outline";
+import { ArrowPathIcon, ArrowsPointingInIcon, ArrowsPointingOutIcon, MagnifyingGlassIcon } from "@heroicons/react/24/outline";
 import { XMarkIcon } from "@heroicons/react/24/outline";
 import * as stylex from "@stylexjs/stylex";
 import { type KeyboardEvent, type ReactNode, useCallback, useEffect, useMemo, useRef, useState } from "react";
@@ -196,11 +197,12 @@ export function treeList<Answer, Row>(definition: TreeDefinition<Answer, Row>) {
       () => (searching ? rolled(pruned(whole, (row) => definition.columns.some((column) => column.text(row).toLowerCase().includes(needle))), definition.rollup) : whole),
       [whole, searching, needle],
     );
-    const parents = useMemo(() => {
+    const treeMeta = useMemo(() => {
       const map = new Map<string, string>();
-      branches(whole, new Set(), map);
-      return map;
+      const branchIds = branches(whole, new Set(), map);
+      return { parents: map, branchIds };
     }, [whole]);
+    const parents = treeMeta.parents;
     const [manual, setManual] = useState<ReadonlySet<string> | null>(null);
     const roots = useMemo(() => new Set(whole.length === 1 && whole[0].children?.length ? [whole[0].id] : []), [whole]);
     const searched = useMemo(() => (searching ? branches(data, new Set(), new Map()) : null), [searching, data]);
@@ -276,7 +278,20 @@ export function treeList<Answer, Row>(definition: TreeDefinition<Answer, Row>) {
                   <IconButton label={t("Refresh")} tooltip={t("Refresh")} variant="ghost" size="sm" icon={<Icon icon={ArrowPathIcon} size="sm" />} onClick={reread} />
                 </HStack>} />
                 {read.status === "ready" && whole.length > 0 && (
-                  <TextInput label={t("Search this list")} isLabelHidden size="sm" value={query} onChange={setQuery} placeholder={t("Search")} startIcon={<Icon icon={MagnifyingGlassIcon} size="sm" />} />
+                  <HStack gap={2} vAlign="center">
+                    <StackItem size="fill">
+                      <TextInput label={t("Search this list")} isLabelHidden size="sm" value={query} onChange={setQuery} placeholder={t("Search")} startIcon={<Icon icon={MagnifyingGlassIcon} size="sm" />} />
+                    </StackItem>
+                    {treeMeta.branchIds.size > 0 && !searching && (
+                      <Button
+                        label={expanded.size >= treeMeta.branchIds.size ? t("Collapse all") : t("Expand all")}
+                        variant="ghost"
+                        size="sm"
+                        icon={<Icon icon={expanded.size >= treeMeta.branchIds.size ? ArrowsPointingInIcon : ArrowsPointingOutIcon} size="sm" />}
+                        onClick={() => setManual(expanded.size >= treeMeta.branchIds.size ? new Set() : new Set(treeMeta.branchIds))}
+                      />
+                    )}
+                  </HStack>
                 )}
               </VStack>
             </Section>

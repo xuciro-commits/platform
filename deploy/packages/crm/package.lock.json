@@ -3,7 +3,7 @@
   "package": "crm",
   "version": "0.1.22",
   "requires": [],
-  "artifact": "sha256:74ee52d4b04907d760f576326ebf1c4b524a3f7233022459a9be8338d4dbe003",
+  "artifact": "sha256:9544e9dffb09259afa756cbc24eb34ea23de97c1e57c4f258b45b53d7dd3fc2f",
   "assets": {
     "action/crm.contact.create": {
       "digest": "sha256:045344c0162d332f6ebd6cfc7e06e51978b5414a68a0885c958f8e8ab2d1a8f2",
@@ -71,7 +71,7 @@
       "sourceVersion": "1"
     },
     "app/crm": {
-      "digest": "sha256:66d6a2bd32131515a5942c4b0d51c632f70b1c7abc8661689332f14998eacb4a",
+      "digest": "sha256:aa80ad8e7f30cc319b4f07e0a1870c81b6b765e2d5b77c9e4d2d4164aba9b478",
       "contractVersion": 1,
       "sourceVersion": "1"
     },

@@ -12,6 +12,7 @@ export type ViewState = {
   filters: PowerSearchFilter[];
   search: string;
   group: string;
+  subGroup: string;
   lanes: string;
   dates: string;
   until: string;
@@ -27,8 +28,9 @@ const densities: Density[] = ["compact", "balanced", "spacious"];
 const edges: StickyEdge[] = ["none", "one", "two"];
 const scales: GanttScale[] = ["day", "week", "month"];
 
-export function newView(columns: string[], group = "none", lanes = ""): ViewState {
-  return { version: 1, layout: "table", columns: [...columns], sort: [], filters: [], search: "", group, lanes, dates: "", until: "", after: "", scale: "day", month: "", density: "balanced", stickyStart: "none", stickyEnd: "none" };
+export function newView(columns: string[], group = "none", lanes = "", subGroup = "none"): ViewState {
+  const normalizedSub = group === "none" || subGroup === group ? "none" : subGroup;
+  return { version: 1, layout: "table", columns: [...columns], sort: [], filters: [], search: "", group, subGroup: normalizedSub, lanes, dates: "", until: "", after: "", scale: "day", month: "", density: "balanced", stickyStart: "none", stickyEnd: "none" };
 }
 
 export function readView(raw: string | null, fallback: ViewState): ViewState {
@@ -36,6 +38,9 @@ export function readView(raw: string | null, fallback: ViewState): ViewState {
   try {
     const value = JSON.parse(raw) as Partial<ViewState>;
     if (value.version !== 1) return fallback;
+    const group = typeof value.group === "string" ? value.group : fallback.group;
+    const rawSub = typeof value.subGroup === "string" ? value.subGroup : fallback.subGroup;
+    const subGroup = group === "none" || rawSub === group ? "none" : rawSub;
     return {
       version: 1,
       layout: value.layout === "board" || value.layout === "calendar" || value.layout === "gantt" ? value.layout : "table",
@@ -43,7 +48,8 @@ export function readView(raw: string | null, fallback: ViewState): ViewState {
       sort: Array.isArray(value.sort) ? value.sort.filter((sort): sort is ViewSort => Boolean(sort && typeof sort.sortKey === "string" && (sort.direction === "ascending" || sort.direction === "descending"))) : [],
       filters: Array.isArray(value.filters) ? value.filters.filter((filter): filter is PowerSearchFilter => Boolean(filter && typeof filter.field === "string" && typeof filter.operator === "string" && filter.value)) : [],
       search: typeof value.search === "string" ? value.search : "",
-      group: typeof value.group === "string" ? value.group : fallback.group,
+      group,
+      subGroup,
       lanes: typeof value.lanes === "string" ? value.lanes : fallback.lanes,
       dates: typeof value.dates === "string" ? value.dates : fallback.dates,
       until: typeof value.until === "string" ? value.until : fallback.until,

@@ -284,8 +284,9 @@ func split(artifactPath, dir string) error {
 		return fmt.Errorf("%s already exists", dir)
 	}
 	manifest := &object{}
+	splitLocales := asObject(descriptor.values["languages"])
 	for _, key := range descriptor.order() {
-		if key != "blueprint" {
+		if key != "blueprint" && key != "languages" {
 			manifest.set(key, descriptor.values[key])
 		}
 	}
@@ -314,6 +315,9 @@ func split(artifactPath, dir string) error {
 				}
 				bodyObject.remove("schemaVersions")
 			}
+		}
+		if bodyObject := asObject(body); splitLocales != nil && bodyObject != nil && (text(ref, "kind") == "app" || text(ref, "kind") == "contract") {
+			bodyObject.remove("languages")
 		}
 		prior.Assets[key] = entry
 		assets = append(assets, resource{ref: platform.AssetRef{App: text(ref, "app"), Kind: platform.AssetKind(text(ref, "kind")), Name: text(ref, "name")}, body: body})
@@ -367,6 +371,13 @@ func split(artifactPath, dir string) error {
 			doc.set("type", typ)
 			doc.set("records", data[typ])
 			if err := writeYAML(filepath.Join(dir, dataDir, fileName(typ[strings.LastIndex(typ, ".")+1:])+".yaml"), doc); err != nil {
+				return err
+			}
+		}
+	}
+	if splitLocales != nil {
+		for _, lang := range splitLocales.order() {
+			if err := writeYAML(filepath.Join(dir, localesDir, lang+".yaml"), splitLocales.values[lang]); err != nil {
 				return err
 			}
 		}
@@ -601,7 +612,7 @@ func build(dir string, previous *platform.PackageDescriptor) (built, error) {
 	if err != nil {
 		return built{}, err
 	}
-	if resources, err = expand(dir, resources, previous != nil && previous.Version == version, external); err != nil {
+	if resources, err = expand(dir, manifest, resources, previous != nil && previous.Version == version, external); err != nil {
 		return built{}, err
 	}
 	resolver := host.PublicationResolver()
@@ -836,6 +847,57 @@ type catalogDocument struct {
 	Packages []protocol.PackageCatalogEntry `json:"packages"`
 }
 
+func descriptorLanguages(d platform.PackageDescriptor) platform.Languages {
+	out := platform.Languages{}
+	merge := func(src platform.Languages) {
+		for lang, dict := range src {
+			if out[lang] == nil {
+				out[lang] = map[string]string{}
+			}
+			for k, v := range dict {
+				if v != "" && out[lang][k] == "" {
+					out[lang][k] = v
+				}
+			}
+		}
+	}
+	merge(d.Languages)
+	if d.Blueprint != nil {
+		for _, asset := range d.Blueprint.Assets {
+			if asset.Ref.Kind == "app" || asset.Ref.Kind == "contract" {
+				var holder struct {
+					Languages platform.Languages `json:"languages"`
+				}
+				if json.Unmarshal(asset.Body, &holder) == nil {
+					merge(holder.Languages)
+				}
+			}
+		}
+	}
+	return out
+}
+
+func lookupLocaleText(dict map[string]string, src string) string {
+	if src == "" || len(dict) == 0 {
+		return ""
+	}
+	if tr := dict[src]; tr != "" {
+		return tr
+	}
+	return dict[strings.ToUpper(src[:1])+src[1:]]
+}
+
 func catalogEntry(b built, url string) protocol.PackageCatalogEntry {
-	return protocol.PackageCatalogEntry{ID: b.id, Version: b.version, Title: b.title, Description: b.description, URL: url, Sha256: b.lock.Artifact, Listing: b.listing}
+	var locales map[string]protocol.CatalogLocale
+	for lang, dict := range descriptorLanguages(b.descriptor) {
+		trTitle := lookupLocaleText(dict, b.title)
+		trDesc := lookupLocaleText(dict, b.description)
+		if trTitle != "" || trDesc != "" {
+			if locales == nil {
+				locales = map[string]protocol.CatalogLocale{}
+			}
+			locales[lang] = protocol.CatalogLocale{Title: trTitle, Description: trDesc}
+		}
+	}
+	return protocol.PackageCatalogEntry{ID: b.id, Version: b.version, Title: b.title, Description: b.description, URL: url, Sha256: b.lock.Artifact, Listing: b.listing, Locales: locales}
 }

@@ -36,7 +36,7 @@ export function MemberDirectoryEntry({ id }: { id: string }) {
     return (
       <Layout
         height="fill"
-        contentWidth={960}
+        contentWidth={1440}
         header={
           <LayoutHeader padding={0} hasDivider>
             <VStack padding={gutter} paddingBlockStart={3} paddingBlockEnd={4}>

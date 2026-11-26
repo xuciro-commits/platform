@@ -1,6 +1,6 @@
 {
   "id": "crm",
-  "version": "0.3.1",
+  "version": "0.3.3",
   "title": "CRM",
   "namespace": "crm",
   "description": "Leads with response times and qualification, a stage-based pipeline where every open deal has a next step, accounts and contacts with roles on each deal, products, activities, win and loss analysis, and a sales dashboard.",
@@ -8,6 +8,288 @@
     "party@^0.2.0",
     "call@^0.1.0"
   ],
+  "languages": {
+    "zh-CN": {
+      "1-10": "1–10 人",
+      "1000+": "1000 人以上",
+      "11-50": "11–50 人",
+      "201-500": "201–500 人",
+      "501-1000": "501–1000 人",
+      "51-200": "51–200 人",
+      "A real need, a budget range and a person who can decide are known.": "确认了真实需求、预算范围和能拍板的人。",
+      "About": "简介",
+      "Account": "客户",
+      "Account owner": "客户负责人",
+      "Accounts": "客户",
+      "Active": "启用",
+      "Activities": "活动",
+      "Activity": "活动",
+      "Address": "地址",
+      "Advertising": "广告",
+      "Amber": "琥珀",
+      "Americas": "美洲",
+      "Amount": "金额",
+      "Annual revenue": "年营业额",
+      "Asia Pacific": "亚太",
+      "Assign new leads evenly": "新线索平均分配",
+      "Assigned to": "负责人",
+      "Attempting": "尝试联系",
+      "Background": "背景",
+      "Became a deal.": "已转为商机。",
+      "Being worked.": "跟进中。",
+      "Best case": "可能",
+      "Blocker": "阻碍者",
+      "Blue": "蓝",
+      "Budget": "预算",
+      "Business": "业务",
+      "CRM": "客户关系",
+      "Call": "电话",
+      "Cancel": "取消",
+      "Canceled": "已取消",
+      "Catalog": "资料",
+      "Category": "类别",
+      "Champion": "推动者",
+      "Chose a competitor": "选了竞争对手",
+      "Close date": "成交日期",
+      "Close this deal as lost and record why.": "把商机关为丢单，并记下原因。",
+      "Close this deal as won and make its account a customer.": "把商机关为赢单，客户随之成为成交客户。",
+      "Close this lead as not worth pursuing.": "判定这条线索不值得跟进。",
+      "Closed as lost.": "已丢单。",
+      "Closed as won.": "已赢单。",
+      "Code": "编码",
+      "Color": "颜色",
+      "Commit": "承诺",
+      "Company": "公司",
+      "Competitor": "竞争对手",
+      "Competitors": "竞争对手",
+      "Complete": "完成",
+      "Connected": "已联系",
+      "Construction": "建筑",
+      "Contact": "联系人",
+      "Contact owner": "联系人负责人",
+      "Contacts": "联系人",
+      "Content": "内容",
+      "Convert to deal": "转为商机",
+      "Converted": "已转化",
+      "Create the account, contact and deal from this lead in one step; link existing ones instead when they already exist. A new account and contact also create their organization and person in Business partners.": "一步按这条线索建好客户、联系人和商机；已经有的就关联现有的。新客户、新联系人也会在往来单位里建好单位和人。",
+      "Customer": "成交客户",
+      "Customers": "客户",
+      "Cyan": "青",
+      "Deal": "商机",
+      "Deal contact": "商机联系人",
+      "Deal contacts": "商机联系人",
+      "Deal name": "商机名称",
+      "Deal owner": "商机负责人",
+      "Deal product": "商机产品",
+      "Deal products": "商机产品",
+      "Deal stage": "商机阶段",
+      "Deal stages": "商机阶段",
+      "Deals": "商机",
+      "Decision maker": "决策人",
+      "Decision role": "决策角色",
+      "Defaults to the company name.": "默认取公司名。",
+      "Defaults to today.": "默认今天。",
+      "Demo": "演示",
+      "Description": "描述",
+      "Details": "详情",
+      "Discount %": "折扣 %",
+      "Discovery": "需求确认",
+      "Disqualified": "不合格",
+      "Disqualify": "判为不合格",
+      "Disqualify reason": "不合格原因",
+      "Disqualify reasons": "不合格原因",
+      "Do not contact": "请勿联系",
+      "Done": "已完成",
+      "Done, with its outcome.": "已完成，并写了结果。",
+      "Due": "到期",
+      "Duplicate": "重复",
+      "Education": "教育",
+      "Email": "邮箱",
+      "Employees": "员工数",
+      "Energy and utilities": "能源与公用事业",
+      "Europe, Middle East and Africa": "欧洲、中东和非洲",
+      "Event": "活动会议",
+      "Existing account": "已有客户",
+      "Existing contact": "已有联系人",
+      "Existing customer": "老客户",
+      "Exit criteria": "出阶段条件",
+      "Expected close": "预计成交",
+      "Fill in the budget before converting; it becomes the deal amount.": "转换前先填预算，它会成为商机金额。",
+      "Financial services": "金融服务",
+      "First response": "首次响应",
+      "First response missed": "首次响应超时",
+      "Follow-up": "跟进",
+      "Follow-up stage": "跟进阶段",
+      "Forecast": "预测",
+      "Forecast category": "预测类别",
+      "Former customer": "前客户",
+      "Full name": "姓名",
+      "Global": "全球",
+      "Gray": "灰",
+      "Green": "绿",
+      "Healthcare": "医疗",
+      "High": "高",
+      "Hospitality": "酒店餐饮",
+      "How we win": "怎样赢",
+      "In the pipeline.": "在管道里推进。",
+      "Industries": "行业",
+      "Industry": "行业",
+      "Influencer": "影响者",
+      "Job title": "职务",
+      "Later": "更晚",
+      "Lead": "线索",
+      "Lead owner": "线索负责人",
+      "Lead source": "线索来源",
+      "Lead sources": "线索来源",
+      "Leads": "线索",
+      "Leads by source": "线索来源分布",
+      "Leave empty to create a new account from the company name.": "不选就按公司名新建客户。",
+      "Leave empty to create a new contact from the lead.": "不选就按线索新建联系人。",
+      "LinkedIn": "领英",
+      "Lost": "丢单",
+      "Lost reason": "丢单原因",
+      "Lost reasons": "丢单原因",
+      "Lost to": "输给",
+      "Low": "低",
+      "Main competitor": "主要竞争对手",
+      "Manufacturing": "制造",
+      "Mark lost": "丢单",
+      "Mark this activity done and write what happened.": "把活动标为完成，并写下结果。",
+      "Mark won": "赢单",
+      "Media": "媒体",
+      "Meeting": "会议",
+      "Met": "达成",
+      "Missed": "超时",
+      "Mobile": "手机",
+      "Need": "需求",
+      "Negotiation": "谈判",
+      "New": "新建",
+      "New leads": "每月新线索",
+      "Next step": "下一步",
+      "Next step due": "下一步到期",
+      "Next step overdue": "下一步已到期",
+      "No budget": "没有预算",
+      "No decision": "迟迟不决",
+      "No decision power": "不能拍板",
+      "No longer needed.": "不再需要。",
+      "Nonprofit": "非营利",
+      "Normal": "普通",
+      "Not a fit": "不匹配",
+      "Not worth pursuing.": "不值得跟进。",
+      "Note": "备注",
+      "Notes": "备注",
+      "Nurturing": "培育中",
+      "Open": "进行中",
+      "Open leads": "进行中的线索",
+      "Open pipeline": "进行中的管道",
+      "Orange": "橙",
+      "Organization": "往来单位",
+      "Other": "其他",
+      "Outbound": "主动开发",
+      "Outcome": "结果",
+      "Outcome notes": "结果说明",
+      "Parent territory": "上级地区",
+      "Partner": "合作伙伴",
+      "Person": "人",
+      "Phone": "电话",
+      "Pink": "粉",
+      "Pinned": "置顶",
+      "Pipeline": "管道",
+      "Pipeline by owner": "各负责人的管道",
+      "Pipeline by stage": "各阶段的管道",
+      "Position": "顺序",
+      "Price": "价格",
+      "Price and terms are agreed in principle; only paperwork remains.": "价格和条款原则上谈妥，只剩走流程。",
+      "Primary contact": "主要联系人",
+      "Priority": "优先级",
+      "Probability %": "赢率 %",
+      "Product": "产品",
+      "Product fit": "产品不合适",
+      "Products": "产品",
+      "Products total": "产品合计",
+      "Professional services": "专业服务",
+      "Proposal": "方案报价",
+      "Prospect": "潜在客户",
+      "Public sector": "公共部门",
+      "Purple": "紫",
+      "Put this activity back on the list.": "把这项活动放回待办。",
+      "Put this deal back into the pipeline with a new next step.": "把商机放回管道，并定下新的下一步。",
+      "Qualification": "资格确认",
+      "Quantity": "数量",
+      "Real estate": "房地产",
+      "Reason": "原因",
+      "Record the first response": "记下首次响应",
+      "Red": "红",
+      "Referral": "转介绍",
+      "Related to": "关联到",
+      "Relationship": "关系",
+      "Remind when a next step is overdue": "下一步到期提醒",
+      "Reopen": "重新打开",
+      "Requirements and success criteria are written down with the customer.": "和客户一起写下了需求与成功标准。",
+      "Respond by": "响应时限",
+      "Response time": "响应时效",
+      "Retail": "零售",
+      "Role": "角色",
+      "Selling": "销售",
+      "Service": "服务",
+      "Settings": "设置",
+      "Software": "软件",
+      "Source": "来源",
+      "Source lead": "来源线索",
+      "Spam": "垃圾信息",
+      "Stage": "阶段",
+      "Standard price": "标准价",
+      "Still to be done.": "还没做。",
+      "Strengths": "优势",
+      "Subject": "主题",
+      "Subscription": "订阅",
+      "Territories": "地区",
+      "Territory": "地区",
+      "Territory manager": "地区经理",
+      "The customer has the proposal and a date to decide.": "客户拿到方案，并定了决定的日期。",
+      "The decision maker has committed verbally; the contract is being signed.": "决策人已口头承诺，合同在签。",
+      "The sales side of a business partner contact. Their name, organization, job title and ways to reach them are kept once in Business partners.": "往来单位里一个联系人在销售这边的信息。姓名、单位、职务和联系方式只在往来单位里存一份。",
+      "The sales side of a business partner organization. Its name, website, industry, size and address are kept once in Business partners.": "往来单位在销售这边的信息。名称、网站、行业、规模和地址只在往来单位里存一份。",
+      "The next step on this deal is due. Do it, or set a new one.": "这个商机的下一步到期了。去做，或者定一个新的。",
+      "The single next thing that moves this deal forward.": "推动这个商机往前走的下一件事。",
+      "This activity is no longer needed.": "这项活动不再需要。",
+      "This lead passed its response time without being contacted.": "这条线索过了响应时限还没有联系。",
+      "This month": "本月",
+      "This quarter": "本季度",
+      "Timeframe": "时间",
+      "Timing": "时机不对",
+      "Title": "标题",
+      "To do": "待办",
+      "To-do": "待办事项",
+      "Transport and logistics": "运输与物流",
+      "Type": "类型",
+      "Unit price": "单价",
+      "Unknown": "未知",
+      "Unreachable": "联系不上",
+      "User": "使用者",
+      "Watch the first response time": "盯住首次响应时限",
+      "Weaknesses": "劣势",
+      "Website": "网站",
+      "Weighted amount": "加权金额",
+      "Weighted forecast": "加权预测",
+      "What problem do they want to solve, and why now?": "他们想解决什么问题，为什么是现在？",
+      "What we learned": "学到了什么",
+      "Wholesale and distribution": "批发与分销",
+      "Why we won": "赢在哪里",
+      "Win rate": "赢率",
+      "Within six months": "半年内",
+      "Won": "赢单",
+      "Won by month": "每月赢单",
+      "Won revenue": "已赢金额",
+      "Work this lead again.": "重新跟进这条线索。",
+      "Call this contact through the tenant's phone service; the call shows up in the call bar.": "经租户的电话服务拨打这位联系人；通话显示在通话条里。",
+      "Call this lead through the tenant's phone service; the call shows up in the call bar.": "经租户的电话服务拨打这条线索；通话显示在通话条里。",
+      "Call the contact or lead of this activity through the tenant's phone service; the call shows up in the call bar.": "经租户的电话服务拨打这条活动的联系人或线索；通话显示在通话条里。",
+      "Leads with response times and qualification, a stage-based pipeline where every open deal has a next step, accounts and contacts with roles on each deal, products, activities, win and loss analysis, and a sales dashboard.": "涵盖首响时效与资格认定的线索跟进、每笔在途商机必有下一步动作的阶段漏斗、客户与商机干系人角色、产品报价、跟进纪要、赢单丢单复盘与销售仪表盘。",
+      "salesrep": "销售代表",
+      "salesmanager": "销售主管"
+    }
+  },
   "blueprint": {
     "roots": [
       {
@@ -621,8 +903,12 @@
               "Won by month": "每月赢单",
               "Won revenue": "已赢金额",
               "Work this lead again.": "重新跟进这条线索。",
+              "Call this contact through the tenant's phone service; the call shows up in the call bar.": "经租户的电话服务拨打这位联系人；通话显示在通话条里。",
               "Call this lead through the tenant's phone service; the call shows up in the call bar.": "经租户的电话服务拨打这条线索；通话显示在通话条里。",
-              "Call the contact or lead of this activity through the tenant's phone service; the call shows up in the call bar.": "经租户的电话服务拨打这条活动的联系人或线索；通话显示在通话条里。"
+              "Call the contact or lead of this activity through the tenant's phone service; the call shows up in the call bar.": "经租户的电话服务拨打这条活动的联系人或线索；通话显示在通话条里。",
+              "Leads with response times and qualification, a stage-based pipeline where every open deal has a next step, accounts and contacts with roles on each deal, products, activities, win and loss analysis, and a sales dashboard.": "涵盖首响时效与资格认定的线索跟进、每笔在途商机必有下一步动作的阶段漏斗、客户与商机干系人角色、产品报价、跟进纪要、赢单丢单复盘与销售仪表盘。",
+              "salesrep": "销售代表",
+              "salesmanager": "销售主管"
             }
           }
         }
@@ -2214,6 +2500,88 @@
               "aside": true
             }
           ],
+          "actions": [
+            {
+              "title": "Call",
+              "description": "Call this contact through the tenant's phone service; the call shows up in the call bar.",
+              "uses": [
+                "call/1#dial"
+              ],
+              "transaction": {
+                "steps": [
+                  {
+                    "request": {
+                      "use": "call/1#dial",
+                      "payload": [
+                        {
+                          "field": "number",
+                          "expr": {
+                            "op": "coalesce",
+                            "kind": "text",
+                            "args": [
+                              {
+                                "op": "path",
+                                "kind": "text",
+                                "args": [
+                                  {
+                                    "op": "",
+                                    "kind": "reference",
+                                    "ref": "base"
+                                  }
+                                ],
+                                "path": [
+                                  "mobile"
+                                ]
+                              },
+                              {
+                                "op": "path",
+                                "kind": "text",
+                                "args": [
+                                  {
+                                    "op": "",
+                                    "kind": "reference",
+                                    "ref": "base"
+                                  }
+                                ],
+                                "path": [
+                                  "phone"
+                                ]
+                              }
+                            ]
+                          }
+                        },
+                        {
+                          "field": "reference",
+                          "expr": {
+                            "op": "concat",
+                            "kind": "text",
+                            "args": [
+                              {
+                                "op": "",
+                                "kind": "text",
+                                "lit": {
+                                  "value": "crm.contact/"
+                                }
+                              },
+                              {
+                                "op": "",
+                                "kind": "text",
+                                "ref": "id"
+                              }
+                            ]
+                          }
+                        }
+                      ]
+                    },
+                    "name": "request",
+                    "kind": "request"
+                  }
+                ],
+                "subject": "crm.contact"
+              },
+              "name": "dial"
+            }
+          ],
           "access": [
             {
               "role": "salesrep",
@@ -2256,6 +2624,10 @@
             },
             {
               "version": "schema.sha256.3886f4eb13d705a3d9bcc24eaf8b20b76212bc0f611ea3b2d75d58a43f69f3ed",
+              "family": 2
+            },
+            {
+              "version": "schema.sha256.71c5e5e10e71f4e220c772457640c3bc95413c8024fc6199862df7abc3e11f29",
               "family": 2
             }
           ]
@@ -4267,9 +4639,29 @@
                       {
                         "field": "organization",
                         "expr": {
-                          "op": "",
+                          "op": "coalesce",
                           "kind": "reference",
-                          "ref": "step.organization"
+                          "args": [
+                            {
+                              "op": "path",
+                              "kind": "reference",
+                              "args": [
+                                {
+                                  "op": "",
+                                  "kind": "reference",
+                                  "ref": "input.account"
+                                }
+                              ],
+                              "path": [
+                                "base"
+                              ]
+                            },
+                            {
+                              "op": "",
+                              "kind": "reference",
+                              "ref": "step.organization"
+                            }
+                          ]
                         }
                       },
                       {
@@ -4767,7 +5159,11 @@
               "family": 2
             },
             {
-              "version": "schema.sha256.d55b049eb92be2f9448ce7266ca7b4f10be429c4f827b69f20748eac61e01ed8",
+              "version": "schema.sha256.553ed6e5dfbbc03af5ca49090b32632eeb8bad21a8e3851d8fe8fc8f3d651266",
+              "family": 3
+            },
+            {
+              "version": "schema.sha256.068b98ad06bdc7df5f6cdcda81f4d7ce122d85e6695a1c2ce6f2d191a557f630",
               "family": 3
             }
           ]
