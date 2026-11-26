@@ -12,7 +12,7 @@ GOPROXY ?= https://goproxy.cn,direct
 STEP := bash scripts/make-step.sh
 export GOPROXY
 LANE := $(notdir $(CURDIR))
-export TRUNK_PORT_OFFSET ?= $(or $(word 2,$(subst :, ,$(filter $(LANE):%,a:10 b:20 c:30 x:40))),0)
+export TRUNK_PORT_OFFSET ?= $(or $(word 2,$(subst :, ,$(filter $(LANE):%,ship:10 studio:20 kit:30 fire:40))),0)
 
 .PHONY: help hooks bootstrap setup local docker infra infra-down build-compute dev dev-light host lite build bundle contract local-update packages check check-frontend verify verify-sql load-sql frontend-host frontend-dev trunk trunk-pg trunk-changed test test-pg test-voice
 

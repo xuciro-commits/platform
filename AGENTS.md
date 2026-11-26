@@ -7,7 +7,7 @@
 
 ## 开工前
 
-1. 认自己：主目录里是 lead，`.build/<名>` 里是那个执行者（[tasks](tasks/README.md)）。先跑 `node scripts/board.mjs inbox`。
+1. 认自己：主目录里是 lead，`.build/<名>` 里是那个执行者：ship、studio、kit 或 fire（[tasks](tasks/README.md)）。先跑 `node scripts/board.mjs inbox`。
 2. 看 `git status`。只动自己留下的改动；有别人的未提交改动，在看板上告诉 lead：不接着写，不替别人提交，不整理。
 3. lead 读 [plan](docs/plan.md) 与 [roadmap](docs/roadmap.md) 定下一步并派活；执行者做派给自己的 `tasks/<名>-<号>.md`，一次一项。
 4. 读这一项涉及的文档小节、实现与调用方，再动手。
@@ -87,7 +87,7 @@
 
 ## 工作方式
 
-- 负责人掌舵；lead 管大局并派活，a、b、c 各管一条车道，x 救火（[tasks](tasks/README.md)）。负责人看两样东西：plan 里的那一行，和浏览器里的界面。
+- 负责人掌舵；lead 管大局并派活，ship、studio、kit 各管一条车道，fire 救火（[tasks](tasks/README.md)）。负责人看两样东西：plan 里的那一行，和浏览器里的界面。
 - 一项任务由领到它的 Agent 端到端做完：设计、实现、核对、提交。车道内可派子代理查资料、跑检查；不把半截活交给另一个 Agent 接力。
 - 每轮开始、每次提交后、结束本轮前跑 `board inbox`；手上有活就不停，卡住换一项做。
 - 每项做完：检查，提交，`node scripts/board.mjs land` 合进 main 并推送，汇报。提交只暂存自己改的路径，不用 `git add -A` 与 `git commit -a`。

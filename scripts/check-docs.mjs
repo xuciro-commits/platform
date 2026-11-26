@@ -35,8 +35,8 @@ const guides = [
   ...inside("tasks", (file) => file),
 ];
 for (const file of guides.filter((file) => file.startsWith("tasks/"))) {
-  if (!/^tasks\/(README|(lead|a|b|c|x|open)-\d+)\.md$/.test(file)) {
-    problems.push(`${file}: tasks/ holds README.md and one file per task named <lead|a|b|c|x|open>-<number>.md (see tasks/README.md).`);
+  if (!/^tasks\/(README|(lead|ship|studio|kit|fire|open)-\d+)\.md$/.test(file)) {
+    problems.push(`${file}: tasks/ holds README.md and one file per task named <lead|ship|studio|kit|fire|open>-<number>.md (see tasks/README.md).`);
   }
 }
 const files = [...documents.map((document) => `docs/${document}.md`).filter((file) => existsSync(root + file)), ...guides.filter((file) => existsSync(root + file))];

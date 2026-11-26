@@ -1,6 +1,6 @@
-# a-2 备份与恢复
+# ship-2 备份与恢复
 
-车道：a    依赖：a-1
+车道：ship    依赖：ship-1
 能改：capabilities/server/cmd/**、capabilities/server/kernel/store/**（只加导出与导入，不改格式）、frontend/e2e/official.spec.ts、Makefile
 不碰：格式纪元与接受映像（B 级，先问 lead）
 

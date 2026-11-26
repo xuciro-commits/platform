@@ -1,6 +1,6 @@
-# a-1 重启不丢
+# ship-1 重启不丢
 
-车道：a    依赖：无
+车道：ship    依赖：无
 能改：frontend/e2e/official.spec.ts、frontend/e2e/support.ts、frontend/e2e/playwright.config.ts、capabilities/server/cmd/platform-server/**
 不碰：kernel/** 的语义（要改先按 tasks/README.md 的“内核”走）
 
