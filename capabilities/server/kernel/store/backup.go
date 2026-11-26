@@ -44,8 +44,8 @@ func validateTenantBackup(target string, identify Identify, payload TenantBackup
 	if payload.Format != TenantBackupFormat {
 		return nil, fmt.Errorf("backup format %q differs from %s", payload.Format, TenantBackupFormat)
 	}
-	if payload.Epoch != FormatEpoch {
-		return nil, fmt.Errorf("backup format epoch %d differs from host epoch %d", payload.Epoch, FormatEpoch)
+	if payload.Epoch < FrozenEpoch || payload.Epoch > FormatEpoch {
+		return nil, fmt.Errorf("backup format epoch %d is outside the epochs %d..%d this host reads", payload.Epoch, FrozenEpoch, FormatEpoch)
 	}
 	if strings.TrimSpace(target) == "" || payload.Tenant != target {
 		return nil, fmt.Errorf("backup tenant %q differs from target tenant %q", payload.Tenant, target)
@@ -59,8 +59,8 @@ func validateTenantBackup(target string, identify Identify, payload TenantBackup
 	seen := make(map[[3]string]string, len(payload.Entries))
 	for i, e := range payload.Entries {
 		seq := int64(i + 1)
-		if e.Epoch != FormatEpoch {
-			return nil, fmt.Errorf("entry %d format epoch %d differs from host epoch %d", seq, e.Epoch, FormatEpoch)
+		if e.Epoch < FrozenEpoch || e.Epoch > FormatEpoch {
+			return nil, fmt.Errorf("entry %d format epoch %d is outside the epochs %d..%d this host reads", seq, e.Epoch, FrozenEpoch, FormatEpoch)
 		}
 		if e.Kind != "accepted-result" {
 			return nil, fmt.Errorf("entry %d has unsupported kind %q", seq, e.Kind)

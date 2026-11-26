@@ -41,11 +41,15 @@ func (s *Sequence) ReplayEntries(entries []persistence.Entry, h ReplayHooks) err
 	defer s.Lane.Unlock()
 	h.Invalidate()
 	defer h.Pin(nil)
+	upgraded := make([]persistence.Entry, len(entries))
 	for i, e := range entries {
-		if e.Epoch != persistence.FormatEpoch {
-			return fmt.Errorf("entry %d: journal is format epoch %d and this host reads epoch %d; rebuild the tenant", i+1, e.Epoch, persistence.FormatEpoch)
+		u, err := persistence.Upgrade(e)
+		if err != nil {
+			return fmt.Errorf("entry %d: %v; rebuild the tenant", i+1, err)
 		}
+		upgraded[i] = u
 	}
+	entries = upgraded
 	for i, e := range entries {
 		h.Pin(e.Versions)
 		var m platform.Member

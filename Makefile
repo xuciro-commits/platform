@@ -132,13 +132,14 @@ packages:
 
 check:
 	@printf '\n\033[1mEIDOS · 后端与仓库全检\033[0m\n'
-	@$(STEP) "[1/6]" "Go 编译、vet 与代码格式" 'cd capabilities/server && $(GO) build ./... && $(GO) vet ./... && test -z "$$(gofmt -l .)" && cd ../voice && $(GO) build ./... && $(GO) vet ./... && test -z "$$(gofmt -l .)"'
-	@$(STEP) "[2/6]" "模块边界与代码形状棘轮" 'node scripts/check-boundaries.mjs'
-	@$(STEP) "[3/6]" "产品包源与快照一致" 'cd capabilities/server && $(GO) run ./cmd/pkg check -install=false -packages ../../deploy/packages'
-	@$(STEP) "[4/6]" "宿主契约零漂移校验" 'mkdir -p .build/contract && cp frontend/src/host/gen/host.ts .build/contract/host.ts && cp frontend/src/host/gen/enterprise-sdk.ts .build/contract/enterprise-sdk.ts && cp capabilities/server/services/apps/pages/page_compat.json .build/contract/page_compat.json && $(MAKE) -s contract && cmp .build/contract/host.ts frontend/src/host/gen/host.ts && cmp .build/contract/enterprise-sdk.ts frontend/src/host/gen/enterprise-sdk.ts && cmp .build/contract/page_compat.json capabilities/server/services/apps/pages/page_compat.json'
-	@$(STEP) "[5/6]" "文档预算与引用检查" 'node scripts/check-docs.mjs'
-	@$(STEP) "[6/6]" "Git 空白字符检查" 'git diff HEAD --check'
-	@printf '\033[32m✓ 全部 6 项检查通过\033[0m\n\n'
+	@$(STEP) "[1/7]" "Go 编译、vet 与代码格式" 'cd capabilities/server && $(GO) build ./... && $(GO) vet ./... && test -z "$$(gofmt -l .)" && cd ../voice && $(GO) build ./... && $(GO) vet ./... && test -z "$$(gofmt -l .)"'
+	@$(STEP) "[2/7]" "模块边界与代码形状棘轮" 'node scripts/check-boundaries.mjs'
+	@$(STEP) "[3/7]" "产品包源与快照一致" 'cd capabilities/server && $(GO) run ./cmd/pkg check -install=false -packages ../../deploy/packages'
+	@$(STEP) "[4/7]" "宿主契约零漂移校验" 'mkdir -p .build/contract && cp frontend/src/host/gen/host.ts .build/contract/host.ts && cp frontend/src/host/gen/enterprise-sdk.ts .build/contract/enterprise-sdk.ts && cp capabilities/server/services/apps/pages/page_compat.json .build/contract/page_compat.json && $(MAKE) -s contract && cmp .build/contract/host.ts frontend/src/host/gen/host.ts && cmp .build/contract/enterprise-sdk.ts frontend/src/host/gen/enterprise-sdk.ts && cmp .build/contract/page_compat.json capabilities/server/services/apps/pages/page_compat.json'
+	@$(STEP) "[5/7]" "文档预算与引用检查" 'node scripts/check-docs.mjs'
+	@$(STEP) "[6/7]" "格式纪元：冻结之后只经迁移" 'node scripts/check-epoch.mjs'
+	@$(STEP) "[7/7]" "Git 空白字符检查" 'git diff HEAD --check'
+	@printf '\033[32m✓ 全部 7 项检查通过\033[0m\n\n'
 
 check-frontend:
 	@printf '\n\033[1mEIDOS · 新前端检查与构建\033[0m\n'

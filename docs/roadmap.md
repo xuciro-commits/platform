@@ -49,7 +49,7 @@
 | CRM 包 | 产品级 | crm 20 项、official 6 项 | 升级后扩展还在：3.3b、3.3c，studio-4 |
 | 宿主：接受路径、重放、内存与文件存储 | 能用 | `capabilities/server/kernel`；十三组内核不变量；official 停机重启、备份恢复 | — |
 | PostgreSQL 存储 | 能用 | 3.1a、3.1b；trunk-pg 只跑过 official、marketplace | 全量 trunk-pg 剩两项，Build 监听器结果太大：kit-6 |
-| 格式纪元冻结 | 无 | `make check` 没有这条核对 | 3.4a，B 级：lead-2 |
+| 格式纪元冻结 | 产品级 | `kernel/store/migration.go`、`scripts/check-epoch.mjs`；K1 纪元拒绝、备份纪元拒绝 | — |
 | 构建：类型、字段、状态、动作、发布 | 能用 | `services/ontology`；builder 12 项 | 条件与表达式只能手写：studio-3 |
 | 条件与表达式编辑器 | 无 | `pages/` 里没有 `ConditionBuilder`、`ExpressionEditor` | studio-3 |
 | 结构化对比、关系图 | 能用（对比） | `RecordComparison`；builder 发布前审阅 | 关系图等客户要 |
@@ -73,7 +73,7 @@
 
 - 3.3a、3.3c 升级审阅要知道哪些附属对象挂在包的类型上、各自的版本范围：只读查询，A 级，kit-5 提前做。
 - 3.1d 导出与导入已接受条目：导入是否走接受路径、纪元在哪核对是 B 级；ship 先在看板给接口草图，lead 定。
-- 3.4a 冻结格式纪元：B 级，lead-2，在开通客户之前做。
+- 3.4a 冻结格式纪元：已做（lead-2）。
 
 ## 3.1 投产底座
 
@@ -104,7 +104,7 @@
 
 ## 3.4 开通客户
 
-- 3.4a 冻结格式纪元：`FormatEpoch` 之后的任何格式变化只经版本化迁移；`make check` 加一条核对，改纪元必须同时带迁移与用例。
+- 3.4a 已做 冻结格式纪元：`FormatEpoch` 之后的任何格式变化只经版本化迁移；`make check` 加一条核对，改纪元必须同时带迁移与用例。
 - 3.4b 导入：客户的线索、客户、联系人从 Excel 导入（沿用已有导入），按客户账号邀请同事并授 CRM 角色。
   用接近客户规模的数据在 PostgreSQL 上验收，导入期间同租户能正常查看、编辑。逐行授权和校验，混入一条无效记录时其余行正常入账，各行保留独立的幂等键和结果。
   同事务批量提交须注入明确回滚和提交结果未知两类故障。明确回滚后整批可重试，租户仍可写。用原键重试前核对是否已落盘，覆盖已提交和未提交两种结果，核对无丢失、无重复、序号连续。

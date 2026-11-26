@@ -158,8 +158,8 @@ POST /v1/submissions
 
 - `contract/proto` 是协议的唯一来源。Go 与 TypeScript 的类型由它和宿主类型生成（`make contract`），生成文件不手改。
 - 每次提交带模式版本头；接受结果的格式带版本；存储格式只经版本化迁移演进，迁移本身是接受结果。
-- 宿主声明一个格式纪元，只打开纪元相同的日志。纪元之内历史字节逐字节保留；纪元之前的格式不读取、不迁移。
-- 第一个客户租户装载之前冻结纪元；此后格式只经迁移演进。
+- 格式纪元在第一个客户租户装载之前冻结于 1（`store.FrozenEpoch`）；冻结之前的格式不读取。纪元之内历史字节逐字节保留，不改写。
+- 此后格式变化只经版本化迁移：`FormatEpoch` 每加一，`kernel/store` 带一个 `migration_<n>_<n+1>.go` 与它的用例；重放与备份导入按步升级到当前纪元。`make check` 缺一项就指名拒。
 - 错误带错误码与英文原因，原因字符串就是翻译键。
 - 修订不符用 HTTP 409，保留 `ERROR_CODE_CONFLICT`，并给可读记录附 `reasonCode: stale_revision` 与 `currentRevision`，消息按成员语言返回。
 
