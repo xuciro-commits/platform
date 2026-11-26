@@ -7,6 +7,7 @@ import { t } from "../i18n";
 import { usePageCommands } from "../shell/CommandSearch";
 import { isDangerAction, stepIntent, useAct } from "./act";
 import type { Described, Step, Values } from "./describe";
+import type { ContributedAction } from "./RecordExtensions";
 
 export type Instances = { field: string; path: string };
 export const dots = { info: "accent", success: "success", warning: "warning", danger: "error", neutral: "neutral" } as const;
@@ -19,6 +20,7 @@ export type TransitionsProps = {
   title: string;
   instances?: Instances;
   allowed?: Api.RecordAction[];
+  contributed?: ContributedAction[];
   publishProblem?: string;
   onFailure: (reason: string) => void;
 };
@@ -32,7 +34,7 @@ function Gated({ label, verdict, busy, danger, onClick }: { label: string; verdi
   );
 }
 
-export function Transitions({ described, id, values, revision, title, instances, allowed, publishProblem, onFailure }: TransitionsProps) {
+export function Transitions({ described, id, values, revision, title, instances, allowed, contributed = [], publishProblem, onFailure }: TransitionsProps) {
   const act = useAct(described);
   const lifecycle = described.lifecycle;
   const current = lifecycle ? String(values[lifecycle.field] ?? "") : "";
@@ -62,6 +64,19 @@ export function Transitions({ described, id, values, revision, title, instances,
     prefill: verdict.inputs as Values | undefined,
     onRefused: onFailure,
   });
+  const runContributed = (entry: ContributedAction) => act.run({
+    action: entry.action,
+    described: entry.described,
+    id: entry.id,
+    revision: entry.revision,
+    label: t(entry.action.title),
+    name: title,
+    danger: isDangerAction(entry.action),
+    reversible: Boolean(entry.action.reverse),
+    prefill: entry.verdict.inputs as Values | undefined,
+    perform: entry.perform,
+    onRefused: onFailure,
+  });
   const tones = ["success", "info", "neutral", "warning", "danger"];
   const toneOf = (step: Step) => lifecycle?.states.find((state) => state.name === step.transition.to[0])?.tone ?? "neutral";
   const rank = ({ step }: (typeof offered)[number]) => tones.indexOf(toneOf(step));
@@ -81,6 +96,13 @@ export function Transitions({ described, id, values, revision, title, instances,
       description: verdict.allowed ? undefined : verdict.reason,
       isDisabled: !verdict.allowed || act.busy,
       onClick: () => run(action, verdict),
+    })),
+    ...contributed.map((entry) => ({
+      id: entry.key,
+      label: t(entry.action.title),
+      description: entry.verdict.allowed ? undefined : entry.verdict.reason,
+      isDisabled: !entry.verdict.allowed || act.busy,
+      onClick: () => runContributed(entry),
     })),
   ];
 

@@ -12,7 +12,7 @@ import { Tab, TabList } from "@astryxdesign/core/TabList";
 import { Heading, Text } from "@astryxdesign/core/Text";
 import { Timestamp } from "@astryxdesign/core/Timestamp";
 import { CheckIcon, ClipboardDocumentIcon } from "@heroicons/react/24/outline";
-import { type ReactNode, useEffect, useMemo, useState } from "react";
+import { type ReactNode, useCallback, useEffect, useMemo, useState } from "react";
 import { type Api, useRead } from "../host";
 import { t } from "../i18n";
 import { originOf, usePath, useSearch } from "../router";
@@ -24,6 +24,7 @@ import { KeyboardHelp } from "./KeyboardHelp";
 import { type Editor, FieldGroup, useEditor } from "./RecordFields";
 import { RecordFiles, RecordLinks, relatedGroups } from "./RecordAttachments";
 import { Collaboration, RecordActivity } from "./RecordActivity";
+import { type ContributedAction, ExtensionHost, extensionsOf } from "./RecordExtensions";
 import { RecordLines } from "./RecordLines";
 import { ObjectPreview } from "./ObjectPreview";
 import { useOptions } from "./options";
@@ -186,6 +187,23 @@ export function RecordPage({ described, id, listPath, listTitle, instances, enti
     if (loaded) search?.remember({ href: base, label: name, type: described.type, id });
   }, [search, loaded, base, name, described.type, id]);
 
+  const extensions = useMemo(() => extensionsOf(described.type, entities, catalog), [described.type, entities, catalog]);
+  const [extActionMap, setExtActionMap] = useState<Record<string, ContributedAction[]>>({});
+  useEffect(() => {
+    setExtActionMap({});
+  }, [described.type, id]);
+  const onExtensionActions = useCallback((extType: string, next: ContributedAction[]) => {
+    setExtActionMap((previous) => {
+      const current = previous[extType] ?? [];
+      if (current.length === 0 && next.length === 0) return previous;
+      return { ...previous, [extType]: next };
+    });
+  }, []);
+  const contributedActions = useMemo(
+    () => extensions.flatMap((ext) => extActionMap[ext.type] ?? []),
+    [extensions, extActionMap],
+  );
+
   const isProjectRecord = described.type === "build.app";
   const tabs = [
     { value: "details", label: "Details" },
@@ -208,6 +226,7 @@ export function RecordPage({ described, id, listPath, listTitle, instances, enti
       title={name}
       instances={instances}
       allowed={read.status === "ready" ? read.data.actions : undefined}
+      contributed={contributedActions}
       publishProblem={definition && stateProblem(definition)}
       onFailure={setRefusal}
     />
@@ -308,6 +327,9 @@ export function RecordPage({ described, id, listPath, listTitle, instances, enti
                   {editor.stale && <VStack xstyle={motionStyles.bannerEnter}><Banner status="info" title={t("This record has new changes")} /></VStack>}
                   {refusal && <VStack xstyle={motionStyles.bannerEnter}><Banner status="error" title={t("Not done")} description={refusal} /></VStack>}
                   <FieldGroup described={detail} editor={editor} sections={body.sections} direction="horizontal-labels" focusEmpty={fresh} fold={!fresh} refs={refs} restricted={restricted} />
+                  {extensions.length > 0 && (
+                    <ExtensionHost extensions={extensions} baseId={id} catalog={catalog} showFields onActions={onExtensionActions} />
+                  )}
                   {definition && <DefinitionRows described={detail} source={definition} entities={entities} catalog={catalog} id={id} revision={kept.revision} />}
                   {described.entity.sets?.flatMap((set) => {
                     if (set.direction !== "inverse") return [];
@@ -315,6 +337,9 @@ export function RecordPage({ described, id, listPath, listTitle, instances, enti
                     return type ? <RecordLines key={set.name} parent={described.type} id={id} set={set} child={describe(type, catalog)} /> : [];
                   })}
                 </VStack>
+              )}
+              {tab !== "details" && extensions.length > 0 && (
+                <ExtensionHost extensions={extensions} baseId={id} catalog={catalog} showFields={false} onActions={onExtensionActions} />
               )}
               {tab === "changes" && (
                 <VStack gap={4}>

@@ -29,7 +29,6 @@ import {
 export function MemberRoles({ member }: { member: Api.MemberView }) {
   const toast = useToast();
   const apps = useRead<Api.AppInfo[]>("/v1/apps");
-  const packages = useRead<Api.PackageView[]>("/v1/packages");
   const permissions = useRead<Api.AppPermissions[]>("/v1/permissions");
   const catalog = useRead<Api.Action[]>("/v1/actions");
   const { nameOf: memberName } = useMemberDirectoryMap();
@@ -56,22 +55,15 @@ export function MemberRoles({ member }: { member: Api.MemberView }) {
         if (roles.length > 0) out.set(entry.id, { id: entry.id, title: entry.title || entry.id, roles });
       }
     }
-    if (packages.status === "ready" && permissions.status === "ready") {
-      const installed = new Set<string>();
-      for (const view of packages.data) {
-        if (view.installed?.state !== "active") continue;
-        for (const name of [view.installed.space, view.installed.namespace, view.descriptor.namespace]) {
-          if (name) installed.add(name);
-        }
-      }
+    if (permissions.status === "ready") {
       for (const entry of permissions.data) {
-        if (!installed.has(entry.app) || out.has(entry.app)) continue;
+        if (out.has(entry.app)) continue;
         const roles = entry.roles.map((item) => item.role).filter((r) => r !== "*");
         if (roles.length > 0) out.set(entry.app, { id: entry.app, title: entry.title || entry.app, roles });
       }
     }
     return [...out.values()];
-  }, [apps, packages, permissions]);
+  }, [apps, permissions]);
 
   const titleByApp = useMemo(() => {
     const map = new Map<string, string>();

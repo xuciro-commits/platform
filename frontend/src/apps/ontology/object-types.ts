@@ -1,3 +1,4 @@
+import { ObjectCreator } from "../../pages/ExtensionCreator";
 import { recordList } from "../../pages/RecordList";
 
 export default recordList({
@@ -8,4 +9,5 @@ export default recordList({
   fields: ["title", "name", "namespace", "state"],
   headers: { title: "Label", name: "API name", plural: "Plural" },
   instances: { field: "installed", path: "/ontology/objects" },
+  creator: ObjectCreator,
 });

@@ -2,7 +2,7 @@ import { Banner } from "@astryxdesign/core/Banner";
 import { Button } from "@astryxdesign/core/Button";
 import { HStack, VStack } from "@astryxdesign/core/Layout";
 import { MoreMenu } from "@astryxdesign/core/MoreMenu";
-import { type ComponentType, lazy, Suspense, useEffect, useMemo, useState } from "react";
+import { type ComponentType, lazy, Suspense, useCallback, useEffect, useMemo, useState } from "react";
 import { type Api, type Read, requestBlob, useRead } from "../host";
 import { t } from "../i18n";
 import { navigate, usePath, useSearch } from "../router";
@@ -15,6 +15,7 @@ const ImportWizard = lazy(() => import("./ImportWizard").then((module) => ({ def
 import { type Described, describe, numeric, type Step } from "./describe";
 import { BatchActions, canBatch } from "./BatchActions";
 import { type Options, useOptions, useRelatedCounts } from "./options";
+import { ExtensionListLoaders, type ExtensionMap, extensionListColumns, extensionsOf } from "./RecordExtensions";
 import { RecordPage } from "./RecordPage";
 import { type Dot, dots, Transitions } from "./Transitions";
 import { money, plain, present } from "./values";
@@ -65,7 +66,8 @@ function mergePage(loaded: LoadedPage, page: Api.RecordPage): LoadedPage {
 }
 
 function useRecordPages(type: string, view: ViewState, enabled: boolean, choiceValue: (field: string, value: string) => string, externalDomain: string, range: unknown[][]) {
-  const conditions = [...domainOf(view.filters, choiceValue), ...range];
+  const baseFilters = view.filters.filter((filter) => !filter.field.includes(":"));
+  const conditions = [...domainOf(baseFilters, choiceValue), ...range];
   try {
     const external = externalDomain ? (JSON.parse(externalDomain) as unknown) : [];
     if (Array.isArray(external)) conditions.push(...external.filter(Array.isArray));
@@ -73,7 +75,7 @@ function useRecordPages(type: string, view: ViewState, enabled: boolean, choiceV
     conditions.push(["id", "in", []]);
   }
   const domain = conditions.length ? JSON.stringify(conditions) : "";
-  const sort = view.sort.map((item) => (item.direction === "descending" ? "-" : "") + item.sortKey).join(",");
+  const sort = view.sort.filter((item) => !item.sortKey.includes(":")).map((item) => (item.direction === "descending" ? "-" : "") + item.sortKey).join(",");
   const signature = JSON.stringify([domain, sort, view.search]);
   const [offset, setOffset] = useState(0);
   const [loaded, setLoaded] = useState<LoadedPage>(() => noPage());
@@ -453,18 +455,40 @@ export function Records({ declared, listPath, id, back }: { declared: Declared; 
       </VStack>
     );
   }) || undefined;
+  const extensions = useMemo(
+    () => (described && !id && types.status === "ready" && actions.status === "ready" ? extensionsOf(described.type, types.data, actions.data) : []),
+    [described, id, types, actions],
+  );
+  const [extPages, setExtPages] = useState<ExtensionMap>({});
+  useEffect(() => {
+    setExtPages({});
+  }, [declared.type]);
+  const onExtPage = useCallback((extType: string, page: Api.RecordPage | undefined) => {
+    setExtPages((previous) => (previous[extType] === page ? previous : { ...previous, [extType]: page }));
+  }, []);
+  const activeExtTypes = useMemo(() => new Set(extensions.map((ext) => ext.type)), [extensions]);
+  const baseIds = useMemo(() => kept.map((row) => String(row.id)), [kept]);
+
   const bulk: RecordShape["bulk"] = described && actions.status === "ready" && actions.data.some((action) => action.target === described.type && canBatch(action, described)) && ((ids, clear) => (
     <BatchActions described={described} ids={ids} clear={clear} records={records.answer} />
   )) || undefined;
   const definition = useMemo(() => {
     if (!described) return pending;
+    const baseShape = shape(described, declared, listPath, { board, calendar, gantt, bulk, detail }, options);
+    const extColumns = extensions.length > 0
+      ? extensionListColumns(extensions, extPages, new Set(baseShape.columns.map((column) => column.header)))
+      : [];
+    const columns = extColumns.length > 0
+      ? [...baseShape.columns.slice(0, -1), ...extColumns, ...baseShape.columns.slice(-1)]
+      : baseShape.columns;
     return {
-      ...shape(described, declared, listPath, { board, calendar, gantt, bulk, detail }, options),
+      ...baseShape,
+      columns,
       remote: "all" as const,
       unfiltered: records.unfiltered,
       page: { total: records.total, loaded: records.loaded, hasMore: records.hasMore, loading: records.loading, loadMore: records.loadMore },
     };
-  }, [described, declared, listPath, pending, board, calendar, gantt, bulk, options, detail, records.total, records.unfiltered, records.loaded, records.hasMore, records.loading, records.loadMore]);
+  }, [described, declared, listPath, pending, board, calendar, gantt, bulk, options, detail, extensions, extPages, records.total, records.unfiltered, records.loaded, records.hasMore, records.loading, records.loadMore]);
   const exportList = async () => {
     setExportFailure("");
     try {
@@ -493,6 +517,9 @@ export function Records({ declared, listPath, id, back }: { declared: Declared; 
   const read: Read<Api.RecordPage> = types.status !== "ready" ? types : actions.status !== "ready" ? actions : described ? records.read : missing;
   return (
     <>
+      {extensions.length > 0 && (
+        <ExtensionListLoaders extensions={extensions} activeTypes={activeExtTypes} baseIds={baseIds} onPage={onExtPage} />
+      )}
       <ListView
         key={(described?.type ?? declared.type) + "/" + JSON.stringify(described?.entity.view ?? {})}
         definition={definition}

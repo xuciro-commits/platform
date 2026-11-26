@@ -39,8 +39,12 @@ const blank = (value: unknown) => value == null || value === "";
 const same = (left: unknown, right: unknown) => left === right || (blank(left) && blank(right)) ||
   (Array.isArray(left) && Array.isArray(right) && JSON.stringify(left) === JSON.stringify(right));
 
-export function useEditor(described: Described, id: string, values: Values, revision: number): Editor {
+type Written = Promise<{ revision: number }>;
+type WriteRecord = (patch: Values, revision: number) => Written;
+
+export function useEditor(described: Described, id: string, values: Values, revision: number, writeRecord?: WriteRecord): Editor {
   const edit = described.edit;
+  const canWrite = Boolean(edit || writeRecord);
   const [drafts, setDrafts] = useState<Values>({});
   const [status, setStatus] = useState<Record<string, InputStatus>>({});
   const [conflict, setConflict] = useState<Conflict>();
@@ -74,9 +78,10 @@ export function useEditor(described: Described, id: string, values: Values, revi
   }, [values]);
 
   const write = async (name: string, value: unknown, before: unknown, together: Values = {}) => {
-    if (!edit) return;
+    if (!canWrite) return;
     try {
-      const accepted = await send(edit, id, { ...together, [name]: value }, latest.current);
+      const patch = { ...together, [name]: value };
+      const accepted = writeRecord ? await writeRecord(patch, latest.current) : await send(edit!, id, patch, latest.current);
       latest.current = accepted.revision;
       const savedFields = [name, ...Object.keys(together)];
       for (const field of savedFields) {
@@ -100,7 +105,7 @@ export function useEditor(described: Described, id: string, values: Values, revi
         }
         return;
       }
-      const now = await request<Api.RecordView>(`/v1/records/${edit.target}/${encodeURIComponent(id)}`);
+      const now = await request<Api.RecordView>(`/v1/records/${described.type}/${encodeURIComponent(id)}`);
       const nextRevision = (now.record as { revision: number }).revision;
       const saved = plain(now.values?.[name]);
       latest.current = nextRevision;
@@ -111,7 +116,7 @@ export function useEditor(described: Described, id: string, values: Values, revi
 
   const save = (name: string, value: unknown) => {
     const before = name in origins.current ? origins.current[name] : values[name];
-    if (!edit || same(value, before) || (name in sent.current && sent.current[name] === value)) return;
+    if (!canWrite || same(value, before) || (name in sent.current && sent.current[name] === value)) return;
     const drafted = (other: string) => other !== name && other in pending.current && !same(pending.current[other], values[other]);
     const form = { ...values, ...pending.current, [name]: value };
     const controller = described.field(name)?.when?.field;
@@ -152,7 +157,7 @@ export function useEditor(described: Described, id: string, values: Values, revi
     }
   };
 
-  const text = new Set((edit?.payload ?? []).filter((parameter) => !settles(parameter, described.field(parameter.name))).map((parameter) => parameter.name));
+  const text = new Set(((edit ?? (writeRecord ? described.create : undefined))?.payload ?? []).filter((parameter) => !settles(parameter, described.field(parameter.name))).map((parameter) => parameter.name));
 
   const settle = () => {
     for (const [name, value] of Object.entries(pending.current)) if (text.has(name)) save(name, value);

@@ -57,8 +57,11 @@ export async function sendBatch(action: Api.Action, rows: BatchRow[], payload: V
   return results;
 }
 
+type Performed = Promise<{ id?: string; revision: number }>;
+
 export type Intent = {
   action: Api.Action;
+  described?: Api.EntityInfo;
   id: string;
   revision?: number;
   fixed?: Values;
@@ -73,6 +76,7 @@ export type Intent = {
   publishProblem?: string;
   reversible: boolean;
   undoAction?: Api.Action;
+  perform?: (payload: Values) => Performed;
   onRefused: (reason: string) => void;
   onDone?: () => void;
   onCancel?: () => void;
@@ -129,9 +133,12 @@ export function useAct(described?: Described) {
     firing.current = true;
     setBusy(true);
     try {
-      const kept = await send(intent.action, intent.id, intent.fixed ?? {}, intent.revision);
+      const kept = intent.perform
+        ? await intent.perform(intent.fixed ?? {})
+        : await send(intent.action, intent.id, intent.fixed ?? {}, intent.revision);
       const back = intent.undoAction ?? (intent.action.reverse ? described?.action(intent.action.reverse) : undefined);
       if (back) {
+        const targetId = kept.id ?? intent.id;
         const dismiss = toast({
           body: `${t("Done")}: ${intent.label} “${intent.name}”`,
           endContent: (
@@ -141,7 +148,7 @@ export function useAct(described?: Described) {
               onClick={async () => {
                 dismiss();
                 try {
-                  await send(back, intent.id, {}, kept.revision);
+                  await send(back, targetId, {}, kept.revision);
                 } catch (problem) {
                   toast({ body: reasonOf(problem), type: "error" });
                 }
@@ -177,7 +184,7 @@ export function useAct(described?: Described) {
   const element = !pending ? null : asked(pending) ? (
     <ActionDialog
       action={pending.action}
-      described={described?.entity}
+      described={pending.described ?? described?.entity}
       heading={pending.label}
       confirm={pending.initial ? t("Save") : pending.label}
       id={pending.id}
@@ -185,6 +192,7 @@ export function useAct(described?: Described) {
       fixed={pending.fixed}
       initial={pending.initial ?? pending.prefill}
       only={pending.only}
+      perform={pending.perform ? async (payload) => void (await pending.perform!(payload)) : undefined}
       onClose={cancel}
       onDone={() => {
         toast({ body: `${t("Done")}: ${pending.label} “${pending.name}”` });

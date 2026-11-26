@@ -170,4 +170,181 @@ test("official tenant: CRM upgrades through the marketplace with an optional fie
   await page.reload();
   await expect(property(page, "External reference")).toContainText("UPGRADE-001");
 });
+
+test("official tenant: an extension project adds fields, an action and columns to CRM leads under its own access", async () => {
+  test.setTimeout(120_000);
+  const grantRole = async (memberId: string, appTitle: string, roleLabel: string) => {
+    await page.goto(`/admin/members?member=${encodeURIComponent(memberId)}`);
+    await page.getByRole("combobox", { name: "Application", exact: true }).click();
+    await page.getByRole("option", { name: appTitle, exact: true }).click();
+    await page.getByRole("combobox", { name: "Role", exact: true }).click();
+    await page.getByRole("option", { name: roleLabel, exact: true }).click();
+    await page.getByRole("button", { name: "Grant role", exact: true }).click();
+    await expect(page.getByText(`${appTitle} · ${roleLabel}`, { exact: true })).toBeVisible();
+  };
+
+  await as("admin-1");
+  await grantRole("admin-1", "Build", "Builder");
+
+  await page.goto("/home/projects");
+  await page.getByRole("button", { name: "New", exact: true }).click();
+  const projectDialog = page.getByRole("dialog", { name: "New project", exact: true });
+  await projectDialog.getByRole("radio", { name: "Extension", exact: true }).click();
+  await projectDialog.getByRole("combobox", { name: /^Target application/ }).click();
+  await page.getByRole("option", { name: "CRM", exact: true }).click();
+  await projectDialog.getByRole("textbox", { name: /^API name/ }).fill("crmext");
+  await projectDialog.getByRole("textbox", { name: /^Name/ }).fill("CRM qualification");
+  await projectDialog.getByRole("button", { name: "Create", exact: true }).click();
+  await expect(page.getByRole("heading", { level: 1, name: "CRM qualification", exact: true })).toBeVisible();
+  await expect(page.getByRole("link", { name: "CRM qualification", exact: true })).toHaveCount(0);
+
+  await page.goto("/home/overview");
+  await page.getByRole("link", { name: "Ontology", exact: true }).first().click();
+  await page.getByRole("navigation", { name: "Primary navigation" }).getByRole("link", { name: "Object types", exact: true }).click();
+  await page.getByRole("button", { name: "New", exact: true }).click();
+  const objectDialog = page.getByRole("dialog");
+  if (await objectDialog.getByRole("combobox", { name: /^Project/ }).count()) {
+    await objectDialog.getByRole("combobox", { name: /^Project/ }).click();
+    await page.getByRole("option", { name: "CRM qualification", exact: true }).click();
+  }
+  await objectDialog.getByRole("combobox", { name: /^Extends/ }).click();
+  await page.getByRole("option", { name: "Lead · crm.lead", exact: true }).click();
+  await objectDialog.getByRole("textbox", { name: /^API name/ }).fill("leadext");
+  await objectDialog.getByRole("textbox", { name: /^Name/ }).fill("Lead qualification");
+  await objectDialog.getByRole("button", { name: "Create", exact: true }).click();
+  await expect(page.getByRole("heading", { level: 1, name: "Lead qualification", exact: true })).toBeVisible();
+  await expect(page.getByRole("cell", { name: "base", exact: true })).toBeVisible();
+
+  for (const [name, label] of [["sourcechannel", "Source channel"], ["verifiednote", "Qualification note"]] as const) {
+    await page.getByRole("button", { name: "Add field", exact: true }).click();
+    const fieldDialog = page.getByRole("dialog");
+    await fieldDialog.getByRole("textbox", { name: /^Name/ }).fill(name);
+    await fieldDialog.getByRole("textbox", { name: /^Label/ }).fill(label);
+    await fieldDialog.getByRole("combobox", { name: /^Type/ }).click();
+    await page.getByRole("option", { name: "text", exact: true }).click();
+    await fieldDialog.getByRole("button", { name: "Save", exact: true }).click();
+    await expect(fieldDialog).toBeHidden();
+  }
+
+  await page.getByRole("button", { name: "Add access rule", exact: true }).click();
+  const repRule = page.getByRole("dialog");
+  await repRule.getByRole("textbox", { name: /^Role/ }).fill("salesrep");
+  await repRule.getByRole("checkbox", { name: "Create", exact: true }).click();
+  await repRule.getByRole("checkbox", { name: "Edit", exact: true }).click();
+  await repRule.getByRole("button", { name: "Save", exact: true }).click();
+  await expect(repRule).toBeHidden();
+
+  await page.getByRole("button", { name: "Add access rule", exact: true }).click();
+  const managerRule = page.getByRole("dialog");
+  await managerRule.getByRole("textbox", { name: /^Role/ }).fill("salesmanager");
+  await managerRule.getByRole("button", { name: "Save", exact: true }).click();
+  await expect(managerRule).toBeHidden();
+
+  await page.getByRole("button", { name: "Create action", exact: true }).click();
+  const actionDialog = page.getByRole("dialog", { name: "Create action", exact: true });
+  await actionDialog.getByRole("textbox", { name: /^API name/ }).fill("verify");
+  await actionDialog.getByRole("textbox", { name: /^What people call it/ }).fill("Verify qualification");
+  await actionDialog.getByRole("combobox", { name: /^Field to update/ }).click();
+  await page.getByRole("option", { name: "Qualification note", exact: true }).click();
+  await actionDialog.getByRole("combobox", { name: /^Taken by/ }).click();
+  await page.getByRole("option", { name: "salesrep", exact: true }).click();
+  await actionDialog.getByRole("heading", { name: "Create action", exact: true }).click();
+  await actionDialog.getByRole("button", { name: "Save", exact: true }).click();
+  await expect(actionDialog).toBeHidden();
+  await expect(page.getByText("Transitions use the linked action types.", { exact: true })).toBeVisible();
+
+  await page.getByRole("button", { name: "Publish", exact: true }).click();
+  const publish = page.getByRole("dialog", { name: /Publish/ });
+  await publish.getByRole("button", { name: "Publish", exact: true }).click();
+  await expect(publish).toBeHidden();
+  await expect(page.getByText("Published", { exact: true }).first()).toBeVisible();
+
+  await grantRole("rep-1", "Crmext", "salesrep");
+  await grantRole("manager-1", "Crmext", "salesmanager");
+
+  await page.goto("/delivery/installations");
+  await expect(page.getByRole("listitem").filter({ hasText: /^CRM/ })).toContainText("0.3.2");
+
+  await as("rep-1");
+  await crm("Leads");
+  await page.getByRole("button", { name: "New", exact: true }).click();
+  const newLead = page.getByRole("dialog");
+  await newLead.getByRole("textbox", { name: "Full name" }).fill("陆衡");
+  await newLead.getByRole("button", { name: "Create", exact: true }).click();
+  await expect(page.getByRole("heading", { name: "陆衡", exact: true }).first()).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Lead qualification", exact: true })).toBeVisible();
+
+  await edit(page, "Source channel");
+  const channelInput = page.getByRole("textbox", { name: "Source channel", exact: true });
+  await channelInput.fill("行业峰会");
+  await channelInput.press("Enter");
+  await expect(property(page, "Source channel")).toContainText("行业峰会");
+
+  await page.getByRole("button", { name: "More actions", exact: true }).click();
+  await page.getByRole("menuitem", { name: "Verify qualification", exact: true }).click();
+  const verifyDialog = page.getByRole("dialog", { name: "Verify qualification", exact: true });
+  await verifyDialog.getByRole("textbox", { name: /^Qualification note/ }).fill("预算与决策链已核实");
+  await verifyDialog.getByRole("button", { name: "Verify qualification", exact: true }).click();
+  await expect(verifyDialog).toBeHidden();
+  await expect(property(page, "Qualification note")).toContainText("预算与决策链已核实");
+  await page.reload();
+  await expect(property(page, "Source channel")).toContainText("行业峰会");
+  await expect(property(page, "Qualification note")).toContainText("预算与决策链已核实");
+
+  await crm("Leads");
+  await page.getByRole("radio", { name: "Table" }).click();
+  await page.getByRole("button", { name: "View options", exact: true }).click();
+  await page.getByRole("button", { name: "Add Source channel", exact: true }).click();
+  await page.getByRole("button", { name: "Add Qualification note", exact: true }).click();
+  await page.keyboard.press("Escape");
+  await expect(page.getByRole("columnheader", { name: "Source channel", exact: true })).toBeVisible();
+  await expect(page.getByRole("cell", { name: "行业峰会", exact: true })).toBeVisible();
+  await expect(page.getByRole("cell", { name: "预算与决策链已核实", exact: true })).toBeVisible();
+
+  await as("manager-1");
+  await crm("Leads");
+  await page.getByRole("radio", { name: "Table" }).click();
+  await page.getByRole("button", { name: "View options", exact: true }).click();
+  await page.getByRole("button", { name: "Add Source channel", exact: true }).click();
+  await page.keyboard.press("Escape");
+  await expect(page.getByRole("cell", { name: "行业峰会", exact: true })).toBeVisible();
+  await page.getByRole("main").getByRole("link", { name: "陆衡", exact: true }).first().click();
+  await expect(page.getByRole("heading", { name: "Lead qualification", exact: true })).toBeVisible();
+  await expect(property(page, "Source channel")).toContainText("行业峰会");
+  await expect(property(page, "Qualification note")).toContainText("预算与决策链已核实");
+  await expect(page.getByRole("button", { name: "Edit Source channel", exact: true })).toHaveCount(0);
+  const managerMenu = page.getByRole("button", { name: "More actions", exact: true });
+  if (await managerMenu.count()) {
+    await managerMenu.click();
+    await expect(page.getByRole("menuitem", { name: "Verify qualification", exact: true })).toHaveCount(0);
+    await page.keyboard.press("Escape");
+  }
+
+  await as("rep-2");
+  await crm("Leads");
+  await page.getByRole("radio", { name: "Table" }).click();
+  await page.getByRole("button", { name: "View options", exact: true }).click();
+  await expect(page.getByRole("button", { name: "Add Source channel", exact: true })).toHaveCount(0);
+  await page.keyboard.press("Escape");
+  await page.getByRole("button", { name: "New", exact: true }).click();
+  const otherLead = page.getByRole("dialog");
+  await otherLead.getByRole("textbox", { name: "Full name" }).fill("沈岚");
+  await otherLead.getByRole("button", { name: "Create", exact: true }).click();
+  await expect(page.getByRole("heading", { name: "沈岚", exact: true }).first()).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Lead qualification", exact: true })).toHaveCount(0);
+  const rep2Menu = page.getByRole("button", { name: "More actions", exact: true });
+  if (await rep2Menu.count()) {
+    await rep2Menu.click();
+    await expect(page.getByRole("menuitem", { name: "Verify qualification", exact: true })).toHaveCount(0);
+    await page.keyboard.press("Escape");
+  }
+  const deniedStatus = await page.evaluate(async () => {
+    const session = JSON.parse(sessionStorage.getItem("platform:session")!) as { token: string; tenant: string };
+    const response = await fetch("/v1/records/crmext.leadext?limit=5", {
+      headers: { Authorization: `Bearer ${session.token}`, "Platform-Tenant": session.tenant },
+    });
+    return response.status;
+  });
+  expect(deniedStatus).toBeGreaterThanOrEqual(400);
+});
 });

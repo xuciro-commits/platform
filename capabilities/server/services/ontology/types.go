@@ -37,7 +37,7 @@ type Object struct {
 	ActionTypes       []platform.AssetBinding      `json:"actionTypes,omitempty" rail:"true" type:"json" title:"Action types"`
 	Actions           []Action                     `json:"actions,omitempty" field:"aside" title:"Actions"`
 	Records           []json.RawMessage            `json:"records,omitempty" type:"json" field:"aside" title:"Reference records" help:"Rows shipped with the type, such as the stages of a pipeline; a publish or an install adds the ones this workspace lacks"`
-	Access            []Access                     `json:"access,omitempty" field:"aside" title:"Access"`
+	Access            []Access                     `json:"access,omitempty" rail:"true" title:"Access"`
 	Scope             *ObjectScope                 `json:"scope,omitempty" type:"json" field:"aside" title:"Scope fields"`
 	Implements        []string                     `json:"implements,omitempty" field:"aside" title:"Implements" help:"Interfaces whose fields this object has, e.g. core.coded"`
 	Extends           string                       `json:"extends,omitempty" field:"aside" title:"Extends" help:"The installed object type this object adds fields to, e.g. core.person; records pair one to one through the base field"`

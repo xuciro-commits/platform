@@ -9,25 +9,26 @@ import { MultiSelector } from "@astryxdesign/core/MultiSelector";
 import { Selector } from "@astryxdesign/core/Selector";
 import { Table, TableBody, TableCell, TableHeader, TableHeaderCell, TableRow } from "@astryxdesign/core/Table";
 import { Heading, Text } from "@astryxdesign/core/Text";
-import { TextInput } from "@astryxdesign/core/TextInput";
 import { Typeahead } from "@astryxdesign/core/Typeahead";
 import { useRef, useState } from "react";
-import { type Api, request, reread, useRead } from "../host";
+import { type Api, reread, useRead } from "../host";
 import { t } from "../i18n";
 import { reasonOf, send } from "./act";
+import { AccessDialog, ActionTypeDialog, type ActionTypeRow, TransitionDialog } from "./DefinitionActions";
 import type { Described, Values } from "./describe";
 import { useListFlip } from "./motion";
 import { ParameterInput, enterable } from "./ParameterInput";
 import { present, shown } from "./values";
 
-type DefinitionRow = Values & { name?: string; title?: string; from?: string[]; transaction?: Api.BusinessTxn };
-type Slot = "fields" | "states" | "actions";
+type DefinitionRow = Values & { name?: string; title?: string; role?: string; from?: string[]; transaction?: Api.BusinessTxn };
+type Slot = "fields" | "states" | "actions" | "access";
 const fromStates = "from";
-const slots: Slot[] = ["fields", "states", "actions"];
+const slots: Slot[] = ["fields", "states", "actions", "access"];
 const metadata = {
   fields: { title: "Fields", add: "Add field", show: ["name", "title", "type", "group"], edit: ["name", "title", "type", "choices", "ref", "required", "search", "group", "aside", "when"] },
   states: { title: "States", add: "Add state", show: ["name", "title", "tone"], edit: ["name", "title", "tone", "description"] },
   actions: { title: "Transitions", add: "Add transition", show: ["name", "title", fromStates, "to"], edit: ["name", "title", fromStates, "to", "description"] },
+  access: { title: "Access", add: "Add access rule", show: ["role", "read", "create", "edit", "archive"], edit: ["role", "read", "create", "edit", "archive"] },
 };
 
 function rowsOf(source: Values, slot: Slot): DefinitionRow[] {
@@ -60,17 +61,20 @@ export function stateProblem(source: Values) {
 
 export function DefinitionRows({ described, source, entities, catalog, id, revision }: { described: Described; source: Values; entities: Api.EntityInfo[]; catalog: Api.Action[]; id: string; revision: number }) {
   const [acceptedRevision, setAcceptedRevision] = useState(revision);
+  const fields = rowsOf(source, "fields");
   const states = rowsOf(source, "states");
+  const access = rowsOf(source, "access");
   const bound = Array.isArray(source.actionTypes) && source.actionTypes.length > 0;
+  const isExtension = Boolean(source.extends);
   const edit = described.edit;
   return slots.map((slot) => {
     const field = described.field(slot);
     if (!field) return null;
     const action = edit?.payload.find((parameter) => parameter.name === slot);
     return (
-      <DefinitionTable key={slot} slot={slot} field={field} rows={rowsOf(source, slot)} states={states} entities={entities}
-        subject={`${String(source.namespace || "build")}.${source.name}`}
-        bound={slot === "actions" && bound}
+      <DefinitionTable key={slot} slot={slot} field={field} rows={rowsOf(source, slot)} fields={fields} states={states} access={access}
+        entities={entities} subject={`${String(source.namespace || "build")}.${source.name}`}
+        bound={slot === "actions" && bound} isExtension={isExtension}
         catalog={catalog}
         objectId={id}
         objectRevision={revision}
@@ -78,6 +82,7 @@ export function DefinitionRows({ described, source, entities, catalog, id, revis
         save={action && edit ? async (rows) => {
           const accepted = await send(edit, id, { [slot]: rows }, revision);
           setAcceptedRevision(accepted.revision);
+          reread();
         } : undefined} />
     );
   });
@@ -86,10 +91,10 @@ export function DefinitionRows({ described, source, entities, catalog, id, revis
 type SavedRows = Promise<void>;
 type SaveRows = (rows: DefinitionRow[]) => SavedRows;
 
-function DefinitionTable({ slot, field, rows, states, entities, subject, bound, catalog, objectId, objectRevision, refreshing, save }: {
-  slot: Slot; field: Api.FieldInfo; rows: DefinitionRow[]; states: DefinitionRow[]; entities: Api.EntityInfo[];
-  subject: string; bound: boolean; catalog: Api.Action[]; objectId: string; objectRevision: number;
-  refreshing: boolean; save?: SaveRows;
+function DefinitionTable({ slot, field, rows, fields: objectFields, states, access, entities, subject, bound, isExtension, catalog, objectId, objectRevision, refreshing, save }: {
+  slot: Slot; field: Api.FieldInfo; rows: DefinitionRow[]; fields: DefinitionRow[]; states: DefinitionRow[]; access: DefinitionRow[];
+  entities: Api.EntityInfo[]; subject: string; bound: boolean; isExtension: boolean; catalog: Api.Action[];
+  objectId: string; objectRevision: number; refreshing: boolean; save?: SaveRows;
 }) {
   const schema = metadata[slot];
   const title = t(schema.title);
@@ -99,16 +104,27 @@ function DefinitionTable({ slot, field, rows, states, entities, subject, bound, 
   const [saving, setSaving] = useState(false);
   const busy = saving || refreshing;
   const [creatingTransition, setCreatingTransition] = useState(false);
+  const [creatingAction, setCreatingAction] = useState(false);
+  const actionDomain = encodeURIComponent(JSON.stringify([["object", "=", subject]]));
+  const linkedActions = useRead<Api.RecordPage>(slot === "actions" && bound ? `/v1/records/build.actiontype?domain=${actionDomain}&limit=200` : null);
+  const linkedRows: DefinitionRow[] = slot === "actions" && bound && linkedActions.status === "ready"
+    ? (linkedActions.data.records as ActionTypeRow[]).map((item) => ({
+        name: item.definition?.name ?? item.name,
+        title: item.definition?.title ?? item.title,
+        from: item.definition?.from ?? [],
+      }))
+    : [];
+  const displayedRows = slot === "actions" && bound && rows.length === 0 ? linkedRows : rows;
   const dragged = useRef<number | undefined>(undefined);
   const tableWrap = useRef<HTMLDivElement>(null);
-  useListFlip(tableWrap, rows.map((row, index) => String(row.name ?? index)).join(","));
-  const fields = field.fields?.length ? field.fields : slot === "actions" ? [
+  useListFlip(tableWrap, displayedRows.map((row, index) => String(row.name ?? row.role ?? index)).join(","));
+  const columns = field.fields?.length ? field.fields : slot === "actions" ? [
     { name: "name", title: "Name", type: "text", required: true },
     { name: "title", title: "What people call it", type: "text", required: true },
     { name: fromStates, title: "From states", type: "text", required: true },
     { name: "description", title: "Description", type: "text" },
   ] as Api.FieldInfo[] : [];
-  const label = (name: string) => name === "to" ? t("To state") : name === fromStates ? t("From states") : t(fields.find((column) => column.name === name)?.title ?? name);
+  const label = (name: string) => name === "to" ? t("To state") : name === fromStates ? t("From states") : t(columns.find((column) => column.name === name)?.title ?? name);
   const canWrite = Boolean(save && !bound);
   const canMove = slot === "fields" && canWrite && !busy;
   const applying = async (next: DefinitionRow[]) => {
@@ -134,20 +150,26 @@ function DefinitionTable({ slot, field, rows, states, entities, subject, bound, 
   };
   const show = (row: DefinitionRow, name: string) => {
     if (name === "to") return targetOf(row) ?? "";
-    if (name === "type" || name === "tone") return t(shown(row[name]));
-    const column = fields.find((item) => item.name === name);
+    if (name === "type" || name === "tone" || name === "read") return t(shown(row[name]));
+    const column = columns.find((item) => item.name === name);
     return column ? present(column, row[name]) : shown(row[name]);
   };
+  const writableCount = objectFields.filter((candidate) => candidate.name && candidate.name !== "base" && !candidate.readOnly).length;
   return (
     <VStack gap={3}>
       <HStack gap={2} vAlign="center">
         <StackItem size="fill"><Heading level={3}>{title}</Heading></StackItem>
-        {slot === "actions" && <Button label={t("Create transition")} variant="secondary" isDisabled={busy || states.length < 2} onClick={() => setCreatingTransition(true)} />}
+        {slot === "actions" && (
+          <>
+            <Button label={t("Create action")} variant="secondary" isDisabled={busy || writableCount === 0} onClick={() => setCreatingAction(true)} />
+            <Button label={t("Create transition")} variant="secondary" isDisabled={busy || states.length < 2} onClick={() => setCreatingTransition(true)} />
+          </>
+        )}
         {canWrite && slot !== "actions" && <Button label={t(schema.add)} variant="secondary" isDisabled={saving} onClick={() => { setFailure(""); setEditing({ index: -1, row: {} }); }} />}
       </HStack>
       {bound && <Text type="supporting">{t("Transitions use the linked action types.")}</Text>}
       {failure && !editing && removing === undefined && <Banner status="error" title={t("Not saved")} description={failure} />}
-      {rows.length > 0 && (
+      {displayedRows.length > 0 && (
         <VStack ref={tableWrap}>
         <Table aria-label={title} density="compact">
           <TableHeader><TableRow>
@@ -155,35 +177,50 @@ function DefinitionTable({ slot, field, rows, states, entities, subject, bound, 
             {canWrite && <TableHeaderCell>{t("Actions")}</TableHeaderCell>}
           </TableRow></TableHeader>
           <TableBody>
-            {rows.map((row, index) => (
-              <TableRow key={row.name ?? index} data-flip-id={String(row.name ?? index)} draggable={canMove}
-                onDragStart={(event) => { if (canMove) { dragged.current = index; event.dataTransfer.setData("text/plain", String(index)); } }}
-                onDragEnd={() => { dragged.current = undefined; }}
-                onDragOver={(event) => { if (canMove && dragged.current !== undefined) event.preventDefault(); }}
-                onDrop={(event) => {
-                  if (!canMove || dragged.current === undefined) return;
-                  event.preventDefault();
-                  move(dragged.current, index);
-                  dragged.current = undefined;
-                }}>
-                {schema.show.map((name) => <TableCell key={name}>{show(row, name)}</TableCell>)}
-                {canWrite && (
-                  <TableCell><MoreMenu label={`${t("Row actions")}: ${row.title ?? row.name}`} items={[
-                    { label: t("Edit"), isDisabled: busy || slot === "actions" && !targetOf(row), onClick: () => { setFailure(""); setEditing({ index, row }); } },
-                    ...(canMove ? [
-                      { label: t("Move up"), isDisabled: index === 0, onClick: () => move(index, index - 1) },
-                      { label: t("Move down"), isDisabled: index === rows.length - 1, onClick: () => move(index, index + 1) },
-                    ] : []),
-                    { label: t("Remove"), isDisabled: busy, onClick: () => { setFailure(""); setRemoving(index); } },
-                  ]} /></TableCell>
-                )}
-              </TableRow>
-            ))}
+            {displayedRows.map((row, index) => {
+              const rowKey = String(row.name ?? row.role ?? index);
+              const rowTitle = String(row.title ?? row.name ?? row.role ?? index);
+              const lockedBase = slot === "fields" && isExtension && row.name === "base";
+              return (
+                <TableRow key={rowKey} data-flip-id={rowKey} draggable={canMove && !lockedBase}
+                  onDragStart={(event) => { if (canMove && !lockedBase) { dragged.current = index; event.dataTransfer.setData("text/plain", String(index)); } }}
+                  onDragEnd={() => { dragged.current = undefined; }}
+                  onDragOver={(event) => { if (canMove && dragged.current !== undefined) event.preventDefault(); }}
+                  onDrop={(event) => {
+                    if (!canMove || dragged.current === undefined) return;
+                    event.preventDefault();
+                    move(dragged.current, index);
+                    dragged.current = undefined;
+                  }}>
+                  {schema.show.map((name) => <TableCell key={name}>{show(row, name)}</TableCell>)}
+                  {canWrite && (
+                    <TableCell><MoreMenu label={`${t("Row actions")}: ${rowTitle}`} items={[
+                      { label: t("Edit"), isDisabled: busy || lockedBase || (slot === "actions" && !targetOf(row)), onClick: () => { setFailure(""); setEditing({ index, row }); } },
+                      ...(canMove ? [
+                        { label: t("Move up"), isDisabled: lockedBase || index === 0, onClick: () => move(index, index - 1) },
+                        { label: t("Move down"), isDisabled: lockedBase || index === rows.length - 1, onClick: () => move(index, index + 1) },
+                      ] : []),
+                      { label: t("Remove"), isDisabled: busy || lockedBase, onClick: () => { setFailure(""); setRemoving(index); } },
+                    ]} /></TableCell>
+                  )}
+                </TableRow>
+              );
+            })}
           </TableBody>
         </Table>
         </VStack>
       )}
-      {editing && (
+      {editing && slot === "access" && (
+        <AccessDialog
+          row={editing.row}
+          title={editing.index < 0 ? t(schema.add) : t("Edit row")}
+          busy={busy}
+          failure={failure}
+          close={() => !busy && setEditing(undefined)}
+          save={(row) => void applying(editing.index < 0 ? [...rows, row] : rows.map((current, index) => (index === editing.index ? row : current)))}
+        />
+      )}
+      {editing && slot !== "access" && (
         <DefinitionForm slot={slot} row={editing.row} field={field} states={states} entities={entities} subject={subject}
           title={editing.index < 0 ? t(schema.add) : t("Edit row")} busy={busy} failure={failure} label={label}
           close={() => !busy && setEditing(undefined)}
@@ -192,7 +229,7 @@ function DefinitionTable({ slot, field, rows, states, entities, subject, bound, 
           }} />
       )}
       {removing !== undefined && (
-        <AlertDialog isOpen title={`${t("Remove from draft")}: ${rows[removing]?.title ?? rows[removing]?.name}`}
+        <AlertDialog isOpen title={`${t("Remove from draft")}: ${rows[removing]?.title ?? rows[removing]?.name ?? rows[removing]?.role}`}
           description={failure || t("The installed type changes only when you publish.")}
           cancelLabel={t("Cancel")}
           actionLabel={t("Remove")}
@@ -215,135 +252,26 @@ function DefinitionTable({ slot, field, rows, states, entities, subject, bound, 
           }}
         />
       )}
+      {creatingAction && (
+        <ActionTypeDialog
+          subject={subject}
+          fields={objectFields}
+          states={states}
+          access={access}
+          catalog={catalog}
+          close={() => setCreatingAction(false)}
+          done={() => {
+            setCreatingAction(false);
+            reread();
+          }}
+        />
+      )}
     </VStack>
   );
 }
 
-type ActionTypeRow = {
-  id: string;
-  revision: number;
-  name: string;
-  title: string;
-  object: string;
-  state: string;
-  definition?: { name?: string; title?: string; from?: string[] };
-};
-
-function TransitionDialog({ subject, objectId, objectRevision, states, catalog, close, done }: {
-  subject: string;
-  objectId: string;
-  objectRevision: number;
-  states: DefinitionRow[];
-  catalog: Api.Action[];
-  close: () => void;
-  done: () => void;
-}) {
-  const domain = encodeURIComponent(JSON.stringify([["object", "=", subject]]));
-  const available = useRead<Api.RecordPage>(`/v1/records/build.actiontype?domain=${domain}&limit=200`);
-  const candidates = available.status === "ready" ? available.data.records as ActionTypeRow[] : [];
-  const [selected, setSelected] = useState("");
-  const [name, setName] = useState("activate");
-  const [title, setTitle] = useState("");
-  const [from, setFrom] = useState(String(states[0]?.name ?? ""));
-  const [to, setTo] = useState(String(states[1]?.name ?? ""));
-  const [failure, setFailure] = useState("");
-  const [busy, setBusy] = useState(false);
-  const createAction = catalog.find((action) => action.schema === "build.actiontype.create");
-  const publishAction = catalog.find((action) => action.schema === "build.actiontype.publish");
-  const objectEdit = catalog.find((action) => action.schema === "build.object.edit");
-  const stateOptions = states.flatMap((state) => state.name ? [{ value: state.name, label: t(state.title ?? state.name) }] : []);
-  const current = candidates.find((candidate) => candidate.id === selected);
-  const actionName = current?.name ?? `${subject}.${name}`;
-  const missing = !publishAction || (!current && (!createAction || !name || !title || from === to)) || (!current && !objectEdit);
-
-  const apply = async () => {
-    setBusy(true);
-    setFailure("");
-    try {
-      let action = current;
-      if (!action) {
-        if (!createAction || !publishAction) throw new Error(t("This action is no longer available."));
-        const actionId = `ACTION-${crypto.randomUUID()}`;
-        const transaction = {
-          subject,
-          steps: [{
-            name,
-            kind: "update",
-            target: { type: subject, id: "$subject" },
-            changes: [{ field: "state", expr: { op: "", kind: "choice", lit: { value: to } } }],
-          }],
-        };
-        const created = await send(createAction, actionId, {
-          name: actionName,
-          object: subject,
-          definition: { name, title, from: [from], transaction },
-        }, 0);
-        await send(publishAction, actionId, {}, created.revision);
-      } else if (action.state !== "published") {
-        if (!publishAction) throw new Error(t("This action is no longer available."));
-        await send(publishAction, action.id, {}, action.revision);
-      }
-      if (!current || !objectEdit) {
-        done();
-        return;
-      }
-      const object = await request<Api.RecordView>(`/v1/records/build.object/${encodeURIComponent(objectId)}`);
-      const record = object.record as { revision?: number; actionTypes?: Api.AssetBinding[] };
-      const bindings = record.actionTypes ?? [];
-      if (!bindings.some((binding) => binding.ref.name === actionName)) {
-        await send(objectEdit, objectId, {
-          actionTypes: [...bindings, { ref: { app: "build", kind: "action", name: actionName }, sourceVersion: "" }],
-        }, record.revision ?? objectRevision);
-      }
-      done();
-    } catch (problem) {
-      setFailure(reasonOf(problem));
-      setBusy(false);
-    }
-  };
-
-  return (
-    <Dialog isOpen onOpenChange={close} purpose="form">
-      <Layout header={<DialogHeader title={t("Create transition")} onOpenChange={close} />} content={
-        <LayoutContent padding={4}>
-          <FormLayout defaultOptionality="optional">
-            {failure && <Banner status="error" title={t("Not saved")} description={failure} />}
-            {available.status === "loading" && <Text type="supporting">{t("Loading…")}</Text>}
-            <Selector
-              label={t("Action type")}
-              value={selected}
-              onChange={setSelected}
-              options={[
-                { value: "", label: t("Create a new action type") },
-                ...candidates.map((candidate) => ({ value: candidate.id, label: `${candidate.title || candidate.name} · ${t(candidate.state === "published" ? "Published" : "Draft")}` })),
-              ]}
-            />
-            {current ? (
-              <Text type="body">{current.title}</Text>
-            ) : (
-              <>
-                <TextInput label={t("Name")} value={name} onChange={(next) => setName(next.toLowerCase().replace(/[^a-z0-9]+/g, ""))} />
-                <TextInput label={t("What people call it")} value={title} onChange={setTitle} />
-                <Selector label={t("From state")} value={from} onChange={setFrom} options={stateOptions} />
-                <Selector label={t("To state")} value={to} onChange={setTo} options={stateOptions} />
-              </>
-            )}
-          </FormLayout>
-        </LayoutContent>
-      } footer={
-        <LayoutFooter padding={4}>
-          <HStack gap={2} hAlign="end">
-            <Button label={t("Cancel")} variant="secondary" onClick={close} />
-            <Button label={t("Save")} variant="primary" isDisabled={busy || missing} onClick={apply} />
-          </HStack>
-        </LayoutFooter>
-      } />
-    </Dialog>
-  );
-}
-
 function DefinitionForm({ slot, row, field, states, entities, subject, title, busy, failure, label, close, save }: {
-  slot: Slot; row: DefinitionRow; field: Api.FieldInfo; states: DefinitionRow[]; entities: Api.EntityInfo[]; subject: string;
+  slot: Exclude<Slot, "access">; row: DefinitionRow; field: Api.FieldInfo; states: DefinitionRow[]; entities: Api.EntityInfo[]; subject: string;
   title: string; busy: boolean; failure: string; label: (name: string) => string; close: () => void; save: (row: DefinitionRow) => void;
 }) {
   const [values, setValues] = useState(row);
