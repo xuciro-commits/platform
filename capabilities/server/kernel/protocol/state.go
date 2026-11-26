@@ -6,6 +6,7 @@ import (
 	"time"
 
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
+	"platformserver/kernel/values"
 )
 
 func (l *ChangeLog) Restore(tenant string, records []*pb.ChangeRecord) {
@@ -23,11 +24,11 @@ func (l *ChangeLog) Restore(tenant string, records []*pb.ChangeRecord) {
 }
 
 func (l *FactLog) Restore(tenant string, records []*pb.FactRecord) {
-	l.logs[tenant] = slices.Clone(records)
-	l.byKey[tenant] = map[string]*pb.FactRecord{}
+	var log tenantFacts
 	for _, r := range records {
-		l.byKey[tenant][r.GetFact().GetIdempotencyKey()] = r
+		log.append(r)
 	}
+	l.tenants.Set(tenant, log)
 	l.next += len(records)
 }
 
@@ -45,11 +46,11 @@ func sortRefs(a, b Ref) int { return strings.Compare(a.Type+"/"+a.ID, b.Type+"/"
 
 func (id *Identity) State() IdentityState {
 	s := IdentityState{Entities: []Ref{}, Redirects: []RedirectState{}}
-	for r := range id.entities {
+	for _, r := range id.entities.All() {
 		s.Entities = append(s.Entities, r)
 	}
-	for from, to := range id.redirects {
-		s.Redirects = append(s.Redirects, RedirectState{From: from, To: to})
+	for _, redirect := range id.redirects.All() {
+		s.Redirects = append(s.Redirects, redirect)
 	}
 	slices.SortFunc(s.Entities, sortRefs)
 	slices.SortFunc(s.Redirects, func(a, b RedirectState) int { return sortRefs(a.From, b.From) })
@@ -57,12 +58,12 @@ func (id *Identity) State() IdentityState {
 }
 
 func (id *Identity) Restore(s IdentityState) {
-	id.entities, id.redirects = map[Ref]bool{}, map[Ref][]Ref{}
+	id.entities, id.redirects = values.Index[Ref]{}, values.Index[RedirectState]{}
 	for _, r := range s.Entities {
-		id.entities[r] = true
+		id.entities.Set(r.key(), r)
 	}
 	for _, r := range s.Redirects {
-		id.redirects[r.From] = r.To
+		id.redirects.Set(r.From.key(), r)
 	}
 }
 

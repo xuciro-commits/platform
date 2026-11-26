@@ -20,21 +20,18 @@ type ClaimSet struct {
 }
 
 type SourceClaims struct {
-	schemas  *protocol.SchemaRegistry
 	Facts    *protocol.FactLog
 	Identity *protocol.Identity
 }
 
 func NewSourceClaims() SourceClaims {
 	schemas := protocol.NewSchemaRegistry([]*pb.SchemaRef{{Name: "integration.claim", Version: 1}})
-	return SourceClaims{schemas: schemas, Facts: protocol.NewFactLog(schemas), Identity: protocol.NewIdentity(nil)}
+	return SourceClaims{Facts: protocol.NewFactLog(schemas), Identity: protocol.NewIdentity(nil)}
 }
 
-func (c SourceClaims) Fork(tenant string) SourceClaims {
-	fork := SourceClaims{schemas: c.schemas, Facts: protocol.NewFactLog(c.schemas), Identity: protocol.NewIdentity(nil)}
-	fork.Facts.Restore(tenant, c.Facts.Records(tenant))
-	fork.Identity.Restore(c.Identity.State())
-	return fork
+func (c SourceClaims) Fork() SourceClaims {
+	facts, identity := *c.Facts, *c.Identity
+	return SourceClaims{Facts: &facts, Identity: &identity}
 }
 
 func (c SourceClaims) Prepare(tenant, typ, id, change string, prepared *ClaimSet) ([]*pb.Fact, error) {

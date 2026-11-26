@@ -68,6 +68,9 @@ func TestInvariantK1K2SourceSnapshotMergeAndDeletion(t *testing.T) {
 				}
 			}
 			pull(invariantClock)
+			retained := live.readImage.Load().state.Claims
+			retainedFacts := platform.Raw(retained.Facts.Records(live.ID))
+			retainedIdentities := platform.Raw(retained.Identity.State())
 			live.accept(t, "invariantproject.merged.edit", "invariantproject.merged", "C", map[string]any{"note": "action edit"})
 			live.accept(t, dataowner.SchemaDatasetLoad, dataowner.DatasetType, "INPUT", map[string]any{"rows": []map[string]any{{"id": "B", "note": "pipeline B"}}})
 			live.accept(t, "build.pipeline.run", dataowner.PipelineType, "PIPE", map[string]any{})
@@ -104,6 +107,10 @@ func TestInvariantK1K2SourceSnapshotMergeAndDeletion(t *testing.T) {
 			rows = `[{"id":"A","note":"restored external A"}]`
 			pull(invariantClock.Add(6 * time.Second))
 			check("A", "restored external A", false)
+			if string(retainedFacts) != string(platform.Raw(retained.Facts.Records(live.ID))) ||
+				string(retainedIdentities) != string(platform.Raw(retained.Identity.State())) {
+				t.Fatal("later source results changed a retained read image")
+			}
 			want := live.recordImage(t)
 			for replay := 0; replay < 2; replay++ {
 				restored := live.restore(t, live.entries)

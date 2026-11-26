@@ -409,7 +409,7 @@ func (r Rows) IDs(after string, limit int) []string {
 	}
 	if r.source == nil {
 		var ids []string
-		for id, row := range r.index.after(after) {
+		for id, row := range r.index.After(after) {
 			if row != nil {
 				ids = append(ids, id)
 				if len(ids) == limit {
@@ -420,7 +420,7 @@ func (r Rows) IDs(after string, limit int) []string {
 		return ids
 	}
 	ids := r.source.IDs(after, limit+r.index.Len())
-	for id, row := range r.index.after(after) {
+	for id, row := range r.index.After(after) {
 		if row != nil {
 			ids = append(ids, id)
 		}

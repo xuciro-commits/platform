@@ -154,7 +154,7 @@ func (t *Tenant) forkReadState(ctx context.Context) (*Tenant, error) {
 	view.work.CopyRotation(&t.work)
 	view.staged = compute.NewChannel(t.ID, view.files)
 	view.staged.Restore(t.staged.Snapshot())
-	view.Claims = t.Claims.Fork(t.ID)
+	view.Claims = t.Claims.Fork()
 	view.DefinitionEpoch.Store(t.DefinitionEpoch.Load())
 	view.runIndex.CopyGeneration(&t.runIndex)
 	view.includeArchivedDefinitions = t.includeArchivedDefinitions
