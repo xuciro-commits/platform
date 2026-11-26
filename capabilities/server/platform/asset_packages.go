@@ -56,6 +56,9 @@ type PackageImpactReference struct {
 	Consumer AssetRef `json:"consumer"`
 }
 type PackageImpactExtension struct {
+	Project       string       `json:"project"`
+	PackageID     string       `json:"packageId,omitempty"`
+	VersionRange  string       `json:"versionRange,omitempty"`
 	Type          string       `json:"type"`
 	Base          AssetBinding `json:"base"`
 	TargetVersion string       `json:"targetVersion"`

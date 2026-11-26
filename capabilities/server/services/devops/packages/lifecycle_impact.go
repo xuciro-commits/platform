@@ -41,6 +41,12 @@ func StoredImpact(store *records.Store, definitions []platform.Definition, activ
 
 func (i Impact) Of(id string, after []platform.ReleaseAsset) (platform.PackageLifecycleImpact, error) {
 	out := platform.PackageLifecycleImpact{Dependencies: []string{}, References: []platform.PackageImpactReference{}, Extensions: []platform.PackageImpactExtension{}, Runs: []platform.ApplicationRun{}, Connections: []platform.PackageImpactConnection{}, Outputs: []platform.PackageImpactOutput{}}
+	extensionResources := map[string]protocol.Resource{}
+	for _, resource := range i.Resources {
+		if resource.Ref.Kind == platform.AssetObject && !resource.Archived {
+			extensionResources[resource.Ref.Name] = resource
+		}
+	}
 	owned, removed, replaced := map[platform.AssetRef]bool{}, map[platform.AssetRef]bool{}, map[platform.AssetRef]bool{}
 	for _, asset := range after {
 		replaced[asset.Ref] = true
@@ -87,8 +93,13 @@ func (i Impact) Of(id string, after []platform.ReleaseAsset) (platform.PackageLi
 		if !owned[extension.Base.Ref] && !replaced[extension.Base.Ref] {
 			continue
 		}
+		if resource, ok := extensionResources[extension.Type]; ok {
+			extension.Project = resource.Project
+			extension.PackageID = resource.ManagedBy
+		}
 		if removed[extension.Base.Ref] {
-			extension.Issue = "The product removes this extension's base"
+			extension.TargetVersion = ""
+			extension.Issue = fmt.Sprintf("Extension %s: the product removes its base %s", extension.Type, extension.Base.Ref.Name)
 		}
 		out.Extensions = append(out.Extensions, extension)
 	}

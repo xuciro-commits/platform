@@ -3751,6 +3751,9 @@ export type PackageImpactConnection = {
 };
 
 export type PackageImpactExtension = {
+  project: string;
+  packageId?: string;
+  versionRange?: string;
   type: string;
   base: AssetBinding;
   targetVersion: string;

@@ -121,6 +121,9 @@ func (rv Review) Of(views []protocol.PackageView, chosen *protocol.PackageView, 
 	if err != nil {
 		return answer, err
 	}
+	if !uninstall {
+		reviewExtensionVersions(impact.Extensions, views, chosen.Descriptor)
+	}
 	answer.Impact = impact
 	answer.Extensions = impact.Extensions
 	if !uninstall {
