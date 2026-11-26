@@ -1,6 +1,6 @@
 # kit-2 party 的结构化地址
 
-车道：kit    依赖：kit-1 之后
+车道：kit    依赖：无；改 marketplace.spec.ts 与夹具等 kit-1 落地，浏览器那一步照 tasks/README.md 交出
 能改：官方包库的 party 包、deploy/packages/**、scripts/frontend-fixtures/**、scripts/frontend-seed.json、frontend/e2e/marketplace.spec.ts
 不碰：kernel/**、services/**（缺平台能力先留言给 lead）
 
