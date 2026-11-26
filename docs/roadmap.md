@@ -61,7 +61,7 @@
 | 导入导出 | 能用 | `pages/ImportWizard.tsx`、`objects/record_import.go`；crm “import” | 客户规模与故障注入：3.4b（ship） |
 | 租户、成员、登录、设置、词汇 | 能用 | `apps/admin`；workspace 17 项 | 自助注册：阶段 4 |
 | 主数据：geo、party、uom | 能用 | marketplace “publisher tenant: a master data”；K42、K43 | party 结构化地址：kit-2 |
-| 能力：契约、绑定、连接器 | 能用 | `pages/Capabilities.tsx`；workspace “capabilities”；K40、K41、K45、K46 | 连接器没有 trunk，等云通话供应商 |
+| 能力：契约、绑定、连接器 | 能用 | `pages/Capabilities.tsx`；workspace “capabilities”；K40、K41、K45、K46 | 模板、Basic 鉴权、签名与 trunk：kit-3 |
 | 电话 | 能用 | `capabilities/voice`、`pages/CallDock.tsx`；phone 3 项、`make test-voice` | 本机外放、TLS 与 NAT：等客户要电话 |
 | 自动化与流程 | 占位 | `services/automate` 约 9 千行；`apps/logic` 只是列表；没有 trunk | 阶段 5 的 `FlowCanvas` |
 | 文档渲染、打印 | 无 | — | B4，第一个客户提出打印时排 |
