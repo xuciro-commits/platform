@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState, useSyncExternalStore } from "react";
 import { HostRefusal, invalidateRequests, request } from "./request";
-import { useSession } from "./session";
+import { currentSession, type Session, useSession } from "./session";
 
 export type Read<Answer> =
   | { status: "loading"; path?: string | null }
@@ -15,7 +15,8 @@ const listeners = new Set<() => void>();
 const keyVersions = new Map<string, number>();
 const readCache = new Map<string, Cached>();
 const pendingReads = new Map<string, Promise<unknown>>();
-let cacheSession = "";
+let cacheSession: Session | null = null;
+let sessionGeneration = 0;
 let cacheOrder = 0;
 let globalVersion = 0;
 let metaVersion = 0;
@@ -39,14 +40,23 @@ function bump(key: string) {
   keyVersions.set(key, (keyVersions.get(key) ?? 0) + 1);
 }
 
-function syncSession(sessionKey: string) {
-  if (sessionKey === cacheSession) return;
-  cacheSession = sessionKey;
-  cacheOrder += 1;
-  readCache.clear();
-  pendingReads.clear();
-  invalidateRequests();
+function syncSession(session: Session | null) {
+  if (session !== cacheSession) {
+    cacheSession = session;
+    sessionGeneration += 1;
+    cacheOrder += 1;
+    readCache.clear();
+    pendingReads.clear();
+    invalidateRequests();
+  }
+  return sessionGeneration;
 }
+
+function readKey(generation: number, path: string | null, sent?: string) {
+  return JSON.stringify([generation, path, sent]);
+}
+
+type ScopedRead<Answer> = { key: string; value: Read<Answer> };
 
 function cachedRead<Answer>(key: string): Cached | undefined {
   const entry = readCache.get(key);
@@ -67,21 +77,29 @@ function storeRead(key: string, seen: string, order: number, data: unknown) {
   readCache.set(key, { seen, order, data });
 }
 
-function loadRead<Answer>(sessionKey: string, path: string, sent: string | undefined, seen: string): Promise<Answer> {
-  const cacheKey = `${sessionKey}\0${path}\0${sent ?? ""}`;
+function loadRead<Answer>(session: Session | null, generation: number, path: string, sent: string | undefined, seen: string): Promise<Answer> {
+  const ownsSession = () => currentSession() === session && generation === sessionGeneration;
+  if (!ownsSession()) return Promise.reject(new Error("Read session changed"));
+  const cacheKey = readKey(generation, path, sent);
   const hit = cachedRead<Answer>(cacheKey);
   if (hit && hit.seen === seen) return Promise.resolve(hit.data as Answer);
-  const flightKey = `${cacheKey}\0${seen}`;
+  const flightKey = JSON.stringify([cacheKey, seen]);
   let shared = pendingReads.get(flightKey) as Promise<Answer> | undefined;
   if (!shared) {
     const order = ++cacheOrder;
     shared = request<Answer>(path, { body: sent === undefined ? undefined : JSON.parse(sent) })
       .then((data) => {
-        if (sessionKey === cacheSession) storeRead(cacheKey, seen, order, data);
+        if (ownsSession()) storeRead(cacheKey, seen, order, data);
         return data;
+      }, (failure: unknown) => {
+        if (ownsSession() && failure instanceof HostRefusal && failure.status < 500) {
+          const previous = readCache.get(cacheKey);
+          if (previous && previous.order <= order) readCache.delete(cacheKey);
+        }
+        throw failure;
       })
       .finally(() => {
-        pendingReads.delete(flightKey);
+        if (pendingReads.get(flightKey) === shared) pendingReads.delete(flightKey);
       });
     pendingReads.set(flightKey, shared);
   }
@@ -175,54 +193,49 @@ function snapshotFor(scope: WatchScope): string {
 
 export function useRead<Answer>(path: string | null, body?: unknown): Read<Answer> {
   const session = useSession();
-  const sessionKey = `${session?.tenant ?? ""} ${session?.token ?? ""}`;
-  syncSession(sessionKey);
+  const generation = syncSession(session);
   const scope = watchScope(path, body);
   const seen = useSyncExternalStore(subscribe, () => snapshotFor(scope));
   const sent = body === undefined ? undefined : JSON.stringify(body);
-  const cacheKey = path === null ? "" : `${sessionKey}\0${path}\0${sent ?? ""}`;
-  const cached = path === null ? undefined : cachedRead<Answer>(cacheKey);
-  const [read, setRead] = useState<Read<Answer>>(() =>
-    cached ? { status: "ready", path, data: cached.data as Answer } : { status: "loading", path },
-  );
+  const key = readKey(generation, path, sent);
+  const cached = path === null ? undefined : cachedRead<Answer>(key);
+  const [read, setRead] = useState<ScopedRead<Answer>>(() => ({
+    key, value: cached ? { status: "ready", path, data: cached.data as Answer } : { status: "loading", path },
+  }));
   useEffect(() => {
+    const show = (value: Read<Answer>) => setRead({ key, value });
     if (path === null) {
-      setRead({ status: "loading", path: null });
+      show({ status: "loading", path: null });
       return;
     }
-    const current = cachedRead<Answer>(cacheKey);
+    const current = cachedRead<Answer>(key);
     if (current) {
       setRead((previous) =>
-        previous.status === "ready" && previous.path === path && previous.data === current.data
+        previous.key === key && previous.value.status === "ready" && previous.value.data === current.data
           ? previous
-          : { status: "ready", path, data: current.data as Answer },
+          : { key, value: { status: "ready", path, data: current.data as Answer } },
       );
       if (current.seen === seen) return;
     } else {
-      setRead({ status: "loading", path });
+      show({ status: "loading", path });
     }
     let active = true;
+    const owns = () => active && currentSession() === session && generation === sessionGeneration;
     queueMicrotask(() => {
-      if (!active) return;
-      loadRead<Answer>(sessionKey, path, sent, seen).then(
-        (data) => {
-          if (active) setRead({ status: "ready", path, data });
-        },
-        (failure: unknown) => {
-          if (active) setRead(failed(failure, path));
-        },
+      if (!owns()) return;
+      loadRead<Answer>(session, generation, path, sent, seen).then(
+        (data) => { if (owns()) show({ status: "ready", path, data }); },
+        (failure: unknown) => { if (owns()) show(failed(failure, path)); },
       );
     });
-    return () => {
-      active = false;
-    };
-  }, [cacheKey, path, sent, sessionKey, seen]);
+    return () => { active = false; };
+  }, [key, path, sent, session, generation, seen]);
   const fresh = cached && cached.seen === seen ? cached : undefined;
   const shown = useMemo<Read<Answer> | undefined>(
     () => (fresh ? { status: "ready", path, data: fresh.data as Answer } : undefined),
     [fresh, path],
   );
-  return shown ?? read;
+  return shown ?? (read.key === key ? read.value : { status: "loading", path });
 }
 
 function failed(failure: unknown, path?: string | null): Read<never> {
@@ -232,47 +245,42 @@ function failed(failure: unknown, path?: string | null): Read<never> {
 
 export function useReads<Answer>(paths: string[]): Read<Answer[]> {
   const session = useSession();
-  const sessionKey = `${session?.tenant ?? ""} ${session?.token ?? ""}`;
-  syncSession(sessionKey);
+  const generation = syncSession(session);
   const scopes = paths.map((path) => watchScope(path));
   const snapshots = scopes.map(snapshotFor);
   const seen = useSyncExternalStore(subscribe, () => scopes.map(snapshotFor).join("|"));
   const asked = JSON.stringify(paths);
+  const key = JSON.stringify([generation, asked]);
   const allFresh = paths.every((path, index) => {
-    const entry = cachedRead<Answer>(`${sessionKey}\0${path}\0`);
+    const entry = cachedRead<Answer>(readKey(generation, path));
     return Boolean(entry && entry.seen === snapshots[index]);
   });
-  const [read, setRead] = useState<Read<Answer[]>>(() =>
-    allFresh
-      ? { status: "ready", data: paths.map((path) => cachedRead<Answer>(`${sessionKey}\0${path}\0`)!.data as Answer) }
+  const [read, setRead] = useState<ScopedRead<Answer[]>>(() => ({
+    key, value: allFresh
+      ? { status: "ready", data: paths.map((path) => cachedRead<Answer>(readKey(generation, path))!.data as Answer) }
       : { status: "loading" },
-  );
+  }));
   useEffect(() => {
+    const show = (value: Read<Answer[]>) => setRead({ key, value });
     const list = JSON.parse(asked) as string[];
     const versions = seen.split("|");
-    if (list.every((path, index) => cachedRead<Answer>(`${sessionKey}\0${path}\0`)?.seen === versions[index])) {
-      setRead({ status: "ready", data: list.map((path) => cachedRead<Answer>(`${sessionKey}\0${path}\0`)!.data as Answer) });
+    if (list.every((path, index) => cachedRead<Answer>(readKey(generation, path))?.seen === versions[index])) {
+      show({ status: "ready", data: list.map((path) => cachedRead<Answer>(readKey(generation, path))!.data as Answer) });
       return;
     }
     let active = true;
-    Promise.all(list.map((path, index) => loadRead<Answer>(sessionKey, path, undefined, versions[index] ?? ""))).then(
-      (data) => {
-        if (active) setRead({ status: "ready", data });
-      },
-      (failure: unknown) => {
-        if (active) setRead(failed(failure));
-      },
+    const owns = () => active && currentSession() === session && generation === sessionGeneration;
+    Promise.all(list.map((path, index) => loadRead<Answer>(session, generation, path, undefined, versions[index] ?? ""))).then(
+      (data) => { if (owns()) show({ status: "ready", data }); },
+      (failure: unknown) => { if (owns()) show(failed(failure)); },
     );
-    return () => {
-      active = false;
-    };
-  }, [asked, sessionKey, seen]);
+    return () => { active = false; };
+  }, [asked, key, session, generation, seen]);
   const shown = useMemo<Read<Answer[]> | undefined>(
-    () =>
-      allFresh
-        ? { status: "ready", data: (JSON.parse(asked) as string[]).map((path) => cachedRead<Answer>(`${sessionKey}\0${path}\0`)!.data as Answer) }
-        : undefined,
-    [allFresh, asked, sessionKey, seen],
+    () => allFresh
+      ? { status: "ready", data: (JSON.parse(asked) as string[]).map((path) => cachedRead<Answer>(readKey(generation, path))!.data as Answer) }
+      : undefined,
+    [allFresh, asked, generation, seen],
   );
-  return shown ?? read;
+  return shown ?? (read.key === key ? read.value : { status: "loading" });
 }

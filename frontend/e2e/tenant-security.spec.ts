@@ -123,3 +123,34 @@ test("tenant isolation: an existing bearer and live subscription lose record, ex
     await other.close();
   }
 });
+
+
+test("tenant isolation: read hooks never display a previous session or path while loading", async ({ page }) => {
+  await page.route("**/read-scope-probe.html", route => route.fulfill({ contentType: "text/html", body: "<!doctype html><html><body></body></html>" }));
+  await page.route("**/v1/read-scope-probe/**", async route => {
+    const tenant = route.request().headers()["platform-tenant"];
+    const path = new URL(route.request().url()).pathname.split("/").at(-1);
+    await route.fulfill({ json: { value: tenant + ":" + path } });
+  });
+  await page.goto("/read-scope-probe.html");
+  await page.evaluate(async () => {
+    const refreshPath = "/@react-refresh";
+    const refresh = (await import(refreshPath)).default;
+    refresh.injectIntoGlobalHook(window);
+    Object.assign(window, { $RefreshReg$: () => {}, $RefreshSig$: () => (type: unknown) => type, __vite_plugin_react_preamble_installed__: true });
+    const modulePath = "/e2e/read-scope-probe.tsx";
+    const { mountReadScopeProbe } = await import(modulePath);
+    Object.assign(window, { readScopeProbe: mountReadScopeProbe() });
+  });
+  const invoke = (method: "latest" | "switchTenant" | "changePath") => page.evaluate(name =>
+    (window as unknown as { readScopeProbe: Record<string, () => unknown> }).readScopeProbe[name](), method);
+  await expect.poll(() => invoke("latest")).toEqual({ single: "audit-a:one", many: "audit-a:one" });
+  const switched = await invoke("switchTenant");
+  expect(switched).not.toEqual([]);
+  expect(JSON.stringify(switched)).not.toContain("audit-a:one");
+  await expect.poll(() => invoke("latest")).toEqual({ single: "audit-b:one", many: "audit-b:one" });
+  const changed = await invoke("changePath");
+  expect(changed).not.toEqual([]);
+  expect(JSON.stringify(changed)).not.toContain("audit-b:one");
+  await expect.poll(() => invoke("latest")).toEqual({ single: "audit-b:two", many: "audit-b:two" });
+});
