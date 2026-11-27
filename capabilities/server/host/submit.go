@@ -68,7 +68,7 @@ func (t *Tenant) submit(m platform.Member, s *pb.Submission, now time.Time, opts
 			return record, refusal
 		}
 	}
-	result, refusal := decideOnImage(t, context.Background(), "submit", func(t *Tenant) (diagnosedSubmission, *platform.Error) {
+	result, refusal := decideOnImage(t, context.Background(), "submit "+s.GetSchema().GetName(), func(t *Tenant) (diagnosedSubmission, *platform.Error) {
 		return t.prepareSubmission(m, s, now, opts)
 	}, func(t *Tenant, decision preparedAccepted, value diagnosedSubmission, refusal *platform.Error) (diagnosedSubmission, *platform.Error) {
 		value.record, refusal = t.finishPreparedSubmission(m, decision, value.record, refusal)

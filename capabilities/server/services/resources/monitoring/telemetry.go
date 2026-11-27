@@ -4,6 +4,7 @@ import (
 	"context"
 	"log"
 	"os"
+	"strings"
 	"time"
 
 	"go.opentelemetry.io/otel"
@@ -51,9 +52,11 @@ func init() {
 	Meters.ReadImages, _ = m.Int64Counter("platform.read_image.retries", metric.WithDescription("Read image consistency retries, fallbacks and quarantine decisions"))
 }
 
+// A holder may name what it holds after its kind ("submit crm.lead.update"); metrics keep only the kind, the slow-hold log keeps both.
 func LaneObserver(tenant string, slow func(holder string, held time.Duration)) func(holder string, waited, held time.Duration) {
 	return func(holder string, waited, held time.Duration) {
-		attrs := metric.WithAttributes(attribute.String("platform.tenant", tenant), attribute.String("platform.lane.holder", holder))
+		kind, _, _ := strings.Cut(holder, " ")
+		attrs := metric.WithAttributes(attribute.String("platform.tenant", tenant), attribute.String("platform.lane.holder", kind))
 		Meters.LaneWait.Record(context.Background(), waited.Seconds(), attrs)
 		Meters.LaneHold.Record(context.Background(), held.Seconds(), attrs)
 		if held > laneHoldBudget {
