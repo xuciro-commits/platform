@@ -1,9 +1,10 @@
+import { join } from "node:path";
+import { fixtureRoot } from "../../scripts/package-fixtures.mjs";
 import { readFileSync } from "node:fs";
-import { fileURLToPath } from "node:url";
 import { type Page, expect, test } from "@playwright/test";
 import { edit, expectRevision, property, restartHost, restoreTenantBackup, signIn } from "./support";
 
-const artifact = fileURLToPath(new URL("../../scripts/frontend-fixtures/crm-official-0.3.1.json", import.meta.url));
+const artifact = join(fixtureRoot(), "frontend-fixtures/crm-official-0.3.1.json");
 
 test.describe.serial("official tenant", () => {
 let page: Page;
@@ -321,7 +322,7 @@ test("official tenant: CRM upgrades through the marketplace with an optional fie
   await page.getByRole("button", { name: "More actions", exact: true }).click();
   await page.getByRole("menuitem", { name: "Install from URL or file", exact: true }).click();
   const wizard = page.getByRole("dialog", { name: /Install from URL or file/ });
-  const next = fileURLToPath(new URL("../../scripts/frontend-fixtures/crm-official-0.3.2.json", import.meta.url));
+  const next = join(fixtureRoot(), "frontend-fixtures/crm-official-0.3.2.json");
   await wizard.locator('input[type="file"]').setInputFiles({ name: "crm-0.3.2.json", mimeType: "application/json", buffer: readFileSync(next) });
   await wizard.getByRole("button", { name: "Inspect package", exact: true }).click();
   await expect(wizard.getByText("crm · 0.3.2", { exact: true })).toBeVisible();

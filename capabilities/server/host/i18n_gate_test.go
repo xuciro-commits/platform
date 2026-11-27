@@ -147,7 +147,7 @@ func TestI18nGatePackagesPermissionsAndWordsEndToEnd(t *testing.T) {
 
 	installFixture := func(rel string) platform.PackageDescriptor {
 		t.Helper()
-		raw, err := os.ReadFile("../../../scripts/frontend-fixtures/" + rel)
+		raw, err := os.ReadFile(fixturePath(t, "frontend-fixtures/"+rel))
 		if err != nil {
 			t.Fatalf("read fixture %s: %v", rel, err)
 		}

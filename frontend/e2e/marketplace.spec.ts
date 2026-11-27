@@ -1,10 +1,20 @@
+import { join } from "node:path";
+import { fixtureRoot, fixtureRelease } from "../../scripts/package-fixtures.mjs";
 import { createHash } from "node:crypto";
 import { readFileSync } from "node:fs";
 import { createServer } from "node:http";
 import type { AddressInfo } from "node:net";
-import { fileURLToPath } from "node:url";
 import { type Locator, type Page, expect, test } from "@playwright/test";
 import { open, property, edit, signIn, submit } from "./support";
+
+async function selectRelease(wizard: Locator, path: string) {
+  const release = fixtureRelease(path);
+  if (!release) throw new Error("No published release: " + path);
+  await wizard.getByRole("radio", { name: "HTTPS address", exact: true }).click();
+  await wizard.getByRole("textbox", { name: /Package URL/ }).fill(release.url);
+  await wizard.getByRole("textbox", { name: "Expected SHA-256", exact: true }).fill(release.expectedSha256);
+  return release;
+}
 
 const chooseRole = async (page: Page, pane: Locator, role: RegExp) => {
   await pane.getByRole("combobox", { name: /^Application/ }).click();
@@ -200,7 +210,7 @@ test("blank tenant: retiring CRM removes its entry and keeps the records, reinst
 });
 
 test.describe.serial("upgrade tenant", () => {
-const previous = fileURLToPath(new URL("../../scripts/frontend-fixtures/crm-0.1.21.json", import.meta.url));
+const previous = join(fixtureRoot(), "frontend-fixtures/crm-0.1.21.json");
 
 test("upgrade tenant: install CRM from a local package file after checking its origin and SHA-256", async ({ page }) => {
   const bytes = readFileSync(previous);
@@ -301,7 +311,7 @@ test("upgrade tenant: upgrading the original party package retains the unstructu
     await page.getByRole("button", { name: "More actions", exact: true }).click();
     await page.getByRole("menuitem", { name: "Install from URL or file", exact: true }).click();
     const wizard = page.getByRole("dialog", { name: /Install from URL or file/ });
-    const file = fileURLToPath(new URL(`../../scripts/frontend-fixtures/${name}-${version}.json`, import.meta.url));
+    const file = join(fixtureRoot(), `frontend-fixtures/${name}-${version}.json`);
     await wizard.locator('input[type="file"]').setInputFiles(file);
     await wizard.getByRole("button", { name: "Inspect package", exact: true }).click();
     await expect(wizard.getByText(`${name} · ${version}`, { exact: true })).toBeVisible();
@@ -333,7 +343,7 @@ test("upgrade tenant: upgrading the original party package retains the unstructu
 });
 
 test.describe.serial("library tenant", () => {
-const previous = fileURLToPath(new URL("../../scripts/frontend-fixtures/crm-0.1.21.json", import.meta.url));
+const previous = join(fixtureRoot(), "frontend-fixtures/crm-0.1.21.json");
 
 test("library tenant: a remote catalog lists its package beside the built-in index, filters by its listing, and its entry installs after the digest is checked", async ({ page }) => {
   const bytes = readFileSync(previous);
@@ -411,16 +421,17 @@ test("library tenant: a remote catalog lists its package beside the built-in ind
 
 test.describe.serial("publisher tenant", () => {
 test("publisher tenant: a master data package installs under Admin → Master data instead of the application rail", async ({ page }) => {
-  const bytes = readFileSync(fileURLToPath(new URL("../../scripts/frontend-fixtures/uom-0.1.1.json", import.meta.url)));
+
   await signIn(page, "admin-1 · publisher");
 
   await open(page, "Delivery", "Marketplace");
   await page.getByRole("button", { name: "More actions", exact: true }).click();
   await page.getByRole("menuitem", { name: "Install from URL or file", exact: true }).click();
   const wizard = page.getByRole("dialog", { name: /Install from URL or file/ });
-  await wizard.locator('input[type="file"]').setInputFiles({ name: "uom-0.1.1.json", mimeType: "application/json", buffer: bytes });
+  const release = await selectRelease(wizard, "frontend-fixtures/uom-0.1.1.json");
   await wizard.getByRole("button", { name: "Inspect package", exact: true }).click();
   await expect(wizard.getByText("uom · 0.1.1", { exact: true })).toBeVisible();
+  await expect(wizard.getByText(release.url, { exact: true }).first()).toBeVisible();
   await wizard.getByRole("button", { name: "Add to library", exact: true }).click();
   await wizard.getByRole("button", { name: "Continue", exact: true }).click({ timeout: 20_000 });
   await wizard.getByRole("button", { name: "Install package", exact: true }).click();
@@ -537,7 +548,7 @@ test("publisher tenant: CRM 0.3.1 to 0.3.2 review shows RecordComparison diffs, 
   await page.getByRole("button", { name: "More actions", exact: true }).click();
   await page.getByRole("menuitem", { name: "Install from URL or file", exact: true }).click();
   const installWizard = page.getByRole("dialog", { name: /Install from URL or file/ });
-  const crm31 = fileURLToPath(new URL("../../scripts/frontend-fixtures/crm-official-0.3.1.json", import.meta.url));
+  const crm31 = join(fixtureRoot(), "frontend-fixtures/crm-official-0.3.1.json");
   await installWizard.locator('input[type="file"]').setInputFiles({ name: "crm-0.3.1.json", mimeType: "application/json", buffer: readFileSync(crm31) });
   await installWizard.getByRole("button", { name: "Inspect package", exact: true }).click();
   await expect(installWizard.getByText("crm · 0.3.1", { exact: true })).toBeVisible();
@@ -665,7 +676,7 @@ test("publisher tenant: CRM 0.3.1 to 0.3.2 review shows RecordComparison diffs, 
   await page.getByRole("button", { name: "More actions", exact: true }).click();
   await page.getByRole("menuitem", { name: "Install from URL or file", exact: true }).click();
   const nextWizard = page.getByRole("dialog", { name: /Install from URL or file/ });
-  const crm32 = fileURLToPath(new URL("../../scripts/frontend-fixtures/crm-official-0.3.2.json", import.meta.url));
+  const crm32 = join(fixtureRoot(), "frontend-fixtures/crm-official-0.3.2.json");
   await nextWizard.locator('input[type="file"]').setInputFiles({ name: "crm-0.3.2.json", mimeType: "application/json", buffer: readFileSync(crm32) });
   await nextWizard.getByRole("button", { name: "Inspect package", exact: true }).click();
   await expect(nextWizard.getByText("crm · 0.3.2", { exact: true })).toBeVisible();

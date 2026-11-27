@@ -1,3 +1,5 @@
+import { join } from "node:path";
+import { fixtureRoot } from "../../scripts/package-fixtures.mjs";
 import { readFileSync } from "node:fs";
 import { expect, test, type Page } from "@playwright/test";
 import { signIn, submit } from "./support";
@@ -31,7 +33,7 @@ test("HTTPS connector: conformance, signed delivery and human settlement", async
   expect(origin).toMatch(/^https:\/\/127\.0\.0\.1:/);
   await signIn(page);
   for (const name of ["connectortrial-contract", "connectortrial"]) {
-    const fixture = JSON.parse(readFileSync(new URL("../../scripts/frontend-fixtures/" + name + "-0.1.0.json", import.meta.url), "utf8"));
+    const fixture = JSON.parse(readFileSync(join(fixtureRoot(), "frontend-fixtures/" + name + "-0.1.0.json"), "utf8"));
     const inspected = await api(page, "/v1/packages/inspect", { content: fixture });
     const imported = await submit(page, "platform.package.import", "platform.package", fixture.id, { id: fixture.id, digest: inspected.digest }, 0);
     await submit(page, "platform.package.install", "platform.package", fixture.id, { id: fixture.id, version: fixture.version }, imported.record.revision);

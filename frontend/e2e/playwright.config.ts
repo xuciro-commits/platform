@@ -1,8 +1,10 @@
 import { copyFileSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { defineConfig } from "@playwright/test";
+import { fixtureRoot } from "../../scripts/package-fixtures.mjs";
 
 const root = fileURLToPath(new URL("../..", import.meta.url));
+const fixtures = fixtureRoot();
 const work = `${root}.build/trunk`;
 const offset = Number(process.env.TRUNK_PORT_OFFSET ?? 0);
 const hostPort = 18521 + offset;
@@ -17,7 +19,7 @@ if (process.env.TEST_WORKER_INDEX === undefined) {
   process.env.TRUNK_SPLIT_OFFICIAL = Boolean(process.env.TRUNK_DATABASE) && (files.length === 0 || (files.some((f) => f.includes("official")) && files.some((f) => !f.includes("official")))) ? "1" : "0";
   mkdirSync(work, { recursive: true });
   const packageDir = mkdtempSync(work + "/packages-");
-  for (const source of [root + "deploy/packages", root + "deploy/test-packages"]) {
+  for (const source of [fixtures + "/packages", fixtures + "/test-packages"]) {
     for (const name of readdirSync(source).filter((entry) => entry.endsWith(".json"))) copyFileSync(source + "/" + name, packageDir + "/" + name);
   }
   const tenants = JSON.parse(readFileSync(`${root}scripts/frontend-tenants.json`, "utf8"));

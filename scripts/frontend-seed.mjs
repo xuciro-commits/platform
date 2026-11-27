@@ -1,8 +1,11 @@
 #!/usr/bin/env node
 import { randomUUID } from "node:crypto";
 import { readFileSync } from "node:fs";
+import { join } from "node:path";
+import { fixtureRoot, fixtureRelease } from "./package-fixtures.mjs";
 import { enterpriseRosterSteps, resolveMemberProfile } from "./demo-roster.mjs";
 
+const fixtures = fixtureRoot();
 const host = process.env.PLATFORM_HOST ?? "http://127.0.0.1:18511";
 const defaultFiles = ["./frontend-seed.json", ...(process.env.PLATFORM_LEGACY_CRM_FIXTURE === "1" ? ["./crm-project.json"] : [])];
 const files = process.argv.slice(2).length ? process.argv.slice(2) : defaultFiles;
@@ -54,11 +57,12 @@ async function connect(tenant, subject = "admin") {
 }
 
 async function importPackage(session, path) {
-  const content = JSON.parse(readFileSync(new URL(path, import.meta.url), "utf8"));
-  const inspected = await session.call("/v1/packages/inspect", { content });
+  const release = fixtureRelease(path);
+  const content = release ? undefined : JSON.parse(readFileSync(join(fixtures, path), "utf8"));
+  const inspected = await session.call("/v1/packages/inspect", release ?? { content });
   const accepted = await session.submit("platform.package", inspected.descriptor.id, "import", { id: inspected.descriptor.id, digest: inspected.digest }, "platform", session.packageRevision);
   session.packageRevision = accepted.revision;
-  return content;
+  return content ?? inspected.descriptor;
 }
 
 async function installPackage(session, path) {
@@ -69,7 +73,7 @@ async function installPackage(session, path) {
   return descriptor;
 }
 
-const partyPackages = ["./frontend-fixtures/geo-0.1.2.json", "./frontend-fixtures/party-0.2.2.json"];
+const partyPackages = ["frontend-fixtures/geo-0.1.2.json", "frontend-fixtures/party-0.2.2.json"];
 
 async function members(session, sample) {
   for (const [id, entry] of Object.entries(sample.members ?? {})) {
@@ -204,7 +208,7 @@ for (const file of files) {
   const written = await records(main, sample);
 
   if (sample.project.name === "sales") {
-    for (const path of ["./frontend-fixtures/production-provider-0.1.4.json", "../deploy/packages/production-provider.json"]) await importPackage(main, path);
+    for (const path of ["frontend-fixtures/production-provider-0.1.4.json", "packages/production-provider.json"]) await importPackage(main, path);
   }
 
   const steps = sample.project.name === "sales" ? [...(sample.steps ?? []), ...enterpriseRosterSteps()] : (sample.steps ?? []);
@@ -248,7 +252,7 @@ for (const file of files) {
 
 const tenantPackages = {
   crm: {
-    packages: [...partyPackages, "./frontend-fixtures/crm-official-0.3.0.json"],
+    packages: [...partyPackages, "frontend-fixtures/crm-official-0.3.0.json"],
     grants: {},
     verifyDemo: true,
     verifyDemoAs: "manager",
@@ -257,13 +261,13 @@ const tenantPackages = {
   official: { packages: partyPackages, grants: {} },
   sim: { packages: partyPackages, grants: {} },
   phone: {
-    packages: [...partyPackages, "./frontend-fixtures/call-0.1.0.json", "./frontend-fixtures/phone-0.1.1.json", "./frontend-fixtures/crm-official-0.3.3.json"],
+    packages: [...partyPackages, "frontend-fixtures/call-0.1.0.json", "frontend-fixtures/phone-0.1.1.json", "frontend-fixtures/crm-official-0.3.3.json"],
     grants: { "user-1": [["party", "user"], ["phone", "agent"], ["crm", "salesrep"]], "manager-1": [["party", "user"], ["phone", "gateway"]] },
     bind: ["call/1"],
   },
   publisher: {
     verifyDemo: true,
-    packages: [...partyPackages, "./frontend-fixtures/projects-0.1.1.json", "./frontend-fixtures/assets-0.1.0.json"],
+    packages: [...partyPackages, "frontend-fixtures/projects-0.1.1.json", "frontend-fixtures/assets-0.1.0.json"],
     grants: { "admin-1": [["party", "user"], ["projects", "manager"], ["assets", "custodian"]], "user-1": [["party", "user"], ["projects", "member"], ["assets", "staff"]] },
   },
 };

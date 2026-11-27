@@ -1,0 +1,10 @@
+{
+  "repository": "xuciro-commits/platform-packages",
+  "revision": null,
+  "manifestSha256": "ac11811e35ec3fc7b19573e3bff61527eb93df77efcf650a5b84d65449db88b1",
+  "releases": {
+    "frontend-fixtures/crm-official-0.3.0.json": "https://github.com/xuciro-commits/platform-packages/releases/download/crm/v0.3.0/crm.json",
+    "frontend-fixtures/party-0.1.0.json": "https://github.com/xuciro-commits/platform-packages/releases/download/party/v0.1.0/party.json",
+    "frontend-fixtures/uom-0.1.1.json": "https://github.com/xuciro-commits/platform-packages/releases/download/uom/v0.1.1/uom.json"
+  }
+}
