@@ -570,3 +570,68 @@ test("capabilities: binding a capability contract makes dependent entries appear
   await expect(page.getByRole("heading", { level: 1, name: `Lead ${suffix}` })).toBeVisible();
   await expect(page.getByRole("button", { name: "Place call", exact: true })).toHaveCount(0);
 });
+
+
+test("navigation: two-level collapsible groups, note page, deep link, and role pruning", async ({ page }) => {
+  await signIn(page);
+  await submit(page, "build.app.create", "build.app", "APP-OPSGUIDE", {
+    name: "opsguide",
+    title: "Ops Guide",
+    pages: [],
+    groups: [
+      {
+        id: "daily",
+        title: "Daily",
+        entries: [
+          { kind: "note", id: "welcome", title: "Start here", body: "Welcome to the operations guide." },
+        ],
+        groups: [
+          {
+            id: "guides",
+            title: "Guides",
+            collapsed: true,
+            entries: [
+              { kind: "note", id: "sop", title: "Standard checklist", body: "Check every item before dispatch." },
+            ],
+          },
+          {
+            id: "admin-only",
+            title: "Admin only",
+            roles: ["builder"],
+            entries: [
+              { kind: "note", id: "builder-sop", title: "Builder guide", body: "Only builders see this." },
+            ],
+          },
+        ],
+      },
+    ],
+  });
+  await submit(page, "build.app.publish", "build.app", "APP-OPSGUIDE", {}, 1);
+
+  await page.goto("/opsguide/welcome");
+  await expect(page.getByRole("heading", { level: 1, name: "Start here" })).toBeVisible();
+  await expect(page.getByText("Welcome to the operations guide.")).toBeVisible();
+
+  const nav = page.getByRole("navigation", { name: "Primary navigation" });
+  await expect(nav.getByRole("button", { name: "Guides", exact: true })).toBeVisible();
+  await expect(nav.getByRole("button", { name: "Admin only", exact: true })).toBeVisible();
+  await expect(nav.getByRole("link", { name: "Standard checklist" })).toHaveCount(0);
+
+  await page.goto("/opsguide/sop");
+  await expect(page.getByRole("heading", { level: 1, name: "Standard checklist" })).toBeVisible();
+  await expect(page.getByText("Check every item before dispatch.")).toBeVisible();
+  await expect(nav.getByRole("link", { name: "Standard checklist" })).toBeVisible();
+
+  await page.goto("/opsguide/welcome");
+  await expect(nav.getByRole("link", { name: "Standard checklist" })).toHaveCount(0);
+  await nav.getByRole("button", { name: "Guides", exact: true }).click();
+  await expect(nav.getByRole("link", { name: "Standard checklist" })).toBeVisible();
+  await page.reload();
+  await expect(nav.getByRole("link", { name: "Standard checklist" })).toBeVisible();
+
+  await signIn(page, "user-1 · acceptance");
+  await page.goto("/opsguide/welcome");
+  await expect(page.getByRole("heading", { level: 1, name: "Start here" })).toBeVisible();
+  await expect(nav.getByRole("button", { name: "Guides", exact: true })).toBeVisible();
+  await expect(nav.getByRole("button", { name: "Admin only", exact: true })).toHaveCount(0);
+});

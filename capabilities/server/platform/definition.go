@@ -104,11 +104,25 @@ type ApplicationPageReplacement struct {
 	View string `json:"view"`
 	Page string `json:"page"`
 }
+type AppMenuEntry struct {
+	Kind   string `json:"kind,omitempty"`
+	ID     string `json:"id,omitempty"`
+	Title  string `json:"title,omitempty"`
+	Body   string `json:"body,omitempty"`
+	Page   string `json:"page,omitempty"`
+	Object string `json:"object,omitempty"`
+	Report string `json:"report,omitempty"`
+}
+
 type AppGroup struct {
-	Title  string   `json:"title"`
-	Roles  []string `json:"roles,omitempty"`
-	Pages  []string `json:"pages"`
-	Layout string   `json:"layout,omitempty"`
+	ID        string         `json:"id,omitempty"`
+	Title     string         `json:"title"`
+	Roles     []string       `json:"roles,omitempty"`
+	Pages     []string       `json:"pages,omitempty"`
+	Entries   []AppMenuEntry `json:"entries,omitempty"`
+	Groups    []AppGroup     `json:"groups,omitempty"`
+	Collapsed bool           `json:"collapsed,omitempty"`
+	Layout    string         `json:"layout,omitempty"`
 }
 
 func IconName(s string) bool {

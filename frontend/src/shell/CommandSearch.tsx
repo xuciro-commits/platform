@@ -5,7 +5,7 @@ import { HStack } from "@astryxdesign/core/Layout";
 import { Text } from "@astryxdesign/core/Text";
 import type { SearchSource } from "@astryxdesign/core/Typeahead";
 import { type ReactNode, useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { type App, type NavItem, pathOf } from "../apps";
+import { type App, type NavItem, pathOf, sectionItems } from "../apps";
 import { entries } from "../apps/entries";
 import { type Command, type Destination, type Recent, SearchScope } from "../commandScope";
 import { useRecordHref } from "../recordRoutes";
@@ -44,7 +44,7 @@ export function CommandSearch({ app, item, apps, tenant, children }: { app: App;
   }), [remember]);
   useHotkeys(["meta+k", "ctrl+k"].map((keys) => ({ keys, onPress: scope.openSearch, allowInInputs: true, isDisabled: open })));
 
-  const targets = useMemo(() => apps.flatMap((application) => application.sections.flatMap((section) => section.items
+  const targets = useMemo(() => apps.flatMap((application) => application.sections.flatMap((section) => sectionItems(section)
     .filter((entry) => application.group === "installed" || Object.hasOwn(entries, `${application.id}/${entry.id}`))
     .map((entry) => ({ application, href: pathOf(application, entry), label: t(entry.label) })))), [apps]);
   const entryHref = pathOf(app, item);

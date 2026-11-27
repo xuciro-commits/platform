@@ -62,8 +62,13 @@ import {
   WrenchScrewdriverIcon,
 } from "@heroicons/react/24/outline";
 
-export type NavItem = { id: string; label: string; icon: IconType; object?: string; description?: string; settings?: string[] };
-export type NavSection = { title: string; items: NavItem[] };
+export type NavItem = { id: string; label: string; icon: IconType; kind?: "page" | "dashboard" | "report" | "note"; object?: string; description?: string; body?: string; report?: string; settings?: string[] };
+export type NavGroup = { id: string; title: string; collapsed?: boolean; items: NavItem[] };
+export type NavSection = { id?: string; title: string; collapsed?: boolean; items: NavItem[]; groups?: NavGroup[] };
+
+export function sectionItems(section: NavSection): NavItem[] {
+  return [...section.items, ...(section.groups ?? []).flatMap((group) => group.items)];
+}
 export type RailGroup = "start" | "installed" | "build" | "run" | "manage";
 
 const slug = (text: string) => text.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "") || "settings";
@@ -302,11 +307,12 @@ export const apps: App[] = [
 export function locate(path: string, available: App[] = apps) {
   const [, appId, itemId] = path.split("/");
   const app = available.find((candidate) => candidate.id === appId) ?? available[0];
-  const items = app.sections.flatMap((section) => section.items);
+  const items = app.sections.flatMap((section) => sectionItems(section));
   const item = items.find((candidate) => candidate.id === itemId) ?? items[0];
-  return { app, item, found: (!appId || app.id === appId) && (!itemId || item.id === itemId) };
+  return { app, item, found: (!appId || app.id === appId) && (!itemId || item?.id === itemId) };
 }
 
 export function pathOf(app: App, item?: NavItem) {
-  return `/${app.id}/${(item ?? app.sections[0].items[0]).id}`;
+  const fallback = app.sections.flatMap((section) => sectionItems(section))[0];
+  return `/${app.id}/${(item ?? fallback).id}`;
 }

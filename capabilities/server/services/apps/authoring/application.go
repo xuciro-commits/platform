@@ -124,12 +124,28 @@ func (o *Owner) installApplication(c platform.Caller, a protocol.Application) *p
 	return nil
 }
 
-func ApplicationDescriptor(a protocol.Application) platform.Application {
-	groups := make([]platform.AppGroup, 0, len(a.Groups))
-	for _, g := range a.Groups {
-		groups = append(groups, platform.AppGroup{Title: g.Title, Roles: slices.Clone(g.Roles), Pages: slices.Clone(g.Pages), Layout: g.Layout})
+func groupDescriptors(src []protocol.Group) []platform.AppGroup {
+	if len(src) == 0 {
+		return nil
 	}
-	return platform.Application{Languages: a.Languages, Profile: a.Profile, Header: a.Header, Name: a.Name, Title: a.Title, Description: a.Description, Icon: a.Icon, Surface: a.Surface, Pages: slices.Clone(a.Pages), Groups: groups, Dashboard: dashboardBody(a.Dashboard), Resources: slices.Clone(a.Resources), Concepts: a.Concepts, UIProfile: a.UIProfile, Variables: a.Variables, Queries: a.Queries, Extends: a.Extends, Entry: a.Entry, Replacements: slices.Clone(a.Replacements)}
+	groups := make([]platform.AppGroup, 0, len(src))
+	for _, g := range src {
+		groups = append(groups, platform.AppGroup{
+			ID:        g.ID,
+			Title:     g.Title,
+			Roles:     slices.Clone(g.Roles),
+			Pages:     slices.Clone(g.Pages),
+			Entries:   slices.Clone(g.Entries),
+			Groups:    groupDescriptors(g.Groups),
+			Collapsed: g.Collapsed,
+			Layout:    g.Layout,
+		})
+	}
+	return groups
+}
+
+func ApplicationDescriptor(a protocol.Application) platform.Application {
+	return platform.Application{Languages: a.Languages, Profile: a.Profile, Header: a.Header, Name: a.Name, Title: a.Title, Description: a.Description, Icon: a.Icon, Surface: a.Surface, Pages: slices.Clone(a.Pages), Groups: groupDescriptors(a.Groups), Dashboard: dashboardBody(a.Dashboard), Resources: slices.Clone(a.Resources), Concepts: a.Concepts, UIProfile: a.UIProfile, Variables: a.Variables, Queries: a.Queries, Extends: a.Extends, Entry: a.Entry, Replacements: slices.Clone(a.Replacements)}
 }
 
 func dashboardBody(blocks []protocol.DashboardBlock) json.RawMessage {
@@ -149,7 +165,7 @@ func (o *Owner) checkApplication(a protocol.Application) error {
 	if err := o.env.CheckName(a.Name, a.ID); err != nil {
 		return err
 	}
-	if len(a.Pages) == 0 && len(a.Resources) == 0 {
+	if len(a.Pages) == 0 && len(a.Resources) == 0 && len(a.Groups) == 0 {
 		return fmt.Errorf("an application needs pages or declared resources")
 	}
 	if a.Icon != "" && !platform.IconName(a.Icon) {

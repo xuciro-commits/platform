@@ -12,14 +12,25 @@ import (
 
 func CheckApplicationGroups(a platform.Application) error {
 	grouped := map[string]string{}
-	for _, g := range a.Groups {
+	groupIDs := map[string]bool{}
+	var check func(g platform.AppGroup, depth int) error
+	check = func(g platform.AppGroup, depth int) error {
 		if strings.TrimSpace(g.Title) == "" {
 			return fmt.Errorf("a group needs a title")
 		}
-		if len(g.Pages) == 0 {
+		if g.ID != "" {
+			if groupIDs[g.ID] {
+				return fmt.Errorf("the group id %q is used twice", g.ID)
+			}
+			groupIDs[g.ID] = true
+		}
+		if depth > 1 && len(g.Groups) > 0 {
+			return fmt.Errorf("the group %q nests more than two levels", g.Title)
+		}
+		if len(g.Pages) == 0 && len(g.Entries) == 0 && len(g.Groups) == 0 {
 			return fmt.Errorf("the group %q holds no page", g.Title)
 		}
-		for _, page := range g.Pages {
+		checkPage := func(page string) error {
 			if !slices.Contains(a.Pages, page) {
 				return fmt.Errorf("the group %q names the page %q, which the application does not hold", g.Title, page)
 			}
@@ -27,6 +38,42 @@ func CheckApplicationGroups(a platform.Application) error {
 				return fmt.Errorf("the page %q is under %q and %q", page, other, g.Title)
 			}
 			grouped[page] = g.Title
+			return nil
+		}
+		for _, page := range g.Pages {
+			if err := checkPage(page); err != nil {
+				return err
+			}
+		}
+		for _, entry := range g.Entries {
+			switch entry.Kind {
+			case "", "page":
+				if err := checkPage(entry.Page); err != nil {
+					return err
+				}
+			case "note":
+				if strings.TrimSpace(entry.ID) == "" || strings.TrimSpace(entry.Title) == "" {
+					return fmt.Errorf("a note entry in %q needs an id and a title", g.Title)
+				}
+			case "dashboard":
+			case "report":
+				if strings.TrimSpace(entry.Object) == "" || strings.TrimSpace(entry.Report) == "" {
+					return fmt.Errorf("a report entry in %q needs an object and a report name", g.Title)
+				}
+			default:
+				return fmt.Errorf("unknown menu entry kind %q in %q", entry.Kind, g.Title)
+			}
+		}
+		for _, sub := range g.Groups {
+			if err := check(sub, depth+1); err != nil {
+				return err
+			}
+		}
+		return nil
+	}
+	for _, g := range a.Groups {
+		if err := check(g, 1); err != nil {
+			return err
 		}
 	}
 	return nil

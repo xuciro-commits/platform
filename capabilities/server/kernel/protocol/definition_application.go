@@ -218,12 +218,18 @@ type ApplicationPage struct {
 	Title       string `json:"title"`
 	Description string `json:"description,omitempty"`
 	Object      string `json:"object,omitempty"`
+	Kind        string `json:"kind,omitempty"`
+	Body        string `json:"body,omitempty"`
+	Report      string `json:"report,omitempty"`
 }
 
 type ApplicationMenuGroup struct {
-	Title   string            `json:"title,omitempty"`
-	Layout  string            `json:"layout,omitempty"`
-	Entries []ApplicationPage `json:"entries"`
+	ID        string                 `json:"id,omitempty"`
+	Title     string                 `json:"title,omitempty"`
+	Layout    string                 `json:"layout,omitempty"`
+	Collapsed bool                   `json:"collapsed,omitempty"`
+	Entries   []ApplicationPage      `json:"entries"`
+	Groups    []ApplicationMenuGroup `json:"groups,omitempty"`
 }
 
 type ApplicationView struct {

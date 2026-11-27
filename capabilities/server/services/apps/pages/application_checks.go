@@ -11,7 +11,7 @@ func (b Bindings) CheckApplication(id string, a platform.Application, published 
 	if a.Name == "" || a.Title == "" {
 		return fmt.Errorf("application %q: it needs a name and a title", a.Name)
 	}
-	if len(a.Pages) == 0 && len(a.Resources) == 0 {
+	if len(a.Pages) == 0 && len(a.Groups) == 0 && len(a.Resources) == 0 {
 		return fmt.Errorf("application %s: it needs pages or declared resources", a.Name)
 	}
 	if a.Icon != "" && !platform.IconName(a.Icon) {

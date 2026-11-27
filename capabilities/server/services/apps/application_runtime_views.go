@@ -130,17 +130,75 @@ func applicationMenu(groups []platform.AppGroup, pages []protocol.ApplicationPag
 	for _, page := range pages {
 		visible[page.Name] = page
 	}
-	var menu []protocol.ApplicationMenuGroup
 	used := make(map[string]bool, len(pages))
-	for _, group := range groups {
-		projected := protocol.ApplicationMenuGroup{Title: group.Title, Layout: group.Layout}
+	var buildGroup func(group platform.AppGroup) (protocol.ApplicationMenuGroup, bool)
+	buildGroup = func(group platform.AppGroup) (protocol.ApplicationMenuGroup, bool) {
+		projected := protocol.ApplicationMenuGroup{ID: group.ID, Title: group.Title, Layout: group.Layout, Collapsed: group.Collapsed, Entries: []protocol.ApplicationPage{}}
 		for _, name := range group.Pages {
 			if page, ok := visible[name]; ok {
 				projected.Entries = append(projected.Entries, page)
 				used[name] = true
 			}
 		}
-		if len(projected.Entries) != 0 {
+		for _, entry := range group.Entries {
+			switch entry.Kind {
+			case "", "page":
+				if page, ok := visible[entry.Page]; ok {
+					projected.Entries = append(projected.Entries, page)
+					used[entry.Page] = true
+				}
+			case "note":
+				projected.Entries = append(projected.Entries, protocol.ApplicationPage{
+					Name:  entry.ID,
+					Title: entry.Title,
+					Kind:  "note",
+					Body:  entry.Body,
+				})
+			case "dashboard":
+				name := entry.ID
+				if name == "" {
+					name = "dashboard"
+				}
+				title := entry.Title
+				if title == "" {
+					title = "Dashboard"
+				}
+				projected.Entries = append(projected.Entries, protocol.ApplicationPage{
+					Name:  name,
+					Title: title,
+					Kind:  "dashboard",
+				})
+			case "report":
+				name := entry.ID
+				if name == "" {
+					name = entry.Object + "--" + entry.Report
+				}
+				title := entry.Title
+				if title == "" {
+					title = entry.Report
+				}
+				projected.Entries = append(projected.Entries, protocol.ApplicationPage{
+					Name:   name,
+					Title:  title,
+					Kind:   "report",
+					Object: entry.Object,
+					Report: entry.Report,
+				})
+			}
+		}
+		for _, sub := range group.Groups {
+			if child, ok := buildGroup(sub); ok {
+				projected.Groups = append(projected.Groups, child)
+			}
+		}
+		if len(projected.Entries) == 0 && len(projected.Groups) == 0 {
+			return protocol.ApplicationMenuGroup{}, false
+		}
+		return projected, true
+	}
+	var menu []protocol.ApplicationMenuGroup
+	for _, group := range groups {
+		if projected, ok := buildGroup(group); ok {
 			menu = append(menu, projected)
 		}
 	}

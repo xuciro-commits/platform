@@ -19,9 +19,6 @@ func ProjectApplication(registered platform.Definition, projection publication.A
 		return !opens[platform.AssetRef{App: def.Ref.App, Kind: platform.AssetPage, Name: name}]
 	}
 	application.Pages = slices.DeleteFunc(slices.Clone(application.Pages), closed)
-	if len(application.Pages) == 0 && len(application.Resources) == 0 && registered.Source != "code" {
-		return platform.Definition{}, false
-	}
 	roleSet := m.RolesFor(def.Ref.App, def.Ref.Name+".")
 	groupAllowed := func(roles []string) bool {
 		if len(roles) == 0 {
@@ -36,24 +33,72 @@ func ProjectApplication(registered platform.Definition, projection publication.A
 	}
 	hiddenByGroup := map[string]bool{}
 	shownByGroup := map[string]bool{}
+	var markHidden func(g platform.AppGroup)
+	markHidden = func(g platform.AppGroup) {
+		for _, name := range g.Pages {
+			hiddenByGroup[name] = true
+		}
+		for _, entry := range g.Entries {
+			if (entry.Kind == "" || entry.Kind == "page") && entry.Page != "" {
+				hiddenByGroup[entry.Page] = true
+			}
+		}
+		for _, sub := range g.Groups {
+			markHidden(sub)
+		}
+	}
+	var projectGroup func(g platform.AppGroup) (platform.AppGroup, bool)
+	projectGroup = func(g platform.AppGroup) (platform.AppGroup, bool) {
+		if !groupAllowed(g.Roles) {
+			markHidden(g)
+			return platform.AppGroup{}, false
+		}
+		g.Pages = slices.DeleteFunc(slices.Clone(g.Pages), closed)
+		for _, name := range g.Pages {
+			shownByGroup[name] = true
+		}
+		entries := make([]platform.AppMenuEntry, 0, len(g.Entries))
+		for _, entry := range g.Entries {
+			switch entry.Kind {
+			case "", "page":
+				if entry.Page != "" && !closed(entry.Page) {
+					shownByGroup[entry.Page] = true
+					entries = append(entries, entry)
+				}
+			case "report":
+				if _, ok := entities[entry.Object]; ok {
+					entries = append(entries, entry)
+				}
+			case "dashboard":
+				if len(application.Dashboard) > 0 {
+					entries = append(entries, entry)
+				}
+			case "note":
+				entries = append(entries, entry)
+			}
+		}
+		g.Entries = entries
+		subs := make([]platform.AppGroup, 0, len(g.Groups))
+		for _, sub := range g.Groups {
+			if projected, ok := projectGroup(sub); ok {
+				subs = append(subs, projected)
+			}
+		}
+		g.Groups = subs
+		if len(g.Pages) == 0 && len(g.Entries) == 0 && len(g.Groups) == 0 {
+			return platform.AppGroup{}, false
+		}
+		return g, true
+	}
 	groups := make([]platform.AppGroup, 0, len(application.Groups))
 	for _, g := range application.Groups {
-		if !groupAllowed(g.Roles) {
-			for _, name := range g.Pages {
-				hiddenByGroup[name] = true
-			}
-			continue
-		}
-		if g.Pages = slices.DeleteFunc(slices.Clone(g.Pages), closed); len(g.Pages) > 0 {
-			for _, name := range g.Pages {
-				shownByGroup[name] = true
-			}
-			groups = append(groups, g)
+		if projected, ok := projectGroup(g); ok {
+			groups = append(groups, projected)
 		}
 	}
 	application.Groups = groups
 	application.Pages = slices.DeleteFunc(application.Pages, func(name string) bool { return hiddenByGroup[name] && !shownByGroup[name] })
-	if len(application.Pages) == 0 && len(application.Resources) == 0 && registered.Source != "code" {
+	if len(application.Pages) == 0 && len(application.Groups) == 0 && len(application.Resources) == 0 && registered.Source != "code" {
 		return platform.Definition{}, false
 	}
 	application.Header = VisibleApplicationHeader(application)
@@ -63,7 +108,7 @@ func ProjectApplication(registered platform.Definition, projection publication.A
 		}
 		return !visibleResources[ref]
 	})
-	if len(application.Pages) == 0 && len(application.Resources) == 0 && registered.Source != "code" {
+	if len(application.Pages) == 0 && len(application.Groups) == 0 && len(application.Resources) == 0 && registered.Source != "code" {
 		return platform.Definition{}, false
 	}
 	application.Replacements = slices.DeleteFunc(slices.Clone(application.Replacements), func(replacement platform.ApplicationPageReplacement) bool {

@@ -373,9 +373,13 @@ export type AppEntry = {
 };
 
 export type AppGroup = {
+  id?: string;
   title: string;
   roles?: string[];
-  pages: string[];
+  pages?: string[];
+  entries?: AppMenuEntry[];
+  groups?: AppGroup[];
+  collapsed?: boolean;
   layout?: string;
 };
 
@@ -393,6 +397,16 @@ export type AppInfo = {
   consumes: string[];
   emits: EffectKind[];
   interfaces: Interface[];
+};
+
+export type AppMenuEntry = {
+  kind?: string;
+  id?: string;
+  title?: string;
+  body?: string;
+  page?: string;
+  object?: string;
+  report?: string;
 };
 
 export type AppPermissions = {
@@ -537,9 +551,12 @@ export type ApplicationMaintenance = {
 };
 
 export type ApplicationMenuGroup = {
+  id?: string;
   title?: string;
   layout?: string;
+  collapsed?: boolean;
   entries: ApplicationPage[];
+  groups?: ApplicationMenuGroup[];
 };
 
 export type ApplicationMonitoring = {
@@ -559,6 +576,9 @@ export type ApplicationPage = {
   title: string;
   description?: string;
   object?: string;
+  kind?: string;
+  body?: string;
+  report?: string;
 };
 
 export type ApplicationPageReplacement = {

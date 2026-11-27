@@ -4,11 +4,11 @@ import { Divider } from "@astryxdesign/core/Divider";
 import { EmptyState } from "@astryxdesign/core/EmptyState";
 import { useHotkeys } from "@astryxdesign/core/hooks";
 import { HStack, VStack } from "@astryxdesign/core/Layout";
-import { ChartPieIcon, Cog6ToothIcon, RectangleGroupIcon, WrenchScrewdriverIcon } from "@heroicons/react/24/outline";
+import { ChartBarIcon, ChartPieIcon, Cog6ToothIcon, DocumentTextIcon, RectangleGroupIcon, WrenchScrewdriverIcon } from "@heroicons/react/24/outline";
 import { MobileNav } from "@astryxdesign/core/MobileNav";
 import { useToast } from "@astryxdesign/core/Toast";
 import { lazy, Suspense, useEffect, useMemo, useState } from "react";
-import { type App, apps, locate, type NavItem, type NavSection, pathOf, settingsItemId } from "../apps";
+import { type App, apps, locate, type NavGroup, type NavItem, type NavSection, pathOf, sectionItems, settingsItemId } from "../apps";
 import { entries } from "../apps/entries";
 import { useRecordHome } from "../recordRoutes";
 import { type Api, useRead, useSession } from "../host";
@@ -28,27 +28,55 @@ import { motionStyles } from "../pages/motion";
 
 const AppDashboard = lazy(() => import("../pages/AppDashboard").then((module) => ({ default: module.AppDashboard })));
 const SettingsTables = lazy(() => import("../pages/SettingsTables").then((module) => ({ default: module.SettingsTables })));
+const NotePage = lazy(() => import("../pages/NotePage").then((module) => ({ default: module.NotePage })));
+
+function menuEntries(entries: Api.ApplicationPage[] | undefined, entities: Api.EntityInfo[]): NavItem[] {
+  return (entries ?? []).flatMap((page): NavItem[] => {
+    if (page.kind === "note") {
+      return [{ id: page.name, label: page.title, icon: DocumentTextIcon, kind: "note", body: page.body }];
+    }
+    if (page.kind === "dashboard") {
+      return [{ id: page.name || "dashboard", label: page.title || "Dashboard", icon: ChartPieIcon, kind: "dashboard" }];
+    }
+    if (page.kind === "report" && page.object) {
+      return [{ id: page.name, label: page.title, icon: ChartBarIcon, kind: "report", object: page.object, report: page.report }];
+    }
+    if (!page.object) return [];
+    return [{
+      id: page.name,
+      label: page.title,
+      icon: iconOf(entities.find((entity) => entity.type === page.object)?.icon, RectangleGroupIcon),
+      kind: "page",
+      object: page.object,
+      description: page.description,
+    }];
+  });
+}
 
 function installedApps(views: Api.ApplicationView[], entities: Api.EntityInfo[]): App[] {
   return views.flatMap((view) => {
-    const sections = (view.menu ?? []).flatMap((group): NavSection[] => {
+    const sections = (view.menu ?? []).flatMap((group, index): NavSection[] => {
       if (group.layout === "settings") {
-        const types = group.entries.flatMap((page) => (page.object ? [page.object] : []));
+        const types = (group.entries ?? []).flatMap((page) => (page.object ? [page.object] : []));
         return types.length ? [{ title: "", items: [{ id: settingsItemId(group.title), label: group.title || "Settings", icon: Cog6ToothIcon, settings: types }] }] : [];
       }
-      const items = group.entries.flatMap((page): NavItem[] => page.object ? [{
-        id: page.name,
-        label: page.title,
-        icon: iconOf(entities.find((entity) => entity.type === page.object)?.icon, RectangleGroupIcon),
-        object: page.object,
-        description: page.description,
-      }] : []);
-      return items.length ? [{ title: group.title || "Pages", items }] : [];
+      const items = menuEntries(group.entries, entities);
+      const groups = (group.groups ?? []).flatMap((sub, subIndex): NavGroup[] => {
+        const subItems = menuEntries(sub.entries, entities);
+        if (subItems.length === 0) return [];
+        return [{ id: sub.id || `${group.id || index}-${subIndex}-${sub.title || "group"}`, title: sub.title || "Pages", collapsed: sub.collapsed, items: subItems }];
+      });
+      return items.length || groups.length
+        ? [{ id: group.id || `${index}-${group.title || "section"}`, title: group.title || "Pages", collapsed: group.collapsed, items, groups: groups.length ? groups : undefined }]
+        : [];
     });
     if (!sections.length) return [];
-    const dashboard = view.dashboard?.length && !sections.some((section) => section.items.some((page) => page.id === "dashboard")) ? view.dashboard : undefined;
-    const overview: NavItem[] = dashboard ? [{ id: "dashboard", label: "Dashboard", icon: ChartPieIcon }] : [];
-    sections[0].items = [...overview, ...sections[0].items];
+    const allItems = sections.flatMap((section) => sectionItems(section));
+    const hasDashboardEntry = allItems.some((page) => page.id === "dashboard" || page.kind === "dashboard");
+    const dashboard = view.dashboard?.length ? view.dashboard : undefined;
+    if (dashboard && !hasDashboardEntry) {
+      sections[0].items = [{ id: "dashboard", label: "Dashboard", icon: ChartPieIcon, kind: "dashboard" }, ...sections[0].items];
+    }
     const id = view.name || view.app;
     const builtinIcon = id === "build" ? WrenchScrewdriverIcon : undefined;
     return [{ id, label: view.title, icon: view.icon ? iconOf(view.icon, RectangleGroupIcon) : (builtinIcon ?? RectangleGroupIcon), badge: !view.icon && !builtinIcon, group: "installed", sections, dashboard, packageId: view.package, hasDemo: view.hasDemo, surface: view.surface }];
@@ -136,7 +164,8 @@ export function Shell() {
   const content = retiredLink ? <RetainedRecord key={path} path={path} />
     : missing ? <Missing home={pathOf(navApp)} label={t(navApp.label)} />
     : Entry ? <Entry key={`${app.id}/${item.id}`} />
-    : app.dashboard && item.id === "dashboard" ? <AppDashboard key={app.id} title={item.label} blocks={app.dashboard} listOf={(type) => listOf(app, type)} />
+    : item.kind === "note" ? <NotePage key={`${app.id}/${item.id}`} title={item.label} body={item.body ?? ""} />
+    : app.dashboard && (item.id === "dashboard" || item.kind === "dashboard") ? <AppDashboard key={app.id} title={item.label} blocks={app.dashboard} listOf={(type) => listOf(app, type)} />
     : app.group === "installed" && item.settings ? <SettingsTables key={`${app.id}/${item.id}`} title={item.label} types={item.settings} />
     : app.group === "installed" && item.object && listPath ? <Records key={`${app.id}/${item.id}`} declared={{ title: item.label, about: item.description ?? "", type: item.object }} listPath={listPath} id={segments[3]} />
     : null;
@@ -148,7 +177,7 @@ export function Shell() {
     );
   }
   return (
-    <CommandSearch app={navApp} item={navItem ?? navApp.sections[0].items[0]} apps={available} tenant={session.tenant}>
+    <CommandSearch app={navApp} item={navItem ?? sectionItems(navApp.sections[0])[0]} apps={available} tenant={session.tenant}>
       <AppShell
         contentPadding={0}
         sideNav={<Navigation app={navApp} item={navItem} apps={available} object={object || undefined} listPath={listPath} />}
@@ -170,7 +199,7 @@ export function Shell() {
 }
 
 function listOf(app: App, type: string) {
-  const page = app.sections.flatMap((section) => section.items).find((item) => item.object === type);
+  const page = app.sections.flatMap((section) => sectionItems(section)).find((item) => item.object === type && item.kind !== "report");
   return page && `/${app.id}/${page.id}`;
 }
 

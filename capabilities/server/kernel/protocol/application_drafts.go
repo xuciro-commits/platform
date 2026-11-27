@@ -68,8 +68,12 @@ type DashboardBlock struct {
 }
 
 type Group struct {
-	Title  string   `json:"title" field:"required" title:"Heading"`
-	Roles  []string `json:"roles,omitempty" title:"Roles" help:"Only members holding one of these roles see the group; empty for everyone"`
-	Pages  []string `json:"pages" title:"Pages" help:"Pages of the application, by their name, in their order"`
-	Layout string   `json:"layout,omitempty" choices:"menu,settings" title:"Layout" help:"menu lists each page; settings shows the group as one page with a table per object"`
+	ID        string                  `json:"id,omitempty" title:"Identifier"`
+	Title     string                  `json:"title" field:"required" title:"Heading"`
+	Roles     []string                `json:"roles,omitempty" title:"Roles" help:"Only members holding one of these roles see the group; empty for everyone"`
+	Pages     []string                `json:"pages,omitempty" title:"Pages" help:"Pages of the application, by their name, in their order"`
+	Entries   []platform.AppMenuEntry `json:"entries,omitempty" title:"Entries"`
+	Groups    []Group                 `json:"groups,omitempty" title:"Subgroups"`
+	Collapsed bool                    `json:"collapsed,omitempty" title:"Collapsed by default"`
+	Layout    string                  `json:"layout,omitempty" choices:"menu,settings" title:"Layout" help:"menu lists each page; settings shows the group as one page with a table per object"`
 }
