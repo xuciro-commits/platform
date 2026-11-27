@@ -11,7 +11,19 @@ import (
 
 var ValueInputTypes = map[string]string{"text": "string", "longtext": "string", "integer": "integer", "decimal": "number", "date": "date", "datetime": "datetime", "boolean": "boolean", "choice": "string", "reference": "string", "attachment": "attachment", "money": "money", "member": "member"}
 
+func CheckReservedActionNames(o Object) error {
+	for _, a := range o.Actions {
+		if slices.Contains([]string{"create", "edit", "archive", "restore", "reverse", "publish"}, a.Name) {
+			return fmt.Errorf("package %s object %s action %q is reserved by the platform; rename the business action", o.Namespace, o.Type(), a.Name)
+		}
+	}
+	return nil
+}
+
 func CheckProcess(o Object, app, objectType, builderRole, userRole, functionCallType string, lookup func(string) (platform.RecordTypeInfo, bool)) error {
+	if err := CheckReservedActionNames(o); err != nil {
+		return err
+	}
 	states := map[string]bool{}
 	for _, s := range o.States {
 		switch {
@@ -42,8 +54,6 @@ func CheckProcess(o Object, app, objectType, builderRole, userRole, functionCall
 			return fmt.Errorf("the action name %q is not lower-case letters and digits", a.Name)
 		case seen[a.Name]:
 			return fmt.Errorf("%s is declared twice", where)
-		case slices.Contains([]string{"create", "edit", "archive", "publish"}, a.Name):
-			return fmt.Errorf("%s is the platform's own", where)
 		case a.Title == "":
 			return fmt.Errorf("%s has no title", where)
 		case len(o.States) > 0 && len(a.From) == 0:

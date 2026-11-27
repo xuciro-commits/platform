@@ -19,6 +19,9 @@ func checkObjectActions(body *object) error {
 	if err := ontology.CheckFields(declared.Fields, nil, declared.States...); err != nil {
 		return err
 	}
+	if err := ontology.CheckReservedActionNames(declared); err != nil {
+		return err
+	}
 	if err := describes(declared); err != nil {
 		return err
 	}
