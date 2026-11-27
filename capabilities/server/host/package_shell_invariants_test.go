@@ -288,7 +288,7 @@ func TestInvariantK24PackageDemoSeedInstallAndClear(t *testing.T) {
 		t.Fatalf("retire: %v", refusal)
 	}
 	if refusal := submit(packages.SchemaPackageInstall, map[string]any{"id": descriptor.ID, "version": offer.Version}); refusal != nil {
-		t.Fatalf("same-version reinstall after clearing demo: %v", refusal)
+		t.Fatalf("same-version reinstall after clearing demo: %+v (%s)", refusal, refusal.Message)
 	}
 	if ids := recordIDs(); !slices.Equal(ids, []string{"user-order-1"}) || appView().HasDemo {
 		t.Fatalf("reinstall must not restore cleared demo data or claim customer records, got %v", ids)

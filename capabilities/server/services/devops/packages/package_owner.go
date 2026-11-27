@@ -714,7 +714,13 @@ func (d *Owner) decide(c platform.Caller, s *pb.Submission) (func(*pb.ChangeReco
 	if descriptor, err = Rebind(descriptor, namespace); err != nil {
 		return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "{reason}", err.Error())
 	}
-	install, closures, refusal := d.host.PrepareManagedPackage(c, descriptor, available, false, upgrade || rollbackUpgrade, downgrade || rollback && !rollbackUpgrade)
+	prepared := descriptor
+	if prior != nil && prior.State == "retired" && prior.Version == descriptor.Version && descriptor.Blueprint != nil {
+		blueprint := *descriptor.Blueprint
+		blueprint.Seed = nil
+		prepared.Blueprint = &blueprint
+	}
+	install, closures, refusal := d.host.PrepareManagedPackage(c, prepared, available, false, upgrade || rollbackUpgrade, downgrade || rollback && !rollbackUpgrade)
 	if refusal != nil {
 		return nil, refusal
 	}
