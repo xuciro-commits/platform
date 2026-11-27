@@ -37,21 +37,21 @@
 | 模块 | 成熟度 | 证据 | 缺什么、归哪块 |
 |---|---|---|---|
 | 记录：列表、记录页、行内编辑、视图 | 产品级 | `pages/RecordList.tsx`、`RecordPage.tsx`；records 32 项 | — |
-| CRM 包 | 产品级 | crm 29 项、official 8 项 | 升级全链路浏览器用例：一（3.3b，#12） |
+| CRM 包 | 产品级 | crm 29 项、official 8 项 | — |
 | 宿主：接受路径、重放、内存与文件存储 | 能用 | `capabilities/server/kernel`；十三组内核不变量；official 停机重启、备份恢复 | — |
-| PostgreSQL 存储 | 能用 | 3.1a–d；crm 与 official trunk-pg 全过 | Build 监听器瘦身（3.1f）：一（#12） |
+| PostgreSQL 存储 | 能用 | 3.1a–f；crm 与 official trunk-pg 全过 | 全量 trunk-pg 验收卡在提交长时间占住租户处理通道：一（3.1f，#12） |
 | 格式纪元冻结 | 产品级 | `kernel/store/migration.go`、`scripts/check-epoch.mjs`；K1 纪元拒绝、备份纪元拒绝 | — |
-| 构建：类型、字段、状态、动作、发布 | 能用 | `services/ontology`；builder 12 项 | 条件与表达式只能手写：一（3.2d，#12） |
-| 条件与表达式编辑器 | 无 | `pages/` 里没有 `ConditionBuilder`、`ExpressionEditor` | 一（3.2d，#12） |
-| 结构化对比、关系图 | 能用（对比） | `RecordComparison`；builder 发布前审阅 | 关系图等客户要：三（#14） |
-| 客户扩展 | 能用 | `pages/RecordExtensions.tsx`；official “an extension project” | 升级后保留的浏览器核对：一（3.3b，#12） |
-| 市场：安装、升级、卸载、远程包库 | 能用 | `apps/delivery/marketplace.tsx`；marketplace 10 项 | 升级全链路与两条失败用例：一（3.3b，#12） |
+| 构建：类型、字段、状态、动作、发布 | 能用 | `services/ontology`；builder 12 项 | — |
+| 条件与表达式编辑器 | 能用 | `pages/ConditionBuilder.tsx`、`ExpressionEditor.tsx`；builder “a condition picked”、“a formula written” | — |
+| 结构化对比、关系图 | 能用（对比） | `RecordComparison`；builder 发布前审阅、marketplace 升级审阅 | 关系图等客户要：三（#14） |
+| 客户扩展 | 能用 | `pages/RecordExtensions.tsx`；official “an extension project”、marketplace CRM 0.3.1 → 0.3.2 | — |
+| 市场：安装、升级、卸载、远程包库 | 能用 | `apps/delivery/marketplace.tsx`；marketplace 13 项 | — |
 | 授权：角色、ReBAC、临时授权、受限字段 | 能用 | `services/security`；rebac 3 项、crm “roles”、workspace “restricted fields”、official “an extension project” | — |
 | 工作：收件箱、任务、提及、跟进 | 能用 | `pages/InboxPage.tsx`、`services/work`；workspace “inbox”、crm “follow-up” | — |
-| 看板、日历、甘特、仪表盘 | 能用 | `BoardView`、`CalendarView`、`GanttView`、`DashboardPage`；crm、gantt | 列表第 4 布局 `RecordGantt`：三（#14） |
+| 看板、日历、甘特、仪表盘 | 能用 | `BoardView`、`CalendarView`、`GanttView`、`DashboardPage`；crm、gantt | — |
 | 导入导出 | 能用 | `pages/ImportWizard.tsx`、`objects/record_import.go`；crm “import” | 界面、邀请与 128 批已合入；重启复核归 3.4b（#12），万行 20s 归四（#15） |
 | 租户、成员、登录、设置、词汇 | 能用 | `apps/admin`；workspace 17 项、crm “invite” | 自助注册：四（阶段 4，#15） |
-| 主数据：geo、party、uom | 能用 | marketplace “publisher tenant: a master data”；K42、K43 | party 结构化地址：二（2.9 A3b，#13） |
+| 主数据：geo、party、uom | 能用 | marketplace “a master data”、“a business partner stores country and division”、“retains the unstructured address”；K42、K43 | — |
 | 能力：契约、绑定、连接器 | 能用 | `pages/Capabilities.tsx`；workspace “capabilities”；connector 1 项（内存与 pg）；K40、K41、K45、K46 | 双主版本、商业供应商适配：二（2.9 B1，#13） |
 | 电话 | 能用 | `capabilities/voice`、`pages/CallDock.tsx`；phone 3 项、`make test-voice` | 真机核对、本机外放、TLS 与 NAT：二（2.9 B3，#13） |
 | 文档渲染、打印 | 无 | — | 二（2.9 B4，#13），第一个客户提出打印时排 |
@@ -108,7 +108,7 @@
 灵魂：一个人、一个客户只有一份，各应用挂自己的附属对象；能力像插上的显卡，应用只认契约，换供应商不改应用。分层与规则在 [architecture](architecture.md)“扩展”。
 
 - **2.9 主数据与包落点剩余项**（`geo`、`party`、`uom` 迁移及市场种类筛选已随 v0.2.9 落地，安装升级留在市场）：
-  - **A3b 剩余**：`party` 的地址改为可选的结构化引用（国家、区划、街道）。
+  - **A3b 已做**（party 0.2.2，01abfb891）：组织的地址拆成国家（引用 `geo.country`）、区划（引用 `geo.division`）、街道与邮编，旧的自由文本留在“其他地址信息”；marketplace :484 存引用读名称，:277 升级旧 party 包保留原地址。
   - **A5 剩余**：扩展包的落点——目标应用的记录页显示扩展包挂的附属对象（现在只有人员页显示），到第一个扩展包时做。
 - **2.9 B1 / B2 契约与连接器剩余项**（`build.contract`、动作 `uses`、`platform.protocol.bind`、`build.implementation`、一致性测试 `.tested`、出站调用 `build.capabilitycall` 与请求模板/HMAC 签名已落地，K40/K41/K45/K46）：
   - **B1a 剩余**：同名契约的两个主版本并存。
@@ -127,8 +127,9 @@
 界面微件第二批落在各行：每个做成 `src/pages/` 里的一个声明函数，所有类型同时得到；一个一次提交，trunk 加一步用到它。
 旧前端已归档于 Git 标签 `archive/web-final`（`git show archive/web-final:<路径>` 查阅原始意图），未落地能力按业务需要以 Astryx 重做：
 
-- **记录与数据微件**（原 `web/packages/ui/src/records/`）：`RecordGantt`（首个排程包出现时作为列表第 4 种布局）、`RecordTimeline`、`EditableRecordGrid`、
-  `RecordScatter`/`Sparkline`/`Leaderboard`、`PdfViewer`、时序观测图表与高精度 `decimal.ts`。
+- **记录与数据微件**（原 `web/packages/ui/src/records/`）：`RecordGantt` 已由列表第 4 种布局 `GanttView` 做成（gantt 用例）；
+  `RecordTimeline` 不另做，起止日期的时间轴归甘特布局、单个日期归日历布局；`EditableRecordGrid` 不另做，列表单元格已在原位编辑（records “cells”），一项能力一个实现。
+  剩 `RecordScatter`/`Sparkline`/`Leaderboard`（仪表盘部件，等客户要）、`PdfViewer`、时序观测图表与高精度 `decimal.ts`。
 - **关系画布、字段溯源与构建仿真**（原 `web/packages/{app,build}/`）：`RelationCanvas`（类型关系图，等客户要）、`FieldProvenance`、`SearchAround`、
   发布仿真 `simulate.tsx`；出现类型生成界面表达不了的页面时解冻 `services/apps`（Workshop 编排器）。
 - **治理与血缘工作台**（原 `web/packages/govern/src/` 与 `web/e2e/F1–F20*.spec.ts`）：可视化血缘图与导出（`lineage/LineagePage.tsx`）、包所有权转移、
