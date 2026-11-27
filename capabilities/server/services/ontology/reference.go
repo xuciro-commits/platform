@@ -14,6 +14,8 @@ import (
 
 const referenceLimit = 500
 
+const ReferenceGroup = 64
+
 var referenceEvents = []string{SchemaPublish, "platform.package.install", "platform.package.upgrade", "platform.package.downgrade", "platform.package.rollback"}
 
 var packageDemoEvents = []string{"platform.package.install", "platform.package.clear-demo"}
@@ -31,6 +33,11 @@ func DataContinues(e platform.Event) (string, bool) {
 	rest, data := strings.CutPrefix(key, "data:")
 	pkg, _, found := strings.Cut(rest, ":")
 	return pkg, data && found && protocol.Continues(key)
+}
+
+func ReferenceContinues(e platform.Event) bool {
+	key := e.Record.GetSubmission().GetIdempotencyKey()
+	return strings.HasPrefix(key, "reference:") && protocol.Continues(key)
 }
 
 func FillsReference(names []string) bool {
@@ -75,6 +82,7 @@ func FillReference(c platform.Caller, lang string, model func(string) (reflect.T
 	if refusal != nil {
 		return refusal
 	}
+	var pending []*pb.Submission
 	for _, object := range found {
 		if object.Archived || object.State != "published" || len(object.Records) == 0 {
 			continue
@@ -101,10 +109,17 @@ func FillReference(c platform.Caller, lang string, model func(string) (reflect.T
 					values[field.Name] = words[text]
 				}
 			}
-			if refusal := submit(&pb.Submission{TenantId: c.Tenant, PrincipalId: c.ID, Authority: AppID, IdempotencyKey: "reference:" + typ + "/" + id,
-				Target: &pb.EntityRef{Type: typ, Id: id}, Schema: &pb.SchemaRef{Name: typ + ".create", Version: 1}, Payload: platform.Raw(values)}); refusal != nil {
-				return refusal
-			}
+			pending = append(pending, &pb.Submission{TenantId: c.Tenant, PrincipalId: c.ID, Authority: AppID, IdempotencyKey: "reference:" + typ + "/" + id,
+				Target: &pb.EntityRef{Type: typ, Id: id}, Schema: &pb.SchemaRef{Name: typ + ".create", Version: 1}, Payload: platform.Raw(values)})
+		}
+	}
+	if len(pending) > ReferenceGroup {
+		pending = pending[:ReferenceGroup]
+		pending[len(pending)-1].IdempotencyKey += protocol.ContinuationSuffix
+	}
+	for _, s := range pending {
+		if refusal := submit(s); refusal != nil {
+			return refusal
 		}
 	}
 	return nil

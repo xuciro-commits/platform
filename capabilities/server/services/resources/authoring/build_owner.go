@@ -297,7 +297,7 @@ func (b *Build) Manifest() platform.Manifest {
 func (b *Build) Interested(names []string, e platform.Event) bool {
 	_, continues := ontology.DataContinues(e)
 	_, _, people := ontology.PeopleSeeded(e)
-	return continues || people || ontology.FillsReference(names) || ontology.HandlesPackageDemo(names)
+	return continues || people || ontology.FillsReference(names) || ontology.ReferenceContinues(e) || ontology.HandlesPackageDemo(names)
 }
 
 func (b *Build) Handle(c platform.Caller, e platform.Event) *platform.Error {
@@ -307,7 +307,8 @@ func (b *Build) Handle(c platform.Caller, e platform.Event) *platform.Error {
 func (b *Build) Listen(c platform.Caller, e platform.Event, names []string, now time.Time) *platform.Error {
 	continuing, continues := ontology.DataContinues(e)
 	seeded, installer, people := ontology.PeopleSeeded(e)
-	if !continues && !people && !ontology.FillsReference(names) && !ontology.HandlesPackageDemo(names) {
+	reference := ontology.FillsReference(names) || ontology.ReferenceContinues(e)
+	if !continues && !people && !reference && !ontology.HandlesPackageDemo(names) {
 		return nil
 	}
 	model := func(typ string) (reflect.Type, bool) {
@@ -323,7 +324,7 @@ func (b *Build) Listen(c platform.Caller, e platform.Event, names []string, now 
 		principal = installer
 	}
 	member, _ := b.host.Member(principal)
-	if ontology.FillsReference(names) {
+	if reference {
 		lang := cmp.Or(member.Language, b.host.Caller(c, member, "platform").Setting("language"))
 		if refusal := ontology.FillReference(c, lang, model, submit); refusal != nil {
 			return refusal
