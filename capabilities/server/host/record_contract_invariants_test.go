@@ -485,7 +485,7 @@ func TestInvariantK19InverseSetTotalsOnlyUseReadableRowsAndFields(t *testing.T) 
 	live := newInvariantTenant(t, "invariant-k19", protocol.Seat{Subjects: []string{"other"}, Member: platform.Member{ID: "other", Roles: map[string]string{build.ID: ontology.UserRole}}})
 	const parent, child = "invariantproject.purchase", "invariantproject.purchaseline"
 	live.accept(t, "build.object.create", build.ObjectType, "PARENT", map[string]any{
-		"name": "purchase", "title": "Purchase", "access": []ontology.Access{{Role: ontology.UserRole, Read: "all"}},
+		"name": "purchase", "title": "Purchase", "display": "name", "access": []ontology.Access{{Role: ontology.UserRole, Read: "all"}},
 		"fields": []ontology.Field{{Name: "name", Type: "text", Title: "Name"}},
 	})
 	live.accept(t, "build.object.publish", build.ObjectType, "PARENT", nil)
@@ -523,6 +523,9 @@ func TestInvariantK19InverseSetTotalsOnlyUseReadableRowsAndFields(t *testing.T) 
 		var page objects.RecordSetResult
 		if res.Code != http.StatusOK || json.Unmarshal(res.Body.Bytes(), &page) != nil || page.Total == nil || *page.Total != sample.total || len(page.Records) != sample.total || string(page.Sums["amount"]) != sample.amount {
 			t.Fatalf("%s lines: HTTP %d %s", sample.role, res.Code, res.Body)
+		}
+		if page.Refs["purchase"]["ORDER"] != "Order" {
+			t.Fatalf("%s lines: collection rows lack reference names: %s", sample.role, res.Body)
 		}
 		if sample.role == "other" {
 			var line platform.Record

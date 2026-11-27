@@ -46,6 +46,44 @@ func (t *Owner) referenceNames(m platform.Member, typ string, rows []any, now ti
 	return t.nameReferences(m, source, byField, now)
 }
 
+func (t *Owner) recordSetNames(m platform.Member, typ string, rows []json.RawMessage, now time.Time) (map[string]map[string]string, bool) {
+	source, ok := t.entity(typ)
+	if !ok || len(rows) == 0 {
+		return nil, false
+	}
+	m = t.authorizationMember(m)
+	sourceCaller := t.caller(m, source.App)
+	byField := map[string]map[string]bool{}
+	for _, raw := range rows {
+		var row map[string]json.RawMessage
+		if json.Unmarshal(raw, &row) != nil {
+			continue
+		}
+		var record string
+		if json.Unmarshal(row["id"], &record) != nil || record == "" {
+			continue
+		}
+		for _, field := range source.Fields {
+			if field.Type != "member" && (field.Type != "reference" || field.Ref == "") {
+				continue
+			}
+			var id string
+			if json.Unmarshal(row[field.Name], &id) != nil || id == "" {
+				continue
+			}
+			visible := sourceCaller.Authorize(platform.AuthzRequest{Principal: m.ID, Tenant: sourceCaller.Tenant, Kind: "read", Type: typ, Record: record, Fields: []string{field.Name}}, now)
+			if !visible.Allow || len(visible.Withheld) > 0 {
+				continue
+			}
+			if byField[field.Name] == nil {
+				byField[field.Name] = map[string]bool{}
+			}
+			byField[field.Name][id] = true
+		}
+	}
+	return t.nameReferences(m, source, byField, now)
+}
+
 func (t *Owner) historyNames(m platform.Member, typ string, history []records.RecordChange, now time.Time) (map[string]map[string]string, bool) {
 	source, ok := t.entity(typ)
 	if !ok || len(history) == 0 {

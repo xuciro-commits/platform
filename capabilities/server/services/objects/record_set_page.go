@@ -11,9 +11,10 @@ import (
 
 type RecordSetResult struct {
 	platform.RecordSetResult
-	Total     *int                       `json:"total,omitempty"`
-	Sums      map[string]json.RawMessage `json:"sums,omitempty"`
-	SumErrors map[string]string          `json:"sumErrors,omitempty"`
+	Refs      map[string]map[string]string `json:"refs,omitempty"`
+	Total     *int                         `json:"total,omitempty"`
+	Sums      map[string]json.RawMessage   `json:"sums,omitempty"`
+	SumErrors map[string]string            `json:"sumErrors,omitempty"`
 }
 
 func (t *Owner) RecordSetPage(m platform.Member, root platform.RecordTypeInfo, id, name string, now time.Time) (RecordSetResult, *platform.Error) {
@@ -23,6 +24,9 @@ func (t *Owner) RecordSetPage(m platform.Member, root platform.RecordTypeInfo, i
 	if refusal != nil {
 		return page, refusal
 	}
+	var partial bool
+	page.Refs, partial = t.recordSetNames(m, result.Object, result.Records, now)
+	page.Partial = page.Partial || partial
 	if !slices.ContainsFunc(root.Sets, func(set platform.RecordSet) bool { return set.Name == name && set.Direction == "inverse" }) {
 		return page, nil
 	}

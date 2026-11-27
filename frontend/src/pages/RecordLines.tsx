@@ -54,7 +54,7 @@ export function RecordLines({ parent, id, set, child }: { parent: string; id: st
           </TableHeader>
           <TableBody>
             {(answer.records as Line[]).map((row) => (
-              <LineRow key={row.id} row={row} child={child} fields={fields} withheld={withheld.get(row.id)}
+              <LineRow key={row.id} row={row} child={child} fields={fields} withheld={withheld.get(row.id)} refs={answer.refs}
                 archive={archive && (() => act.run({
                   action: archive, id: row.id, revision: row.revision, label: t("Archive row"), name: child.name(row, row.id),
                   reversible: false, onRefused: setRefusal,
@@ -85,7 +85,7 @@ export function RecordLines({ parent, id, set, child }: { parent: string; id: st
   );
 }
 
-function LineRow({ row, child, fields, withheld, archive }: { row: Line; child: Described; fields: Api.FieldInfo[]; withheld?: string[]; archive?: () => void }) {
+function LineRow({ row, child, fields, withheld, refs, archive }: { row: Line; child: Described; fields: Api.FieldInfo[]; withheld?: string[]; refs?: Api.RecordSetResult["refs"]; archive?: () => void }) {
   const editor = useEditor(child, row.id, row, row.revision);
   return (
     <TableRow>
@@ -97,7 +97,7 @@ function LineRow({ row, child, fields, withheld, archive }: { row: Line; child: 
             {withheld?.includes(field.name) ? <Text type="supporting">{t("Cannot view")}</Text>
               : (
                 <PropertyField field={field} parameter={parameter} described={child.entity} value={editor.values[field.name]} form={editor.values}
-                  status={editor.status[field.name]} saving={editor.saving.has(field.name)} labelHidden
+                  name={refs?.[field.name]?.[String(editor.values[field.name] ?? "")]} status={editor.status[field.name]} saving={editor.saving.has(field.name)} labelHidden
                   onChange={parameter && ((value) => editor.change(parameter, value))} onCommit={() => editor.commit(field.name)} />
               )}
           </TableCell>

@@ -4844,6 +4844,7 @@ export type RecordSetResult = {
   partial: boolean;
   sources?: string[];
   definition: string;
+  refs?: Record<string, Record<string, string>>;
   total?: number;
   sums?: Record<string, unknown>;
   sumErrors?: Record<string, string>;
