@@ -1,4 +1,5 @@
 const descriptions = new Map(`
+K55LedgerValuationAndDepletion|过账前余额计价、分层消耗与投影重放一致
 AggregateReferencePath|聚合表达式支持多跳引用路径
 ReservedObjectActions|包编译拒绝系统保留动作名
 K49ReservedObjectActions|系统保留动作名不能被业务定义占用
