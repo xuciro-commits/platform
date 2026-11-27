@@ -320,7 +320,9 @@ export function InboxPage() {
   const isSingleSurface = 0 < surfaceWidth && surfaceWidth < SINGLE_SURFACE_BELOW;
   const isStacked = 0 < listWidth && listWidth < STACK_ROWS_BELOW;
   const isTouch = useMediaQuery("(hover: none)");
-  const openId = chosenId === null ? null : chosenId !== undefined && visible.some((item) => item.id === chosenId) ? chosenId : isSingleSurface ? null : (visible[0]?.id ?? null);
+  const askedQuestion = typeof window !== "undefined" ? new URLSearchParams(window.location.search).get("question") : null;
+  const askedItemId = askedQuestion ? visible.find((item) => item.task?.ref === "work.question/" + askedQuestion)?.id : undefined;
+  const openId = chosenId === null ? null : chosenId !== undefined && visible.some((item) => item.id === chosenId) ? chosenId : askedItemId ?? (isSingleSurface ? null : (visible[0]?.id ?? null));
   const opened = visible.find((item) => item.id === openId) ?? null;
   const isPaneFullWidth = isSingleSurface && opened != null;
 

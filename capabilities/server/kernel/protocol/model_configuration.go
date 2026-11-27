@@ -3,6 +3,7 @@ package protocol
 import (
 	"context"
 	"encoding/json"
+	pb "platformkernel/gen/platform/kernel/v1alpha1"
 	"platformserver/platform"
 	"time"
 )
@@ -38,19 +39,25 @@ type CatalogModel struct {
 	Capabilities *platform.ModelCapabilities `json:"capabilities,omitempty"`
 }
 
-type ModelToolProposal struct {
-	ID      string
-	Key     string
-	Action  platform.Action
-	Target  string
-	Payload json.RawMessage
+type ModelToolCatalog struct {
+	Entities       []platform.RecordTypeInfo
+	Actions        []platform.Action
+	Applications   []ApplicationView
+	HiddenAIFields map[string][]string
+}
+
+type ModelObjectQuery struct {
+	Set      platform.ObjectSet
+	Sort     []string
+	Offset   int
+	Limit    int
+	Groups   []string
+	Measures []string
 }
 
 type ModelToolHost interface {
-	ModelToolSurface(platform.Member) platform.AgentSurface
-	AgentObjects(platform.Member, string, json.RawMessage, time.Time) (AgentObservation, *platform.Error)
-	Catalog(platform.Member) []platform.Action
-	ModelToolReads(platform.Member) []string
-	Read(context.Context, platform.Member, string, ...json.RawMessage) (any, *platform.Error)
-	ProposeModelTool(platform.Member, ModelToolProposal, time.Time) *platform.Error
+	TenantID() string
+	ModelToolCatalog(platform.Member) ModelToolCatalog
+	QueryModelObjects(platform.Member, ModelObjectQuery, time.Time) (json.RawMessage, *platform.Error)
+	SubmitModelAction(context.Context, platform.Member, *pb.Submission, time.Time) (*pb.ChangeRecord, *platform.Error, []platform.FieldIssue)
 }

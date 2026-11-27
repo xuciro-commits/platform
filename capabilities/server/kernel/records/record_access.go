@@ -549,3 +549,17 @@ func VisitPlan(image IndexImage, lookup ImageLookup, plan Plan, visible func(ref
 	}
 	return matched
 }
+
+func HiddenAIFields(store *Store) map[string][]string {
+	hidden := map[string][]string{}
+	store.Lock()
+	defer store.Unlock()
+	for _, et := range store.Types() {
+		for _, f := range et.Info().Fields {
+			if f.AIInput != nil && !*f.AIInput {
+				hidden[et.Info().Type] = append(hidden[et.Info().Type], f.Name)
+			}
+		}
+	}
+	return hidden
+}

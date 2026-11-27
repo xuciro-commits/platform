@@ -185,8 +185,8 @@ func (a Authorizer) Authorize(store *records.Store, c platform.Caller, q platfor
 				if field.ReadOnly {
 					continue
 				}
-				allowed = known && field.WritesAny(c.RolesIn(et.Info().Type), c.Rules())
-				if c.Automation && c.App == et.Info().App {
+				allowed = known && field.WritesAny(c.RolesIn(et.Info().Type), c.Rules()) && !(c.AIContext && field.AIInput != nil && !*field.AIInput)
+				if c.Automation && c.App == et.Info().App && !(c.AIContext && field.AIInput != nil && !*field.AIInput) {
 					allowed = true
 				}
 			}
