@@ -269,7 +269,10 @@ func (l *authority) checked(c platform.Caller, s *pb.Submission, now time.Time, 
 				if f.Ref == "enterprise.element" && previous[f.Name] == v {
 					continue
 				}
-				if len(f.Choices) > 0 && !slices.Contains(f.Choices, v) || f.Ref != "" && c.HasRuntime() && !c.Readable(f.Ref+"/"+v) {
+				if len(f.Choices) > 0 && !slices.Contains(f.Choices, v) {
+					return nil, c.RefuseFields([]platform.FieldIssue{{Code: "choice", Path: []string{f.Name}, Message: "Choose a listed value."}})
+				}
+				if f.Ref != "" && c.HasRuntime() && !c.Readable(f.Ref+"/"+v) {
 					return nil, c.RefuseFields([]platform.FieldIssue{{Code: "reference", Path: []string{f.Name}, Message: "Choose a readable listed value."}})
 				}
 				if f.Ref == "enterprise.element" && (f.Stereotype != "" || len(f.Stereotypes) > 0) && c.HasRuntime() {

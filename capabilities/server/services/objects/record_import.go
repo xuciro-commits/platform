@@ -21,7 +21,9 @@ func (i Importer) Rows(info platform.RecordTypeInfo, parsed ImportFile) []protoc
 	out := []protocol.ImportRow{}
 	for _, line := range parsed.Lines {
 		r := protocol.ImportRow{Row: line.Row, ID: line.ID, Outcome: line.Outcome}
-		if r.Outcome == "" {
+		if line.Issue != nil {
+			r.Error = &protocol.ErrorBody{Code: line.Outcome, Message: line.Issue.Message, Issues: []platform.FieldIssue{*line.Issue}}
+		} else if r.Outcome == "" {
 			try := func(verb, key string) *platform.Error {
 				r.Error = nil
 				r.Action = info.Type + verb

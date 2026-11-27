@@ -484,11 +484,11 @@ test("import: an Excel workbook of leads, accounts and contacts maps by column t
       {
         name: "Leads",
         rows: [
-          ["Full name", "Company", "Follow-up stage", "Industry"],
-          [`Ada Lin ${tag}`, `Nebula Robotics ${tag}`, "New", "Manufacturing"],
-          [`Bo Chen ${tag}`, `Helios Solar ${tag}`, "Connected", ""],
-          ["", "Nameless Co", "New", ""],
-          [`Cy Wu ${tag}`, "Fabrikam", "Pending", ""],
+          ["Full name", "Company", "Follow-up stage", "Source", "Industry"],
+          [`Ada Lin ${tag}`, `Nebula Robotics ${tag}`, "New", "网站", "制造"],
+          [`Bo Chen ${tag}`, `Helios Solar ${tag}`, "已联系", "Website", "Manufacturing"],
+          ["", "Nameless Co", "New", "", ""],
+          [`Cy Wu ${tag}`, "Fabrikam", "Pending", "", ""],
         ],
       },
       {
@@ -522,7 +522,7 @@ test("import: an Excel workbook of leads, accounts and contacts maps by column t
 
   await wizard.getByRole("button", { name: "Continue", exact: true }).click();
   await expect(wizard.getByText("6 can be imported · 3 need fixing", { exact: true })).toBeVisible();
-  await expect(wizard.getByRole("row", { name: /Pending.*Choose a readable listed value/ })).toBeVisible();
+  await expect(wizard.getByRole("row", { name: /Pending.*Follow-up stage: Choose a listed value\./ })).toBeVisible();
   await expect(wizard.getByRole("row", { name: /Ghost Corp.*This value cannot be read: Account/ })).toBeVisible();
 
   const importValid = wizard.getByRole("button", { name: "Import 6", exact: true }).click();
@@ -552,9 +552,14 @@ test("import: an Excel workbook of leads, accounts and contacts maps by column t
   await search.fill(`Ada Lin ${tag}`);
   await search.press("Enter");
   await expect(page.getByRole("link", { name: `Ada Lin ${tag}`, exact: true })).toHaveCount(1);
+  await page.getByRole("link", { name: `Ada Lin ${tag}`, exact: true }).click();
+  await expect(property(page, "Source")).toContainText("Website");
+  await expect(property(page, "Industry")).toContainText("Manufacturing");
 
-  await search.fill(`Fiona Gao ${tag}`);
-  await search.press("Enter");
+  await page.goto("/crm/crm.lead");
+  const nextSearch = page.getByRole("textbox", { name: "Search this list" });
+  await nextSearch.fill(`Fiona Gao ${tag}`);
+  await nextSearch.press("Enter");
   await expect(page.getByRole("link", { name: `Fiona Gao ${tag}`, exact: true })).toBeVisible();
   await expect(page.getByRole("link", { name: `Ada Lin ${tag}`, exact: true })).toHaveCount(0);
   const started = page.waitForEvent("download");

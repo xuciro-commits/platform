@@ -281,6 +281,10 @@ export function ImportWizard({ described, target, onClose }: { described?: Descr
     if (line.result.outcome.startsWith(unreadable)) {
       return `${t("This value cannot be read")}: ${titleInPlan(plan, line.result.outcome.slice(unreadable.length))}`;
     }
+    const issue = line.result.error?.issues?.[0];
+    if (issue?.path?.[0] && line.result.error?.message) {
+      return `${titleInPlan(plan, issue.path[0])}: ${line.result.error.message}`;
+    }
     return line.result.error?.message || t("Not saved");
   };
 

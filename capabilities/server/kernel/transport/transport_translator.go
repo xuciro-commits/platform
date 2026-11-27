@@ -142,6 +142,33 @@ func (x *Translator) Dictionary(lang string) map[string]string {
 	return x.dictionary("", lang).words
 }
 
+func (x *Translator) Translations(s string) []string {
+	if s == "" {
+		return nil
+	}
+	var out []string
+	collect := func(languages platform.Languages) {
+		for _, dict := range languages {
+			if tr := dictGet(dict, s); tr != "" && !slices.Contains(out, tr) {
+				out = append(out, tr)
+			}
+		}
+	}
+	collect(x.base)
+	for _, a := range x.apps() {
+		collect(x.appManifest(a).Languages)
+	}
+	x.mu.Lock()
+	for _, languages := range x.applications {
+		collect(languages)
+	}
+	x.mu.Unlock()
+	if x.tenant != nil {
+		collect(x.tenant())
+	}
+	return out
+}
+
 func (x *Translator) dictionary(app, lang string) *translationDictionary {
 	x.mu.Lock()
 	defer x.mu.Unlock()

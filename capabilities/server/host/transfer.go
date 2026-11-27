@@ -24,7 +24,7 @@ func (t *Tenant) Import(m platform.Member, typ string, data []byte, preview bool
 	view, _ := objects.ViewOf(m, et)
 	currency := t.setting(t.automation(controlowner.PlatformApp, false), controlowner.SettingCurrency)
 	parsed, err := recordRead(t, context.Background(), func(t *Tenant) (objects.ImportFile, *platform.Error) {
-		return objects.ParseImport(view.Info(), data, currency, t.objectOwner(t.Projection).Referrer(m, now))
+		return objects.ParseImport(view.Info(), data, currency, t.objectOwner(t.Projection).Referrer(m, now, t.i18n.Translations), t.i18n.Translations)
 	})
 	if err != nil {
 		return nil, err

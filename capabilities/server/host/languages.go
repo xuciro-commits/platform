@@ -20,8 +20,10 @@ func (t *Tenant) Language(m platform.Member, r *http.Request) string {
 	if m.Language != "" {
 		return m.Language
 	}
-	if lang, asked := transport.NegotiateLanguage(r.Header.Get("Accept-Language"), t.i18n.Languages); asked {
-		return lang
+	if r != nil {
+		if lang, asked := transport.NegotiateLanguage(r.Header.Get("Accept-Language"), t.i18n.Languages); asked {
+			return lang
+		}
 	}
 	if t.IdentityOwner != nil {
 		return t.IdentityOwner.Language("")

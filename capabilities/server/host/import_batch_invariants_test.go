@@ -273,3 +273,50 @@ func TestInvariantK4ImportBatchAuthorizesEachRow(t *testing.T) {
 		t.Fatalf("retry: %+v, %v", retry, refusal)
 	}
 }
+
+func TestImportResolvesLocalizedReferenceAndSeparatesChoiceRefusal(t *testing.T) {
+	live := newInvariantTenant(t, fmt.Sprintf("import-i18n-%d", time.Now().UnixNano()))
+	sourceObj := invariantObject("source", "Source")
+	sourceObj["display"] = "note"
+	live.accept(t, "build.object.create", build.ObjectType, "SRC_OBJ", sourceObj)
+	live.accept(t, "build.object.publish", build.ObjectType, "SRC_OBJ", map[string]any{})
+	live.accept(t, "invariantproject.source.create", "invariantproject.source", "website", map[string]any{"note": "Website"})
+
+	leadObj := invariantObject("lead", "Lead")
+	leadObj["fields"] = []ontology.Field{
+		{Name: "note", Title: "Name", Type: "text", Required: true},
+		{Name: "source", Title: "Source", Type: "reference", Ref: "invariantproject.source"},
+		{Name: "stage", Title: "Stage", Type: "choice", Choices: "new:New,connected:Connected"},
+	}
+	live.accept(t, "build.object.create", build.ObjectType, "LEAD_OBJ", leadObj)
+	live.accept(t, "build.object.publish", build.ObjectType, "LEAD_OBJ", map[string]any{})
+	live.accept(t, "build.app.edit", "build.app", invariantProject, map[string]any{
+		"resources": []platform.AssetRef{{App: "build", Kind: platform.AssetObject, Name: "invariantproject.source"}, {App: "build", Kind: platform.AssetObject, Name: "invariantproject.lead"}},
+		"languages": map[string]map[string]string{"zh-CN": {"Website": "网站", "Connected": "已联系"}},
+	})
+	live.accept(t, "build.app.publish", "build.app", invariantProject, map[string]any{})
+
+	member := live.member(t)
+	csv := []byte("id,note,source,stage\nL1,Ada,网站,已联系\nL2,Cy,,Pending\nL3,Evan,Ghost,new\n")
+	rows, refusal := live.Import(member, "invariantproject.lead", csv, false, invariantClock)
+	if refusal != nil || len(rows) != 3 {
+		t.Fatalf("import: %+v, %v", rows, refusal)
+	}
+	if rows[0].Outcome != "ok" {
+		t.Fatalf("expected localized row ok, got %+v", rows[0])
+	}
+	if rows[1].Outcome == "ok" || rows[1].Error == nil || len(rows[1].Error.Issues) == 0 || rows[1].Error.Issues[0].Code != "choice" || rows[1].Error.Issues[0].Message != "Choose a listed value." {
+		t.Fatalf("expected distinct choice issue, got %+v", rows[1])
+	}
+	if rows[2].Outcome != "ERROR_CODE_INVALID_ARGUMENT: source" {
+		t.Fatalf("expected unreadable reference outcome, got %+v", rows[2])
+	}
+	view, refusal := live.RecordOf(t.Context(), member, "invariantproject.lead", "L1", invariantClock)
+	if refusal != nil {
+		t.Fatalf("record: %v", refusal)
+	}
+	raw := string(platform.Raw(view.Record))
+	if !strings.Contains(raw, `"source":"website"`) || !strings.Contains(raw, `"stage":"connected"`) {
+		t.Fatalf("unexpected imported payload: %s", raw)
+	}
+}

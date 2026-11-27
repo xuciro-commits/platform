@@ -6,6 +6,7 @@ import (
 	"encoding/csv"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"reflect"
 	"slices"
@@ -14,6 +15,7 @@ import (
 	"time"
 
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
+	"platformserver/kernel/records"
 	"platformserver/platform"
 )
 
@@ -22,6 +24,7 @@ type ImportLine struct {
 	ID      string
 	Payload json.RawMessage
 	Outcome string
+	Issue   *platform.FieldIssue
 }
 
 type ImportFile struct {
@@ -29,10 +32,18 @@ type ImportFile struct {
 	Lines []ImportLine
 }
 
-func ParseImport(info platform.RecordTypeInfo, data []byte, currency string, refer func(platform.FieldInfo, string) (string, bool)) (ImportFile, *platform.Error) {
+type choiceError struct{ field string }
+
+func (e choiceError) Error() string { return "unknown or ambiguous choice for " + e.field }
+
+func ParseImport(info platform.RecordTypeInfo, data []byte, currency string, refer func(platform.FieldInfo, string) (string, bool), translate ...func(string) []string) (ImportFile, *platform.Error) {
 	rows, err := csv.NewReader(bytes.NewReader(data)).ReadAll()
 	if err != nil || len(rows) < 1 {
 		return ImportFile{}, &platform.Error{Code: pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT}
+	}
+	var tr func(string) []string
+	if len(translate) > 0 {
+		tr = translate[0]
 	}
 	header := rows[0]
 	sum := sha256.Sum256(data)
@@ -65,9 +76,15 @@ func ParseImport(info platform.RecordTypeInfo, data []byte, currency string, ref
 				}
 				continue
 			}
-			v, err := fromCSV(f, value, currency, refer)
+			v, err := fromCSV(f, value, currency, refer, tr)
 			if err != nil {
-				r.Outcome = "ERROR_CODE_INVALID_ARGUMENT: " + name
+				var badChoice choiceError
+				if errors.As(err, &badChoice) {
+					r.Outcome = pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT.String()
+					r.Issue = &platform.FieldIssue{Code: "choice", Path: []string{name}, Message: "Choose a listed value."}
+				} else {
+					r.Outcome = "ERROR_CODE_INVALID_ARGUMENT: " + name
+				}
 				break
 			}
 			payload[name] = v
@@ -80,7 +97,7 @@ func ParseImport(info platform.RecordTypeInfo, data []byte, currency string, ref
 	return ImportFile{File: hex.EncodeToString(sum[:8]), Lines: out}, nil
 }
 
-func fromCSV(f platform.FieldInfo, value, currency string, refer func(platform.FieldInfo, string) (string, bool)) (any, error) {
+func fromCSV(f platform.FieldInfo, value, currency string, refer func(platform.FieldInfo, string) (string, bool), translate ...func(string) []string) (any, error) {
 	switch f.Type {
 	case "choice":
 		if slices.Contains(f.Choices, value) {
@@ -95,7 +112,21 @@ func fromCSV(f platform.FieldInfo, value, currency string, refer func(platform.F
 		if len(matches) == 1 {
 			return matches[0], nil
 		}
-		return nil, fmt.Errorf("unknown or ambiguous choice for %s", f.Name)
+		if len(matches) == 0 && len(translate) > 0 && translate[0] != nil {
+			for i, key := range f.Choices {
+				title := key
+				if i < len(f.ChoiceTitles) && f.ChoiceTitles[i] != "" {
+					title = f.ChoiceTitles[i]
+				}
+				if slices.ContainsFunc(translate[0](title), func(said string) bool { return strings.EqualFold(said, value) }) {
+					matches = append(matches, key)
+				}
+			}
+			if len(matches) == 1 {
+				return matches[0], nil
+			}
+		}
+		return nil, choiceError{field: f.Name}
 	case "reference":
 		id, ok := refer(f, value)
 		if !ok {
@@ -213,22 +244,28 @@ func toCSV(v any) string {
 	return fmt.Sprint(v)
 }
 
-func (o *Owner) Referrer(m platform.Member, now time.Time) func(platform.FieldInfo, string) (string, bool) {
-	return func(f platform.FieldInfo, value string) (string, bool) { return o.referred(m, f.Ref, value, now) }
+func (o *Owner) Referrer(m platform.Member, now time.Time, translate ...func(string) []string) func(platform.FieldInfo, string) (string, bool) {
+	var tr func(string) []string
+	if len(translate) > 0 {
+		tr = translate[0]
+	}
+	return func(f platform.FieldInfo, value string) (string, bool) { return o.referred(m, f.Ref, value, now, tr) }
 }
 
-func (o *Owner) referred(m platform.Member, typ, value string, now time.Time) (string, bool) {
+func (o *Owner) referred(m platform.Member, typ, value string, now time.Time, translate func(string) []string) (string, bool) {
 	o.Store.Lock()
 	et := o.Store.Type(typ)
 	o.Store.Unlock()
 	if et == nil {
 		return value, true
 	}
+	info := et.Info()
+	display := info.Display
 	equal := func(field string) platform.Expr {
 		return platform.Expr{Op: "=", Kind: "boolean", Args: []platform.Expr{platform.ExprReference("text", field), platform.ExprLiteralValue("text", value)}}
 	}
 	filter := equal("id")
-	if display := et.Info().Display; display != "" && display != "id" {
+	if display != "" && display != "id" {
 		filter = platform.Expr{Op: "or", Kind: "boolean", Args: []platform.Expr{filter, equal(display)}}
 	}
 	page, err := o.Records(m, typ, platform.Query{Filter: &filter, Limit: 3}, now)
@@ -241,10 +278,33 @@ func (o *Owner) referred(m platform.Member, typ, value string, now time.Time) (s
 			return value, true
 		}
 	}
-	if len(page.Records) != 1 {
+	if len(page.Records) == 1 {
+		return id(page.Records[0]), true
+	}
+	if len(page.Records) > 1 || display == "" || display == "id" {
 		return value, false
 	}
-	return id(page.Records[0]), true
+	all, err := o.Records(m, typ, platform.Query{Limit: 501}, now)
+	if err != nil || len(all.Records) > 500 {
+		return value, false
+	}
+	var matches []string
+	for _, record := range all.Records {
+		shown := records.BusinessField(info, reflect.ValueOf(record), display)
+		if shown == "" {
+			continue
+		}
+		if strings.EqualFold(shown, value) || (translate != nil && slices.ContainsFunc(translate(shown), func(said string) bool { return strings.EqualFold(said, value) })) {
+			rid := id(record)
+			if !slices.Contains(matches, rid) {
+				matches = append(matches, rid)
+			}
+		}
+	}
+	if len(matches) != 1 {
+		return value, false
+	}
+	return matches[0], true
 }
 
 func (o *Owner) ExportRead(m platform.Member, typ string, q platform.Query, now time.Time) ([]byte, *platform.Error) {
