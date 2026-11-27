@@ -130,6 +130,12 @@
 | Provenance | 出处 | 一个数字由哪些记录组成：宿主给出的对象集定义，点开就是那些记录 | ux |
 | Summary view | 汇总视图 | 列表的第五种布局：分组、度量、小计与期间；不是报表设计器 | ux |
 | Note page | 说明页 | 只有标题与一段文字的菜单项，不对应对象 | ux |
+| Tool surface | 工具面 | 由已发布的动作与可读类型生成的智能体工具；助手、外部 MCP 客户端与被委派的智能体共用 | architecture |
+| Delegation | 委派 | 资源：什么发生时交给哪个智能体、以谁的名义、能调哪些动作 | architecture |
+| Receipt | 回执 | 智能体一轮的全部写入、提问与复查，一次接受生效 | architecture |
+| Ask-first | 先问 | 动作声明 `ask`：智能体调用时变成收件箱里的提问，成员批准后才执行 | architecture |
+| Hops | 跳数 | 写入引起新事件的层数；超过 8 记下不派发 | architecture |
+| Worker | 接单程序 | 只往外连、领任务、交回执的进程；替命令行智能体干活 | architecture |
 | Contribution slot | 贡献位 | 界面上允许别的包放入口的位置：记录页动作菜单、“管理 → 主数据” | frontend |
 | Marketplace | 市场 | 列出可安装的产品版本，按种类、行业与业务领域筛选 | 交付 |
 | Domain | 业务领域 | 市场的分类标签（销售、人事、库存），不是能力 | 交付 |

@@ -194,6 +194,8 @@
 - 界面微件：仪表盘的散点、迷你图与排行；`PdfViewer`；高精度小数；`RelationCanvas`、字段溯源、构建仿真；
   治理与血缘工作台。原始意图查 Git 标签 `archive/web-final`。
 - 开放应用接入的后续包（2.8）：按 [platform-packages](https://github.com/xuciro-commits/platform-packages) 的 sources 逐个接，坑写进 `open-app-intake` Skill。
+- 阶段 6 的智能体：设计在 [architecture](architecture.md)“智能体”。最先做的是动作的 `ask` 声明（平台认它、`pkg check` 校验），
+  做了以后 ERP 包把删除、对外发送、不可冲正的动作标上，工具面与委派直接用。
 - 包的读在并发下慢：按定义纪元缓存包视图，审阅与准备只算被问的那个包。
 
 ## 承重的要求
