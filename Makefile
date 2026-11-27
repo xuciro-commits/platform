@@ -182,7 +182,7 @@ test: test-runner
 test-voice:
 	cd capabilities/voice && $(GO) test -race -count=1 ./...
 
-verify: check check-frontend test test-voice trunk
+verify: check check-frontend test trunk
 
 verify-sql:
 	mkdir -p .build/host

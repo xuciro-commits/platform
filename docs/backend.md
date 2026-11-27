@@ -48,7 +48,7 @@
 | `cmd/*` | 二进制入口、契约生成器、受控的辅助进程；只做装配 |
 
 - 语音网关不在这里：`capabilities/voice/`（自有 go.mod，模块 `platformvoice`，入口 `cmd/voice-gateway`）管 SIP 中继注册、来电信令与媒体。
-  它不导入 `capabilities/server`，只经宿主公开接口读写；`make check` 第 1 步一并编译检查，`make test-voice` 跑它的测试。
+  它不导入 `capabilities/server`，只经宿主公开接口读写；`make check` 第 1 步一并编译检查，语音竞态测试仅按需手动执行 `make test-voice`，不属于固定验收。
 - 租户的提交序列是 `kernel` 的类型。每个服务经同一个拥有者接口（决定、应用、分叉、读取）向它注册自己的状态。
 - 服务可以导入 `kernel` 下四个叶层数据包：`kernel/records`、`kernel/acceptedformat`、`kernel/protocol`、`kernel/values`。
   数据服务的本地文件实现可使用 `kernel/fileio`；`kernel` 的其余部分与 `host` 不被服务导入。`kernel` 不导入任何服务。

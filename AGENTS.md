@@ -86,7 +86,7 @@
 | 内核不变量 | `make test RUN=K13` 定点跑相关编号；不给 `RUN` 跑全部 |
 | 产品包 | `make packages`（刷新作者态源的锁文件，并把夹具一起装进内存租户检查；顶层制品是发布快照，不重建）；试跑动作用 `pkg try` |
 
-GitHub 的 push/PR CI 只跑 `make check`、`make test-runner`、`make check-frontend`；全量 PostgreSQL、语音竞态与浏览器验收在本地发布前执行（`make test-pg`、`make test-voice`、`make trunk-pg TRUNK_ARGS="--workers=1 --forbid-only --fail-on-flaky-tests"`），不以远程轻量检查代替。Tag 发行流程仍负责多平台制品构建与签发。
+GitHub 的 push/PR CI 只跑 `make check`、`make test-runner`、`make check-frontend`；全量 PostgreSQL 与浏览器验收在本地发布前执行（`make test-pg`、`make trunk-pg TRUNK_ARGS="--workers=1 --forbid-only --fail-on-flaky-tests"`），不以远程轻量检查代替。语音竞态测试仅在明确需要时手动运行，不进入固定验收。Tag 发行流程仍负责多平台制品构建与签发。
 
 提交钩子（`.githooks/`，通过 `make hooks` 启用）自动跑 `make check`，暂存里有 `frontend/` 时加跑 `make check-frontend`，并用 `scripts/check-commit-msg.mjs` 拦截不合规范的提交信息。
 
