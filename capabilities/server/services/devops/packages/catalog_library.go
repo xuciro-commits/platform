@@ -219,6 +219,14 @@ func DecodeCatalog(raw []byte, baseURL string) (string, []runtimeprotocol.Packag
 		}
 		if entry.Listing != nil {
 			entry.Listing.Domains, entry.Listing.Capabilities = packagedesc.Domains(*entry.Listing), nil
+			if entry.Listing.Cover != "" {
+				cover, _ := url.Parse(entry.Listing.Cover)
+				resolvedCover := base.ResolveReference(cover).String()
+				if _, _, err := ValidatePackageURL(resolvedCover); err != nil {
+					return "", nil, fmt.Errorf("Catalog entry %s@%s has an invalid cover address", entry.ID, entry.Version)
+				}
+				entry.Listing.Cover = resolvedCover
+			}
 		}
 		if entry.Kind != "" && !slices.Contains(packagedesc.Kinds, entry.Kind) {
 			return "", nil, fmt.Errorf("Catalog entry %s@%s: kind %q is not one of %s", entry.ID, entry.Version, entry.Kind, strings.Join(packagedesc.Kinds, ", "))

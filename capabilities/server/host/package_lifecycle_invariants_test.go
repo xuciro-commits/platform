@@ -474,7 +474,7 @@ func TestInvariantK9PackageMarketLibrary(t *testing.T) {
 			"url":         "./packages/itempkg-1.0.0.json",
 			"sha256":      pkgSha,
 			"listing": map[string]any{
-				"industries": []string{"general"}, "capabilities": []string{"sales"}, "keywords": []string{"item"}, "stage": "preview",
+				"industries": []string{"general"}, "capabilities": []string{"sales"}, "keywords": []string{"item"}, "stage": "preview", "icon": "cube", "cover": "./cover.avif",
 				"source": map[string]any{"ecosystem": "frappe", "app": "crm", "license": "AGPL-3.0", "relation": "redesign"},
 			},
 		}},
@@ -523,10 +523,10 @@ func TestInvariantK9PackageMarketLibrary(t *testing.T) {
 	if entry.URL != expectedPkgURL || entry.Sha256 != pkgSha {
 		t.Fatalf("resolved catalog entry mismatch: %+v", entry)
 	}
-	if entry.Listing == nil || entry.Listing.Stage != "preview" || entry.Listing.Source == nil || entry.Listing.Source.Relation != "redesign" {
+	if entry.Listing == nil || entry.Listing.Stage != "preview" || entry.Listing.Source == nil || entry.Listing.Source.Relation != "redesign" || entry.Listing.Icon != "cube" || entry.Listing.Cover != "http://127.0.0.1:18999/repo/cover.avif" {
 		t.Fatalf("a catalog entry keeps its listing: %+v", entry.Listing)
 	}
-	for _, bad := range []map[string]any{{"industries": []string{"space"}}, {"stage": "beta"}, {"keywords": []string{"Two Words"}}, {"source": map[string]any{"ecosystem": "frappe", "app": "crm", "relation": "copied"}}} {
+	for _, bad := range []map[string]any{{"icon": "not-an-icon"}, {"cover": "javascript:alert(1)"}, {"cover": "https://user:pass@example.com/cover.png"}, {"industries": []string{"space"}}, {"stage": "beta"}, {"keywords": []string{"Two Words"}}, {"source": map[string]any{"ecosystem": "frappe", "app": "crm", "relation": "copied"}}} {
 		raw := platform.Raw(map[string]any{"version": 1, "packages": []map[string]any{{"id": "x", "version": "1.0.0", "title": "X", "url": "./x.json", "sha256": pkgSha, "listing": bad}}})
 		if _, _, err := packages.DecodeCatalog(raw, libURL+"/catalog.json"); err == nil {
 			t.Fatalf("a listing outside the taxonomy must be refused: %v", bad)

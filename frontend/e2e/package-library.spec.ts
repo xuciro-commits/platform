@@ -12,11 +12,12 @@ test("library tenant: a remote catalog lists its package beside the built-in ind
   const sha256 = "sha256:" + createHash("sha256").update(bytes).digest("hex");
   const catalog = JSON.stringify({ version: 1, title: "Acme packages", packages: [
     { id: "application.production-provider", version, title: "Acme production", description: "CRM from the Acme library", url: "./crm.json", sha256,
-      listing: { industries: ["general"], capabilities: ["sales"], keywords: ["pipeline"], stage: "preview", source: { ecosystem: "frappe", app: "crm", relation: "redesign" } } },
+      listing: { icon: "cube", cover: "./cover.svg", industries: ["general"], capabilities: ["sales"], keywords: ["pipeline"], stage: "preview", source: { ecosystem: "frappe", app: "crm", relation: "redesign" } } },
     { id: "acme.demo", version: "1.0.0", title: "Acme demo", url: "./crm.json", sha256, listing: { capabilities: ["hr"], stage: "test" } },
   ] });
   const server = createServer((request, response) => {
     if (request.url === "/catalog.json") response.writeHead(200, { "content-type": "application/json" }).end(catalog);
+    else if (request.url === "/cover.svg") response.writeHead(200, { "content-type": "image/svg+xml" }).end('<svg xmlns="http://www.w3.org/2000/svg" width="160" height="120"><rect width="160" height="120" fill="#336699"/></svg>');
     else if (request.url === "/crm.json") response.writeHead(200, { "content-type": "application/json" }).end(bytes);
     else response.writeHead(404).end();
   });
@@ -40,6 +41,7 @@ test("library tenant: a remote catalog lists its package beside the built-in ind
 
     const remote = page.getByRole("listitem").filter({ hasText: "Acme production" });
     await expect(remote).toContainText("Acme packages");
+    await expect.poll(() => remote.evaluate((el, url) => Array.from(el.querySelectorAll("*")).some(child => getComputedStyle(child).backgroundImage.includes(url)), address.replace("catalog.json", "cover.svg"))).toBe(true);
     await expect(remote).toContainText(`application.production-provider · ${version}`);
     await expect(page.getByRole("listitem").filter({ hasText: /^CRM/ }).filter({ hasText: `crm · ${input("crm").version}` })).toBeVisible();
     await expect(remote).toContainText("Preview");

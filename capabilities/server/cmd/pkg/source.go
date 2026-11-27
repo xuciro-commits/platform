@@ -930,6 +930,32 @@ func lookupLocaleText(dict map[string]string, src string) string {
 }
 
 func catalogEntry(b built, url string) protocol.PackageCatalogEntry {
+	listing := b.listing
+	if listing == nil || listing.Icon == "" {
+		if blueprint := b.descriptor.Blueprint; blueprint != nil {
+			for _, ref := range blueprint.Roots {
+				if ref.Kind != platform.AssetApp {
+					continue
+				}
+				for _, asset := range blueprint.Assets {
+					if asset.Ref != ref {
+						continue
+					}
+					var app platform.Application
+					if json.Unmarshal(asset.Body, &app) == nil && slices.Contains(packagedesc.Icons, app.Icon) {
+						var declared protocol.PackageListing
+						if listing != nil {
+							declared = *listing
+						}
+						declared.Icon = app.Icon
+						listing = &declared
+					}
+					break
+				}
+				break
+			}
+		}
+	}
 	var locales map[string]protocol.CatalogLocale
 	for lang, dict := range descriptorLanguages(b.descriptor) {
 		trTitle := lookupLocaleText(dict, b.title)
@@ -941,5 +967,5 @@ func catalogEntry(b built, url string) protocol.PackageCatalogEntry {
 			locales[lang] = protocol.CatalogLocale{Title: trTitle, Description: trDesc}
 		}
 	}
-	return protocol.PackageCatalogEntry{ID: b.id, Version: b.version, Title: b.title, Description: b.description, URL: url, Sha256: b.lock.Artifact, Listing: b.listing, Locales: locales}
+	return protocol.PackageCatalogEntry{ID: b.id, Version: b.version, Title: b.title, Description: b.description, URL: url, Sha256: b.lock.Artifact, Listing: listing, Locales: locales}
 }

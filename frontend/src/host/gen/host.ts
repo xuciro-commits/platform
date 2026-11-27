@@ -3931,6 +3931,8 @@ export type PackageLifecycleImpact = {
 };
 
 export type PackageListing = {
+  icon?: string;
+  cover?: string;
   industries?: string[];
   domains?: string[];
   capabilities?: string[];

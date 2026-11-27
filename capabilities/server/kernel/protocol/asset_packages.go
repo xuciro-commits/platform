@@ -140,6 +140,8 @@ type PackageCatalogEntry struct {
 }
 
 type PackageListing struct {
+	Icon         string                `json:"icon,omitempty"`
+	Cover        string                `json:"cover,omitempty"`
 	Industries   []string              `json:"industries,omitempty"`
 	Domains      []string              `json:"domains,omitempty"`
 	Capabilities []string              `json:"capabilities,omitempty"`

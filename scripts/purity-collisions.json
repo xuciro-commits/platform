@@ -1,0 +1,139 @@
+{
+  "capabilities/server/cmd/pkg/expr.go": [
+    {"context":"if left.kind == \"call\" && left.name == op {","words":["call"],"count":1},
+    {"context":"left = &exprNode{kind: \"call\", name: op, args: []*exprNode{left, right}}","words":["call"],"count":1},
+    {"context":"return &exprNode{kind: \"call\", name: \"not\", args: []*exprNode{inner}}, nil","words":["call"],"count":1},
+    {"context":"return &exprNode{kind: \"call\", name: \"not\", args: []*exprNode{{kind: \"call\", name: \"in\", args: []*exprNode{left, list}}}}, nil","words":["call"],"count":2},
+    {"context":"return &exprNode{kind: \"call\", name: \"in\", args: []*exprNode{left, list}}, nil","words":["call"],"count":1},
+    {"context":"node := &exprNode{kind: \"call\", name: \"empty\", args: []*exprNode{left}}","words":["call"],"count":1},
+    {"context":"return &exprNode{kind: \"call\", name: \"not\", args: []*exprNode{node}}, nil","words":["call"],"count":1},
+    {"context":"return &exprNode{kind: \"call\", name: op, args: []*exprNode{left, right}}, nil","words":["call"],"count":1},
+    {"context":"left = &exprNode{kind: \"call\", name: matched, args: []*exprNode{left, right}}","words":["call"],"count":1},
+    {"context":"return &exprNode{kind: \"call\", name: \"negate\", args: []*exprNode{inner}}, nil","words":["call"],"count":1},
+    {"context":"call := &exprNode{kind: \"call\", name: strings.ReplaceAll(t.text, \"_\", \"-\")}","words":["call"],"count":1},
+    {"context":"root, rest = \"item.\"+parts[1], parts[2:]","words":["item."],"count":1}
+  ],
+  "capabilities/server/cmd/pkg/source.go": [
+    {"context":"case len(parts) == 3 && parts[0] == \"assets\":","words":["assets"],"count":1},
+    {"context":"assetValues, _ := blueprint.get(\"assets\")","words":["assets"],"count":1},
+    {"context":"blueprint.set(\"assets\", assets)","words":["assets"],"count":1}
+  ],
+  "capabilities/server/expr/compile.go": [
+    {"context":"child.Refs[\"item.\"+k] = v","words":["item."],"count":1}
+  ],
+  "capabilities/server/expr/eval.go": [
+    {"context":"typ = decl.Element.Fields[strings.TrimPrefix(e.In.Ref, \"item.\")]","words":["item."],"count":1}
+  ],
+  "capabilities/server/expr/row.go": [
+    {"context":"if field, item := strings.CutPrefix(name, \"item.\"); item {","words":["item."],"count":1}
+  ],
+  "capabilities/server/kernel/constraints.go": [
+    {"context":"if strings.HasPrefix(ref, \"item.\") {","words":["item."],"count":1},
+    {"context":"paths[collection] = append(paths[collection], append([]string{strings.TrimPrefix(ref, \"item.\")}, expr.Path...))","words":["item."],"count":1}
+  ],
+  "capabilities/server/kernel/protocol/app_access.go": [
+    {"context":"{Schema: SchemaProjectSave, Target: ProjectType, Capability: \"projects\", Title: \"Save project access\",","words":["projects"],"count":1}
+  ],
+  "capabilities/server/kernel/protocol/protocol.go": [
+    {"context":"return []platform.Field{{Name: \"call\", Type: \"string\", Required: true, Description: \"What was asked of the provider\"},","words":["call"],"count":1}
+  ],
+  "capabilities/server/kernel/protocol/rule_schema.go": [
+    {"context":"if strings.HasPrefix(ref, \"item.\") {","words":["item."],"count":2},
+    {"context":"fieldName = strings.TrimPrefix(ref, \"item.\")","words":["item."],"count":1},
+    {"context":"if err := expand(\"item.\"+e.Agg.Field[0], e.Agg.Field[1:]); err != nil {","words":["item."],"count":1},
+    {"context":"if e.Ref != \"\" && !strings.HasPrefix(e.Ref, \"item.\") && !strings.HasPrefix(e.Ref, \"input.\") && e.Ref != \"caller.id\" && e.Ref != \"caller.tenant\" && !strings.HasPrefix(e.Ref, \"step.\") && !strings.HasPrefix(e.Ref, \"row.\") {","words":["item."],"count":1},
+    {"context":"if e.Op == \"path\" && len(e.Args) == 1 && !strings.HasPrefix(e.Args[0].Ref, \"item.\") {","words":["item."],"count":1},
+    {"context":"used[scope] = append(used[scope], platform.Expr{Op: \"path\", Kind: e.Kind, Args: []platform.Expr{platform.ExprReference(\"reference\", \"item.\"+e.Agg.Field[0])}, Path: e.Agg.Field[1:]})","words":["item."],"count":1},
+    {"context":"if strings.HasPrefix(e.Ref, \"item.\") {","words":["item."],"count":1},
+    {"context":"need(scope, strings.TrimPrefix(e.Ref, \"item.\"))","words":["item."],"count":1},
+    {"context":"if e.Op == \"path\" && len(e.Args) == 1 && strings.HasPrefix(e.Args[0].Ref, \"item.\") {","words":["item."],"count":1},
+    {"context":"fieldName := strings.TrimPrefix(path.Args[0].Ref, \"item.\")","words":["item."],"count":1}
+  ],
+  "capabilities/server/services/apps/pages/page_rule_bindings.go": [
+    {"context":"item := strings.HasPrefix(base, \"item.\")","words":["item."],"count":1},
+    {"context":"parts = append([]string{strings.TrimPrefix(base, \"item.\")}, path...)","words":["item."],"count":1},
+    {"context":"if err := expand(\"item.\"+e.Agg.Field[0], e.Agg.Field[1:]); err != nil {","words":["item."],"count":1}
+  ],
+  "capabilities/server/services/apps/pages/page_variable_checks.go": [
+    {"context":"if e.Ref != \"\" && !strings.HasPrefix(e.Ref, \"item.\") {","words":["item."],"count":1}
+  ],
+  "capabilities/server/services/apps/pages/page_visibility.go": [
+    {"context":"if e.Ref != \"\" && !strings.HasPrefix(e.Ref, \"item.\") {","words":["item."],"count":1}
+  ],
+  "capabilities/server/services/automate/runtime/automation_engine_take.go": [
+    {"context":"tok.Waits, tok.Child = \"call\", id","words":["call"],"count":1}
+  ],
+  "capabilities/server/services/automate/runtime/automation_listen.go": [
+    {"context":"case tok.Waits == \"wait\" || tok.Waits == \"ask\" || tok.Waits == \"call\" || tok.Waits == \"agent\":","words":["call"],"count":1}
+  ],
+  "capabilities/server/services/data/confirmation_reconcile.go": [
+    {"context":"payload := map[string]any{\"party\": p.Name, \"revision\": run.Revision, \"outcome\": outcome, \"reason\": \"Source reconciliation\", \"difference\": diff, \"answer\": diff.Observed}","words":["party"],"count":1}
+  ],
+  "capabilities/server/services/data/integration_confirmations.go": [
+    {"context":"Withheld: \"withheld\", Derived: []platform.Derivation{{From: \"subject\", Fields: []string{\"input\", \"parties\", \"definition\", \"assets\"}}},","words":["assets"],"count":1},
+    {"context":"{Schema: confirmationReview, Target: confirmationType, Title: \"Review business confirmation\", Description: \"Resolve or retry a party from checked evidence, or request its declared compensation.\", Capability: \"confirmations\", Roles: []string{platform.AnyMember}, Payload: []platform.Field{{Name: \"party\", Type: \"string\", Description: \"The declared party\"}, {Name: \"outcome\", Type: \"string\", Required: true, Choices: []string{\"accepted\", \"refused\", \"retry\", \"compensate\", \"complete\"}, Description: \"The evidenced decision\"}, {Name: \"compensation\", Type: \"boolean\", Description: \"Resolve the compensation instead of the original request\"}, {Name: \"reason\", Type: \"string\", Required: true, Description: \"Evidence supporting the decision\"}}},","words":["party"],"count":1}
+  ],
+  "capabilities/server/services/data/integration_dispatch.go": [
+    {"context":"}), Withheld: \"withheld\", Derived: []platform.Derivation{{From: \"subject\", Fields: []string{\"reason\", \"input\", \"request\", \"source\", \"connection\", \"observation\", \"device\", \"attempts\", \"readback\", \"definition\", \"assets\", \"compensationCommand\", \"compensationRequest\"}}}}","words":["assets"],"count":1}
+  ],
+  "capabilities/server/services/devops/descriptor/icons.go": [
+    {"context":"\"musical-note\", \"newspaper\", \"no-symbol\", \"paper-clip\", \"pencil-square\", \"phone\", \"photo\", \"presentation-chart-line\",","words":["phone"],"count":1}
+  ],
+  "capabilities/server/services/devops/descriptor/listing.go": [
+    {"context":"\"general\", \"manufacturing\", \"retail\", \"distribution\", \"hospitality\", \"healthcare\", \"education\", \"finance\",","words":["manufacturing"],"count":1},
+    {"context":"\"sales\", \"marketing\", \"service\", \"hr\", \"payroll\", \"accounting\", \"inventory\", \"purchasing\", \"production\",","words":["sales"],"count":1},
+    {"context":"\"sales\", \"marketing\", \"service\", \"hr\", \"payroll\", \"accounting\", \"inventory\", \"purchasing\", \"production\",","words":["accounting"],"count":1},
+    {"context":"\"sales\", \"marketing\", \"service\", \"hr\", \"payroll\", \"accounting\", \"inventory\", \"purchasing\", \"production\",","words":["inventory"],"count":1},
+    {"context":"\"sales\", \"marketing\", \"service\", \"hr\", \"payroll\", \"accounting\", \"inventory\", \"purchasing\", \"production\",","words":["purchasing"],"count":1},
+    {"context":"\"projects\", \"assets\", \"maintenance\", \"quality\", \"learning\", \"knowledge\", \"lending\", \"operations\", \"master-data\",","words":["projects"],"count":1},
+    {"context":"\"projects\", \"assets\", \"maintenance\", \"quality\", \"learning\", \"knowledge\", \"lending\", \"operations\", \"master-data\",","words":["assets"],"count":1},
+    {"context":"\"projects\", \"assets\", \"maintenance\", \"quality\", \"learning\", \"knowledge\", \"lending\", \"operations\", \"master-data\",","words":["quality"],"count":1}
+  ],
+  "capabilities/server/services/functions/authoring/compute_code.go": [
+    {"context":"return []platform.Action{{Schema: protocol.SchemaCodeAttach, Target: protocol.CodeType, Capability: \"compute\", Title: \"Attach code build\", Description: \"Retain an isolated build made on a branch on the code asset it was built from.\", Automation: true, Payload: []platform.Field{{Name: \"module\", Type: \"string\", Required: true, Description: \"The content digest of the built module\"}, {Name: \"sourceHash\", Type: \"string\", Required: true, Description: \"The digest of the built source\"}, {Name: \"buildHash\", Type: \"string\", Required: true, Description: \"The digest of the source and schema snapshot\"}, {Name: \"toolchain\", Type: \"string\", Required: true, Description: \"The pinned toolchain that built it\"}}}, {Schema: protocol.SchemaCodeCompiled, Target: protocol.CodeType, Capability: \"compute\", Title: \"Keep code build result\", Description: \"Retain the accepted compiler output on its source asset.\", Automation: true, Payload: []platform.Field{{Name: \"call\", Type: \"string\", Required: true, Description: \"The accepted compilation call\"}, {Name: \"result\", Type: \"json\", Required: true, Description: \"Validated compiler result\"}, {Name: \"request\", Type: \"json\", Required: true, Description: \"The accepted source and SDK schema snapshot\"}}}}","words":["call"],"count":1}
+  ],
+  "capabilities/server/services/ontology/stored_formulas.go": [
+    {"context":"if name, ok := strings.CutPrefix(e.Ref, \"item.\"); ok {","words":["item."],"count":1}
+  ],
+  "capabilities/server/services/ontology/transaction.go": [
+    {"context":"typed := map[string]bool{\"post\": step.Post != nil, \"effect\": step.Effect != nil, \"work\": step.Work != nil, \"call\": step.Call != nil, \"request\": step.Request != nil, \"intervals\": step.Intervals != nil}","words":["call"],"count":1},
+    {"context":"if count > 0 || slices.Contains([]string{\"post\", \"effect\", \"work\", \"call\", \"request\", \"intervals\"}, step.Kind) {","words":["call"],"count":1}
+  ],
+  "capabilities/server/services/ontology/transaction_steps.go": [
+    {"context":"case \"call\":","words":["call"],"count":1}
+  ],
+  "capabilities/server/services/security/control/control_identity.go": [
+    {"context":"{Name: \"email\", Type: \"string\", Description: \"Where notifications are mailed\"}, {Name: \"phone\", Type: \"string\"},","words":["phone"],"count":1},
+    {"context":"set(\"phone\", &cur.Phone, p.Phone)","words":["phone"],"count":1}
+  ],
+  "frontend/src/apps.ts": [
+    {"context":"{ id: \"projects\", label: \"Projects\", icon: FolderIcon },","words":["projects"],"count":1}
+  ],
+  "frontend/src/pages/ListDetail.tsx": [
+    {"context":"if ((column.kind === \"email\" || column.kind === \"phone\") && value) {","words":["phone"],"count":1}
+  ],
+  "frontend/src/pages/PackageReviewContent.tsx": [
+    {"context":"description={`${item.kind || \"view\"} · ${item.surface || \"work\"}${item.app ? ` · ${item.app}` : \"\"}`}","words":["item.app"],"count":1}
+  ],
+  "frontend/src/pages/RecordList.tsx": [
+    {"context":": isPhoneField(field) ? (\"phone\" as const)","words":["phone"],"count":1}
+  ],
+  "frontend/src/pages/listShape.ts": [
+    {"context":"| \"phone\"","words":["phone"],"count":1}
+  ],
+  "frontend/src/pages/rebac/SelfAccessPanel.tsx": [
+    {"context":": `${t(appTitles.get(item.app ?? \"\") ?? item.app ?? \"\")} · ${roleTitle(item.role ?? \"\")}${item.unit ? ` (${unitName(item.unit)})` : \"\"}`;","words":["item.unit"],"count":1}
+  ],
+  "frontend/src/semantic/SemanticValue.tsx": [
+    {"context":"kind=\"phone\"","words":["phone"],"count":1}
+  ],
+  "frontend/src/semantic/TemporalAndScalar.tsx": [
+    {"context":"kind: \"email\" | \"phone\";","words":["phone"],"count":1},
+    {"context":"const catalog = useRead<Api.Action[]>(kind === \"phone\" && interactive && surface === \"detail\" ? \"/v1/actions\" : null);","words":["phone"],"count":1},
+    {"context":"const dialAction = kind === \"phone\" && catalog.status === \"ready\"","words":["phone"],"count":1},
+    {"context":"<Text type={textTypeOf(size)} hasTabularNumbers={kind === \"phone\"} maxLines={1}>","words":["phone"],"count":2}
+  ],
+  "frontend/src/shell/settings/panels.tsx": [
+    {"context":"<SettingsRow title={t(\"Phone\")} icon={PhoneIcon} control={field(\"phone\", t(\"Phone\"), \"tel\")} />","words":["phone"],"count":1}
+  ]
+}

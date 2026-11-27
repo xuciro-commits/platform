@@ -972,7 +972,7 @@
   "Upgrade package": "升级包",
   "Upload image": "上传图片",
   "Upstream lineage & source data closure verified": "上游数据血缘与源数据集权限闭环通过",
-  "Use a consumer such as connection/sales-crm and an exact origin such as https://crm.example.com.": "填写使用方（如 connection/sales-crm）和精确的来源地址（如 https://crm.example.com）。",
+  "Use a consumer such as connection/customer-service and an exact origin such as https://service.example.com.": "填写使用方（如 connection/customer-service）和精确的来源地址（如 https://service.example.com）。",
   "Used by": "使用中的功能",
   "users": "指定角色",
   "Validity window": "有效期限",

@@ -62,7 +62,7 @@ func CredentialActions() []platform.Action {
 		{Name: "kind", Type: "string", Required: true, Label: "Kind", Choices: []string{"api-key", "bearer", "password"}},
 		{Name: "source", Type: "string", Required: true, Label: "Source", Choices: []string{"deployment", "managed"}},
 		{Name: "reference", Type: "string", Label: "Reference"},
-		{Name: "bindings", Type: "lines", Required: true, Label: "Bindings", Description: "Use a consumer such as connection/sales-crm and an exact origin such as https://crm.example.com.", Fields: []platform.Field{
+		{Name: "bindings", Type: "lines", Required: true, Label: "Bindings", Description: "Use a consumer such as connection/customer-service and an exact origin such as https://service.example.com.", Fields: []platform.Field{
 			{Name: "consumer", Type: "string", Required: true, Label: "Consumer"},
 			{Name: "origin", Type: "string", Required: true, Label: "Origin"},
 		}},

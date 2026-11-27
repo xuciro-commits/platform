@@ -2,6 +2,7 @@ package descriptor
 
 import (
 	"fmt"
+	"net/url"
 	"slices"
 	"strings"
 	"unicode"
@@ -34,6 +35,15 @@ func Domains(l protocol.PackageListing) []string {
 }
 
 func CheckListing(l protocol.PackageListing) error {
+	if l.Icon != "" && !slices.Contains(Icons, l.Icon) {
+		return fmt.Errorf("listing icon: %q is not a declared icon", l.Icon)
+	}
+	if l.Cover != "" {
+		cover, err := url.Parse(l.Cover)
+		if err != nil || cover.User != nil || cover.Fragment != "" || cover.Opaque != "" || (cover.Scheme != "" && cover.Scheme != "https" && cover.Scheme != "http") || (cover.Host != "" && cover.Scheme == "") || (cover.Scheme != "" && cover.Host == "") {
+			return fmt.Errorf("listing cover must be a relative path or HTTPS address without credentials")
+		}
+	}
 	for field, values := range map[string][]string{"industries": l.Industries, "domains": l.Domains, "capabilities": l.Capabilities} {
 		allowed := Industries
 		if field != "industries" {
