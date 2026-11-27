@@ -404,5 +404,6 @@
   "Available when": "可用条件",
   "Extend an object": "扩展对象",
   "No extension objects yet. Extend an object from the target application to add custom fields and actions.": "还没有扩展对象。选择目标应用的对象进行扩展，即可添加自定义字段和动作。",
-  "No object types in this project yet.": "该项目还没有对象类型。"
+  "No object types in this project yet.": "该项目还没有对象类型。",
+  "Mention a member": "提及成员"
 }

@@ -3,6 +3,7 @@ import { Button } from "@astryxdesign/core/Button";
 import { Card } from "@astryxdesign/core/Card";
 import { Icon } from "@astryxdesign/core/Icon";
 import { HStack, StackItem, VStack } from "@astryxdesign/core/Layout";
+import { List, ListItem } from "@astryxdesign/core/List";
 import { Switch } from "@astryxdesign/core/Switch";
 import { SegmentedControl, SegmentedControlItem } from "@astryxdesign/core/SegmentedControl";
 import { Text } from "@astryxdesign/core/Text";
@@ -10,7 +11,7 @@ import { TextArea } from "@astryxdesign/core/TextArea";
 import { colorVars, radiusVars, spacingVars } from "@astryxdesign/core/theme/tokens.stylex";
 import { ChatBubbleLeftIcon, ChevronDownIcon, ChevronRightIcon, DocumentTextIcon, PencilSquareIcon } from "@heroicons/react/24/outline";
 import * as stylex from "@stylexjs/stylex";
-import { type KeyboardEvent, useState } from "react";
+import { type KeyboardEvent, useRef, useState } from "react";
 import { type Api, type Read, useRead } from "../host";
 import { t, useLocale } from "../i18n";
 import { ActionDialog } from "./ActionDialog";
@@ -67,6 +68,14 @@ function collapse(events: Event[]): TimelineItem[] {
   return result;
 }
 
+function findMentionToken(value: string, cursor: number): { start: number; end: number; query: string } | null {
+  const head = value.slice(0, cursor);
+  const match = /(?:^|\s)@([^\s@]*)$/.exec(head);
+  if (!match) return null;
+  const start = head.lastIndexOf("@");
+  return start >= 0 ? { start, end: cursor, query: match[1] } : null;
+}
+
 export function RecordActivity({ described, id, comments, catalog, entities }: { described: Described; id: string; comments: Section; catalog: Api.Action[]; entities: Api.EntityInfo[] }) {
   const follow = useFollowUps(described, id, entities, catalog);
   const [only, setOnly] = useState("all");
@@ -75,7 +84,12 @@ export function RecordActivity({ described, id, comments, catalog, entities }: {
   const activity = useRead<Api.RecordSectionView>(`${root}/activity`);
   const history = useRead<Api.RecordSectionView>(`${root}/history`);
   const comment = catalog.find((action) => action.schema === "platform.comment.add");
+  const directory = useRead<Api.MemberOption[]>(comment ? "/v1/member-directory" : null);
+  const inputRef = useRef<HTMLTextAreaElement>(null);
   const [text, setText] = useState("");
+  const [caret, setCaret] = useState(0);
+  const [dismissedAt, setDismissedAt] = useState<number | null>(null);
+  const [activeMention, setActiveMention] = useState(0);
   const [busy, setBusy] = useState(false);
   const [failure, setFailure] = useState("");
   const [expanded, setExpanded] = useState<Set<string>>(() => new Set());
@@ -84,6 +98,31 @@ export function RecordActivity({ described, id, comments, catalog, entities }: {
     if (!next.delete(key)) next.add(key);
     return next;
   });
+  const mention = findMentionToken(text, caret);
+  const mentionQuery = mention?.query.trim().toLocaleLowerCase() ?? "";
+  const mentionItems = mention && mention.start !== dismissedAt && directory.status === "ready"
+    ? directory.data
+      .filter((entry) => !mentionQuery || entry.name.toLocaleLowerCase().includes(mentionQuery) || entry.id.toLocaleLowerCase().includes(mentionQuery))
+      .slice(0, 6)
+    : [];
+  const selectedMention = mentionItems.length > 0 ? Math.min(activeMention, mentionItems.length - 1) : 0;
+  const insertMention = (member: Api.MemberOption) => {
+    if (!mention) return;
+    const inserted = `@${member.id} `;
+    const after = text.slice(mention.end);
+    const nextText = `${text.slice(0, mention.start)}${inserted}${after.startsWith(" ") ? after.slice(1) : after}`;
+    const nextCaret = mention.start + inserted.length;
+    setText(nextText);
+    setCaret(nextCaret);
+    setActiveMention(0);
+    setDismissedAt(null);
+    requestAnimationFrame(() => {
+      const node = inputRef.current;
+      if (!node) return;
+      node.focus();
+      node.setSelectionRange(nextCaret, nextCaret);
+    });
+  };
   const post = async () => {
     if (!comment || !text.trim() || busy) return;
     setBusy(true);
@@ -91,6 +130,8 @@ export function RecordActivity({ described, id, comments, catalog, entities }: {
     try {
       await send(comment, crypto.randomUUID(), { target, text }, 0);
       setText("");
+      setCaret(0);
+      setDismissedAt(null);
     } catch (problem) {
       setFailure(reasonOf(problem));
     } finally {
@@ -98,6 +139,28 @@ export function RecordActivity({ described, id, comments, catalog, entities }: {
     }
   };
   const submitKey = (event: KeyboardEvent<HTMLElement>) => {
+    if (mentionItems.length > 0 && !(event.metaKey || event.ctrlKey)) {
+      if (event.key === "ArrowDown") {
+        event.preventDefault();
+        setActiveMention((selectedMention + 1) % mentionItems.length);
+        return;
+      }
+      if (event.key === "ArrowUp") {
+        event.preventDefault();
+        setActiveMention((selectedMention - 1 + mentionItems.length) % mentionItems.length);
+        return;
+      }
+      if (event.key === "Enter" || event.key === "Tab") {
+        event.preventDefault();
+        insertMention(mentionItems[selectedMention]);
+        return;
+      }
+      if (event.key === "Escape") {
+        event.preventDefault();
+        if (mention) setDismissedAt(mention.start);
+        return;
+      }
+    }
     if ((event.metaKey || event.ctrlKey) && event.key === "Enter") {
       event.preventDefault();
       void post();
@@ -179,8 +242,35 @@ export function RecordActivity({ described, id, comments, catalog, entities }: {
     <VStack gap={5}>
       {comment && comments.status === "ready" && (
         <VStack gap={2} onKeyDown={submitKey}>
-          <TextArea label={t("Write a comment")} value={text} onChange={setText} isDisabled={busy}
-            status={failure ? { type: "error", message: failure } : undefined} />
+          <TextArea
+            ref={inputRef}
+            label={t("Write a comment")}
+            value={text}
+            onChange={(nextValue, event) => {
+              setText(nextValue);
+              setCaret(event.target.selectionStart ?? nextValue.length);
+              setActiveMention(0);
+              setDismissedAt(null);
+            }}
+            isDisabled={busy}
+            status={failure ? { type: "error", message: failure } : undefined}
+          />
+          {mentionItems.length > 0 && (
+            <Card padding={2}>
+              <List density="compact" edge="bleed" header={<Text type="supporting" color="secondary">{t("Mention a member")}</Text>}>
+                {mentionItems.map((entry, index) => (
+                  <ListItem
+                    key={entry.id}
+                    label={entry.name}
+                    description={`@${entry.id}`}
+                    startContent={<PersonAvatar id={entry.id} name={entry.name} size="xs" />}
+                    isSelected={index === selectedMention}
+                    onClick={() => insertMention(entry)}
+                  />
+                ))}
+              </List>
+            </Card>
+          )}
           <HStack hAlign="end"><Button label={t("Post comment")} variant="primary" isDisabled={!text.trim() || busy} onClick={post} /></HStack>
         </VStack>
       )}

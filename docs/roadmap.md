@@ -114,7 +114,7 @@
   第 1、2、11 天已修：`Delivery` 默认落 `Marketplace`、`Admin` 默认落 `Members`；`sim` 包库预导入 `CRM 0.3.1` 与 `0.3.2`；
   `ListPage` 日历与甘特空月保留顶栏“新建”，`RecordList` 经 `/v1/actions/{schema}/check` 判定新建权限（workspace、crm）。
   第 1 天导入已修：导入引用与选项支持按应用及工作区译文唯一匹配记录标识与键值，并在接受路径与向导中区分非法选项（“请从列表中选择”）与不可读引用（crm）。
-  待修（第 5 天评论提及）：记录活动评论框输入 `@` 无成员候选弹出——支持输入 `@` 检索并插入工作区成员账号。
+  第 5 天评论提及已修：`RecordActivity` 评论框输入 `@` 按成员姓名或标识弹出工作区成员候选列表，支持键盘与点击插入 `@<memberId>`（records “comment mention”）。
 
 ## 二、能力底座与受管服务（[#13](https://github.com/xuciro-commits/platform/issues/13)）
 

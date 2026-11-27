@@ -868,7 +868,14 @@ test("inbox: a comment mention opens the referenced record from the Mentions tab
   const record = "/ontology/objects/sales.opportunity/OPP-002";
   await author.goto(`${record}/activity`);
   const message = "@admin-1 Please review the spare parts agreement.";
-  await author.getByRole("textbox", { name: "Write a comment" }).fill(message);
+  const input = author.getByRole("textbox", { name: "Write a comment" });
+  await input.fill("@王");
+  const suggestions = author.getByRole("list", { name: "Mention a member", exact: true });
+  await expect(suggestions).toBeVisible();
+  await suggestions.getByRole("button", { name: /王丹/ }).click();
+  await expect(suggestions).toHaveCount(0);
+  await expect(input).toHaveValue("@admin-1 ");
+  await input.pressSequentially("Please review the spare parts agreement.");
   await author.getByRole("button", { name: "Post comment" }).click();
   await expect(author.getByText(message, { exact: true })).toBeVisible();
   await author.close();
