@@ -1,4 +1,4 @@
-import { copyFileSync, mkdirSync, writeFileSync } from "node:fs";
+import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { defineConfig } from "@playwright/test";
 
@@ -16,7 +16,9 @@ if (process.env.TEST_WORKER_INDEX === undefined) {
   const files = args.filter((arg, i) => !arg.startsWith("-") && args[i - 1] !== "-c" && args[i - 1] !== "--grep" && arg !== "test");
   process.env.TRUNK_SPLIT_OFFICIAL = Boolean(process.env.TRUNK_DATABASE) && (files.length === 0 || (files.some((f) => f.includes("official")) && files.some((f) => !f.includes("official")))) ? "1" : "0";
   mkdirSync(work, { recursive: true });
-  copyFileSync(`${root}scripts/frontend-tenants.json`, `${work}/tenants.json`);
+  const tenants = JSON.parse(readFileSync(`${root}scripts/frontend-tenants.json`, "utf8"));
+  const securityTenants = JSON.parse(readFileSync(`${root}scripts/frontend-security-tenants.json`, "utf8"));
+  writeFileSync(`${work}/tenants.json`, JSON.stringify([...tenants, ...securityTenants]));
   writeFileSync(`${work}/host.log`, "");
   writeFileSync(
   `${work}/supervisor.mjs`,

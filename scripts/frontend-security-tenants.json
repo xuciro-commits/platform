@@ -1,0 +1,60 @@
+[
+  {
+    "id": "audit-a",
+    "settings": {
+      "language": "en",
+      "timezone": "UTC",
+      "currency": "USD"
+    },
+    "seats": [
+      {
+        "id": "admin-1",
+        "subjects": [
+          "admin"
+        ],
+        "roles": {
+          "platform": "admin",
+          "build": "builder"
+        }
+      },
+      {
+        "id": "user-1",
+        "subjects": [
+          "user"
+        ],
+        "roles": {
+          "build": "user"
+        }
+      }
+    ]
+  },
+  {
+    "id": "audit-b",
+    "settings": {
+      "language": "en",
+      "timezone": "UTC",
+      "currency": "USD"
+    },
+    "seats": [
+      {
+        "id": "admin-1",
+        "subjects": [
+          "admin"
+        ],
+        "roles": {
+          "platform": "admin",
+          "build": "builder"
+        }
+      },
+      {
+        "id": "user-1",
+        "subjects": [
+          "user"
+        ],
+        "roles": {
+          "build": "user"
+        }
+      }
+    ]
+  }
+]
