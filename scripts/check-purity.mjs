@@ -1,16 +1,13 @@
 import { execFileSync } from "node:child_process";
-import { readFileSync, readdirSync, existsSync, mkdirSync, writeFileSync } from "node:fs";
+import { readFileSync, mkdirSync, writeFileSync, mkdtempSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { checkout } from "./package-fixtures.mjs";
 import { join, resolve } from "node:path";
 const root=new URL("..",import.meta.url).pathname;
 const lock=JSON.parse(readFileSync(join(root,"package-fixtures.lock.json"),"utf8"));
-const cache=join(root,".build/package-inputs");
-const dirs=existsSync(cache)?readdirSync(cache).map(x=>join(cache,x,"source")):[];
-let source=dirs.find(x=>{try{return execFileSync("git",["-C",x,"rev-parse","HEAD"],{encoding:"utf8",stdio:["ignore","pipe","ignore"]}).trim()===lock.revision}catch{return false}});
-if(!source){
- const fixture=execFileSync("node",[join(root,"scripts/package-fixtures.mjs"),"--materialize"],{cwd:root,encoding:"utf8",timeout:55000}).trim().split("\n").at(-1);
- source=join(fixture,"source");
-}
-if(execFileSync("git",["-C",source,"rev-parse","HEAD"],{encoding:"utf8"}).trim()!==lock.revision)throw Error("Package vocabulary revision mismatch");
+const scratch=mkdtempSync(join(tmpdir(),"platform-purity-"));
+try {
+const source=checkout(scratch);
 const manifests=execFileSync("git",["-C",source,"ls-tree","-r","--name-only",lock.revision,"packages"],{encoding:"utf8"}).trim().split("\n").filter(x=>x.endsWith("/package.yaml"));
 const names=new Set();
 for(const p of manifests){const raw=execFileSync("git",["-C",source,"show",lock.revision+":"+p],{encoding:"utf8"});for(const match of raw.matchAll(/^(?:id|namespace):\s*["']?([\w.-]+)["']?\s*(?:#.*)?$/gm))names.add(match[1]);}
@@ -26,3 +23,5 @@ for(const hit of hits.filter(h=>/PackageCard\.tsx|PolicyDialog\.tsx|app_views\.g
 console.log("purity report: "+report);
 if(process.argv.includes("--strict")&&hits.length)process.exitCode=1;
 else if(hits.length)console.log("purity: report-only until cross-wave cleanup and domain-neutral collisions are resolved");
+
+} finally { rmSync(scratch,{recursive:true,force:true}); }

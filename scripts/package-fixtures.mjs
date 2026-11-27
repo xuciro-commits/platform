@@ -158,7 +158,7 @@ async function runPool(items, limit, worker) {
   return results;
 }
 
-function checkout(root) {
+export function checkout(root) {
   const dir = join(root, "source");
   mkdirSync(dir, { recursive: true });
   command("git", ["init", "-q"], dir);
