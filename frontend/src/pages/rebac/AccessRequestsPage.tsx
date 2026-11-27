@@ -22,7 +22,7 @@ import { t } from "../../i18n";
 import { useIsDark } from "../../shell/appearance";
 import { reasonOf, send } from "../act";
 import { PageTitle, useGutter } from "../frame";
-import { PersonLabel } from "../MemberField";
+import { PersonLabel } from "../../semantic";
 import { AccessRequestDecisionCard } from "./AccessRequestDecisionCard";
 import { AnatomyPlate, MetricStrip } from "./RebacVisuals";
 import { RequestAccessDialog } from "./RequestAccessDialog";

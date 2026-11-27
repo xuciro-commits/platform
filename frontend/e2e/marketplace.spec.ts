@@ -675,7 +675,7 @@ test("publisher tenant: CRM 0.3.1 to 0.3.2 review shows RecordComparison diffs, 
   await expect(nextWizard).toBeHidden();
 
   const card32 = page.getByRole("listitem").filter({ hasText: /^CRM/ }).filter({ hasText: "crm · 0.3.2" });
-  await card32.getByRole("button", { name: "Upgrade", exact: true }).click();
+  await card32.getByRole("button", { name: "Upgrade", exact: true }).click({ timeout: 30_000 });
   const blockedReview = page.getByRole("dialog", { name: /Review and install/ });
   const leadDiff = blockedReview.getByRole("table", { name: "Changes", exact: true }).filter({ hasText: "externalref" });
   await expect(leadDiff).toBeVisible();

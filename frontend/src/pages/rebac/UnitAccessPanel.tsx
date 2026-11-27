@@ -9,7 +9,7 @@ import { useMemo } from "react";
 import { type Api, useRead } from "../../host";
 import { t } from "../../i18n";
 import { elementHref } from "../enterprise";
-import { PersonAvatar } from "../MemberField";
+import { PersonAvatar } from "../../semantic";
 import { roleTitle, spanAlive, todayISO, useMemberDirectoryMap } from "./shared";
 
 export function UnitAccessPanel({ unitId, org }: { unitId: string; org: Api.OrgSeed }) {

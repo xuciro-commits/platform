@@ -4,9 +4,8 @@ import { Drawer, DrawerHeader } from "@astryxdesign/core/Drawer";
 import { EmptyState } from "@astryxdesign/core/EmptyState";
 import { HStack, Layout, LayoutContent, LayoutFooter, LayoutPanel, VStack } from "@astryxdesign/core/Layout";
 import { Skeleton } from "@astryxdesign/core/Skeleton";
-import { StatusDot } from "@astryxdesign/core/StatusDot";
 import { Text } from "@astryxdesign/core/Text";
-import { Timestamp } from "@astryxdesign/core/Timestamp";
+import { CodeValue, StatusValue, TemporalValue } from "../semantic";
 import { createContext, Fragment, type ReactNode, useContext, useEffect, useMemo, useRef, useState } from "react";
 import { useRecordHref } from "../apps/entries";
 import { type Api, useRead } from "../host";
@@ -245,22 +244,19 @@ export function RecordPeek({ type, id, name, isOpen, onOpenChange, hasScrim = tr
   const fullHref = href(active.type, active.id);
   const sections = body ? [...body.sections, ...(body.aside.length ? [{ title: "Properties", fields: body.aside }] : [])] : [];
   const subtitle = (
-    <HStack gap={1} vAlign="center" wrap="wrap">
-      <Text type="code" color="secondary">{active.id}</Text>
+    <HStack gap={1.5} vAlign="center" wrap="wrap">
+      <CodeValue value={active.id} size="xs" />
       {status && (
         <>
           <Bullet />
-          <HStack gap={2} vAlign="center">
-            <StatusDot variant={dots[(status.tone ?? "neutral") as keyof typeof dots] ?? dots.neutral} label={t(status.title)} />
-            <Text type="supporting">{t(status.title)}</Text>
-          </HStack>
+          <StatusValue label={t(status.title)} tone={status.tone} size="xs" appearance="pill" />
         </>
       )}
       {kept?.changed?.at && (
         <>
           <Bullet />
           <Text type="supporting" color="secondary">{t("Updated")}</Text>
-          <Timestamp value={kept.changed.at} format="auto" />
+          <TemporalValue value={kept.changed.at} kind="datetime" mode="auto" size="xs" surface="inline" />
         </>
       )}
     </HStack>

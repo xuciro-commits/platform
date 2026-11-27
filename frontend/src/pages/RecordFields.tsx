@@ -15,11 +15,12 @@ import { beforeLeave } from "../router";
 import { reasonOf, send } from "./act";
 import type { Described, Section, Values } from "./describe";
 import { type InputStatus, ParameterInput, enterable, settles } from "./ParameterInput";
+import { SemanticValue } from "../semantic";
 import { plain, present, shown } from "./values";
 import { OneOfInput, ReferenceLink } from "./ReferenceField";
 import { motionStyles } from "./motion";
 import { PropertyField } from "./PropertyField";
-import { MemberLabel } from "./MemberField";
+import { MemberLabel } from "../semantic";
 
 type Conflict = { name: string; before: unknown; mine: unknown; saved: unknown; revision: number };
 export type Editor = {
@@ -230,13 +231,13 @@ export function EditorConflict({ editor, described }: { editor: Editor; describe
               <Heading level={4}>{t(clashing.title)}</Heading>
               <MetadataList>
                 <MetadataListItem label={t("Before")}>
-                  <Text type="body">{present(clashing, clash.before)}</Text>
+                  <SemanticValue field={clashing} value={clash.before} size="sm" surface="detail" interactive={false} />
                 </MetadataListItem>
                 <MetadataListItem label={t("Saved")}>
-                  <Text type="body">{present(clashing, clash.saved)}</Text>
+                  <SemanticValue field={clashing} value={clash.saved} size="sm" surface="detail" interactive={false} />
                 </MetadataListItem>
                 <MetadataListItem label={t("Yours")}>
-                  <Text type="body">{present(clashing, clash.mine)}</Text>
+                  <SemanticValue field={clashing} value={clash.mine} size="sm" surface="detail" interactive={false} />
                 </MetadataListItem>
               </MetadataList>
             </VStack>
@@ -275,7 +276,8 @@ export function FieldGroup({ described, editor, sections, direction, focusEmpty,
       if (field.oneOf) return described.members(field).some((member) => parameters.has(member.name) || !blank(editor.values[member.name]));
       if (parameters.has(field.name)) return true;
       const value = editor.values[field.name];
-      return (field.type === "money" || typeof value !== "object") && present(field, value) !== "";
+      const structured = field.type === "money" || (field.type as string) === "quantity" || field.type === "attachment" || field.type === "tags" || field.type === "references";
+      return (structured || typeof value !== "object") && present(field, value) !== "";
     });
   const hidden = more ? 0 : sections.flatMap((section) => visible(section.fields)).filter((field) => folded.has(field.name)).length;
   const prepared = sections.map((section) => {

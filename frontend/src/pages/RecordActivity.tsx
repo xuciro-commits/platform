@@ -7,7 +7,6 @@ import { Switch } from "@astryxdesign/core/Switch";
 import { SegmentedControl, SegmentedControlItem } from "@astryxdesign/core/SegmentedControl";
 import { Text } from "@astryxdesign/core/Text";
 import { TextArea } from "@astryxdesign/core/TextArea";
-import { Timestamp } from "@astryxdesign/core/Timestamp";
 import { colorVars, radiusVars, spacingVars } from "@astryxdesign/core/theme/tokens.stylex";
 import { ChatBubbleLeftIcon, ChevronDownIcon, ChevronRightIcon, DocumentTextIcon, PencilSquareIcon } from "@heroicons/react/24/outline";
 import * as stylex from "@stylexjs/stylex";
@@ -17,7 +16,7 @@ import { t, useLocale } from "../i18n";
 import { ActionDialog } from "./ActionDialog";
 import { reasonOf, send } from "./act";
 import { type Described, statusField } from "./describe";
-import { PersonAvatar, PersonLabel } from "./MemberField";
+import { PersonAvatar, PersonLabel, TemporalValue } from "../semantic";
 import { type FollowUp, FollowUpBody, useFollowUps } from "./RecordFollowUps";
 import { plain, present } from "./values";
 
@@ -245,7 +244,7 @@ export function RecordActivity({ described, id, comments, catalog, entities }: {
                       <Text type="body" color="secondary">{item.kind === "comment" ? t("Commented") : item.kind === "group" ? item.items[0].title : item.kind === "followup" ? item.item.kind : item.title}</Text>
                     </HStack>
                     <HStack xstyle={styles.stamp}>
-                      <Timestamp value={item.at} format="relative" type="supporting" color="secondary" />
+                      <TemporalValue value={item.at} kind="datetime" mode="relative" size="xs" surface="inline" />
                     </HStack>
                   </HStack>
                   {item.kind === "change" && item.changes.length > 0 && renderChanges(item.changes)}
@@ -262,7 +261,7 @@ export function RecordActivity({ described, id, comments, catalog, entities }: {
                         <VStack key={entry.key} id={entry.key} gap={1}>
                           <HStack gap={2} vAlign="center">
                             <Text type="supporting" color="secondary">{entry.title}</Text>
-                            <Timestamp value={entry.at} format="relative" type="supporting" color="secondary" />
+                            <TemporalValue value={entry.at} kind="datetime" mode="relative" size="xs" surface="inline" />
                           </HStack>
                           {entry.changes.length > 0 && renderChanges(entry.changes)}
                         </VStack>

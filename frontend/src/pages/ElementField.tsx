@@ -1,11 +1,10 @@
 import type { StyleXStyles } from "@stylexjs/stylex";
-import { Icon } from "@astryxdesign/core/Icon";
-import { Link } from "@astryxdesign/core/Link";
 import { Typeahead } from "@astryxdesign/core/Typeahead";
 import { useMemo, useState } from "react";
 import { type Api, useRead } from "../host";
 import { t } from "../i18n";
-import { elementHref, findElements } from "./enterprise";
+import { ReferenceValue } from "../semantic";
+import { elementType, findElements } from "./enterprise";
 import type { InputStatus } from "./ParameterInput";
 
 type ElementInputProps = {
@@ -53,9 +52,5 @@ export function ElementInput({ id, name, stereotypes, label, description, requir
 }
 
 export function ElementLink({ id, name, compact }: { id: string; name: string; compact?: boolean }) {
-  return (
-    <Link href={elementHref(id)} label={compact ? name : undefined}>
-      {compact ? <Icon icon="externalLink" size="sm" /> : name}
-    </Link>
-  );
+  return <ReferenceValue type={elementType} id={id} name={name} compact={compact} />;
 }

@@ -1,5 +1,4 @@
 import { AlertDialog } from "@astryxdesign/core/AlertDialog";
-import { AvatarGroup } from "@astryxdesign/core/AvatarGroup";
 import { Banner } from "@astryxdesign/core/Banner";
 import { Button } from "@astryxdesign/core/Button";
 import { Card } from "@astryxdesign/core/Card";
@@ -26,7 +25,7 @@ import { t } from "../../i18n";
 import { useIsDark } from "../../shell/appearance";
 import { reasonOf, send } from "../act";
 import { PageTitle, useGutter } from "../frame";
-import { PersonAvatar } from "../MemberField";
+import { PersonStack, TagListValue } from "../../semantic";
 import { AnatomyPlate, MetricStrip } from "./RebacVisuals";
 import { addDaysISO, asIsoDate, roleTitle, todayISO, useMemberDirectoryMap, useUnitChoices } from "./shared";
 
@@ -337,17 +336,8 @@ export function TeamsPage() {
       renderCell: (team) =>
         team.members.length > 0 ? (
           <HStack gap={2} vAlign="center" wrap="wrap">
-            <AvatarGroup size="xsm">
-              {team.members.slice(0, 4).map((id) => (
-                <PersonAvatar key={id} id={id} name={memberName(id)} size="xsm" />
-              ))}
-            </AvatarGroup>
-            <HStack gap={1} wrap="wrap">
-              {team.members.slice(0, 3).map((id) => (
-                <Token key={id} size="sm" color="default" label={memberName(id)} />
-              ))}
-              {team.members.length > 3 && <Token size="sm" color="gray" label={`+${team.members.length - 3}`} />}
-            </HStack>
+            <PersonStack items={team.members.map((id) => ({ id, name: memberName(id) }))} max={3} size="xs" />
+            <TagListValue items={team.members.map((id) => memberName(id))} max={2} size="sm" />
           </HStack>
         ) : (
           <Text color="secondary">{t("No members")}</Text>

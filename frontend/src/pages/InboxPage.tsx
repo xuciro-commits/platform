@@ -1,4 +1,4 @@
-import { PersonLabel } from "./MemberField";
+import { PersonLabel, TemporalValue } from "../semantic";
 import { Badge } from "@astryxdesign/core/Badge";
 import { Banner } from "@astryxdesign/core/Banner";
 import { Button } from "@astryxdesign/core/Button";
@@ -16,7 +16,6 @@ import { Tab, TabList } from "@astryxdesign/core/TabList";
 import { Table, pixel, proportional, useTableRowStatus } from "@astryxdesign/core/Table";
 import type { TableColumn, TablePlugin } from "@astryxdesign/core/Table";
 import { Heading, Text } from "@astryxdesign/core/Text";
-import { Timestamp } from "@astryxdesign/core/Timestamp";
 import { useToast } from "@astryxdesign/core/Toast";
 import { Token } from "@astryxdesign/core/Token";
 import { Toolbar } from "@astryxdesign/core/Toolbar";
@@ -155,7 +154,7 @@ function ReceivedCell({ item, reveal, act, isOverlaid }: { item: InboxItem; reve
       <StackItem size="fill">
         <HStack {...(isOverlaid || !can ? {} : reveal.getContentRevealProps({ isRevealInverted: true }))} xstyle={styles.clip} hAlign="end">
           <Text color="secondary" hasTabularNumbers justify="end" maxLines={1} hasTruncateTooltip={false} weight={item.unread ? "semibold" : "normal"}>
-            {item.at && <Timestamp value={item.at} format="relative" />}
+            {item.at && <TemporalValue value={item.at} kind="datetime" mode="relative" size="xs" surface="cell" />}
           </Text>
         </HStack>
       </StackItem>
@@ -274,12 +273,12 @@ function ItemPane({ item, act, onClose, isFullWidth, canMarkUnread }: { item: In
             )}
             {item.record?.due && (
               <MetadataListItem label={t("Due")}>
-                <Timestamp value={item.record.due.length === 10 ? `${item.record.due}T00:00:00` : item.record.due} format="date" type="body" color="primary" />
+                <TemporalValue value={item.record.due} kind={item.record.due.length === 10 ? "date" : "datetime"} size="md" surface="detail" />
               </MetadataListItem>
             )}
             {task?.due && (
               <MetadataListItem label={t("Due")}>
-                <Timestamp value={task.due} format="date" type="body" color="primary" />
+                <TemporalValue value={task.due} kind={task.due.length === 10 ? "date" : "datetime"} size="md" surface="detail" />
               </MetadataListItem>
             )}
             {task?.answer && (

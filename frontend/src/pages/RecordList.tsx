@@ -18,6 +18,7 @@ import { type Options, useOptions, useRelatedCounts } from "./options";
 import { ExtensionListLoaders, type ExtensionMap, extensionListColumns, extensionsOf } from "./RecordExtensions";
 import { RecordPage } from "./RecordPage";
 import { type Dot, dots, Transitions } from "./Transitions";
+import { isCodeField, isEmailField, isPercentField, isPhoneField, isUrlField, parseQuantity } from "../semantic";
 import { money, plain, present } from "./values";
 import { domainOf, ganttSpan, hasFilters, monthSpan, newView, readView, shownMonth, type ViewState } from "./view";
 
@@ -191,14 +192,19 @@ function shape(described: Described, declared: Declared, listPath: string, extra
   const hasContact = described.entity.fields.some((field) => field.type === "text" && /(?:email|phone|mobile)/i.test(field.name));
   const kindOf = (field: Api.FieldInfo) =>
     field.type === "choice" ? ("enum" as const)
+    : field.type === "money" ? ("money" as const)
+    : isPercentField(field) ? ("percent" as const)
     : numeric.has(field.type) ? ("number" as const)
+    : field.type === "tags" ? ("tags" as const)
+    : field.type === "attachment" ? ("attachment" as const)
     : field.type === "date" ? ("date" as const)
     : field.type === "datetime" ? ("time" as const)
     : field.type === "member" ? ("member" as const)
     : field.type === "text" && hasContact && field.name === described.entity.display ? ("person" as const)
-    : field.type === "text" && /email/i.test(field.name) ? ("email" as const)
-    : field.type === "text" && /(?:phone|mobile)/i.test(field.name) ? ("phone" as const)
-    : ["name", "key", "id", "code", "slug"].includes(field.name) ? ("code" as const)
+    : isEmailField(field) ? ("email" as const)
+    : isPhoneField(field) ? ("phone" as const)
+    : isUrlField(field) ? ("url" as const)
+    : isCodeField(field) ? ("code" as const)
     : ("string" as const);
   const defaults = declared.fields ? declared.fields.flatMap((name) => described.field(name) ?? []) : described.columns;
   const chosen = [...defaults, ...described.table.filter((field) => !defaults.includes(field))];
@@ -222,9 +228,19 @@ function shape(described: Described, declared: Declared, listPath: string, extra
         choices: field.name === lifecycle?.field ? states.map((state) => t(state.title)) : titles(field),
         options: field.oneOf ? undefined : options[field.name] ?? (field.type === "member" || field.type === "reference" ? [] : undefined),
         boolean: field.type === "boolean",
+        integer: field.type === "integer",
         chip: field.type !== "money",
         hiddenByDefault: !defaults.includes(field),
         dot: dot(field),
+        tone: (row: Row) => field.name === lifecycle?.field ? described.state(row)?.tone : formats(row)[field.name]?.tone,
+        memberId: field.type === "member" ? (row: Row) => (row[field.name] ? String(row[field.name]) : undefined) : undefined,
+        raw: (row: Row) => {
+          const val = plain(row[field.name]);
+          if (field.type === "money" || field.type === "tags" || field.type === "attachment" || isPercentField(field) || numeric.has(field.type) || isUrlField(field, val) || parseQuantity(val)) {
+            return val;
+          }
+          return undefined;
+        },
         reference: field.type === "reference" && field.ref ? (row: Row) => {
           const target = linked(field, row);
           return row[target.name] ? { type: String(target.ref), id: String(row[target.name]) } : undefined;

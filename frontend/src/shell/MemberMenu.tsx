@@ -20,7 +20,7 @@ import {
 import { useState, useSyncExternalStore } from "react";
 import { endSession, switchAccount, useAccounts, useSession } from "../host";
 import { t } from "../i18n";
-import { PersonAvatar } from "../pages/MemberField";
+import { PersonAvatar } from "../semantic";
 import { useAccount } from "./account";
 import { AddAccountDialog } from "./AddAccountDialog";
 import { SettingsDialog, type SettingsPanelId } from "./settings/SettingsDialog";

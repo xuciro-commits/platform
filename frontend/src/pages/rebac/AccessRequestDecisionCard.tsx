@@ -6,14 +6,13 @@ import { HStack, VStack } from "@astryxdesign/core/Layout";
 import { MetadataList, MetadataListItem } from "@astryxdesign/core/MetadataList";
 import { Heading, Text } from "@astryxdesign/core/Text";
 import { TextInput } from "@astryxdesign/core/TextInput";
-import { Timestamp } from "@astryxdesign/core/Timestamp";
 import { useToast } from "@astryxdesign/core/Toast";
 import { Token } from "@astryxdesign/core/Token";
 import { useState } from "react";
 import { type Api, reread, useRead } from "../../host";
 import { t } from "../../i18n";
 import { reasonOf, send } from "../act";
-import { PersonLabel } from "../MemberField";
+import { PersonLabel, TemporalValue } from "../../semantic";
 import { addDaysISO, asIsoDate, roleTitle } from "./shared";
 
 export function AccessRequestDecisionCard({
@@ -91,7 +90,7 @@ export function AccessRequestDecisionCard({
             <Heading level={4}>{targetSummary}</Heading>
             <Token size="sm" color={stateColor} label={t(request.state)} />
           </HStack>
-          {request.created.at && <Timestamp value={request.created.at} format="relative" />}
+          {request.created.at && <TemporalValue value={request.created.at} kind="datetime" mode="relative" size="xs" surface="inline" />}
         </HStack>
 
         <MetadataList>

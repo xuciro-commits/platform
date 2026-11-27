@@ -10,6 +10,7 @@ import type { TableColumn } from "@astryxdesign/core/Table";
 import { Heading, Text } from "@astryxdesign/core/Text";
 import { useRead } from "../host";
 import { t } from "../i18n";
+import { NumberValue } from "../semantic";
 import { PageTitle, useGutter } from "./frame";
 
 type Cells = Record<string, string>;
@@ -63,7 +64,7 @@ export function dashboardPage<Answer>(definition: DashboardDefinition<Answer>) {
                     <Card key={metric.title}>
                       <VStack gap={2}>
                         <Heading level={4} accessibilityLevel={2}>{t(metric.title)}</Heading>
-                        <Text type="large" size="2xl" weight="semibold">{metric.value(read.data).toLocaleString()}</Text>
+                        <NumberValue value={metric.value(read.data)} size="lg" />
                         <Link href={metric.href}>{t("View all")}</Link>
                       </VStack>
                     </Card>

@@ -117,7 +117,7 @@ test("official tenant: the deal is won and the CRM home counts its revenue", asy
   await page.goto("/");
   await page.getByRole("link", { name: "CRM", exact: true }).first().click();
   await expect(page.getByText("Won revenue", { exact: true })).toBeVisible();
-  await expect(page.getByRole("main").getByText(/368,000/).first()).toBeVisible();
+  await expect(page.getByRole("main").getByText("$368K USD").first()).toBeVisible();
 });
 
 test("official tenant: CRM upgrades through the marketplace with an optional field and a renamed label", async () => {
@@ -417,6 +417,6 @@ test("official tenant: exported backup imports into a fresh database and serves 
   await page.goto("/");
   await page.getByRole("link", { name: "CRM", exact: true }).first().click();
   await expect(page.getByText("Won revenue", { exact: true })).toBeVisible();
-  await expect(page.getByRole("main").getByText(/368,000/).first()).toBeVisible();
+  await expect(page.getByRole("main").getByText("$368K USD").first()).toBeVisible();
 });
 });

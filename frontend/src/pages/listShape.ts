@@ -2,18 +2,40 @@ import type { ReactNode } from "react";
 import type { CellEdit } from "./PropertyField";
 import type { Dot } from "./Transitions";
 
+export type ListColumnKind =
+  | "string"
+  | "enum"
+  | "number"
+  | "money"
+  | "percent"
+  | "quantity"
+  | "date"
+  | "time"
+  | "code"
+  | "member"
+  | "person"
+  | "email"
+  | "phone"
+  | "url"
+  | "tags"
+  | "attachment";
+
 export type ListColumn<Row> = {
   key: string;
   header: string;
   width?: number;
   flex?: number;
   text: (row: Row) => string;
-  kind?: "string" | "enum" | "number" | "date" | "time" | "code" | "member" | "person" | "email" | "phone";
+  kind?: ListColumnKind;
   choices?: string[];
   options?: { value: string; label: string }[];
   boolean?: boolean;
+  integer?: boolean;
   dot?: (row: Row) => Dot | undefined;
+  tone?: (row: Row) => string | undefined;
   value?: (row: Row) => unknown;
+  raw?: (row: Row) => unknown;
+  memberId?: (row: Row) => string | undefined;
   hiddenByDefault?: boolean;
   chip?: boolean;
   reference?: (row: Row) => { type: string; id: string } | undefined;

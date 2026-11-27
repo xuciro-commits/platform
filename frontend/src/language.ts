@@ -1,33 +1,93 @@
 import { useSyncExternalStore } from "react";
 import { zhCN } from "./i18n";
 
+export type NumberFormatStyle = "1,234.56" | "1.234,56" | "1 234,56";
+
 const supported = (language: string) => (language.startsWith("zh") ? "zh-CN" : "en");
 let locale = supported(navigator.language);
 let zone: string | undefined;
 let dateFormat: string | undefined;
+let currency = "EUR";
+let numberFormat: NumberFormatStyle = "1,234.56";
+let version = 0;
 const listeners = new Set<() => void>();
+
+function emit() {
+  version += 1;
+  listeners.forEach((notify) => notify());
+}
 
 export function setLanguage(language: string) {
   const next = supported(language);
   if (next === locale) return;
   locale = next;
   document.documentElement.lang = next;
-  listeners.forEach((notify) => notify());
+  emit();
 }
 
 export function setTimeZone(next: string) {
-  zone = next || undefined;
+  const normalized = next || undefined;
+  if (normalized === zone) return;
+  zone = normalized;
+  emit();
 }
 
 export function setDateFormat(next: string) {
-  dateFormat = next || undefined;
+  const normalized = next || undefined;
+  if (normalized === dateFormat) return;
+  dateFormat = normalized;
+  emit();
+}
+
+export function setCurrency(next: string) {
+  const normalized = next.trim().toUpperCase() || "EUR";
+  if (normalized === currency) return;
+  currency = normalized;
+  emit();
+}
+
+export function setNumberFormat(next: string) {
+  const normalized: NumberFormatStyle =
+    next === "1.234,56" || next === "1 234,56" ? next : "1,234.56";
+  if (normalized === numberFormat) return;
+  numberFormat = normalized;
+  emit();
+}
+
+export function currentLanguage() {
+  return locale;
+}
+
+export function currentTimeZone() {
+  return zone;
+}
+
+export function currentDateFormat() {
+  return dateFormat;
+}
+
+export function currentCurrency() {
+  return currency;
+}
+
+export function currentNumberFormat() {
+  return numberFormat;
 }
 
 export function useLocale() {
-  return useSyncExternalStore((notify) => {
+  useSyncExternalStore((notify) => {
     listeners.add(notify);
     return () => listeners.delete(notify);
-  }, () => locale);
+  }, () => version);
+  return locale;
+}
+
+export function useFormatConfig() {
+  useSyncExternalStore((notify) => {
+    listeners.add(notify);
+    return () => listeners.delete(notify);
+  }, () => version);
+  return { locale, zone, dateFormat, currency, numberFormat };
 }
 
 export function dayText(value: string) {

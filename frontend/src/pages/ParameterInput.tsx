@@ -18,10 +18,10 @@ import { colorVars } from "@astryxdesign/core/theme/tokens.stylex";
 import * as stylex from "@stylexjs/stylex";
 import { type ComponentProps, useId, useState } from "react";
 import { type Api, request, requestBlob, useRead } from "../host";
-import { t } from "../i18n";
+import { currentCurrency, t, useFormatConfig } from "../i18n";
 import { reasonOf, send } from "./act";
 import { MemberInput } from "./MemberField";
-import { money } from "./values";
+import { currencyMeta, formatTenantNumber, parseMoney, parseQuantity, PersonAvatar } from "../semantic";
 import { ReferenceInput } from "./ReferenceField";
 import { stereotypesOf } from "./enterprise";
 
@@ -75,7 +75,7 @@ function MultipleInput({ parameter, value, form, label, description, status, onC
   const read = members ? directory : catalog;
   const selected = Array.isArray(value) ? value as string[] : [];
   const options = members
-    ? (directory.status === "ready" ? directory.data.map((member) => ({ value: member.id, label: member.name })) : [])
+    ? (directory.status === "ready" ? directory.data.map((member) => ({ value: member.id, label: member.name, icon: <PersonAvatar id={member.id} name={member.name} size="xs" /> })) : [])
     : (catalog.status === "ready" ? catalog.data.filter((action) => action.schema.startsWith(app + "."))
       .map((action) => ({ value: action.schema, label: `${t(action.title)} · ${action.schema}` })) : []);
   for (const id of selected) {
@@ -230,9 +230,12 @@ function MoneyInput({ parameter, value, label, description, status, onChange, on
   description?: string;
   control?: ComponentProps<typeof NumberInput>["controlXstyle"];
 }) {
+  useFormatConfig();
   const me = useRead<Api.MeView>("/v1/me");
-  const given = money(value);
-  const currency = given?.currency || (me.status === "ready" ? me.data.currency : "");
+  const given = parseMoney(value, me.status === "ready" ? me.data.currency : currentCurrency());
+  const currency = given?.currency || (me.status === "ready" ? me.data.currency : currentCurrency());
+  const meta = currencyMeta(currency);
+  const unitBadge = meta.symbol.trim() === meta.code ? meta.code : `${meta.symbol.trim()} ${meta.code}`;
   return (
     <NumberInput
       label={label}
@@ -240,15 +243,53 @@ function MoneyInput({ parameter, value, label, description, status, onChange, on
       description={description}
       isRequired={parameter.required}
       status={status}
-      units={currency || null}
+      units={currency ? unitBadge : null}
       isDisabled={!currency}
       value={given ? given.amount / 100 : null}
-      formatValue={(number) => number.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+      formatValue={(number) => formatTenantNumber(number, { minimumFractionDigits: meta.decimals, maximumFractionDigits: meta.decimals })}
       controlXstyle={control}
       onChange={(number) => onChange(Number.isFinite(number) ? { amount: Math.round(number * 100), currency } : "")}
       onEnter={onEnter}
       hasAutoFocus={focused}
     />
+  );
+}
+
+function QuantityInput({ parameter, value, label, description, status, onChange, onEnter, labelHidden, control, focused }: ParameterInputProps & {
+  label: string;
+  description?: string;
+  control?: ComponentProps<typeof NumberInput>["controlXstyle"];
+}) {
+  useFormatConfig();
+  const parsed = parseQuantity(value);
+  const unit = parsed?.unit || "pcs";
+  const amountNum = parsed ? Number(parsed.amount) : null;
+  return (
+    <HStack gap={1.5} vAlign="end">
+      <StackItem size="fill">
+        <NumberInput
+          label={label}
+          isLabelHidden={labelHidden}
+          description={description}
+          isRequired={parameter.required}
+          status={status}
+          value={amountNum != null && Number.isFinite(amountNum) ? amountNum : null}
+          formatValue={(number) => formatTenantNumber(number, { maximumFractionDigits: 6 })}
+          controlXstyle={control}
+          onChange={(number) => onChange(Number.isFinite(number) ? { amount: String(number), unit } : "")}
+          onEnter={onEnter}
+          hasAutoFocus={focused}
+        />
+      </StackItem>
+      <TextInput
+        label={t("Unit")}
+        isLabelHidden
+        value={unit}
+        controlXstyle={control}
+        onChange={(nextUnit) => onChange(parsed ? { amount: parsed.amount, unit: nextUnit.trim() || unit } : "")}
+        onEnter={onEnter}
+      />
+    </HStack>
   );
 }
 
@@ -340,6 +381,10 @@ export function ParameterInput({ parameter, described, value, form, status, onCh
       />
     );
   }
+  if (parameter.type === "quantity") {
+    return <QuantityInput parameter={parameter} value={value} label={label} description={description} status={status} onChange={onChange}
+      onEnter={onEnter} labelHidden={labelHidden} control={control} focused={focused} />;
+  }
   if (parameter.type === "money") {
     return <MoneyInput parameter={parameter} value={value} label={label} description={description} status={status} onChange={onChange}
       onEnter={onEnter} labelHidden={labelHidden} control={control} focused={focused} />;
@@ -354,7 +399,7 @@ export function ParameterInput({ parameter, described, value, form, status, onCh
         isRequired={parameter.required}
         status={status}
         value={typeof value === "number" ? value : null}
-        formatValue={(number) => number.toLocaleString()}
+        formatValue={(number) => formatTenantNumber(number, { maximumFractionDigits: parameter.type === "integer" ? 0 : 6 })}
         controlXstyle={control}
         onChange={onChange}
         onEnter={onEnter}

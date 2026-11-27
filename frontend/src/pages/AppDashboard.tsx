@@ -10,7 +10,8 @@ import * as stylex from "@stylexjs/stylex";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Bar, BarChart, CartesianGrid, Cell, Line, LineChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import { type Api, type Read, useRead } from "../host";
-import { t } from "../i18n";
+import { currentCurrency, t, useFormatConfig, useLocale } from "../i18n";
+import { formatMoneyValue, formatTenantNumber, MoneyValue, NumberValue } from "../semantic";
 import { navigate } from "../router";
 import { describe } from "./describe";
 import { PageTitle, useGutter } from "./frame";
@@ -21,7 +22,7 @@ import { ErrorBoundary } from "../shell/ErrorBoundary";
 
 type Hue = "blue" | "orange" | "green" | "purple" | "teal" | "pink" | "cyan" | "red";
 type Point = { key: string; value: unknown; label: string; amount: number; href?: string; hue: Hue };
-type Shown = { points: Point[]; money: boolean; format: (amount: number) => string };
+type Shown = { points: Point[]; money: boolean; currency: string; format: (amount: number) => string };
 
 const hues: Hue[] = ["blue", "orange", "green", "purple", "teal", "pink", "cyan", "red"];
 const colour = (hue: Hue) => `var(--color-data-categorical-${hue})`;
@@ -69,6 +70,7 @@ export function AppDashboard({ title, blocks, listOf }: { title: string; blocks:
 }
 
 function Block({ block, entity, list }: { block: Api.DashboardBlock; entity?: Api.EntityInfo; list?: string }) {
+  useFormatConfig();
   const measure = block.measure || "count";
   const base = Array.isArray(block.domain) ? (block.domain as unknown[]) : [];
   const read = useRead<Api.RecordsAggregate>("/v1/object-sets/aggregate", {
@@ -86,10 +88,11 @@ function Block({ block, entity, list }: { block: Api.DashboardBlock; entity?: Ap
     const money = Boolean(read.data.columns.find((column) => column.name === measure)?.money);
     const currencyKey = read.data.columns.find((column) => column.name.endsWith(".currency"))?.name;
     const currency = currencyKey ? String(read.data.rows.find((row) => row[currencyKey])?.[currencyKey] ?? "") : "";
+    const effectiveCurrency = currency || currentCurrency();
     const rows = currencyKey ? read.data.rows.filter((row) => (currency ? row[currencyKey] === currency : !row[currencyKey])) : read.data.rows;
     const format = (amount: number) => money
-      ? `${(amount / 100).toLocaleString(undefined, { maximumFractionDigits: 0 })} ${currency}`.trim()
-      : amount.toLocaleString(undefined, { maximumFractionDigits: 2 });
+      ? (formatMoneyValue({ amount, currency: effectiveCurrency }, { compact: true })?.text ?? "0")
+      : formatTenantNumber(amount, { maximumFractionDigits: 2 });
     const states = field && !bucket && field.name === entity?.lifecycle?.field ? (entity.lifecycle.states ?? []) : [];
     const order = field && !bucket ? (states.length ? states.map((state) => state.name) : options[field.name]?.map((option) => option.value) ?? field.choices ?? []) : [];
     const labelOf = (value: unknown) => {
@@ -109,7 +112,7 @@ function Block({ block, entity, list }: { block: Api.DashboardBlock; entity?: Ap
       };
     });
     const ranked = order.length ? [...points].sort((a, b) => rank(order, a.key) - rank(order, b.key)) : points;
-    return { format, money, points: ranked.map((point, index) => ({ ...point, hue: hues[index % hues.length] })) };
+    return { format, money, currency: effectiveCurrency, points: ranked.map((point, index) => ({ ...point, hue: hues[index % hues.length] })) };
   }, [read, measure, field, bucket, options, block.group, base, name, list]);
   if (block.kind === "metric") {
     return (
@@ -118,7 +121,11 @@ function Block({ block, entity, list }: { block: Api.DashboardBlock; entity?: Ap
           <Text type="label" color="secondary">{t(block.title)}</Text>
           {shown ? (
             <VStack xstyle={motionStyles.fadeEnter}>
-              <Text type="large" size="2xl" weight="semibold" hasTabularNumbers>{shown.points[0] ? shown.format(shown.points[0].amount) : "0"}</Text>
+              {shown.money ? (
+                <MoneyValue value={{ amount: shown.points[0]?.amount ?? 0, currency: shown.currency }} size="lg" compact />
+              ) : (
+                <NumberValue value={shown.points[0]?.amount ?? 0} size="lg" compact />
+              )}
             </VStack>
           ) : <Pending read={read} />}
         </VStack>
@@ -209,7 +216,8 @@ function Share({ shown }: { shown: Shown }) {
 
 function Chart({ kind, shown }: { kind: string; shown: Shown }) {
   const animate = useOnceAnimation();
-  const compact = new Intl.NumberFormat(undefined, { notation: "compact" });
+  const locale = useLocale();
+  const compact = new Intl.NumberFormat(locale, { notation: "compact" });
   const axis = (amount: number) => compact.format(shown.money ? amount / 100 : amount);
   const open = (point?: Point) => point?.href && void navigate(point.href);
   const tip = <Tooltip cursor={{ fill: grid, stroke: grid }} content={({ active, payload }) => (active && payload?.[0] ? <Tip point={payload[0].payload as Point} shown={shown} first={shown.points[0]?.amount} funnel={kind === "funnel"} /> : null)} />;

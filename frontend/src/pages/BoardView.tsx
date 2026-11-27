@@ -6,18 +6,49 @@ import { Heading, Text } from "@astryxdesign/core/Text";
 import { Icon } from "@astryxdesign/core/Icon";
 import { IconButton } from "@astryxdesign/core/IconButton";
 import { PlusIcon } from "@heroicons/react/24/outline";
-import { Timestamp } from "@astryxdesign/core/Timestamp";
 import * as stylex from "@stylexjs/stylex";
 import { Fragment, type PointerEvent as ReactPointerEvent, type ReactNode, useEffect, useMemo, useRef, useState } from "react";
-import { t } from "../i18n";
+import { t, useFormatConfig } from "../i18n";
+import {
+  MoneyValue,
+  NumberValue,
+  PercentValue,
+  PersonValue,
+  ReferenceValue,
+  StatusValue,
+  TemporalValue,
+} from "../semantic";
 import { dragStyles, useDrag } from "./drag";
 import { useGutter } from "./frame";
-import { PersonLabel } from "./MemberField";
 import type { Dot } from "./Transitions";
 import { DotMark } from "./DotMark";
 
-export type BoardLine = string | { label: string; value: string; kind?: string };
-export type BoardCard = { id: string; column: string; title: string; href: string; lines: BoardLine[]; amount?: number; currency?: string; owner?: string; updated?: string; related?: string };
+export type BoardLine =
+  | string
+  | {
+      label: string;
+      value: string;
+      kind?: string;
+      raw?: string;
+      refType?: string;
+      refId?: string;
+      dot?: Dot;
+    };
+
+export type BoardCard = {
+  id: string;
+  column: string;
+  title: string;
+  href: string;
+  lines: BoardLine[];
+  amount?: number;
+  currency?: string;
+  owner?: string;
+  ownerId?: string;
+  updated?: string;
+  related?: string;
+};
+
 type MoveResult = Promise<unknown> | void;
 type BoardProps = {
   columns: { key: string; label: string; dot?: Dot }[];
@@ -36,6 +67,15 @@ const styles = stylex.create({
   cardBody: { minWidth: 0 },
 });
 
+function parseRaw(raw?: string): unknown {
+  if (!raw) return undefined;
+  try {
+    return JSON.parse(raw);
+  } catch {
+    return undefined;
+  }
+}
+
 function CardBody({ card }: { card: BoardCard }) {
   return (
     <VStack gap={2} xstyle={styles.cardBody}>
@@ -47,15 +87,32 @@ function CardBody({ card }: { card: BoardCard }) {
           if (typeof line === "string") {
             return <Text key={position} type="supporting" color="secondary" maxLines={1}>{line}</Text>;
           }
-          const money = line.kind === "number" && /[A-Z]{3}$/.test(line.value);
-          if (money) {
+          if (line.refType && line.refId) {
+            return <ReferenceValue key={position} type={line.refType} id={line.refId} name={line.value} size="xs" color="secondary" />;
+          }
+          if (line.dot) {
+            return <StatusValue key={position} label={line.value} dot={line.dot} size="xs" color="secondary" />;
+          }
+          if (line.kind === "money") {
+            const parsed = parseRaw(line.raw);
+            if (parsed) return <MoneyValue key={position} value={parsed} size="xs" weight="medium" />;
             return <Text key={position} type="supporting" color="primary" weight="medium" hasTabularNumbers maxLines={1}>{line.value}</Text>;
           }
-          if (line.kind === "number") {
+          if (line.kind === "percent") {
+            const parsed = parseRaw(line.raw);
             return (
               <HStack key={position} gap={1.5} vAlign="center">
                 <Text type="supporting" color="secondary" maxLines={1}>{line.label}</Text>
-                <Text type="supporting" color="primary" hasTabularNumbers maxLines={1}>{line.value}</Text>
+                {parsed != null ? <PercentValue value={parsed} size="xs" /> : <Text type="supporting" hasTabularNumbers>{line.value}</Text>}
+              </HStack>
+            );
+          }
+          if (line.kind === "number") {
+            const parsed = parseRaw(line.raw);
+            return (
+              <HStack key={position} gap={1.5} vAlign="center">
+                <Text type="supporting" color="secondary" maxLines={1}>{line.label}</Text>
+                {typeof parsed === "number" ? <NumberValue value={parsed} size="xs" /> : <Text type="supporting" color="primary" hasTabularNumbers maxLines={1}>{line.value}</Text>}
               </HStack>
             );
           }
@@ -65,9 +122,9 @@ function CardBody({ card }: { card: BoardCard }) {
       </VStack>
       {(card.owner || card.updated) && (
         <HStack gap={2} vAlign="center">
-          {card.owner && <PersonLabel name={card.owner} size="xsm" color="secondary" />}
+          {card.owner && <PersonValue id={card.ownerId} name={card.owner} size="xs" color="secondary" />}
           <StackItem size="fill" />
-          {card.updated && <Timestamp value={card.updated} format="relative" type="supporting" color="secondary" />}
+          {card.updated && <TemporalValue value={card.updated} kind="datetime" mode="relative" size="xs" surface="card" />}
         </HStack>
       )}
     </VStack>
@@ -88,6 +145,7 @@ const sortColumn = (items: BoardCard[], ids?: string[]) => {
 };
 
 export function BoardView({ columns, cards, onMove, accepts, onCreate, page, total }: BoardProps) {
+  useFormatConfig();
   const gutter = useGutter();
   const columnsScroll = useRef<HTMLDivElement | null>(null);
   const [optimistic, setOptimistic] = useState<Record<string, string>>({});
@@ -169,10 +227,7 @@ export function BoardView({ columns, cards, onMove, accepts, onCreate, page, tot
       const currency = card.currency ?? "";
       sums.set(currency, (sums.get(currency) ?? 0) + card.amount);
     }
-    const subtotal = [...sums].map(([currency, amount]) => {
-      const digits = currency ? { minimumFractionDigits: 2, maximumFractionDigits: 2 } : { maximumFractionDigits: 8 };
-      return currency ? `${(amount / 100).toLocaleString(undefined, digits)} ${currency}` : amount.toLocaleString(undefined, digits);
-    }).join(" · ");
+    const subtotalEntries = [...sums];
     return (
       <Card key={key} variant="muted" padding={0} xstyle={styles.column}>
         <Layout
@@ -186,14 +241,31 @@ export function BoardView({ columns, cards, onMove, accepts, onCreate, page, tot
                     <Heading level={4}>{label}</Heading>
                   </HStack>
                   <HStack gap={1} vAlign="center">
-                    <Text type="supporting" color="secondary" hasTabularNumbers>{own.length.toLocaleString()}{page?.hasMore ? "+" : ""}</Text>
+                    <NumberValue value={own.length} integer size="xs" color="secondary" />
+                    {page?.hasMore && <Text type="supporting" color="secondary">+</Text>}
                     {onCreate && key && (
                       <IconButton label={t("New in {column}").replace("{column}", label)} tooltip={t("New in {column}").replace("{column}", label)}
                         variant="ghost" size="sm" icon={<Icon icon={PlusIcon} size="sm" />} onClick={() => onCreate(key)} />
                     )}
                   </HStack>
                 </HStack>
-                {total && subtotal && <Text type="supporting" color="secondary" hasTabularNumbers>{t(total)} · {page?.hasMore ? t("Loaded subtotal") : t("Total")} · {subtotal}</Text>}
+                {total && subtotalEntries.length > 0 && (
+                  <HStack gap={1} vAlign="center" wrap="wrap">
+                    <Text type="supporting" color="secondary">
+                      {t(total)} · {page?.hasMore ? t("Loaded subtotal") : t("Total")} ·
+                    </Text>
+                    {subtotalEntries.map(([currency, amount], idx) => (
+                      <Fragment key={currency || idx}>
+                        {idx > 0 && <Text type="supporting" color="secondary">·</Text>}
+                        {currency ? (
+                          <MoneyValue value={{ amount, currency }} size="xs" compact color="secondary" />
+                        ) : (
+                          <NumberValue value={amount} size="xs" compact color="secondary" />
+                        )}
+                      </Fragment>
+                    ))}
+                  </HStack>
+                )}
               </VStack>
             </LayoutHeader>
           }

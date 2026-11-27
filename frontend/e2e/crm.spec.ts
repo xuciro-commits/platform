@@ -131,14 +131,14 @@ test("crm: deal product lines total into the deal and move between deals", async
   const lines = page.getByRole("table", { name: "Deal product lines" });
   await expect(lines).toBeVisible();
   await expect(property(lines, "Product name").filter({ hasText: "平台核心席位" }).first()).toBeVisible();
-  await expect(page.getByText("19,500.00 USD", { exact: true }).first()).toBeVisible();
-  const added = lines.getByRole("row").filter({ hasText: "1,000.00 USD" });
+  await expect(page.getByText("$19,500.00 USD", { exact: true }).first()).toBeVisible();
+  const added = lines.getByRole("row").filter({ hasText: "$1,000.00 USD" });
   await edit(added, "Quantity");
   await added.getByRole("spinbutton", { name: "Quantity" }).fill("3");
   await added.getByRole("spinbutton", { name: "Quantity" }).press("Enter");
-  await expect(lines.getByText("1,500.00 USD", { exact: true })).toBeVisible();
+  await expect(lines.getByText("$1,500.00 USD", { exact: true })).toBeVisible();
   await page.reload();
-  await expect(page.getByText("20,000.00 USD", { exact: true }).first()).toBeVisible();
+  await expect(page.getByText("$20,000.00 USD", { exact: true }).first()).toBeVisible();
   await page.goto("/ontology/objects/crm.dealline");
   const lineSearch = page.getByRole("textbox", { name: "Search this list" });
   await lineSearch.fill("Custom Workshop");
@@ -149,7 +149,7 @@ test("crm: deal product lines total into the deal and move between deals", async
   await page.getByRole("option", { name: /先锋车队门户/ }).click();
   await expect(page.getByRole("link", { name: "先锋车队门户" })).toBeVisible();
   await page.goto("/ontology/objects/crm.deal/DEL-001");
-  await expect(page.getByText("18,500.00 USD", { exact: true }).first()).toBeVisible();
+  await expect(page.getByText("$18,500.00 USD", { exact: true }).first()).toBeVisible();
 });
 
 test("crm: notes show what they relate to and a task switches from a lead to a deal", async ({ page }) => {
@@ -326,7 +326,7 @@ test("dashboard: the CRM home shows its pipeline numbers and charts, and each bl
   await page.goto("/crm/dashboard");
   const home = page.getByRole("main");
   for (const title of ["Open pipeline", "Weighted forecast", "Won revenue", "Open leads"]) await expect(home.getByRole("link", { name: title, exact: true })).toBeVisible();
-  await expect(home.getByRole("link", { name: "Weighted forecast", exact: true }).locator("..")).toHaveText(/[1-9][\d,]*(\.\d+)? USD$/);
+  await expect(home.getByRole("link", { name: "Weighted forecast", exact: true }).locator("..")).toContainText(/\$[1-9][\d,.]*[KMB]? USD/);
   await expect(home.getByRole("link", { name: "Open leads", exact: true }).locator("..")).toHaveText(/\D\d+$/);
   await expect(home.getByRole("heading", { name: "Dashboard", exact: true })).toBeVisible();
   for (const title of ["Pipeline by stage", "Pipeline by owner", "Forecast", "Leads by source", "Win rate"]) await expect(home.getByRole("heading", { name: title, exact: true })).toBeVisible();
@@ -336,7 +336,7 @@ test("dashboard: the CRM home shows its pipeline numbers and charts, and each bl
   await expect(page).toHaveURL(/\/crm\/crm\.deal\?domain=.*open/);
   await expect(page.getByText("Clear all", { exact: true })).toBeVisible();
   await page.goBack();
-  await expect(home.getByRole("link", { name: "Won revenue", exact: true }).locator("..")).toHaveText(/[1-9][\d,]*(\.\d+)? USD$/);
+  await expect(home.getByRole("link", { name: "Won revenue", exact: true }).locator("..")).toContainText(/\$[1-9][\d,.]*[KMB]? USD/);
   await home.getByText("Won revenue", { exact: true }).click();
   await expect(page).toHaveURL(/\/crm\/crm\.deal\?domain=.*won/);
   await expect(page.getByRole("link", { name: "Northwind Service Desk Add-on", exact: true })).toBeVisible();
@@ -687,23 +687,23 @@ test("defaults and from: an activity is assigned to its creator, and a deal take
 
   const id = await deal(page, { title: `Derived ${unique()}` });
   await page.goto(`/crm/crm.deal/${id}`);
-  await expect(property(page, "Probability %")).toHaveText("10");
+  await expect(property(page, "Probability %")).toHaveText("10%");
   await expect(page.getByText("From Stage", { exact: true }).first()).toBeVisible();
   await edit(page, "Stage");
   await page.getByRole("combobox", { name: "Stage", exact: true }).fill("Proposal");
   await page.getByRole("option", { name: /Proposal/ }).click();
-  await expect(property(page, "Probability %")).toHaveText("50");
+  await expect(property(page, "Probability %")).toHaveText("50%");
   await edit(page, "Probability %");
   const probability = page.getByRole("spinbutton", { name: "Probability %", exact: true });
   await probability.fill("35");
   await probability.press("Enter");
-  await expect(property(page, "Probability %")).toHaveText("35");
+  await expect(property(page, "Probability %")).toHaveText("35%");
   await edit(page, "Next step");
   const next = page.getByRole("textbox", { name: "Next step", exact: true });
   await next.fill("Send the revised proposal");
   await next.press("Enter");
   await page.reload();
-  await expect(property(page, "Probability %")).toHaveText("35");
+  await expect(property(page, "Probability %")).toHaveText("35%");
 });
 
 test("roles: sales reps see only business menu entries and actions, and see a lead immediately after it is assigned to them", async ({ page }) => {
@@ -830,4 +830,96 @@ test("crm timeline: a note added on a deal can be pinned above the timeline, and
   await expect(main.getByRole("link", { name: title, exact: true })).toBeVisible();
 });
 
+test("semantic: currency settings, minor units, compact KPIs, person cards, reference cards, percent and website links work across surfaces", async ({ page }) => {
+  await as(page, "manager-1");
+  const tag = unique();
+
+  const idOf = (res: { record?: { submission?: { target?: { id?: string } } } }, fallback: string) =>
+    res.record?.submission?.target?.id || fallback;
+
+  const orgRes = await submit(page, "party.organization.create", "party.organization", `org-sem-${tag}`, {
+    name: `Semantic Org ${tag}`,
+  });
+  const baseId = idOf(orgRes, `org-sem-${tag}`);
+
+  const accRes = await submit(page, "crm.account.create", "crm.account", `acc-sem-${tag}`, {
+    base: baseId,
+    relationship: "customer",
+    revenue: { amount: 2500000, currency: "JPY" },
+  });
+  const accId = idOf(accRes, `acc-sem-${tag}`);
+
+  const dealRes = await submit(page, "crm.deal.create", "crm.deal", `deal-sem-${tag}`, {
+    title: `Semantic Deal ${tag}`,
+    account: accId,
+    amount: { amount: 12500000, currency: "CNY" },
+    probability: 75,
+    expectedclose: "2026-12-31",
+    nextstep: "Review contract",
+    nextstepdue: "2026-12-15",
+    owner: "user-1",
+  });
+  const dealId = idOf(dealRes, `deal-sem-${tag}`);
+
+  const leadRes = await submit(page, "crm.lead.create", "crm.lead", `lead-sem-${tag}`, {
+    fullname: `Semantic Lead ${tag}`,
+    company: `Semantic Org ${tag}`,
+    email: "hello@nebula-robotics.example",
+    phone: "+1 415 555 0199",
+    website: "https://nebula-robotics.example/portal",
+  });
+  const leadId = idOf(leadRes, `lead-sem-${tag}`);
+
+  await page.goto(`/crm/crm.account/${accId}`);
+  await expect(property(page, "Annual revenue")).toContainText("¥25,000 JPY");
+
+  await page.goto(`/crm/crm.deal/${dealId}`);
+  await expect(property(page, "Amount")).toContainText("¥125,000.00 CNY");
+  await expect(property(page, "Weighted amount")).toContainText("¥93,750.00 CNY");
+  await expect(property(page, "Probability %")).toHaveText("75%");
+
+  const ownerProp = property(page, "Deal owner");
+  await expect(ownerProp).toContainText("田雪");
+  await ownerProp.getByText("田雪").first().hover();
+  await expect(page.getByRole("heading", { level: 4, name: "田雪" })).toBeVisible();
+
+  await page.mouse.move(0, 0);
+  const accountLink = property(page, "Account").getByRole("link", { name: `Semantic Org ${tag}`, exact: true });
+  await expect(accountLink).toBeVisible();
+  await accountLink.hover();
+  await expect(page.getByText("¥25,000 JPY").first()).toBeVisible();
+
+  await page.goto(`/crm/crm.lead/${leadId}`);
+  const webLink = property(page, "Website").getByRole("link", { name: "nebula-robotics.example/portal", exact: true });
+  await expect(webLink).toHaveAttribute("href", "https://nebula-robotics.example/portal");
+  await expect(property(page, "Email").getByRole("button", { name: "Send email", exact: true })).toBeVisible();
+  await expect(property(page, "Phone").getByRole("button", { name: "Call", exact: true })).toBeVisible();
+
+  const boardUrl = "/crm/crm.deal?view=" + encodeURIComponent(JSON.stringify({
+    version: 1, layout: "board", columns: ["title", "account", "amount", "probability", "owner"],
+    sort: [], filters: [], search: tag, group: "none", subGroup: "none",
+    lanes: "stage", dates: "expectedclose", month: "", scale: "month",
+    density: "balanced", stickyStart: "none", stickyEnd: "none",
+  }));
+  await page.goto(boardUrl);
+  await expect(page.getByText("¥125K CNY")).toBeVisible();
+
+  await page.getByRole("button", { name: "Account", exact: true }).click();
+  await page.getByRole("menuitem", { name: "Settings", exact: true }).click();
+  const settingsDialog = page.getByRole("dialog");
+  await expect(settingsDialog).toBeVisible();
+  await settingsDialog.getByRole("combobox", { name: "Language", exact: true }).click();
+  await page.getByRole("option", { name: /中文/ }).click();
+  await settingsDialog.getByRole("button", { name: /^(Close|关闭)$/ }).first().click();
+  await expect(page.getByText("¥12.5万 CNY")).toBeVisible();
+
+  await page.getByRole("button", { name: "账户", exact: true }).click();
+  await page.getByRole("menuitem", { name: "设置", exact: true }).click();
+  const zhDialog = page.getByRole("dialog");
+  await expect(zhDialog).toBeVisible();
+  await zhDialog.getByRole("combobox", { name: "语言", exact: true }).click();
+  await page.getByRole("option", { name: /English/ }).click();
+  await zhDialog.getByRole("button", { name: /^(Close|关闭)$/ }).first().click();
+  await expect(page.getByText("¥125K CNY")).toBeVisible();
+});
 });

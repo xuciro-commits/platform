@@ -1,5 +1,4 @@
 import { AlertDialog } from "@astryxdesign/core/AlertDialog";
-import { AvatarGroup } from "@astryxdesign/core/AvatarGroup";
 import { Banner } from "@astryxdesign/core/Banner";
 import { Button } from "@astryxdesign/core/Button";
 import { Card } from "@astryxdesign/core/Card";
@@ -24,7 +23,7 @@ import { t } from "../../i18n";
 import { useIsDark } from "../../shell/appearance";
 import { reasonOf, send } from "../act";
 import { PageTitle, useGutter } from "../frame";
-import { PersonAvatar } from "../MemberField";
+import { PersonStack, TagListValue } from "../../semantic";
 import { AnatomyPlate, MetricStrip } from "./RebacVisuals";
 import { useMemberDirectoryMap } from "./shared";
 
@@ -313,21 +312,16 @@ export function MarkingsPage() {
         return (
           <HStack gap={1.5} vAlign="center" wrap="wrap">
             {memIds.length > 0 && (
-              <AvatarGroup size="xsm">
-                {memIds.slice(0, 4).map((id) => (
-                  <PersonAvatar key={id} id={id} name={memberName(id)} size="xsm" />
-                ))}
-              </AvatarGroup>
+              <PersonStack items={memIds.map((id) => ({ id, name: memberName(id) }))} max={3} size="xs" />
             )}
-            {tmIds.slice(0, 2).map((id) => (
-              <Token key={`t:${id}`} size="sm" color="purple" label={`${t("Team")}: ${teamName(id)}`} />
-            ))}
-            {memIds.slice(0, 2).map((id) => (
-              <Token key={`m:${id}`} size="sm" color="default" label={memberName(id)} />
-            ))}
-            {memIds.length + tmIds.length > 4 && (
-              <Token size="sm" color="gray" label={`+${memIds.length + tmIds.length - 4}`} />
-            )}
+            <TagListValue
+              items={[
+                ...tmIds.map((id) => ({ label: `${t("Team")}: ${teamName(id)}`, color: "purple" as const })),
+                ...memIds.map((id) => ({ label: memberName(id), color: "default" as const })),
+              ]}
+              max={3}
+              size="sm"
+            />
           </HStack>
         );
       },

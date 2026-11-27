@@ -16,7 +16,7 @@ import { type Described, type Values } from "./describe";
 import { enterable } from "./ParameterInput";
 import { PropertyField } from "./PropertyField";
 import { EditorConflict, useEditor } from "./RecordFields";
-import { present } from "./values";
+import { SemanticValue } from "../semantic";
 
 type Line = Values & { id: string; revision: number };
 
@@ -67,7 +67,7 @@ export function RecordLines({ parent, id, set, child }: { parent: string; id: st
                 {fields.map((field, index) => (
                   <TableCell key={field.name}>
                     {index === 0 && <Text type="supporting" weight="medium">{t("Totals")}</Text>}
-                    <Text type="body" hasTabularNumbers>{present(field, answer.sums?.[field.name])}</Text>
+                    <SemanticValue field={field} value={answer.sums?.[field.name]} size="sm" surface="cell" interactive={false} />
                   </TableCell>
                 ))}
                 {archive && <TableCell />}

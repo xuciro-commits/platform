@@ -21,7 +21,8 @@ import { AvatarPicker } from "./AvatarPicker";
 import { elementHref, elementType, personStereotype } from "./enterprise";
 import { PageTitle, useGutter } from "./frame";
 import { ListView } from "./ListPage";
-import { MemberInput, PersonLabel } from "./MemberField";
+import { MemberInput } from "./MemberField";
+import { PersonLabel, SemanticValue } from "../semantic";
 import { asIsoDate } from "./rebac/shared";
 import { present } from "./values";
 
@@ -280,7 +281,7 @@ function FacetSection({ type, id, entity }: { type: string; id: string; entity: 
       {read.status === "loading" && <Skeleton height={48} />}
       {values && (fields.length ? (
         <MetadataList>
-          {fields.map((field) => <MetadataListItem key={field.name} label={t(field.title)}>{present(field, values[field.name])}</MetadataListItem>)}
+          {fields.map((field) => <MetadataListItem key={field.name} label={t(field.title)}><SemanticValue field={field} value={values[field.name]} size="sm" surface="detail" interactive={false} /></MetadataListItem>)}
         </MetadataList>
       ) : <Text type="supporting" color="secondary">{t("Nothing filled in yet.")}</Text>)}
     </VStack>

@@ -13,7 +13,7 @@ import { useToast } from "@astryxdesign/core/Toast";
 import { Toolbar } from "@astryxdesign/core/Toolbar";
 import { ArrowLeftIcon, ChevronRightIcon, Cog6ToothIcon, HashtagIcon, ListBulletIcon, PencilSquareIcon, PowerIcon } from "@heroicons/react/24/outline";
 import { useState } from "react";
-import { type Api, useRead } from "../host";
+import { type Api, reread, useRead } from "../host";
 import { t } from "../i18n";
 import { reasonOf, send } from "./act";
 import { PageTitle, useGutter } from "./frame";
@@ -56,6 +56,7 @@ export function settingsPage<Answer>(definition: SettingsDefinition<Answer>) {
       if (!action || !group) return;
       try {
         await send(action, definition.target(group.id, setting), { value });
+        reread();
       } catch (problem) {
         toast({ body: reasonOf(problem), type: "error" });
       }

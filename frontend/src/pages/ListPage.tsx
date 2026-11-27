@@ -28,7 +28,7 @@ import { useListWindow } from "./ListWindow";
 import { CellProperty } from "./PropertyField";
 import { FilterBar } from "./ListFilters";
 import { ListOptions } from "./ListOptions";
-import { type Cells, idKey, ListCell, ListDetail } from "./ListDetail";
+import { type Cells, dotOf, idKey, ListCell, ListDetail, rawOf, targetOf, typeOf } from "./ListDetail";
 import { buildFilterChips, columnWidthSpec, formatFilterLabel, prepareRows, type RawRow, sortPreparedRows, stuck } from "./listModel";
 import { useSavedViews } from "./SavedViews";
 import type { Dot } from "./Transitions";
@@ -124,7 +124,7 @@ export function ListView<Answer, Row>({ definition, read, primary, back, exportR
         .map((column) => ({
           key: column.key,
           label: t(column.header),
-          type: column.options ? "enum" : column.boolean ? "boolean" : column.kind === "time" || column.kind === "date" ? "date" : column.kind === "enum" || column.kind === "number" ? column.kind : "string",
+          type: column.options ? "enum" : column.boolean ? "boolean" : column.kind === "time" || column.kind === "date" ? "date" : column.kind === "enum" ? "enum" : column.kind === "number" || column.kind === "money" || column.kind === "percent" ? "number" : "string",
           enumValues: column.options ?? column.choices?.map((choice) => ({ value: choice, label: t(choice) })),
         }))
         .concat({ key: textKey, label: t("Any text"), type: "string", enumValues: undefined }),
@@ -231,7 +231,7 @@ export function ListView<Answer, Row>({ definition, read, primary, back, exportR
       header: t(column.header),
       width: sizing.spec,
       sortable: true,
-      align: column.kind === "number" || column.kind === "time" || column.kind === "date" ? "end" : undefined,
+      align: column.kind === "number" || column.kind === "money" || column.kind === "percent" || column.kind === "quantity" || column.kind === "time" || column.kind === "date" ? "end" : undefined,
       renderCell: (cells) => {
         if (group && isHeader(cells)) return null;
         const row = rowOf.get(cells[idKey]);
@@ -474,10 +474,19 @@ export function ListView<Answer, Row>({ definition, read, primary, back, exportR
                       column: cells.__lane,
                       title: cells[orderedColumns[0].key],
                       href: cells.__href,
-                      lines: orderedColumns.slice(1, 5).filter((column) => column.key !== board.key && column.kind !== "time" && column.key !== ownerCol?.key && cells[column.key]).map((column) => ({ label: t(column.header), value: column.kind === "date" ? dayText(cells[column.key]) : cells[column.key], kind: column.kind })),
+                      lines: orderedColumns.slice(1, 5).filter((column) => column.key !== board.key && column.kind !== "time" && column.key !== ownerCol?.key && cells[column.key]).map((column) => ({
+                        label: t(column.header),
+                        value: column.kind === "date" ? dayText(cells[column.key]) : cells[column.key],
+                        kind: column.kind,
+                        raw: cells[rawOf(column.key)],
+                        refType: cells[typeOf(column.key)],
+                        refId: cells[targetOf(column.key)],
+                        dot: cells[dotOf(column.key)] as Dot | undefined,
+                      })),
                       amount: cells.__amount === undefined ? undefined : Number(cells.__amount),
                       currency: cells.__currency,
                       owner: ownerCol ? cells[ownerCol.key] : undefined,
+                      ownerId: ownerCol ? cells[targetOf(ownerCol.key)] : undefined,
                       updated: timeCol ? cells[timeCol.key] : undefined,
                       related: cells.__related || undefined,
                     };

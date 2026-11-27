@@ -13,17 +13,16 @@ import { Table, pixel, proportional, useTableSortable, useTableSortableState, us
 import type { TableColumn, TablePlugin } from "@astryxdesign/core/Table";
 import { Text } from "@astryxdesign/core/Text";
 import { TextInput } from "@astryxdesign/core/TextInput";
-import { Timestamp } from "@astryxdesign/core/Timestamp";
 import { colorVars } from "@astryxdesign/core/theme/tokens.stylex";
 import { ArrowPathIcon, ArrowsPointingInIcon, ArrowsPointingOutIcon, MagnifyingGlassIcon } from "@heroicons/react/24/outline";
 import { XMarkIcon } from "@heroicons/react/24/outline";
 import * as stylex from "@stylexjs/stylex";
 import { type KeyboardEvent, type ReactNode, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { reread, useRead } from "../host";
-import { dayText, t } from "../i18n";
+import { t } from "../i18n";
 import { PageTitle, useGutter } from "./frame";
 import type { Dot } from "./Transitions";
-import { DotMark } from "./DotMark";
+import { CodeValue, StatusValue, TemporalValue } from "../semantic";
 
 export type TreeColumn<Row> = {
   key: string;
@@ -165,17 +164,11 @@ function useTreeKeyboardNav<Row>({ rows, parents, focused, onFocus, expanded, on
 function Cell<Row>({ column, row }: { column: TreeColumn<Row>; row: Row }) {
   const text = column.text(row);
   const dot = column.dot?.(row);
-  if (column.kind === "date" && text) return <Text color="secondary" hasTabularNumbers maxLines={1}>{dayText(text)}</Text>;
-  if (column.kind === "time" && text) return <Text color="secondary"><Timestamp value={text} format="relative" /></Text>;
-  if (dot) {
-    return (
-      <HStack gap={2} vAlign="center">
-        <DotMark dot={dot} label={text} />
-        <Text maxLines={1}>{text}</Text>
-      </HStack>
-    );
-  }
-  return <Text type={column.kind === "code" ? "code" : "body"} color={column.kind === "code" ? "secondary" : undefined} hasTabularNumbers={column.kind === "number"} maxLines={1}>{text}</Text>;
+  if (column.kind === "date" && text) return <TemporalValue value={text} kind="date" size="sm" surface="cell" />;
+  if (column.kind === "time" && text) return <TemporalValue value={text} kind="datetime" mode="relative" size="sm" surface="cell" />;
+  if (dot && text) return <StatusValue label={text} dot={dot} size="sm" appearance="dot" />;
+  if (column.kind === "code" && text) return <CodeValue value={text} size="sm" />;
+  return <Text type="body" hasTabularNumbers={column.kind === "number"} maxLines={1}>{text}</Text>;
 }
 
 export function treeList<Answer, Row>(definition: TreeDefinition<Answer, Row>) {

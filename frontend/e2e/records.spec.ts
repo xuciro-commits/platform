@@ -12,7 +12,7 @@ test("records: open a list, open a record, change a field in place", async ({ pa
   await expect(retrofit.getByText("184,000", { exact: true })).toBeVisible();
   await expect(retrofit.getByLabel("Negotiation")).toBeVisible();
   await expect(retrofit.getByRole("img", { name: "Yes" })).toBeVisible();
-  await expect(retrofit.getByText("1,250.00 USD", { exact: true })).toBeVisible();
+  await expect(retrofit.getByText("$1,250.00 USD", { exact: true })).toBeVisible();
 
   await page.getByRole("link", { name: "冲压线改造" }).click();
   await expect(property(page, "Stage")).toContainText("Negotiation");
@@ -778,7 +778,8 @@ test("members: an opportunity owner is shown by name and can be reassigned", asy
 test("record fields: an attachment preserves the horizontal label alignment", async ({ page }) => {
   await signIn(page);
   await page.goto("/ontology/objects/sales.opportunity/OPP-001");
-  await page.getByRole("button", { name: /^Show empty fields/ }).click();
+  const showEmpty = page.getByRole("button", { name: /^Show empty fields/ });
+  if (await showEmpty.isVisible()) await showEmpty.click();
   const brief = page.getByText("Brief", { exact: true });
   const customer = page.getByText("Customer", { exact: true });
   const amount = page.getByText("Amount", { exact: true });

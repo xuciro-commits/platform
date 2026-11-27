@@ -12,7 +12,7 @@ import { type App, apps, locate, type NavItem, type NavSection, pathOf, settings
 import { entries, recordHref } from "../apps/entries";
 import { type Api, useRead, useSession } from "../host";
 import { Records } from "../pages/RecordList";
-import { setDateFormat, setLanguage, setTimeZone, t } from "../i18n";
+import { setCurrency, setDateFormat, setLanguage, setNumberFormat, setTimeZone, t } from "../i18n";
 import { navigate, useHash, usePath, useSearch } from "../router";
 import { AppRail } from "./AppRail";
 import { setAppearance } from "./appearance";
@@ -69,6 +69,8 @@ export function Shell() {
     setLanguage(me.data.language);
     setTimeZone(me.data.account.effective.timezone);
     setDateFormat(me.data.account.effective.dateFormat);
+    setNumberFormat(me.data.account.effective.numberFormat || me.data.tenant?.settings?.numberFormat || "1,234.56");
+    setCurrency(me.data.currency || me.data.tenant?.settings?.currency || "EUR");
     setAppearance(me.data.account.theme);
   }, [me]);
   const signedIn = session && me.status !== "loading";

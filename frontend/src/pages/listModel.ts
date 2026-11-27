@@ -1,7 +1,8 @@
 import { pixel, proportional } from "@astryxdesign/core/Table";
 import type { PowerSearchFilter } from "@astryxdesign/core/PowerSearch";
 import { t } from "../i18n";
-import { type Cells, dotOf, idKey, targetOf, typeOf } from "./ListDetail";
+import { formatTenantNumber } from "../semantic";
+import { type Cells, dotOf, idKey, rawOf, targetOf, toneOf, typeOf } from "./ListDetail";
 import type { ListBoard, ListCalendar, ListColumn, ListGantt, ListGroup, ListShape } from "./listShape";
 import type { Chip } from "./ListFilters";
 import type { StickyEdge, ViewSort, ViewState } from "./view";
@@ -11,17 +12,25 @@ export type PreparedRow<Row> = { cells: Cells; raw: RawRow; row: Row };
 
 const widthOf: Record<string, number> = {
   string: 160,
-  person: 140,
+  person: 148,
   email: 204,
-  phone: 144,
+  phone: 148,
+  url: 168,
   code: 150,
-  enum: 120,
-  member: 132,
+  enum: 124,
+  tags: 176,
+  member: 148,
   number: 128,
+  money: 152,
+  percent: 104,
+  quantity: 132,
   date: 120,
-  time: 132,
+  time: 136,
   boolean: 96,
+  attachment: 160,
 };
+
+const numericColKinds = new Set(["number", "money", "percent", "quantity"]);
 
 const operators: Record<string, string> = {
   is: "is",
@@ -74,17 +83,20 @@ export function columnWidthSpec<Row>(column: ListColumn<Row>, position: number, 
   if (kind === "string") {
     return { flex: true, spec: proportional(1.4, { minWidth: Math.max(124, minHeader) }) };
   }
-  if (kind === "email") {
+  if (kind === "email" || kind === "url" || kind === "tags") {
     return { flex: true, spec: proportional(1.2, { minWidth: Math.max(144, minHeader) }) };
   }
   if (kind === "code") {
     return { flex: true, spec: proportional(1.1, { minWidth: Math.max(116, minHeader) }) };
   }
   if (kind === "person" || kind === "member") {
-    return { flex: true, spec: proportional(1.0, { minWidth: Math.max(112, minHeader) }) };
+    return { flex: true, spec: proportional(1.05, { minWidth: Math.max(124, minHeader) }) };
   }
-  if (kind === "number") {
-    return { flex: true, spec: proportional(1.05, { minWidth: Math.max(132, minHeader) }) };
+  if (kind === "money") {
+    return { flex: true, spec: proportional(1.1, { minWidth: Math.max(148, minHeader) }) };
+  }
+  if (numericColKinds.has(kind)) {
+    return { flex: true, spec: proportional(1.0, { minWidth: Math.max(120, minHeader) }) };
   }
   return { flex: true, spec: proportional(0.85, { minWidth: Math.max(Math.min(widthOf[kind] ?? 112, 116), minHeader) }) };
 }
@@ -98,7 +110,7 @@ export function buildFilterChips<Row>(orderedColumns: ListColumn<Row>[]): Chip[]
     if (column.kind === "enum" && column.choices?.length) {
       return [{ ...base, kind: "many", options: column.choices.map((choice) => ({ value: choice, label: t(choice) })) }];
     }
-    if (column.kind === "number") return [{ ...base, kind: "range", options: [] }];
+    if (column.kind === "number" || column.kind === "percent") return [{ ...base, kind: "range", options: [] }];
     if (column.kind === "time" || column.kind === "date") return [{ ...base, kind: "date", options: [] }];
     return [];
   });
@@ -116,7 +128,7 @@ export function formatFilterLabel<Row>(columns: ListColumn<Row>[], filter: Power
         : raw.value == null
           ? ""
           : typeof raw.value === "number"
-            ? raw.value.toLocaleString()
+            ? formatTenantNumber(raw.value)
             : name(raw.value);
   return `${t(column?.header ?? filter.field)} ${t(operators[filter.operator] ?? filter.operator)} ${value}`.trim();
 }
@@ -165,8 +177,21 @@ export function prepareRows<Answer, Row>({
       cells[column.key] = column.text(row);
       const dot = column.dot?.(row);
       if (dot) cells[dotOf(column.key)] = dot;
+      const tone = column.tone?.(row);
+      if (tone) cells[toneOf(column.key)] = tone;
       const reference = cells[column.key] ? column.reference?.(row) : undefined;
       if (reference) [cells[typeOf(column.key)], cells[targetOf(column.key)]] = [reference.type, reference.id];
+      const memberId = column.memberId?.(row);
+      if (memberId && !cells[targetOf(column.key)]) cells[targetOf(column.key)] = memberId;
+      if (column.raw) {
+        const rawVal = column.raw(row);
+        if (rawVal !== undefined && rawVal !== null && rawVal !== "") {
+          cells[rawOf(column.key)] = JSON.stringify(rawVal);
+        }
+      } else if (column.boolean) {
+        const boolVal = column.value ? Boolean(column.value(row)) : cells[column.key] === t("Yes");
+        cells[rawOf(column.key)] = String(boolVal);
+      }
       const value = column.value ? column.value(row) : column.boolean ? cells[column.key] === t("Yes") : cells[column.key];
       raw[column.key] = column.kind === "date" ? (value ? parseDay(String(value)) : undefined) : column.kind === "time" ? (value ? new Date(String(value)) : undefined) : value;
     }

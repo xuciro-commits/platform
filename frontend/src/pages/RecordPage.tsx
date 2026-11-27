@@ -7,10 +7,8 @@ import { IconButton } from "@astryxdesign/core/IconButton";
 import { HStack, Layout, LayoutContent, LayoutHeader, LayoutPanel, VStack } from "@astryxdesign/core/Layout";
 import { MetadataList, MetadataListItem } from "@astryxdesign/core/MetadataList";
 import { Skeleton } from "@astryxdesign/core/Skeleton";
-import { StatusDot } from "@astryxdesign/core/StatusDot";
 import { Tab, TabList } from "@astryxdesign/core/TabList";
 import { Heading, Text } from "@astryxdesign/core/Text";
-import { Timestamp } from "@astryxdesign/core/Timestamp";
 import { CheckIcon, ClipboardDocumentIcon } from "@heroicons/react/24/outline";
 import { type ReactNode, useCallback, useEffect, useMemo, useState } from "react";
 import { type Api, useRead } from "../host";
@@ -30,7 +28,7 @@ import { RecordLines } from "./RecordLines";
 import { ObjectPreview } from "./ObjectPreview";
 import { useOptions } from "./options";
 import { enterable } from "./ParameterInput";
-import { PersonLabel } from "./MemberField";
+import { CodeValue, PersonLabel, StatusValue, TemporalValue } from "../semantic";
 import { motionStyles } from "./motion";
 import { PropertyField } from "./PropertyField";
 import { ProjectAccessPanel } from "./rebac/ProjectAccessDialog";
@@ -90,13 +88,13 @@ function Rail({ described, editor, kept, refs, people, restricted, collaboration
         <MetadataList>
           <MetadataListItem label={t("Created")}>
             <VStack gap={0.5}>
-              {kept.created.at && <Timestamp value={kept.created.at} format="date_time" type="body" color="primary" />}
+              {kept.created.at && <TemporalValue value={kept.created.at} kind="datetime" mode="absolute" size="md" surface="detail" />}
               {kept.created.by && <PersonLabel id={kept.created.by} name={people?.[kept.created.by] ?? t("Unnamed member")} />}
             </VStack>
           </MetadataListItem>
           <MetadataListItem label={t("Updated")}>
             <VStack gap={0.5}>
-              {kept.changed.at && <Timestamp value={kept.changed.at} format="date_time" type="body" color="primary" />}
+              {kept.changed.at && <TemporalValue value={kept.changed.at} kind="datetime" mode="absolute" size="md" surface="detail" />}
               {kept.changed.by && <PersonLabel id={kept.changed.by} name={people?.[kept.changed.by] ?? t("Unnamed member")} />}
             </VStack>
           </MetadataListItem>
@@ -230,17 +228,8 @@ export function RecordPage({ described, id, listPath, listTitle, instances, enti
           <VStack gap={4} padding={gutter} paddingBlockStart={3} paddingBlockEnd={0}>
             <PageTitle title={name} back={origin ? { href: origin.href, label: origin.title || t(listTitle) } : { href: listHref, label: t(listTitle) }} actions={!narrow && actions}>
               <HStack gap={4} vAlign="center" wrap="wrap">
-                {showIdInHeader && (
-                  <Text type="code" color="secondary">
-                    {id}
-                  </Text>
-                )}
-                {status && (
-                  <HStack gap={2} vAlign="center">
-                    <StatusDot variant={dots[(status.tone ?? "neutral") as keyof typeof dots] ?? dots.neutral} label={t(status.title)} />
-                    <Text type="supporting">{t(status.title)}</Text>
-                  </HStack>
-                )}
+                {showIdInHeader && <CodeValue value={id} size="sm" copyable />}
+                {status && <StatusValue label={t(status.title)} tone={status.tone} size="md" appearance="pill" />}
                 {heading.map((field) => {
                   const value = editor.values[field.name];
                   const parameter = parameters.get(field.name);
@@ -257,7 +246,7 @@ export function RecordPage({ described, id, listPath, listTitle, instances, enti
                     <Text type="supporting" color="secondary">
                       {t("Updated")}
                     </Text>
-                    <Timestamp value={kept.changed.at} format="auto" />
+                    <TemporalValue value={kept.changed.at} kind="datetime" mode="auto" size="xs" surface="inline" />
                   </HStack>
                 )}
               </HStack>

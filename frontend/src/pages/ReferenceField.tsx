@@ -1,25 +1,20 @@
 import type { StyleXStyles } from "@stylexjs/stylex";
-import { HoverCard } from "@astryxdesign/core/HoverCard";
+import { Field } from "@astryxdesign/core/Field";
 import { Icon } from "@astryxdesign/core/Icon";
 import { InputGroup } from "@astryxdesign/core/InputGroup";
-import { Link } from "@astryxdesign/core/Link";
 import { VStack } from "@astryxdesign/core/Layout";
-import { MetadataList, MetadataListItem } from "@astryxdesign/core/MetadataList";
-import { Heading, Text } from "@astryxdesign/core/Text";
-import { type SearchContext, Typeahead, TypeaheadItem } from "@astryxdesign/core/Typeahead";
 import { SegmentedControl, SegmentedControlItem } from "@astryxdesign/core/SegmentedControl";
-import { Field } from "@astryxdesign/core/Field";
+import { type SearchContext, Typeahead, TypeaheadItem } from "@astryxdesign/core/Typeahead";
 import { PlusIcon } from "@heroicons/react/24/outline";
 import { useId, useMemo, useRef, useState } from "react";
-import { useRecordHref } from "../apps/entries";
 import { type Api, request, useRead } from "../host";
 import { t } from "../i18n";
+import { ReferenceValue, type SemanticSize } from "../semantic";
 import { ActionDialog } from "./ActionDialog";
-import { ElementInput, ElementLink } from "./ElementField";
+import { ElementInput } from "./ElementField";
 import { elementType, stereotypesOf } from "./enterprise";
 import { enterable, type InputStatus } from "./ParameterInput";
-import { usePeek } from "./RecordPeek";
-import { plain, present, shown } from "./values";
+import { plain, shown } from "./values";
 
 type Reference = { id: string; label: string };
 const createOption = "__create__";
@@ -28,52 +23,8 @@ function canCreate(actions: Api.Action[] | undefined, type: string) {
   return actions?.find((action) => action.target === type && action.schema === `${type}.create` && !action.payload.some((parameter) => parameter.required && !enterable(parameter)));
 }
 
-export function ReferenceLink(props: { type: string; id: string; name: string; compact?: boolean }) {
-  return props.type === elementType ? <ElementLink id={props.id} name={props.name} compact={props.compact} /> : <RecordReferenceLink {...props} />;
-}
-
-function RecordReferenceLink({ type, id, name, compact }: { type: string; id: string; name: string; compact?: boolean }) {
-  const [open, setOpen] = useState(false);
-  const href = useRecordHref();
-  const peek = usePeek();
-  const types = useRead<Api.EntityInfo[]>(open ? "/v1/entities" : null);
-  const read = useRead<Api.RecordView>(open ? `/v1/records/${encodeURIComponent(type)}/${encodeURIComponent(id)}` : null);
-  const target = types.status === "ready" ? types.data.find((item) => item.type === type) : undefined;
-  const values = read.status === "ready" ? read.data.values : undefined;
-  const lifecycle = target?.lifecycle;
-  const state = lifecycle?.states?.find((candidate) => candidate.name === values?.[lifecycle.field]);
-  const fields = target?.fields.filter((field) => field.name !== target.display && field.name !== lifecycle?.field && values?.[field.name] != null).slice(0, 3);
-  return (
-    <HoverCard
-      onOpenChange={setOpen}
-      placement="below"
-      content={
-        <VStack gap={2}>
-          <Heading level={4}>{name}</Heading>
-          {state && <Text type="supporting">{t(state.title)}</Text>}
-          {fields && fields.length > 0 && (
-            <MetadataList>
-              {fields.map((field) => <MetadataListItem key={field.name} label={t(field.title)}>{present(field, values?.[field.name])}</MetadataListItem>)}
-            </MetadataList>
-          )}
-        </VStack>
-      }
-    >
-      <Link
-        href={href(type, id)}
-        label={compact ? name : undefined}
-        onClick={(event) => {
-          if (!peek || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey || event.button !== 0) return;
-          event.preventDefault();
-          event.stopPropagation();
-          setOpen(false);
-          peek.open({ type, id, name });
-        }}
-      >
-        {compact ? <Icon icon="externalLink" size="sm" /> : name}
-      </Link>
-    </HoverCard>
-  );
+export function ReferenceLink(props: { type: string; id: string; name: string; compact?: boolean; size?: SemanticSize; showIcon?: boolean }) {
+  return <ReferenceValue {...props} />;
 }
 
 type ReferenceInputProps = {

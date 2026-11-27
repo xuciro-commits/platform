@@ -1,6 +1,6 @@
 import { Banner } from "@astryxdesign/core/Banner";
 import { HStack, VStack } from "@astryxdesign/core/Layout";
-import { StatusDot } from "@astryxdesign/core/StatusDot";
+import { SemanticValue, StatusValue } from "../semantic";
 import { Table } from "@astryxdesign/core/Table";
 import { Heading, Text } from "@astryxdesign/core/Text";
 import { useMemo } from "react";
@@ -76,7 +76,7 @@ export function ObjectPreview({ definition, source, catalog }: { definition: Val
   const columns = preview.table.map((field) => ({
     key: field.name,
     header: t(field.title),
-    renderCell: (row: Record<string, unknown>) => <Text type="body">{present(field, row[field.name])}</Text>,
+    renderCell: (row: Record<string, unknown>) => <SemanticValue field={field} value={row[field.name]} size="sm" surface="cell" interactive={false} />,
   }));
   const state = preview.state(samples[0]);
 
@@ -90,12 +90,7 @@ export function ObjectPreview({ definition, source, catalog }: { definition: Val
       <VStack gap={3}>
         <HStack gap={2} vAlign="center">
           <Heading level={2}>{t("Record preview")}</Heading>
-          {state && (
-            <>
-              <StatusDot variant={dots[(state.tone ?? "neutral") as keyof typeof dots] ?? dots.neutral} label={t(state.title)} />
-              <Text type="supporting">{t(state.title)}</Text>
-            </>
-          )}
+          {state && <StatusValue label={t(state.title)} tone={state.tone} size="sm" appearance="pill" />}
         </HStack>
         <FieldGroup described={preview} editor={editor} sections={preview.sections} direction="horizontal-labels" refs={{}} restricted={new Set()} />
       </VStack>

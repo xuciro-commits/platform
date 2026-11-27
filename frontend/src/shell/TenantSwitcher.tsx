@@ -1,4 +1,4 @@
-import { Avatar } from "@astryxdesign/core/Avatar";
+import { EntityAvatar } from "../semantic";
 import { Button } from "@astryxdesign/core/Button";
 import {
   DropdownMenu,
@@ -56,7 +56,7 @@ export function TenantSwitcher() {
             label={currentName}
             variant="ghost"
             size="sm"
-            icon={<Avatar name={currentName} size="sm" shape="rounded" tooltip={false} />}
+            icon={<EntityAvatar name={currentName} size="sm" shape="rounded" />}
             endContent={<Icon icon={ChevronUpDownIcon} size="sm" color="secondary" />}
           >
             <Text type="body" weight="semibold" maxLines={1}>{currentName}</Text>
@@ -72,7 +72,7 @@ export function TenantSwitcher() {
                 key={tenant.id}
                 label={
                   <HStack gap={2} vAlign="center">
-                    <Avatar name={label} size="sm" shape="rounded" tooltip={false} />
+                    <EntityAvatar name={label} size="sm" shape="rounded" />
                     <Text type="body" weight={active ? "medium" : "normal"} maxLines={1}>{label}</Text>
                   </HStack>
                 }

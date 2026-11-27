@@ -12,7 +12,7 @@ import { ArrowRightIcon, LockClosedIcon, ShieldCheckIcon } from "@heroicons/reac
 import * as stylex from "@stylexjs/stylex";
 import type { Api } from "../../host";
 import { t } from "../../i18n";
-import { PersonLabel } from "../MemberField";
+import { PersonLabel } from "../../semantic";
 import { motionStyles } from "../motion";
 import { grantSourceSummary, layerName, roleTitle, scopeName, scopeRank } from "./shared";
 

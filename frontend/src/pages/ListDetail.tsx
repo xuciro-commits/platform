@@ -1,85 +1,144 @@
 import { Button } from "@astryxdesign/core/Button";
-import { Icon } from "@astryxdesign/core/Icon";
 import { HStack, VStack } from "@astryxdesign/core/Layout";
 import { Link } from "@astryxdesign/core/Link";
 import { MetadataList, MetadataListItem } from "@astryxdesign/core/MetadataList";
 import { Text } from "@astryxdesign/core/Text";
-import { Timestamp } from "@astryxdesign/core/Timestamp";
-import { Tooltip } from "@astryxdesign/core/Tooltip";
 import { type ReactNode, useState } from "react";
-import { dayText, t } from "../i18n";
-import { PersonLabel } from "./MemberField";
+import { t } from "../i18n";
+import {
+  AttachmentValue,
+  BooleanValue,
+  ChoiceValue,
+  CodeValue,
+  ContactValue,
+  MoneyValue,
+  NumberValue,
+  PercentValue,
+  PersonValue,
+  QuantityValue,
+  ReferenceValue,
+  StatusValue,
+  TagListValue,
+  TemporalValue,
+  UrlValue,
+} from "../semantic";
+import type { ListColumnKind } from "./listShape";
 import { PeekDrawer, type PeekSurfaceMode, RecordPeek } from "./RecordPeek";
-import { ReferenceLink } from "./ReferenceField";
 import type { Dot } from "./Transitions";
-import { DotMark } from "./DotMark";
 
 export type Cells = Record<string, string>;
 export const idKey = "__id";
 export const dotOf = (key: string) => `__dot:${key}`;
+export const toneOf = (key: string) => `__tone:${key}`;
 export const typeOf = (key: string) => `__type:${key}`;
 export const targetOf = (key: string) => `__target:${key}`;
+export const rawOf = (key: string) => `__raw:${key}`;
 
-type Column = { key: string; header: string; kind?: string; boolean?: boolean };
+type Column = { key: string; header: string; kind?: ListColumnKind; boolean?: boolean; integer?: boolean };
+
+function parseSerialized(raw?: string): unknown {
+  if (!raw) return undefined;
+  try {
+    return JSON.parse(raw);
+  } catch {
+    return raw;
+  }
+}
 
 export function ListCell({ column, cells, first }: { column: Column; cells: Cells; first: boolean }) {
   const value = cells[column.key] ?? "";
+  const dot = cells[dotOf(column.key)] as Dot | undefined;
+  const tone = cells[toneOf(column.key)] || undefined;
+  const targetId = cells[targetOf(column.key)] || undefined;
+  const rawJson = cells[rawOf(column.key)];
+
   if (first && cells.__href) {
     return (
       <Link href={cells.__href} color="primary" weight="normal" maxLines={1}>
-        {(column.kind === "member" || column.kind === "person") && value ? <PersonLabel name={value} /> : value || cells[idKey]}
+        {(column.kind === "member" || column.kind === "person") && value ? (
+          <PersonValue id={targetId} name={value} size="sm" card={false} />
+        ) : (
+          value || cells[idKey]
+        )}
       </Link>
     );
   }
-  if (cells[dotOf(column.key)]) {
-    return (
-      <HStack gap={2} vAlign="center">
-        <DotMark dot={cells[dotOf(column.key)] as Dot} label={value} />
-        <Text type="body" maxLines={1}>
-          {value}
-        </Text>
-      </HStack>
-    );
+
+  if (dot && value) {
+    return <StatusValue label={value} dot={dot} tone={tone} size="sm" appearance="dot" />;
   }
-  if (cells[targetOf(column.key)]) {
-    return <ReferenceLink type={cells[typeOf(column.key)]} id={cells[targetOf(column.key)]} name={value} />;
+
+  if (cells[typeOf(column.key)] && targetId) {
+    return <ReferenceValue type={cells[typeOf(column.key)]} id={targetId} name={value} size="sm" />;
   }
-  if ((column.kind === "member" || column.kind === "person") && value) {
-    return <PersonLabel name={value} />;
+
+  if ((column.kind === "member" || column.kind === "person") && (value || targetId)) {
+    return <PersonValue id={targetId} name={value || undefined} size="sm" />;
   }
+
+  if (column.boolean) {
+    const checked = rawJson ? rawJson === "true" : value === t("Yes");
+    return <BooleanValue value={checked} size="sm" surface="cell" />;
+  }
+
+  if (column.kind === "money") {
+    const parsed = parseSerialized(rawJson);
+    if (parsed) return <MoneyValue value={parsed} size="sm" align="end" />;
+    return value ? <Text type="body" hasTabularNumbers maxLines={1}>{value}</Text> : null;
+  }
+
+  if (column.kind === "percent") {
+    const parsed = parseSerialized(rawJson);
+    if (parsed != null && parsed !== "") return <PercentValue value={parsed} size="sm" />;
+    return value ? <Text type="body" hasTabularNumbers maxLines={1}>{value}</Text> : null;
+  }
+
+  if (column.kind === "quantity") {
+    const parsed = parseSerialized(rawJson);
+    if (parsed) return <QuantityValue value={parsed} size="sm" />;
+  }
+
+  if (column.kind === "number" && rawJson !== undefined && rawJson !== "") {
+    const parsed = parseSerialized(rawJson);
+    if (typeof parsed === "number" && Number.isFinite(parsed)) {
+      return <NumberValue value={parsed} integer={column.integer} size="sm" align="end" />;
+    }
+  }
+
+  if (column.kind === "tags" && rawJson) {
+    const parsed = parseSerialized(rawJson);
+    if (Array.isArray(parsed)) return <TagListValue items={parsed.map(String)} size="sm" max={2} />;
+  }
+
+  if (column.kind === "attachment" && rawJson) {
+    return <AttachmentValue value={parseSerialized(rawJson)} size="sm" />;
+  }
+
+  if (column.kind === "url" && (rawJson || value)) {
+    return <UrlValue value={parseSerialized(rawJson) ?? value} size="sm" surface="cell" interactive={false} />;
+  }
+
   if ((column.kind === "email" || column.kind === "phone") && value) {
-    return (
-      <Tooltip content={value} hasHoverIndication={false}>
-        <Text type="body" maxLines={1} hasTabularNumbers={column.kind === "phone"}>
-          {value}
-        </Text>
-      </Tooltip>
-    );
+    return <ContactValue kind={column.kind} value={value} size="sm" surface="cell" interactive={false} />;
   }
-  if (column.kind === "code") {
-    return (
-      <Text type="code" color="secondary" maxLines={1}>
-        {value}
-      </Text>
-    );
+
+  if (column.kind === "code" && value) {
+    return <CodeValue value={value} size="sm" />;
   }
-  if (column.boolean && value === t("Yes")) {
-    return <Icon icon="check" size="sm" label={t("Yes")} />;
+
+  if (column.kind === "enum" && value) {
+    return <ChoiceValue value={value} tone={tone} size="sm" />;
   }
+
   if (column.kind === "date" && value) {
-    return (
-      <Text type="body" color="secondary" hasTabularNumbers maxLines={1}>
-        {dayText(value)}
-      </Text>
-    );
+    return <TemporalValue value={value} kind="date" size="sm" surface="cell" />;
   }
+
   if (column.kind === "time" && value) {
-    return (
-      <Text type="body" color="secondary" hasTabularNumbers>
-        <Timestamp value={value} format="relative" />
-      </Text>
-    );
+    return <TemporalValue value={value} kind="datetime" mode="relative" size="sm" surface="cell" />;
   }
+
+  if (!value) return null;
   return (
     <Text type="body" maxLines={1} hasTabularNumbers={column.kind === "number"}>
       {value}
@@ -128,10 +187,13 @@ export function ListDetail({ recordType, activeId, columns, title, cells, action
       label={t("Details")}
       title={heading}
       subtitle={state && (
-        <HStack gap={2} vAlign="center">
-          <DotMark dot={shown[dotOf(state.key)] as Dot} label={shown[state.key]} />
-          <Text type="supporting" color="secondary">{shown[state.key]}</Text>
-        </HStack>
+        <StatusValue
+          label={shown[state.key]}
+          dot={shown[dotOf(state.key)] as Dot}
+          tone={shown[toneOf(state.key)] || undefined}
+          size="xs"
+          appearance="pill"
+        />
       )}
       footer={shown.__href ? (
         <HStack gap={2} hAlign="end">

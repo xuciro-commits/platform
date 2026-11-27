@@ -1,5 +1,5 @@
 import { useAppShellMobile } from "@astryxdesign/core/AppShell";
-import { Avatar } from "@astryxdesign/core/Avatar";
+import { EntityAvatar } from "../semantic";
 import { Badge } from "@astryxdesign/core/Badge";
 import { Divider } from "@astryxdesign/core/Divider";
 import { DropdownMenu } from "@astryxdesign/core/DropdownMenu";
@@ -77,12 +77,12 @@ export function AppRail({ current, compact, apps, collapsed, onExpand }: { curre
     </Tip>
   );
   const of = (group: RailGroup) => apps.filter((app) => app.group === group && app.surface !== "master-data").map((app) => link(app, app.badge
-    ? <Avatar name={t(app.label)} size="sm" shape="square" tooltip={false} />
+    ? <EntityAvatar name={t(app.label)} size="sm" shape="square" />
     : <Icon icon={app.icon} />));
   const groups = middle.map(of).filter((links) => links.length);
   const logo = (
     <Tip label={t("Platform")}>
-      <IconButton label={t("Platform")} variant="ghost" href="/home/overview" onClick={onExpand} icon={<Avatar src="/media/logo.svg" name={t("Platform")} size="sm" shape="rounded" tooltip={false} />} />
+      <IconButton label={t("Platform")} variant="ghost" href="/home/overview" onClick={onExpand} icon={<EntityAvatar src="/media/logo.svg" name={t("Platform")} size="sm" shape="rounded" />} />
     </Tip>
   );
   return (

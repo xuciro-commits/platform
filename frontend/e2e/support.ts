@@ -161,7 +161,7 @@ export async function crmMainline(page: Page, go: (type: string, plural: string)
   const wonCard = page.getByRole("region", { name: "Won", exact: true }).getByRole("heading", { level: 4, name: company, exact: true });
   await expect(wonCard).toBeVisible();
   await page.goto(dealPage);
-  await expect(property(page, "Probability %")).toHaveText("100");
+  await expect(property(page, "Probability %")).toHaveText("100%");
   await edit(page, "Status");
   await page.getByRole("combobox", { name: "Status" }).fill("Negotiation");
   const refusedEdit = page.waitForResponse((response) => response.url().endsWith("/v1/submissions") && response.status() >= 400);
@@ -170,7 +170,7 @@ export async function crmMainline(page: Page, go: (type: string, plural: string)
   await page.getByRole("combobox", { name: "Status" }).press("Escape");
   await expect(page.getByRole("combobox", { name: "Status" })).toHaveCount(0);
   await page.getByRole("button", { name: "Reopen", exact: true }).click();
-  await expect(property(page, "Probability %")).toHaveText("10");
+  await expect(property(page, "Probability %")).toHaveText("10%");
 
   await page.setViewportSize({ width: 2600, height: 900 });
   await go("crm.deal", "Deals");
@@ -192,16 +192,16 @@ export async function crmMainline(page: Page, go: (type: string, plural: string)
   await expect(lost.getByRole("heading", { level: 4, name: company, exact: true })).toBeVisible();
 
   await page.goto(dealPage);
-  await expect(property(page, "Probability %")).toHaveText("0");
+  await expect(property(page, "Probability %")).toHaveText("0%");
   await expect(page.getByRole("button", { name: "About Probability %", exact: true })).toBeVisible();
   await page.getByRole("button", { name: "Reopen", exact: true }).click();
   await page.getByRole("alertdialog").getByRole("button", { name: "Reopen", exact: true }).click();
-  await expect(property(page, "Probability %")).toHaveText("10");
+  await expect(property(page, "Probability %")).toHaveText("10%");
   await edit(page, "Status");
   await page.getByRole("combobox", { name: "Status" }).fill("Negotiation");
   await page.getByRole("option", { name: "Negotiation", exact: true }).click();
   await page.reload();
-  await expect(property(page, "Probability %")).toHaveText("70");
+  await expect(property(page, "Probability %")).toHaveText("70%");
   await expect(property(page, "Lost reason")).toHaveCount(0);
 
   await go("crm.organization", "Organizations");

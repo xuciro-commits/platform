@@ -1,8 +1,6 @@
 import { Button } from "@astryxdesign/core/Button";
 import { Field } from "@astryxdesign/core/Field";
 import { Icon } from "@astryxdesign/core/Icon";
-import { IconButton } from "@astryxdesign/core/IconButton";
-import { Markdown } from "@astryxdesign/core/Markdown";
 import { HStack, StackItem, VStack } from "@astryxdesign/core/Layout";
 import { Spinner } from "@astryxdesign/core/Spinner";
 import { Text } from "@astryxdesign/core/Text";
@@ -10,20 +8,17 @@ import { VisuallyHidden } from "@astryxdesign/core/VisuallyHidden";
 import { useClickableContainer, usePressFeedback } from "@astryxdesign/core/hooks";
 import { radiusVars, sizeVars, spacingVars } from "@astryxdesign/core/theme/tokens.stylex";
 import { focusOutlineStyles, interactionOverlayStyles } from "@astryxdesign/core/utils";
-import { ArrowTurnDownRightIcon, CalculatorIcon, CheckIcon, ClipboardDocumentIcon, EnvelopeIcon, LockClosedIcon, PhoneIcon } from "@heroicons/react/24/outline";
+import { ArrowTurnDownRightIcon, CalculatorIcon, CheckIcon, LockClosedIcon } from "@heroicons/react/24/outline";
 import * as stylex from "@stylexjs/stylex";
 import { type FocusEvent, type KeyboardEvent, useEffect, useId, useRef, useState } from "react";
 import type { Api } from "../host";
 import { t } from "../i18n";
+import { SemanticValue } from "../semantic";
 import { reasonOf } from "./act";
-import { MemberLabel } from "./MemberField";
-import { type InputStatus, ParameterInput } from "./ParameterInput";
-import { ReferenceLink } from "./ReferenceField";
-import type { Dot } from "./Transitions";
-import { iconField, icons } from "./icons";
+import { iconField } from "./icons";
 import { motionStyles } from "./motion";
-import { present } from "./values";
-import { DotMark } from "./DotMark";
+import { type InputStatus, ParameterInput } from "./ParameterInput";
+import type { Dot } from "./Transitions";
 
 const layers = "[role=listbox], [role=dialog], [role=menu], [role=grid], [role=tooltip]";
 const direct = new Set(["boolean", "attachment", "lines", "member[]", "action[]"]);
@@ -48,55 +43,39 @@ export function picks(parameter: Api.Field, field?: Api.FieldInfo) {
   return Boolean(parameter.choices || parameter.ref) || iconField(parameter.name, parameter.type) || ["choice", "reference", "member", "date"].includes(field?.type ?? parameter.type);
 }
 
-function ContactActions({ kind, value }: { kind: "email" | "phone"; value: string }) {
-  const [copied, setCopied] = useState(false);
-  const copy = () => {
-    void navigator.clipboard?.writeText(value);
-    setCopied(true);
-    setTimeout(() => setCopied(false), 1500);
-  };
-  const launch = () => {
-    window.location.href = kind === "email" ? `mailto:${value}` : `tel:${value.replace(/[^\d+]/g, "")}`;
-  };
+export function PropertyValue({
+  field,
+  value,
+  name,
+  dot,
+  tone,
+  recordType,
+  recordId,
+  recordRevision,
+}: {
+  field: Api.FieldInfo;
+  value: unknown;
+  name?: string;
+  dot?: Dot;
+  tone?: string;
+  recordType?: string;
+  recordId?: string;
+  recordRevision?: number;
+}) {
   return (
-    <HStack gap={0} vAlign="center" onClick={(event) => event.stopPropagation()} onPointerDown={(event) => event.stopPropagation()}>
-      <IconButton
-        label={copied ? t("Copied") : t("Copy")}
-        tooltip={copied ? t("Copied") : t("Copy")}
-        variant="ghost"
-        size="sm"
-        icon={
-          <HStack key={copied ? "copied" : "copy"} xstyle={motionStyles.popEnter}>
-            <Icon icon={copied ? CheckIcon : ClipboardDocumentIcon} color={copied ? "success" : undefined} size="sm" />
-          </HStack>
-        }
-        onClick={copy}
-      />
-      <IconButton label={kind === "email" ? t("Send email") : t("Call")} tooltip={kind === "email" ? t("Send email") : t("Call")} variant="ghost" size="sm"
-        icon={<Icon icon={kind === "email" ? EnvelopeIcon : PhoneIcon} size="sm" />} onClick={launch} />
-    </HStack>
+    <SemanticValue
+      field={field}
+      value={value}
+      name={name}
+      dot={dot}
+      tone={tone}
+      size="md"
+      surface="detail"
+      recordType={recordType}
+      recordId={recordId}
+      recordRevision={recordRevision}
+    />
   );
-}
-
-export function PropertyValue({ field, value, name, dot }: { field: Api.FieldInfo; value: unknown; name?: string; dot?: Dot }) {
-  if (field.type === "member" && !blank(value)) return <MemberLabel id={String(value)} name={name ?? t("Unnamed member")} />;
-  if (iconField(field.name, field.type) && icons[String(value)]) {
-    return <HStack gap={2} vAlign="center"><Icon icon={icons[String(value)]} size="sm" /><Text type="body">{String(value)}</Text></HStack>;
-  }
-  if (dot && !blank(value)) {
-    const text = name ?? present(field, value);
-    return <HStack gap={2} vAlign="center"><DotMark dot={dot} label={text} /><Text type="body">{text}</Text></HStack>;
-  }
-  if (field.type === "reference" && field.ref && name && !blank(value)) return <ReferenceLink type={field.ref} id={String(value)} name={name} />;
-  const text = present(field, value);
-  if (text === "") return null;
-  if (field.type === "text" && /email/i.test(field.name)) {
-    return <HStack gap={1} vAlign="center"><StackItem size="fill"><Text type="body" maxLines={1}>{text}</Text></StackItem><ContactActions kind="email" value={text} /></HStack>;
-  }
-  if (field.type === "text" && /(?:phone|mobile)/i.test(field.name)) {
-    return <HStack gap={1} vAlign="center"><StackItem size="fill"><Text type="body" maxLines={1} hasTabularNumbers>{text}</Text></StackItem><ContactActions kind="phone" value={text} /></HStack>;
-  }
-  return field.type === "longtext" ? <Markdown density="compact" headingLevelStart={4}>{text}</Markdown> : <Text type="body">{text}</Text>;
 }
 
 export type CellEdit<Row> = {
@@ -123,11 +102,14 @@ type PropertyFieldProps = {
   form?: Record<string, unknown>;
   name?: string;
   dot?: Dot;
+  tone?: string;
   hint?: string;
   status?: InputStatus;
   saving?: boolean;
   labelHidden?: boolean;
   open?: boolean;
+  recordId?: string;
+  recordRevision?: number;
   onChange?: (value: unknown) => void;
   onCommit?(value: unknown): Promise<unknown> | void;
   onClose?: () => void;
@@ -233,7 +215,20 @@ export function PropertyField(props: PropertyFieldProps) {
     <HStack ref={surface} id={id} gap={2} vAlign="center" xstyle={parameter ? [styles.surface, motionStyles.overlayBadge, interactionOverlayStyles.backgroundColor, focusOutlineStyles.focusWithin] : [styles.surface, motionStyles.overlayBadge]}
       {...(parameter ? { ...pressable, onClick: clickable.onClick, onMouseUp: clickable.onMouseUp, onPointerDown: clickable.onPointerDown } : {})}>
       <StackItem size="fill" role="group" aria-label={label} xstyle={styles.value}>
-        {props.hint && blank(value) ? <Text type="body" color="secondary">{props.hint}</Text> : <PropertyValue field={field} value={value} name={name} dot={props.dot} />}
+        {props.hint && blank(value) ? (
+          <Text type="body" color="secondary">{props.hint}</Text>
+        ) : (
+          <PropertyValue
+            field={field}
+            value={value}
+            name={name}
+            dot={props.dot}
+            tone={props.tone}
+            recordType={described?.type}
+            recordId={props.recordId ?? (typeof form?.id === "string" ? form.id : undefined)}
+            recordRevision={props.recordRevision}
+          />
+        )}
       </StackItem>
       {saving && <Spinner size="sm" />}
       {savedCheck && (
