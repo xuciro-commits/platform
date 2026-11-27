@@ -1,11 +1,10 @@
 package organization
 
 import (
-	"crypto/sha256"
 	"encoding/json"
-	"fmt"
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
 	"platformserver/platform"
+	"platformserver/services/security/internal/avatarref"
 	"slices"
 	"strings"
 	"sync"
@@ -316,12 +315,12 @@ func (e *Enterprise) Submit(c platform.Caller, s *pb.Submission, now time.Time) 
 				return nil, invalid("the element would end before it starts")
 			case m.ElementOf(id) != nil:
 				return nil, conflict
-			case !c.Replaying && !validAvatar(p.Avatar):
+			case !c.Replaying && !avatarref.Valid(p.Avatar):
 				return nil, invalid("invalid avatar reference")
 			}
 			avatar := p.Avatar
 			if avatar == "" && p.Stereotype == Person && !c.Replaying {
-				avatar = defaultAvatar(id)
+				avatar = avatarref.Default(id)
 			}
 			return func(*pb.ChangeRecord) {
 				m.Elements = append(m.Elements, Element{ID: id, Stereotype: p.Stereotype, Name: p.Name, ShortName: p.ShortName, Avatar: avatar, Kind: p.Kind, Legal: p.Legal, External: p.External, From: p.From, Until: p.Until, Properties: p.Properties})
@@ -439,7 +438,7 @@ func (e *Enterprise) Submit(c platform.Caller, s *pb.Submission, now time.Time) 
 			if !c.Replaying && supplied["name"] != nil && strings.TrimSpace(p.Name) == "" {
 				return nil, invalid("an element needs a name")
 			}
-			if !c.Replaying && supplied["avatar"] != nil && !validAvatar(p.Avatar) {
+			if !c.Replaying && supplied["avatar"] != nil && !avatarref.Valid(p.Avatar) {
 				return nil, invalid("invalid avatar reference")
 			}
 			return func(*pb.ChangeRecord) {
@@ -667,43 +666,4 @@ func directoryActions() []platform.Action {
 		}
 	}
 	return actions
-}
-
-func defaultAvatar(seed string) string {
-	sum := sha256.Sum256([]byte(seed))
-	return fmt.Sprintf("default/global/gl-%03d", int(sum[0])%20+1)
-}
-
-func validAvatar(value string) bool {
-	if value == "" {
-		return true
-	}
-	if rest, ok := strings.CutPrefix(value, "default/"); ok {
-		if len(rest) == 2 && rest >= "01" && rest <= "20" {
-			return true
-		}
-		pack, item, found := strings.Cut(rest, "/")
-		if !found || pack == "" || item == "" || len(pack) > 24 || len(item) > 32 || strings.Contains(item, "/") {
-			return false
-		}
-		return isAvatarSlug(pack) && isAvatarSlug(item)
-	}
-	if hex, ok := strings.CutPrefix(value, "sha256:"); ok && len(hex) == 64 {
-		for _, c := range hex {
-			if !((c >= '0' && c <= '9') || (c >= 'a' && c <= 'f')) {
-				return false
-			}
-		}
-		return true
-	}
-	return false
-}
-
-func isAvatarSlug(s string) bool {
-	for _, c := range s {
-		if !((c >= 'a' && c <= 'z') || (c >= '0' && c <= '9') || c == '-') {
-			return false
-		}
-	}
-	return true
 }
