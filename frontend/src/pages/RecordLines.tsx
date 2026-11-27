@@ -26,16 +26,20 @@ type CellPos = { row: string; field: string };
 function parsePasted(field: Api.FieldInfo, text: string, currency: string): unknown {
   const trimmed = text.trim();
   if (!trimmed) return "";
+  const plainNum = trimmed.replace(/,/g, "");
   if (field.type === "integer") {
-    return /^-?\d+$/.test(trimmed) ? Number(trimmed) : undefined;
+    return /^-?\d+$/.test(plainNum) ? Number(plainNum) : undefined;
   }
   if (field.type === "decimal") {
-    const num = Number(trimmed);
+    const num = Number(plainNum);
     return Number.isFinite(num) ? num : undefined;
   }
   if (field.type === "money") {
-    const amount = Number(trimmed.split(" ")[0]);
-    return Number.isFinite(amount) ? { amount: Math.round(amount * 100), currency } : undefined;
+    const parts = trimmed.split(/\s+/);
+    const cleaned = parts[0].replace(/^[$¥€£]+/, "").replace(/,/g, "");
+    const amount = Number(cleaned);
+    const code = parts[1] && /^[A-Z]{3}$/.test(parts[1]) ? parts[1] : currency;
+    return cleaned !== "" && Number.isFinite(amount) ? { amount: Math.round(amount * 100), currency: code } : undefined;
   }
   if (field.type === "boolean") {
     const low = trimmed.toLowerCase();
@@ -54,7 +58,7 @@ function parsePasted(field: Api.FieldInfo, text: string, currency: string): unkn
 }
 
 function cellToCsv(field: Api.FieldInfo, value: unknown, raw?: string): string {
-  if (raw !== undefined) return raw;
+  if (raw !== undefined && (value === undefined || field.type === "reference")) return raw;
   if (value == null || value === "") return "";
   if (field.type === "money" && typeof value === "object" && value !== null && "amount" in value) {
     const money = value as { amount: number; currency?: string };

@@ -8,10 +8,11 @@ import { Skeleton } from "@astryxdesign/core/Skeleton";
 import { Table, TableBody, TableCell, TableFooter, TableHeader, TableHeaderCell, TableRow } from "@astryxdesign/core/Table";
 import { Text } from "@astryxdesign/core/Text";
 import type { PowerSearchFilter } from "@astryxdesign/core/PowerSearch";
+import * as stylex from "@stylexjs/stylex";
 import { type ComponentProps, useMemo } from "react";
 import { type Api, useRead } from "../host";
 import { currentCurrency, t, useFormatConfig } from "../i18n";
-import { formatMoneyValue, formatTenantNumber } from "../semantic";
+import { MoneyValue, NumberValue, SemanticValue } from "../semantic";
 import { numeric, type Described } from "./describe";
 import { useGutter } from "./frame";
 import type { Options } from "./options";
@@ -32,6 +33,7 @@ type Groupable = { name: string; title: string; field: Api.FieldInfo };
 type MeasureOption = { value: string; label: string; field?: Api.FieldInfo; fn: "count" | "sum" | "avg" };
 
 const groupableTypes = new Set(["choice", "reference", "member", "boolean"]);
+const styles = stylex.create({ tableWrap: { width: "100%", overflowX: "auto" } });
 
 function boundDate(field: Api.FieldInfo, day: string, end: boolean): string {
   if (field.type === "datetime") return end ? `${day}T23:59:59Z` : `${day}T00:00:00Z`;
@@ -102,6 +104,13 @@ export function SummaryView({ described, listPath, view, baseDomain, options, up
     measures,
   });
 
+  const nameOf = (field: Api.FieldInfo | undefined, raw: unknown): string | undefined => {
+    if (!field || raw == null || raw === "") return undefined;
+    if (field.type === "member") return membersById.get(String(raw)) ?? options[field.name]?.find((o) => o.value === String(raw))?.label;
+    if (field.type === "reference") return options[field.name]?.find((o) => o.value === String(raw))?.label;
+    return undefined;
+  };
+
   const labelOf = (fieldName: string, raw: unknown): string => {
     if (raw == null || raw === "") return t("Not set");
     const field = described.field(fieldName);
@@ -110,14 +119,29 @@ export function SummaryView({ described, listPath, view, baseDomain, options, up
       const state = described.lifecycle.states.find((s) => s.name === String(raw));
       return state ? t(state.title) : String(raw);
     }
-    if (field.type === "member") {
-      return membersById.get(String(raw)) ?? options[field.name]?.find((o) => o.value === String(raw))?.label ?? String(raw);
-    }
-    if (field.type === "choice") {
-      const idx = field.choices?.indexOf(String(raw)) ?? -1;
-      return idx >= 0 && field.choiceTitles?.[idx] ? t(field.choiceTitles[idx]) : String(raw);
-    }
-    return options[field.name]?.find((o) => o.value === String(raw))?.label ?? (present(field, raw) || String(raw));
+    return nameOf(field, raw) ?? (present(field, raw) || String(raw));
+  };
+
+  const renderGroupCell = (field: Api.FieldInfo | undefined, raw: unknown) => {
+    if (!field || raw == null || raw === "") return <Text type="supporting" color="secondary">{t("Not set")}</Text>;
+    const dot = field.type === "reference" || field.type === "choice"
+      ? options[field.name]?.find((o) => o.value === String(raw))?.dot
+      : undefined;
+    const tone = field.name === described.lifecycle?.field
+      ? described.lifecycle.states.find((s) => s.name === String(raw))?.tone
+      : undefined;
+    return (
+      <SemanticValue
+        field={field}
+        value={raw}
+        name={nameOf(field, raw)}
+        dot={dot}
+        tone={tone}
+        size="sm"
+        surface="cell"
+        interactive={false}
+      />
+    );
   };
 
   const drillHref = (criteria: { field: string; value: unknown }[]) => {
@@ -153,11 +177,23 @@ export function SummaryView({ described, listPath, view, baseDomain, options, up
   const isMoney = read.status === "ready" && Boolean(read.data.columns.find((c) => c.name === activeMeasure.value)?.money);
   const currency = (read.status === "ready" && currencyKey ? String(read.data.rows.find((r) => r[currencyKey])?.[currencyKey] ?? "") : "") || currentCurrency();
 
-  const formatMetric = (amount: number): string => {
-    if (activeMeasure.fn === "count") return formatTenantNumber(amount, { maximumFractionDigits: 0 });
-    if (isMoney) return formatMoneyValue({ amount, currency })?.text ?? "0";
-    return formatTenantNumber(amount, { maximumFractionDigits: 2 });
-  };
+  const renderCountLink = (count: number, href: string) => (
+    <HStack hAlign="end">
+      <Link href={href}>
+        <NumberValue value={count} integer size="sm" align="end" />
+      </Link>
+    </HStack>
+  );
+
+  const renderMetricLink = (amount: number, href: string) => (
+    <HStack hAlign="end">
+      <Link href={href}>
+        {isMoney
+          ? <MoneyValue value={{ amount, currency }} size="sm" align="end" />
+          : <NumberValue value={amount} size="sm" align="end" />}
+      </Link>
+    </HStack>
+  );
 
   const rows = read.status === "ready" ? (read.data.rows as AggRow[]) : [];
   const totalCount = rows.reduce((sum, row) => sum + Number(row.count ?? 0), 0);
@@ -225,14 +261,14 @@ export function SummaryView({ described, listPath, view, baseDomain, options, up
               />
             )}
             <DateInput
-              label={t("From")}
+              label={t("Start date")}
               size="sm"
               format="date"
               value={view.from ? (view.from as ComponentProps<typeof DateInput>["value"]) : undefined}
               onChange={(next) => update({ from: next ?? "" })}
             />
             <DateInput
-              label={t("To")}
+              label={t("End date")}
               size="sm"
               format="date"
               value={view.to ? (view.to as ComponentProps<typeof DateInput>["value"]) : undefined}
@@ -249,26 +285,21 @@ export function SummaryView({ described, listPath, view, baseDomain, options, up
         <EmptyState headingLevel={3} title={t("No summary data")} />
       )}
       {read.status === "ready" && rows.length > 0 && (
+        <VStack xstyle={styles.tableWrap}>
         <Table aria-label={t("Summary")} density="compact">
           <TableHeader>
             <TableRow>
               {g1Field && <TableHeaderCell>{t(g1Field.title)}</TableHeaderCell>}
               {g2Field && <TableHeaderCell>{t(g2Field.title)}</TableHeaderCell>}
-              <TableHeaderCell>{t("Count")}</TableHeaderCell>
-              {activeMeasure.fn !== "count" && <TableHeaderCell>{activeMeasure.label}</TableHeaderCell>}
+              <TableHeaderCell><HStack hAlign="end">{t("Count")}</HStack></TableHeaderCell>
+              {activeMeasure.fn !== "count" && <TableHeaderCell><HStack hAlign="end">{activeMeasure.label}</HStack></TableHeaderCell>}
             </TableRow>
           </TableHeader>
           <TableBody>
             {groups.length === 0 && (
               <TableRow>
-                <TableCell>
-                  <Link href={drillHref([])}>{formatTenantNumber(totalCount, { maximumFractionDigits: 0 })}</Link>
-                </TableCell>
-                {activeMeasure.fn !== "count" && (
-                  <TableCell>
-                    <Link href={drillHref([])}>{formatMetric(totalMetric)}</Link>
-                  </TableCell>
-                )}
+                <TableCell>{renderCountLink(totalCount, drillHref([]))}</TableCell>
+                {activeMeasure.fn !== "count" && <TableCell>{renderMetricLink(totalMetric, drillHref([]))}</TableCell>}
               </TableRow>
             )}
             {groups.length === 1 && rows.map((row, index) => {
@@ -276,15 +307,9 @@ export function SummaryView({ described, listPath, view, baseDomain, options, up
               const href = drillHref([{ field: group1, value: v1 }]);
               return (
                 <TableRow key={`${String(v1 ?? "")}:${index}`}>
-                  <TableCell>{labelOf(group1, v1)}</TableCell>
-                  <TableCell>
-                    <Link href={href}>{formatTenantNumber(Number(row.count ?? 0), { maximumFractionDigits: 0 })}</Link>
-                  </TableCell>
-                  {activeMeasure.fn !== "count" && (
-                    <TableCell>
-                      <Link href={href}>{formatMetric(Number(row[activeMeasure.value] ?? 0))}</Link>
-                    </TableCell>
-                  )}
+                  <TableCell>{renderGroupCell(g1Field, v1)}</TableCell>
+                  <TableCell>{renderCountLink(Number(row.count ?? 0), href)}</TableCell>
+                  {activeMeasure.fn !== "count" && <TableCell>{renderMetricLink(Number(row[activeMeasure.value] ?? 0), href)}</TableCell>}
                 </TableRow>
               );
             })}
@@ -294,16 +319,10 @@ export function SummaryView({ described, listPath, view, baseDomain, options, up
                 const href = drillHref([{ field: group1, value: section.raw }, { field: group2, value: v2 }]);
                 return (
                   <TableRow key={`${section.key}:${String(v2 ?? "")}:${idx}`}>
-                    <TableCell>{idx === 0 ? labelOf(group1, section.raw) : ""}</TableCell>
-                    <TableCell>{labelOf(group2, v2)}</TableCell>
-                    <TableCell>
-                      <Link href={href}>{formatTenantNumber(Number(row.count ?? 0), { maximumFractionDigits: 0 })}</Link>
-                    </TableCell>
-                    {activeMeasure.fn !== "count" && (
-                      <TableCell>
-                        <Link href={href}>{formatMetric(Number(row[activeMeasure.value] ?? 0))}</Link>
-                      </TableCell>
-                    )}
+                    <TableCell>{idx === 0 ? renderGroupCell(g1Field, section.raw) : null}</TableCell>
+                    <TableCell>{renderGroupCell(g2Field, v2)}</TableCell>
+                    <TableCell>{renderCountLink(Number(row.count ?? 0), href)}</TableCell>
+                    {activeMeasure.fn !== "count" && <TableCell>{renderMetricLink(Number(row[activeMeasure.value] ?? 0), href)}</TableCell>}
                   </TableRow>
                 );
               }),
@@ -312,17 +331,9 @@ export function SummaryView({ described, listPath, view, baseDomain, options, up
                   <Text type="supporting" weight="medium">{`${labelOf(group1, section.raw)} · ${t("Subtotal")}`}</Text>
                 </TableCell>
                 <TableCell />
-                <TableCell>
-                  <Link href={drillHref([{ field: group1, value: section.raw }])}>
-                    {formatTenantNumber(section.subCount, { maximumFractionDigits: 0 })}
-                  </Link>
-                </TableCell>
+                <TableCell>{renderCountLink(section.subCount, drillHref([{ field: group1, value: section.raw }]))}</TableCell>
                 {activeMeasure.fn !== "count" && (
-                  <TableCell>
-                    <Link href={drillHref([{ field: group1, value: section.raw }])}>
-                      {formatMetric(section.subMetric)}
-                    </Link>
-                  </TableCell>
+                  <TableCell>{renderMetricLink(section.subMetric, drillHref([{ field: group1, value: section.raw }]))}</TableCell>
                 )}
               </TableRow>,
             ])}
@@ -331,17 +342,12 @@ export function SummaryView({ described, listPath, view, baseDomain, options, up
             <TableRow>
               {g1Field && <TableCell><Text type="supporting" weight="medium">{t("Totals")}</Text></TableCell>}
               {g2Field && <TableCell />}
-              <TableCell>
-                <Link href={drillHref([])}>{formatTenantNumber(totalCount, { maximumFractionDigits: 0 })}</Link>
-              </TableCell>
-              {activeMeasure.fn !== "count" && (
-                <TableCell>
-                  <Link href={drillHref([])}>{formatMetric(totalMetric)}</Link>
-                </TableCell>
-              )}
+              <TableCell>{renderCountLink(totalCount, drillHref([]))}</TableCell>
+              {activeMeasure.fn !== "count" && <TableCell>{renderMetricLink(totalMetric, drillHref([]))}</TableCell>}
             </TableRow>
           </TableFooter>
         </Table>
+        </VStack>
       )}
     </VStack>
   );

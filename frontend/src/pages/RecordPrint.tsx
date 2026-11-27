@@ -121,7 +121,7 @@ export function RecordPrint({
   const me = useRead<Api.MeView>("/v1/me");
   const printConfig = (described.entity.view as { print?: PrintConfig } | undefined)?.print;
   const allowedFields = printConfig?.fields?.length ? new Set(printConfig.fields) : null;
-  const canPrint = (field: Api.FieldInfo) => !restricted.has(field.name) && (!allowedFields || allowedFields.has(field.name)) && described.shows(field, values);
+  const canPrint = (field: Api.FieldInfo) => !restricted.has(field.name) && (!allowedFields || allowedFields.has(field.name)) && described.shows(field, values) && values[field.name] != null && values[field.name] !== "";
   const name = described.name(values, id);
   const heading = printConfig?.title ? t(printConfig.title) : name;
   const status = headerStatus(described, values, kept.archived);
