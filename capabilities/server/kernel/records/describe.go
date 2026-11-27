@@ -189,7 +189,7 @@ func Describe(app string, e Entity, typeOf func(reflect.Type) string) (EntityInf
 			return EntityInfo{}, fmt.Errorf("field %s needs one compatible direct read alias target", alias.Name)
 		}
 	}
-	if _, err := info.CompileEnterpriseUse(); err != nil {
+	if _, err := compileEnterpriseUse(info); err != nil {
 		return EntityInfo{}, fmt.Errorf("entity %s: %w", e.Type, err)
 	}
 	return info, nil

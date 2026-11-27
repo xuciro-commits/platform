@@ -2,7 +2,9 @@ package host
 
 import (
 	"encoding/json"
+	"platformserver/kernel/records"
 	"platformserver/platform"
+	"platformserver/services/objects"
 	build "platformserver/services/resources/authoring"
 	"strings"
 	"sync"
@@ -60,9 +62,49 @@ func TestInvariantK47LedgerFactsAndProjection(t *testing.T) {
 		return platform.Raw(page.Records[0])
 	}
 	before := read(live)
+	if diff, err := live.Projection.ReconcileLedger(fact); err != nil || len(diff) > 0 {
+		t.Fatalf("reconcile: %v %v", diff, err)
+	}
+	raw, _, err := live.Snapshot(func() int64 { return int64(len(live.entries)) })
+	if err != nil {
+		t.Fatal(err)
+	}
+	restored := newInvariantTenantReplayWithApps(t, live.ID, nil)
+	if err := restored.Restore(raw); err != nil {
+		t.Fatalf("snapshot restore: %v", err)
+	}
+	if after := read(restored); string(after) != string(before) {
+		t.Fatalf("snapshot balance differs: %s != %s", after, before)
+	}
+	period, refusal := live.aggregateObjectSet(live.member(t), objects.ObjectSetRequest{Set: platform.ObjectSet{Object: balance}, Groups: []string{"bucket"}, Measures: []string{"sum:qty"}, From: "2026-10-01", To: "2026-10-31"}, invariantClock)
+	if refusal != nil || len(period.Rows) != 1 {
+		t.Fatalf("ledger period: %+v %v", period, refusal)
+	}
+	for k, want := range map[string]string{"opening:qty": "0", "debit:qty": "10", "credit:qty": "6", "closing:qty": "4"} {
+		if string(platform.Raw(period.Rows[0][k])) != want {
+			t.Fatalf("period %s: %v want %s", k, period.Rows[0][k], want)
+		}
+	}
 	var row map[string]any
 	if json.Unmarshal(before, &row) != nil || row["qty"] != float64(4) {
 		t.Fatalf("balance: %s", before)
+	}
+	info, ok := live.Entity(fact)
+	if !ok {
+		t.Fatal("ledger type missing")
+	}
+	for _, schema := range info.Standard {
+		if schema == fact+".edit" || schema == fact+".archive" {
+			t.Fatalf("mutable ledger action declared: %s", schema)
+		}
+	}
+	et := live.Projection.Type(balance)
+	for id, row := range et.Rows().All() {
+		copy := *row
+		copy.Value = records.Copy(et.Info().Go, row.Value.Interface())
+		if err := et.SetRow(id, &copy); err == nil {
+			t.Fatal("second balance writer allowed")
+		}
 	}
 	for _, schema := range []string{fact + ".edit", fact + ".archive", balance + ".create", balance + ".edit", balance + ".archive"} {
 		typ := fact

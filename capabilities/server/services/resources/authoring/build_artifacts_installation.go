@@ -157,6 +157,13 @@ func (b *Build) BeginAssetBootstrap(assets []platform.ReleaseAsset) (func(), err
 			return nil, err
 		}
 		shapes[asset.Ref.Name] = shape
+		for _, balance := range ontology.LedgerBalances(object) {
+			info, err := records.Describe(ID, balance, func(reflect.Type) string { return "" })
+			if err != nil {
+				return nil, err
+			}
+			shapes[info.Type] = info
+		}
 	}
 	b.jointEntities, b.jointMode = shapes, true
 	b.jointAssets = available

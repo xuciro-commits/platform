@@ -1,24 +1,9 @@
 package platform
 
 import (
-	"fmt"
 	"reflect"
 	"slices"
 )
-
-func (info RecordTypeInfo) CompileEnterpriseUse(engines ...RuleEngine) (ExprProgram, error) {
-	if info.EnterpriseUse == nil {
-		return nil, nil
-	}
-	if info.EnterpriseUse.Kind != "boolean" {
-		return nil, fmt.Errorf("current enterprise use must return boolean")
-	}
-	refs := map[string]ExprType{"archived": {Kind: "boolean"}}
-	for _, field := range info.Fields {
-		refs[field.Name] = ExprType{Kind: RuleFieldKind(field.Type), Object: field.Ref}
-	}
-	return RuleEngineOf(engines).CompileExpr(*info.EnterpriseUse, ExprSchema{Refs: refs})
-}
 
 func ApplyFieldAliases(info RecordTypeInfo, value reflect.Value) {
 	for _, field := range info.Fields {

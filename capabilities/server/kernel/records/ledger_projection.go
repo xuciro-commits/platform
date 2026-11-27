@@ -13,9 +13,13 @@ import (
 // ordinary accepted record rows; this index contains only derived totals.
 // Copying it shares immutable index roots, as with record and reference indexes.
 type ledgerProjection struct {
-	current  Index[ledgerTotals]
-	months   Index[ledgerTotals]
-	reversed Index[string]
+	current      Index[ledgerTotals]
+	months       Index[ledgerTotals]
+	days         Index[ledgerTotals]
+	credits      Index[ledgerTotals]
+	debitMonths  Index[ledgerTotals]
+	creditMonths Index[ledgerTotals]
+	reversed     Index[string]
 }
 
 type ledgerPlan struct {
@@ -107,6 +111,12 @@ func (p ledgerProjection) apply(plan ledgerPlan, f ledgerFact) (ledgerProjection
 		current := cloneLedgerTotals(next.current.Get(key))
 		monthlyKey := f.on[:7] + "/" + key
 		monthly := cloneLedgerTotals(next.months.Get(monthlyKey))
+		dayKey := key + "/" + f.on
+		monthKey := key + "/" + f.on[:7]
+		daily := cloneLedgerTotals(next.days.Get(dayKey))
+		credit := cloneLedgerTotals(next.credits.Get(dayKey))
+		debitMonth := cloneLedgerTotals(next.debitMonths.Get(monthKey))
+		creditMonth := cloneLedgerTotals(next.creditMonths.Get(monthKey))
 		for _, m := range b.measures {
 			var err error
 			current[m.name], err = addLedgerAmount(m.kind, current[m.name], f.fields[m.name])
@@ -116,6 +126,34 @@ func (p ledgerProjection) apply(plan ledgerPlan, f ledgerFact) (ledgerProjection
 			monthly[m.name], err = addLedgerAmount(m.kind, monthly[m.name], f.fields[m.name])
 			if err != nil {
 				return p, fmt.Errorf("ledger monthly balance %s measure %s: %w", b.name, m.name, err)
+			}
+			delta := f.fields[m.name]
+			amount, _, err := ledgerNumber(delta)
+			if err != nil {
+				return p, err
+			}
+			if amount.Sign() >= 0 {
+				daily[m.name], err = addLedgerAmount(m.kind, daily[m.name], delta)
+				if err != nil {
+					return p, err
+				}
+				debitMonth[m.name], err = addLedgerAmount(m.kind, debitMonth[m.name], delta)
+				if err != nil {
+					return p, err
+				}
+			} else {
+				delta, err = negateLedgerAmount(m.kind, delta)
+				if err != nil {
+					return p, err
+				}
+				credit[m.name], err = addLedgerAmount(m.kind, credit[m.name], delta)
+				if err != nil {
+					return p, err
+				}
+				creditMonth[m.name], err = addLedgerAmount(m.kind, creditMonth[m.name], delta)
+				if err != nil {
+					return p, err
+				}
 			}
 		}
 		for _, name := range b.nonnegative {
@@ -140,6 +178,10 @@ func (p ledgerProjection) apply(plan ledgerPlan, f ledgerFact) (ledgerProjection
 		}
 		next.current.Set(key, current)
 		next.months.Set(monthlyKey, monthly)
+		next.days.Set(dayKey, daily)
+		next.credits.Set(dayKey, credit)
+		next.debitMonths.Set(monthKey, debitMonth)
+		next.creditMonths.Set(monthKey, creditMonth)
 	}
 	return next, nil
 }

@@ -58,6 +58,11 @@ func (b *Build) jointObjectEntities(objects []ontology.Object, drafts []JointDra
 			continue
 		}
 		joint[info.Type] = info
+		for _, balance := range ontology.LedgerBalances(record) {
+			if info, err := records.Describe(ID, balance, func(reflect.Type) string { return "" }); err == nil {
+				joint[info.Type] = info
+			}
+		}
 	}
 	return joint
 }

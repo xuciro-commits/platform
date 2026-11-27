@@ -31,7 +31,7 @@ func (h *Host) objectSetRoutes(rt *routes) {
 			return objects.ObjectSetRequest{}, false
 		}
 		paged := len(req.Sort) > 0 || req.Offset != 0 || req.Limit != 0
-		aggregated := len(req.Groups) > 0 || len(req.Measures) > 0 || req.Window != nil || req.Histogram != nil || req.MaxRows != 0 || req.Collection != nil
+		aggregated := len(req.Groups) > 0 || len(req.Measures) > 0 || req.Window != nil || req.Histogram != nil || req.MaxRows != 0 || req.Collection != nil || req.From != "" || req.To != "" || req.DateField != ""
 		if op == "load" && aggregated || op == "aggregate" && (paged || req.Format) || op == "count" && (paged || aggregated || req.Format) {
 			Reply(w, nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "The request carries options of another object set operation"))
 			return objects.ObjectSetRequest{}, false

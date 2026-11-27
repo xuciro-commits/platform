@@ -182,7 +182,7 @@ func (et *Type) Grouping(name string) (grouping, bool) {
 		}
 	default:
 		f, ok := et.info.Field(field)
-		if !ok {
+		if !ok || f.Provenance == "live" {
 			return grouping{}, false
 		}
 		col.Title = f.Title
@@ -235,7 +235,7 @@ func (et *Type) Measure(name string) (measure, bool) {
 	}
 	op, field, _ := strings.Cut(name, ":")
 	f, ok := et.info.Field(field)
-	if !ok || !slices.Contains([]string{"sum", "avg", "min", "max"}, op) || !slices.Contains([]string{"integer", "decimal", "number", "money"}, f.Type) {
+	if !ok || f.Provenance == "live" || !slices.Contains([]string{"sum", "avg", "min", "max"}, op) || !slices.Contains([]string{"integer", "decimal", "number", "money"}, f.Type) {
 		return measure{}, false
 	}
 	col := Column{Name: name, Title: fmt.Sprintf("%s (%s)", f.Title, op), Kind: "measure", Type: "quantitative", Field: field, Money: f.Type == "money"}

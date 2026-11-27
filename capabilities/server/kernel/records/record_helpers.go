@@ -109,6 +109,9 @@ func CheckRecordSets(info platform.RecordTypeInfo, lookup func(string) (platform
 		if !ok {
 			return fmt.Errorf("set %s object is undeclared", set.Name)
 		}
+		if target.Ledger != nil {
+			return fmt.Errorf("set %s cannot contain ledger facts; read a declared balance instead", set.Name)
+		}
 		if set.Binding != nil {
 			if set.Binding.Ref.Check() != nil || set.Binding.SourceVersion == "" || !slices.Contains([]platform.AssetKind{platform.AssetQuery, platform.AssetLinkType}, set.Binding.Ref.Kind) || set.Binding.Ref.Name != set.From || set.Direction != "forward" && set.Direction != "reverse" && set.Binding.Ref.Kind == platform.AssetLinkType {
 				return fmt.Errorf("set %s needs a retained query or single-hop link binding", set.Name)

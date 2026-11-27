@@ -2,6 +2,7 @@ package records
 
 import (
 	"encoding/json"
+	"fmt"
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
 	"platformserver/kernel/protocol"
 	"platformserver/platform"
@@ -645,7 +646,7 @@ func EnterpriseCurrent(info platform.RecordTypeInfo, value reflect.Value, now ti
 	if info.EnterpriseUse == nil {
 		return true
 	}
-	program, err := info.CompileEnterpriseUse(engines...)
+	program, err := compileEnterpriseUse(info, engines...)
 	if err != nil {
 		return true
 	}
@@ -670,4 +671,18 @@ func keptAcrossStates(info platform.RecordTypeInfo, f platform.FieldInfo, value,
 		before = before.Elem()
 	}
 	return reflect.DeepEqual(before.FieldByIndex(f.Index).Interface(), value.Interface())
+}
+
+func compileEnterpriseUse(info platform.RecordTypeInfo, engines ...platform.RuleEngine) (platform.ExprProgram, error) {
+	if info.EnterpriseUse == nil {
+		return nil, nil
+	}
+	if info.EnterpriseUse.Kind != "boolean" {
+		return nil, fmt.Errorf("current enterprise use must return boolean")
+	}
+	refs := map[string]platform.ExprType{"archived": {Kind: "boolean"}}
+	for _, field := range info.Fields {
+		refs[field.Name] = platform.ExprType{Kind: platform.RuleFieldKind(field.Type), Object: field.Ref}
+	}
+	return platform.RuleEngineOf(engines).CompileExpr(*info.EnterpriseUse, platform.ExprSchema{Refs: refs})
 }

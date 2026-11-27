@@ -3420,6 +3420,9 @@ export type ObjectSetRequest = {
   offset?: number;
   limit?: number;
   groups?: string[];
+  from?: string;
+  to?: string;
+  dateField?: string;
   measures?: string[];
   window?: AggregateWindowQuery;
   histogram?: HistogramQuery;

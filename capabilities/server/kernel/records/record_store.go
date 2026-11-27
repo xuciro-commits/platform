@@ -426,6 +426,12 @@ func (s *Store) Install(info platform.RecordTypeInfo) error {
 	}
 	et := &Type{store: s, info: info, rows: Rows{}, knowledge: KnowledgeBearing(info), formats: formats}
 	if before := s.types[info.Type]; before != nil {
+		if (before.info.Ledger != nil) != (info.Ledger != nil) && before.rows.Len() > 0 {
+			return fmt.Errorf("cannot change ledger identity after facts exist")
+		}
+		if before.info.BalanceOf != info.BalanceOf {
+			return fmt.Errorf("cannot replace a balance with an ordinary type")
+		}
 		if before.info.App != info.App {
 			return fmt.Errorf("%s is declared by %s", info.Type, before.info.App)
 		}
@@ -433,6 +439,9 @@ func (s *Store) Install(info platform.RecordTypeInfo) error {
 			return fmt.Errorf("published business versioning and pin bindings are retained")
 		}
 		rows := before.rows
+		if info.BalanceOf != "" {
+			rows = Rows{}
+		}
 		if rows.Sourced() && s.current.Backend() != nil && !before.retainedProjection {
 			rows = rows.Rebind(s.current.Source(info.Type, &info))
 		}

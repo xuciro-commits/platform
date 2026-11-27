@@ -134,6 +134,31 @@ func expandObject(body *object, path string, definitions map[string]*object, typ
 			}
 		}
 	}
+	// Balance constraints share the expression compiler.
+	if list, ok := body.get("balances"); ok {
+		balances, _ := list.([]any)
+		for _, item := range balances {
+			b := asObject(item)
+			if b == nil {
+				continue
+			}
+			cs, _ := b.get("constraints")
+			constraints, _ := cs.([]any)
+			for _, item := range constraints {
+				c := asObject(item)
+				if c == nil {
+					continue
+				}
+				if value, ok := c.get("expr"); ok {
+					compiled, err := compileAt(value, s, "boolean", path+": balance "+text(b, "name")+" constraint "+text(c, "name"))
+					if err != nil {
+						return err
+					}
+					c.set("expr", compiled)
+				}
+			}
+		}
+	}
 	list, _ = body.get("constraints")
 	constraints, _ := list.([]any)
 	for _, item := range constraints {
@@ -211,6 +236,23 @@ func expandObject(body *object, path string, definitions map[string]*object, typ
 			info.Fields = append(info.Fields, field)
 		}
 		return info, ok
+	}
+	if err := ontology.NormalizeLedger(&declaredObject); err != nil {
+		return fmt.Errorf("%s: %w", path, err)
+	}
+	if declaredObject.Ledger {
+		raw, err := json.Marshal(declaredObject.Fields)
+		if err != nil {
+			return err
+		}
+		fields, err := parseJSON(raw)
+		if err != nil {
+			return err
+		}
+		body.set("fields", fields)
+	}
+	if err := ontology.CheckLedger(declaredObject, platform.NativeRules{}); err != nil {
+		return fmt.Errorf("%s: %w", path, err)
 	}
 	if err := ontology.CheckStoredFormulas(declaredObject, lookup); err != nil {
 		return fmt.Errorf("%s: %w", path, err)
@@ -428,6 +470,9 @@ func standardPage(source *object, title string) *object {
 	}
 	page := &object{}
 	page.set("actionTriggers", value(`[{"actions":[{"app":"build","kind":"action","name":`+quoteJSON(full+".create")+`},{"app":"build","kind":"action","name":`+quoteJSON(full+".edit")+`}],"binding":"page","id":"page"},{"binding":"list","id":"list","owner":"binding:list"},{"binding":"detail","id":"detail","owner":"binding:detail"}]`))
+	if ledger, _ := source.values["ledger"].(bool); ledger {
+		page.set("actionTriggers", value(`[{"actions":[{"app":"build","kind":"action","name":`+quoteJSON(full+".create")+`}],"binding":"page","id":"page"},{"binding":"list","id":"list","owner":"binding:list"},{"binding":"detail","id":"detail","owner":"binding:detail"}]`))
+	}
 	page.set("dataBindings", []any{binding("list", "table", "write"), binding("detail", "detail", "read")})
 	page.set("format", float64(4))
 	page.set("inputSchema", &object{})
@@ -491,6 +536,30 @@ func expand(dir string, manifest *object, resources []resource, released bool, e
 		}
 		if r.ref.Kind == "object" {
 			types[r.ref.Name] = objectFields(asObject(r.body))
+			body := asObject(r.body)
+			if ledger, _ := body.values["ledger"].(bool); ledger {
+				fields := types[r.ref.Name]
+				fields["on"] = exprField{kind: "date"}
+				fields["reverses"] = exprField{kind: "reference", ref: r.ref.Name}
+				fields["reversed"] = exprField{kind: "boolean", live: true}
+				list, _ := body.values["balances"].([]any)
+				for _, item := range list {
+					b := asObject(item)
+					if b == nil {
+						continue
+					}
+					projected := map[string]exprField{"id": {kind: "text"}}
+					for _, part := range []string{"keys", "measures"} {
+						items, _ := b.values[part].([]any)
+						for _, raw := range items {
+							if name, ok := raw.(string); ok {
+								projected[name] = fields[name]
+							}
+						}
+					}
+					types[r.ref.Name+"."+text(b, "name")] = projected
+				}
+			}
 		}
 		out = append(out, r)
 	}

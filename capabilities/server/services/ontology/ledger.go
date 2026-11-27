@@ -51,7 +51,7 @@ func CheckLedger(o Object, engine platform.RuleEngine) error {
 			return fmt.Errorf("ledger closedBefore must be a date")
 		}
 	}
-	if len(o.DataSources) > 0 || len(o.Records) > 0 || len(o.States) > 0 || o.CreateTransaction != nil || o.Extends != "" || o.Versioning != nil {
+	if len(o.DataSources) > 0 || len(o.Records) > 0 || len(o.States) > 0 || len(o.Actions) > 0 || o.CreateTransaction != nil || o.Extends != "" || o.Versioning != nil {
 		return fmt.Errorf("ledger %s facts are posted, not sourced, seeded, extended or transitioned", o.Type())
 	}
 	fields := map[string]Field{}
@@ -124,7 +124,7 @@ func LedgerBalances(o Object) []platform.RecordType {
 			f := o.Fields[i]
 			f.ReadOnly = true
 			f.From, f.FormulaExpr, f.Live = nil, nil, nil
-			f.Formula, f.Default, f.Inverse, f.When, f.OneOf = "", "", "", "", ""
+			f.Formula, f.Default, f.When, f.OneOf = "", "", "", ""
 			f.Write = nil
 			shape.Fields = append(shape.Fields, f)
 		}

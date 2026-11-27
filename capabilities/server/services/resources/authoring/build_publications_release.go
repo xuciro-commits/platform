@@ -101,6 +101,13 @@ func (b *Build) ForkReleaseExecution(assets []platform.ReleaseAsset) (platform.S
 			return nil, err
 		}
 		bound.jointEntities[info.Type] = info
+		for _, balance := range ontology.LedgerBalances(object) {
+			info, err := records.Describe(ID, balance, func(reflect.Type) string { return "" })
+			if err != nil {
+				return nil, err
+			}
+			bound.jointEntities[info.Type] = info
+		}
 	}
 	var actions []platform.Action
 	for _, asset := range assets {

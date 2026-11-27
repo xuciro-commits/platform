@@ -18,6 +18,9 @@ type ObjectSetRequest struct {
 	Offset     int                           `json:"offset,omitempty"`
 	Limit      int                           `json:"limit,omitempty"`
 	Groups     []string                      `json:"groups,omitempty"`
+	From       string                        `json:"from,omitempty"`
+	To         string                        `json:"to,omitempty"`
+	DateField  string                        `json:"dateField,omitempty"`
 	Measures   []string                      `json:"measures,omitempty"`
 	Window     *records.AggregateWindowQuery `json:"window,omitempty"`
 	Histogram  *records.HistogramQuery       `json:"histogram,omitempty"`
@@ -671,6 +674,52 @@ func (t *Owner) AggregateObjectSet(m platform.Member, req ObjectSetRequest, now 
 		return records.Aggregate{}, err
 	}
 	m = r.c.Member
+	if len(req.Groups) > 2 {
+		return records.Aggregate{}, invalidSet("Aggregate accepts at most two group keys")
+	}
+	if req.From != "" || req.To != "" {
+		for _, d := range []string{req.From, req.To} {
+			if d != "" {
+				if _, err := time.Parse(time.DateOnly, d); err != nil {
+					return records.Aggregate{}, invalidSet("Invalid period date")
+				}
+			}
+		}
+		if req.From != "" && req.To != "" && req.From > req.To {
+			return records.Aggregate{}, invalidSet("Period start follows end")
+		}
+		if req.Collection != nil {
+			return records.Aggregate{}, invalidSet("Period requires an object set")
+		}
+		if req.Set.Object != "" {
+			info, ok := t.entity(req.Set.Object)
+			if ok && info.BalanceOf == "" {
+				field := req.DateField
+				if field == "" {
+					field = "on"
+				}
+				date, known := info.Field(field)
+				if !known || date.Type != "date" || date.Provenance == "live" {
+					return records.Aggregate{}, invalidSet("Period needs a readable date field")
+				}
+				var terms []any
+				if len(req.Set.Domain) > 0 {
+					if json.Unmarshal(req.Set.Domain, &terms) != nil {
+						return records.Aggregate{}, invalidSet("Invalid period domain")
+					}
+				}
+				if req.From != "" {
+					terms = append(terms, []any{field, ">=", req.From})
+				}
+				if req.To != "" {
+					terms = append(terms, []any{field, "<=", req.To})
+				}
+				req.Set.Domain = platform.Raw(terms)
+			}
+		} else {
+			return records.Aggregate{}, invalidSet("Period needs a direct object")
+		}
+	}
 	options := records.AggregateQuery{Window: req.Window, Histogram: req.Histogram, MaxRows: req.MaxRows, Groups: req.Groups, Measures: req.Measures}
 	if req.Collection != nil {
 		return r.aggregateCollection(req, options)
@@ -701,7 +750,16 @@ func (t *Owner) AggregateObjectSet(m platform.Member, req ObjectSetRequest, now 
 		}
 	}
 	view, _ := ViewOf(m, read.entity)
-	out, refusal := s.Aggregate(view, options, rows, node.op != "")
+	var out records.Aggregate
+	var refusal *platform.Error
+	if view.Info().BalanceOf != "" && (req.From != "" || req.To != "") {
+		if len(read.hidden) > 0 {
+			return records.Aggregate{}, platform.Refuse(pb.ErrorCode_ERROR_CODE_POLICY_DENIED, "A ledger period requires readable balance keys and measures")
+		}
+		out, refusal = s.AggregateLedgerPeriod(view, options, rows, req.From, req.To)
+	} else {
+		out, refusal = s.Aggregate(view, options, rows, node.op != "")
+	}
 	if refusal == nil && options.Window == nil && options.Histogram == nil {
 		out.Partial = matched != shown
 	}
