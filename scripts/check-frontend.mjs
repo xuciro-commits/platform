@@ -98,6 +98,16 @@ for (const path of walk(src)) {
   if (vendored(file) || !/\.(ts|tsx)$/.test(file) || file.endsWith(".d.ts")) continue;
   const content = readFileSync(path, "utf8");
   const lines = content.split("\n");
+  for (const match of content.matchAll(/\b(?:from\s*|import\s*\(?\s*)["'](\.[^"']+)["']/g)) {
+    const target = relative(src, resolve(dirname(path), match[1]));
+    const line = content.slice(0, match.index).split("\n").length;
+    if (file === "i18n.ts" && !/^i18n\/[^/]+\.json$/.test(target)) {
+      report(file, line, "i18n is a leaf: import only its translation dictionaries and external libraries.");
+    }
+    if (file !== "i18n.ts" && /^i18n\//.test(target)) {
+      report(file, line, "translation dictionaries are private to i18n.ts; use its public API.");
+    }
+  }
   const entry = file.match(/^apps\/([^/]+\/[^/]+)\.tsx?$/);
   if (entry && !menu.has(entry[1])) {
     report(file, 1, `"${entry[1]}" is not an entry in src/apps.ts. Name the file after the entry on your task card (apps/<app>/<entry>.ts); put helper files in a subfolder.`);
