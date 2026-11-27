@@ -177,7 +177,7 @@ test("delivery: a builder publishes a version and installs beside its source pro
   await expect(page).toHaveURL(/releaseexample%400\.1\.0$/);
   await page.goto("/delivery/marketplace");
   await page.getByRole("listitem").filter({ hasText: "releaseexample · 0.1.0" }).getByRole("button", { name: "Install", exact: true }).click();
-  const review = page.getByRole("dialog");
+  const review = page.getByRole("dialog", { name: /Review and install/ });
   const name = review.getByRole("textbox", { name: "Project API name" });
   await expect(name).toHaveValue("releaseexample");
   const install = review.getByRole("button", { name: "Install package", exact: true });
@@ -188,6 +188,10 @@ test("delivery: a builder publishes a version and installs beside its source pro
   await expect(install).toBeEnabled({ timeout: 30_000 });
   await install.click();
   await expect(review).toBeHidden({ timeout: 60_000 });
+  const access = page.getByRole("dialog", { name: "Who can use it" });
+  await expect(access.getByRole("combobox", { name: "Role in Releasecopy", exact: true })).toBeVisible();
+  await access.getByRole("button", { name: "Grant access", exact: true }).click();
+  await expect(access).toBeHidden();
   await page.goto("/ontology/objects/releasecopy.item");
   await expect(page.getByRole("heading", { name: "Release items", exact: true })).toBeVisible();
   await expect(page.getByText("Source only", { exact: true })).toHaveCount(0);
