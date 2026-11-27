@@ -1,4 +1,9 @@
 const descriptions = new Map(`
+AggregateReferencePath|聚合表达式支持多跳引用路径
+ReservedObjectActions|包编译拒绝系统保留动作名
+K49ReservedObjectActions|系统保留动作名不能被业务定义占用
+K49StoredFormulaRejectsForeignReference|存储公式拒绝非自有引用
+K49LiveDerivedReadsCurrentSources|实时派生按权限读取当前来源、守卫与重放一致
 I18nGateCapabilityPackageAndMissingKeys|能力包翻译完整性与缺失词条拒绝
 I18nGateRejectsUntranslatedRoleAndChoice|角色及选项未翻译时拒绝交付
 AggregateOverDifferentCurrenciesHasNoTotal|不同币种禁止直接汇总金额

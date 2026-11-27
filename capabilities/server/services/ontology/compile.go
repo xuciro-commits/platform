@@ -74,7 +74,9 @@ func CompileObjectShape(o Object, app, builderRole string) platform.RecordType {
 		if f.SourceType != "" {
 			tag += fmt.Sprintf(` source:"%s"`, f.SourceType)
 		}
-		if f.Formula != "" || f.FormulaExpr != nil {
+		if f.Live != nil {
+			tag += ` provenance:"live"`
+		} else if f.Formula != "" || f.FormulaExpr != nil {
 			tag += ` provenance:"formula"`
 		} else if f.From != nil {
 			tag += ` provenance:"from"`
@@ -115,7 +117,7 @@ func CompileObjectShape(o Object, app, builderRole string) platform.RecordType {
 		if f.Search {
 			marks = append(marks, "search")
 		}
-		if f.Formula != "" || f.FormulaExpr != nil || f.ReadOnly || f.AliasOf != "" {
+		if f.Live != nil || f.Formula != "" || f.FormulaExpr != nil || f.ReadOnly || f.AliasOf != "" {
 			marks = append(marks, "readonly")
 		}
 		if slices.ContainsFunc(o.VersionPins, func(pin platform.VersionPinBinding) bool { return pin.Version == f.Name }) && !slices.Contains(marks, "readonly") {
@@ -137,7 +139,7 @@ func CompileObjectShape(o Object, app, builderRole string) platform.RecordType {
 			tag += fmt.Sprintf(` write:"%s"`, strings.Join(append([]string{builderRole}, f.Write...), ","))
 		}
 		fieldType := goType(f.Type)
-		if (!f.Required || f.FormulaExpr != nil) && (f.Type == "integer" || f.Type == "decimal" || f.Type == "boolean" || f.Type == "datetime" || f.Type == "money") {
+		if (!f.Required || f.FormulaExpr != nil || f.Live != nil) && (f.Type == "integer" || f.Type == "decimal" || f.Type == "boolean" || f.Type == "datetime" || f.Type == "money") {
 			fieldType = reflect.PointerTo(fieldType)
 		}
 		fields = append(fields, reflect.StructField{Name: GoName(f.Name), Type: fieldType, Tag: reflect.StructTag(tag)})
@@ -176,12 +178,16 @@ func CompileObjectShape(o Object, app, builderRole string) platform.RecordType {
 		}
 	}
 	localRules := map[string]platform.Expr{}
+	liveRules := map[string]platform.Expr{}
 	for _, field := range o.Fields {
+		if field.Live != nil {
+			liveRules[field.Name] = *field.Live
+		}
 		if field.FormulaExpr != nil {
 			localRules[field.Name] = *field.FormulaExpr
 		}
 	}
-	return platform.RecordType{DataSources: slices.Clone(o.DataSources), LocalRules: localRules, Type: o.Type(), Title: o.Title, Plural: o.Plural, Description: o.Description, Icon: o.Icon, Color: o.Color, Format: FieldFormats(o.Fields), ValueTypeBindings: ValueTypeBindings(o.Fields), PropertyBindings: PropertyBindings(o.Fields), Model: model, Display: display, Naming: o.Naming, ObjectView: o.ObjectView, View: slices.Clone(o.View), Constraints: append(slices.Clone(o.Constraints), OneOfConstraints(o.Fields)...), Sets: o.Sets, Versioning: o.Versioning, VersionPins: o.VersionPins, Implements: slices.Clone(o.Implements), Extends: o.Extends, ExtensionSource: o.ExtensionSource, Derived: derived, Withheld: withheld, EnterpriseUse: o.EnterpriseUse}
+	return platform.RecordType{DataSources: slices.Clone(o.DataSources), LocalRules: localRules, LiveRules: liveRules, LiveReads: o.Reads, Type: o.Type(), Title: o.Title, Plural: o.Plural, Description: o.Description, Icon: o.Icon, Color: o.Color, Format: FieldFormats(o.Fields), ValueTypeBindings: ValueTypeBindings(o.Fields), PropertyBindings: PropertyBindings(o.Fields), Model: model, Display: display, Naming: o.Naming, ObjectView: o.ObjectView, View: slices.Clone(o.View), Constraints: append(slices.Clone(o.Constraints), OneOfConstraints(o.Fields)...), Sets: o.Sets, Versioning: o.Versioning, VersionPins: o.VersionPins, Implements: slices.Clone(o.Implements), Extends: o.Extends, ExtensionSource: o.ExtensionSource, Derived: derived, Withheld: withheld, EnterpriseUse: o.EnterpriseUse}
 }
 
 func goType(kind string) reflect.Type {

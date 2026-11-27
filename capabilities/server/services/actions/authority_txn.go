@@ -95,6 +95,9 @@ func (l *authority) ApplyTxnRecord(c platform.Caller, r *pb.ChangeRecord, e plat
 		if !found || !f.ReadOnly {
 			continue
 		}
+		if f.Provenance == "live" {
+			return platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "A live field cannot be written")
+		}
 		var state string
 		if name == "state" && (!own || e.Lifecycle == nil || e.Lifecycle.Field != "state" || json.Unmarshal(raw, &state) != nil || !slices.ContainsFunc(e.Lifecycle.States, func(s platform.State) bool { return s.Name == state })) {
 			return platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "Transaction state must be a declared state of its subject")

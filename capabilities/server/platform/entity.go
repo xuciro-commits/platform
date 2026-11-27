@@ -41,6 +41,8 @@ type Money struct {
 type RecordType struct {
 	DataSources       []DataSourceBinding
 	LocalRules        map[string]Expr
+	LiveRules         map[string]Expr
+	LiveReads         *RuleReadSpec
 	EnterpriseUse     *Expr
 	Protocols         []Provision
 	CreateTxn         *BusinessTxn
@@ -236,7 +238,7 @@ type FieldInfo struct {
 	Required     bool              `json:"required,omitempty"`
 	Search       bool              `json:"search,omitempty"`
 	ReadOnly     bool              `json:"readOnly,omitempty"`
-	Provenance   string            `json:"provenance,omitempty" enum:"formula,from,action"`
+	Provenance   string            `json:"provenance,omitempty" enum:"formula,from,action,live"`
 	FromField    string            `json:"fromField,omitempty"`
 	Default      string            `json:"default,omitempty"`
 	AliasOf      string            `json:"aliasOf,omitempty"`
@@ -326,6 +328,8 @@ func (f FieldInfo) Active(valueOf func(field string) string, engines ...RuleEngi
 type RecordTypeInfo struct {
 	DataSources     []DataSourceBinding `json:"datasources,omitempty"`
 	LocalRules      map[string]Expr     `json:"localRules,omitempty"`
+	LiveRules       map[string]Expr     `json:"-"`
+	LiveReads       *RuleReadSpec       `json:"-"`
 	EnterpriseUse   *Expr               `json:"enterpriseUse,omitempty"`
 	Versioning      *Versioning         `json:"versioning,omitempty"`
 	VersionPins     []VersionPinBinding `json:"versionPins,omitempty"`

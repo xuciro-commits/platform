@@ -241,8 +241,16 @@ func RuleContext(c platform.Caller, expr platform.Expr, spec platform.RuleReadSp
 			ctx.Refs["id"] = platform.ExprValue{Kind: "text", Status: "value", Data: raw}
 		}
 	}
+	evaluatedLive := map[string]bool{}
 	var visit func(platform.Expr) error
 	visit = func(e platform.Expr) error {
+		if field, ok := info.Field(e.Ref); ok && field.Provenance == "live" && !evaluatedLive[e.Ref] {
+			value, sources := LiveField(c, info, field, record, lookup, now)
+			ctx.Refs[e.Ref] = value
+			ctx.Sources = append(ctx.Sources, sources...)
+			evaluatedLive[e.Ref] = true
+		}
+
 		if e.Ref != "" && !strings.HasPrefix(e.Ref, "item.") && !strings.HasPrefix(e.Ref, "input.") && e.Ref != "caller.id" && e.Ref != "caller.tenant" && !strings.HasPrefix(e.Ref, "step.") && !strings.HasPrefix(e.Ref, "row.") {
 			var id string
 			_ = json.Unmarshal(values["id"], &id)
@@ -264,7 +272,7 @@ func RuleContext(c platform.Caller, expr platform.Expr, spec platform.RuleReadSp
 			if !ok {
 				return fmt.Errorf("rule reference %s is undeclared", name)
 			}
-			value := platform.ExprValue{Kind: e.Kind, Status: "missing"}
+			value := platform.ExprValue{Kind: e.Kind, Status: "null"}
 			base := ctx.Refs[name]
 			if base.Status == "withheld" {
 				value.Status = "withheld"
@@ -274,7 +282,7 @@ func RuleContext(c platform.Caller, expr platform.Expr, spec platform.RuleReadSp
 					raw, sources, err := c.ReadRecordPath(field.Ref, id, e.Path, now)
 					if err != nil {
 						value.Status = rulePathStatus(err)
-						if value.Status == "missing" {
+						if value.Status == "null" {
 							ctx.Sources = append(ctx.Sources, sources...)
 						}
 					} else {
@@ -423,6 +431,11 @@ func RuleContext(c platform.Caller, expr platform.Expr, spec platform.RuleReadSp
 				if !field.ReadsAny(c.RolesIn(object.Type), c.Rules()) {
 					v.Status = "withheld"
 					collection.Withheld = true
+				} else if field.Provenance == "live" {
+					var sources []string
+					v, sources = LiveField(c, object, field, row, lookup, now)
+					ctx.Sources = append(ctx.Sources, sources...)
+					collection.Withheld = collection.Withheld || v.Status == "withheld"
 				} else if raw, ok := row[field.Name]; ok {
 					v.Status = "value"
 					v.Data = raw
@@ -432,7 +445,7 @@ func RuleContext(c platform.Caller, expr platform.Expr, spec platform.RuleReadSp
 			for _, path := range paths {
 				fieldName := strings.TrimPrefix(path.Args[0].Ref, "item.")
 				field, _ := object.Field(fieldName)
-				v := platform.ExprValue{Kind: path.Kind, Status: "missing"}
+				v := platform.ExprValue{Kind: path.Kind, Status: "null"}
 				base := item.Fields[fieldName]
 				if base.Status == "withheld" {
 					v.Status = "withheld"
@@ -444,7 +457,7 @@ func RuleContext(c platform.Caller, expr platform.Expr, spec platform.RuleReadSp
 						if err != nil {
 							v.Status = rulePathStatus(err)
 							collection.Withheld = collection.Withheld || v.Status == "withheld"
-							if v.Status == "missing" {
+							if v.Status == "null" {
 								ctx.Sources = append(ctx.Sources, sources...)
 							}
 						} else {
@@ -469,7 +482,7 @@ func RuleContext(c platform.Caller, expr platform.Expr, spec platform.RuleReadSp
 
 func rulePathStatus(err *platform.Error) string {
 	if err.Code == pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT {
-		return "missing"
+		return "null"
 	}
 	return "withheld"
 }

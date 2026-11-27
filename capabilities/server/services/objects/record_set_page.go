@@ -24,6 +24,12 @@ func (t *Owner) RecordSetPage(m platform.Member, root platform.RecordTypeInfo, i
 	if refusal != nil {
 		return page, refusal
 	}
+	if info, ok := t.entity(result.Object); ok && len(info.LiveRules) > 0 {
+		for i, row := range result.Records {
+			result.Records[i] = t.projectLiveRaw(t.Store, c, result.Object, row, now)
+		}
+		page.Records = result.Records
+	}
 	var partial bool
 	page.Refs, partial = t.recordSetNames(m, result.Object, result.Records, now)
 	page.Partial = page.Partial || partial
@@ -38,6 +44,9 @@ func (t *Owner) RecordSetPage(m platform.Member, root platform.RecordTypeInfo, i
 	info, _ := t.entity(result.Object)
 	fields := make([]string, 0, len(info.Fields))
 	for _, field := range info.Fields {
+		if field.Provenance == "live" {
+			continue
+		}
 		switch field.Type {
 		case "integer", "decimal", "money":
 			fields = append(fields, field.Name)

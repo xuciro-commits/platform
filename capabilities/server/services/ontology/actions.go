@@ -243,13 +243,18 @@ func RuleLookup(o Object, app, builderRole string, lookup func(string) (platform
 			}
 			return lookup(typ)
 		}
-		info := platform.RecordTypeInfo{Type: typ, App: app, Sets: o.Sets}
+		info := platform.RecordTypeInfo{Type: typ, App: app, Sets: o.Sets, LiveRules: map[string]platform.Expr{}, LiveReads: o.Reads}
 		for _, f := range o.Fields {
 			read := f.Read
 			if len(read) > 0 {
 				read = append([]string{builderRole}, read...)
 			}
-			info.Fields = append(info.Fields, platform.FieldInfo{Name: f.Name, Type: f.Type, Ref: f.Ref, Read: read})
+			field := platform.FieldInfo{Name: f.Name, Type: f.Type, Ref: f.Ref, Read: read, Inverse: f.Inverse}
+			if f.Live != nil {
+				field.Provenance = "live"
+				info.LiveRules[f.Name] = *f.Live
+			}
+			info.Fields = append(info.Fields, field)
 		}
 		if len(o.States) > 0 {
 			info.Fields = append(info.Fields, platform.FieldInfo{Name: "state", Type: "choice"})

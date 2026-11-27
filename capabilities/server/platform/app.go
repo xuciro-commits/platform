@@ -52,22 +52,19 @@ func (m Member) RolesIn(scope string) []string {
 	var out []string
 	for i, app := range apps {
 		held := len(out)
-		for _, role := range append([]string{m.Roles[app]}, m.grantedIn(app)...) {
+		roles := []string{m.Roles[app]}
+		for _, g := range m.Grants {
+			if g.App == app {
+				roles = append(roles, g.Role)
+			}
+		}
+		for _, role := range roles {
 			if role != "" && !slices.Contains(out, role) {
 				out = append(out, role)
 			}
 		}
 		if i == 1 && len(out) > held && !slices.Contains(out, "user") {
 			out = append(out, "user")
-		}
-	}
-	return out
-}
-
-func (m Member) grantedIn(app string) (out []string) {
-	for _, g := range m.Grants {
-		if g.App == app {
-			out = append(out, g.Role)
 		}
 	}
 	return out
@@ -108,10 +105,8 @@ const (
 )
 
 func (m Member) Location() *time.Location {
-	if m.Timezone != "" {
-		if loc, err := time.LoadLocation(m.Timezone); err == nil {
-			return loc
-		}
+	if loc, err := time.LoadLocation(m.Timezone); err == nil {
+		return loc
 	}
 	return time.UTC
 }

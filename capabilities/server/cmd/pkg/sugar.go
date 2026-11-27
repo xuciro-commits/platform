@@ -1,9 +1,11 @@
 package main
 
 import (
+	"encoding/json"
 	"fmt"
 	"os"
 	"path/filepath"
+	"platformserver/services/ontology"
 	"slices"
 	"strings"
 	"unicode"
@@ -24,7 +26,7 @@ func objectFields(body *object) map[string]exprField {
 		if f == nil {
 			continue
 		}
-		out[text(f, "name")] = exprField{kind: fieldKind(text(f, "type")), ref: text(f, "ref")}
+		out[text(f, "name")] = exprField{kind: fieldKind(text(f, "type")), ref: text(f, "ref"), inverse: text(f, "inverse"), live: f.has("live")}
 	}
 	return out
 }
@@ -122,7 +124,7 @@ func expandObject(body *object, path string, definitions map[string]*object, typ
 			f.remove("formula")
 			f.set("formulaExpr", formula)
 		}
-		for _, key := range []string{"from", "formulaExpr"} {
+		for _, key := range []string{"from", "formulaExpr", "live"} {
 			if value, ok := f.get(key); ok {
 				compiled, err := compileAt(value, s, kind, path+": field "+text(f, "name")+" "+key)
 				if err != nil {
@@ -194,6 +196,26 @@ func expandObject(body *object, path string, definitions map[string]*object, typ
 	if len(actions) > 0 {
 		body.set("actions", actions)
 	}
+	var declaredObject ontology.Object
+	if err := json.Unmarshal([]byte(stringify(body)), &declaredObject); err != nil {
+		return fmt.Errorf("%s: %w", path, err)
+	}
+	lookup := func(typ string) (platform.RecordTypeInfo, bool) {
+		fields, ok := types[typ]
+		info := platform.RecordTypeInfo{Type: typ}
+		for name, f := range fields {
+			field := platform.FieldInfo{Name: name, Type: f.kind, Ref: f.ref, Inverse: f.inverse}
+			if f.live {
+				field.Provenance = "live"
+			}
+			info.Fields = append(info.Fields, field)
+		}
+		return info, ok
+	}
+	if err := ontology.CheckStoredFormulas(declaredObject, lookup); err != nil {
+		return fmt.Errorf("%s: %w", path, err)
+	}
+
 	return nil
 }
 

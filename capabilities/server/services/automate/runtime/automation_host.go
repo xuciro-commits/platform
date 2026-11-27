@@ -167,6 +167,11 @@ func ReadRecordPath(c platform.Caller, typ, id string, path []string, now time.T
 		var fields map[string]json.RawMessage
 		_ = json.Unmarshal(raw, &fields)
 		value, visible := fields[name]
+		var withheld []string
+		_ = json.Unmarshal(fields["livewithheld"], &withheld)
+		if slices.Contains(withheld, name) {
+			return nil, nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_POLICY_DENIED, "Live field is withheld")
+		}
 		if !known || !declared || !field.ReadsAny(c.RolesIn(info.Type), c.Rules()) {
 			return nil, nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_POLICY_DENIED, "Record input is unavailable to this member")
 		}

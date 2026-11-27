@@ -11,7 +11,7 @@ import (
 	"time"
 )
 
-func EvaluateRule(expr platform.Expr, reads platform.RuleReadSpec, caller platform.Caller, record any, inputs map[string]any, at time.Time, lookup func(string) (platform.RecordTypeInfo, bool)) (result platform.ExprResult, refusal *platform.Error) {
+func EvaluateRule(expr platform.Expr, reads platform.RuleReadSpec, caller platform.Caller, record any, inputs map[string]any, at time.Time, lookup func(string) (platform.RecordTypeInfo, bool), strict ...bool) (result platform.ExprResult, refusal *platform.Error) {
 	var observed *platform.ExprContext
 	if caller.TraceEnabled() {
 		defer func() {
@@ -22,6 +22,46 @@ func EvaluateRule(expr platform.Expr, reads platform.RuleReadSpec, caller platfo
 			caller.Trace(event)
 		}()
 	}
+	if err := ruleSubjectPermissions(expr, reads, caller, record, at); err != nil {
+		return platform.ExprResult{}, err
+	}
+	schema, err := RuleSchema(expr, reads, lookup, caller.Rules())
+	if err != nil {
+		return platform.ExprResult{}, platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "Rule: {reason} / 规则：{reason}", err.Error(), err.Error())
+	}
+	context, err := RuleContext(caller, expr, reads, lookup, record, inputs, at)
+	if err != nil {
+		var denied *platform.Error
+		if errors.As(err, &denied) {
+			return platform.ExprResult{}, denied
+		}
+		return platform.ExprResult{}, platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "Rule input: {reason} / 规则输入：{reason}", err.Error(), err.Error())
+	}
+	if caller.TraceEnabled() {
+		filtered := ruleTraceContext(expr, context)
+		observed = &filtered
+	}
+	if len(strict) > 0 && strict[0] && ruleWithheld(expr, context) {
+		return platform.ExprResult{}, platform.Refuse(pb.ErrorCode_ERROR_CODE_POLICY_DENIED, "Rule source is outside the caller permissions")
+	}
+	program, err := caller.Rules().CompileExpr(expr, schema)
+	if err != nil {
+		return platform.ExprResult{}, platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, err.Error())
+	}
+	value, err := program.Eval(context)
+	value.Sources = slices.Clone(context.Sources)
+	if err != nil {
+		code := pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT
+		var issue *platform.ExprIssue
+		if errors.As(err, &issue) && issue.Code == "withheld" {
+			code = pb.ErrorCode_ERROR_CODE_POLICY_DENIED
+		}
+		return value, platform.Refuse(code, "Rule: {reason} / 规则：{reason}", err.Error(), err.Error())
+	}
+	return value, nil
+}
+
+func ruleSubjectPermissions(expr platform.Expr, reads platform.RuleReadSpec, caller platform.Caller, record any, at time.Time) *platform.Error {
 	if caller.HasRuntime() && !caller.Replaying && reads.Object != "" {
 		var subject struct {
 			ID string `json:"id"`
@@ -50,50 +90,20 @@ func EvaluateRule(expr platform.Expr, reads platform.RuleReadSpec, caller platfo
 			return nil
 		}
 		if err := check(expr); err != nil {
-			return platform.ExprResult{}, err
+			return err
 		}
 	}
-	schema, err := RuleSchema(expr, reads, lookup, caller.Rules())
-	if err != nil {
-		return platform.ExprResult{}, platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "Rule: {reason} / 规则：{reason}", err.Error(), err.Error())
-	}
-	context, err := RuleContext(caller, expr, reads, lookup, record, inputs, at)
-	if err != nil {
-		var denied *platform.Error
-		if errors.As(err, &denied) {
-			return platform.ExprResult{}, denied
-		}
-		return platform.ExprResult{}, platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "Rule input: {reason} / 规则输入：{reason}", err.Error(), err.Error())
-	}
-	if caller.TraceEnabled() {
-		filtered := ruleTraceContext(expr, context)
-		observed = &filtered
-	}
-	program, err := caller.Rules().CompileExpr(expr, schema)
-	if err != nil {
-		return platform.ExprResult{}, platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, err.Error())
-	}
-	value, err := program.Eval(context)
-	value.Sources = slices.Clone(context.Sources)
-	if err != nil {
-		code := pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT
-		var issue *platform.ExprIssue
-		if errors.As(err, &issue) && issue.Code == "withheld" {
-			code = pb.ErrorCode_ERROR_CODE_POLICY_DENIED
-		}
-		return value, platform.Refuse(code, "Rule: {reason} / 规则：{reason}", err.Error(), err.Error())
-	}
-	return value, nil
+	return nil
 }
 
 func GuardSatisfied(expr platform.Expr, reads platform.RuleReadSpec, c platform.Caller, record any, inputs map[string]any, at time.Time, lookup func(string) (platform.RecordTypeInfo, bool)) (bool, *platform.Error) {
-	value, err := EvaluateRule(expr, reads, c, record, inputs, at, lookup)
+	value, err := EvaluateRule(expr, reads, c, record, inputs, at, lookup, true)
 	return string(value.Value.Data) == "true", err
 }
 
 func EvaluateCriteria(plan platform.RuleCriteria, c platform.Caller, record any, inputs map[string]any, at time.Time, lookup func(string) (platform.RecordTypeInfo, bool)) (bool, string, *platform.Error) {
 	for _, condition := range plan.Conditions {
-		value, err := EvaluateRule(condition.Expr, plan.Reads, c, record, inputs, at, lookup)
+		value, err := EvaluateRule(condition.Expr, plan.Reads, c, record, inputs, at, lookup, true)
 		if err != nil {
 			return false, "", err
 		}
@@ -189,4 +199,25 @@ func RuleAssignment(e platform.Expr, s platform.RuleReadSpec, c platform.Caller,
 		return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, failure.Error())
 	}
 	return v, nil
+}
+
+func ruleWithheld(e platform.Expr, ctx platform.ExprContext) bool {
+	if e.Ref != "" && ctx.Refs[e.Ref].Status == "withheld" {
+		return true
+	}
+	if e.Op == "path" && len(e.Args) == 1 && ctx.Refs[e.Args[0].Ref+"."+strings.Join(e.Path, ".")].Status == "withheld" {
+		return true
+	}
+	if e.Agg != nil {
+		s := ctx.Sets[e.Agg.Source]
+		if s.Status == "withheld" || s.Withheld {
+			return true
+		}
+	}
+	for _, a := range e.Args {
+		if ruleWithheld(a, ctx) {
+			return true
+		}
+	}
+	return e.In != nil && ruleWithheld(*e.In, ctx)
 }

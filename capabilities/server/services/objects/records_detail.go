@@ -141,15 +141,16 @@ func (t *Owner) readRecordBase(m platform.Member, typ, id string, now time.Time)
 		narrowed, _ := t.narrower(m, now, false).Derive(et, reflect.ValueOf(record))
 		record = narrowed.Interface()
 	}
-	values, valueErrors := propertyValues(seen.Info(), record)
 	caller := t.caller(m, et.Info().App)
+	record, liveRestricted := t.projectLive(s, caller, typ, record, now)
+	values, valueErrors := propertyValues(seen.Info(), record)
 	view := RecordView{Values: values, ValueErrors: valueErrors, Formats: t.recordFormats(s, caller, et, id, record, now, false), Record: record}
 	for position, field := range et.Info().Fields {
 		if field.Supplemental {
 			continue
 		}
 		decision := caller.Authorize(platform.AuthzRequest{Principal: m.ID, Tenant: t.TenantID, Kind: "read", Type: typ, Record: id, Fields: []string{field.Name}}, now)
-		if !decision.Allow || len(decision.Withheld) > 0 {
+		if !decision.Allow || len(decision.Withheld) > 0 || slices.Contains(liveRestricted, field.Name) {
 			view.Restricted = append(view.Restricted, field.Name)
 			view.RestrictedFields = append(view.RestrictedFields, RestrictedField{Name: field.Name, Title: field.Title, Group: field.Group, Aside: field.Aside, Position: position})
 		}

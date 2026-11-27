@@ -26,7 +26,7 @@ func FormulaExpr(fields []Field, f Field) (platform.Expr, error) {
 func FormulaOperands(fields []Field) map[string]string {
 	types := map[string]string{}
 	for _, operand := range fields {
-		if operand.Formula == "" && operand.FormulaExpr == nil && (operand.Type == "integer" || operand.Type == "decimal" || operand.Type == "money") {
+		if operand.Live == nil && operand.Formula == "" && operand.FormulaExpr == nil && (operand.Type == "integer" || operand.Type == "decimal" || operand.Type == "money") {
 			types[operand.Name] = operand.Type
 			if operand.Type == "money" {
 				types[operand.Name] = "decimal"

@@ -32,6 +32,7 @@ type ObjectSetCount struct {
 }
 
 type Window struct {
+	SkipLive      bool
 	Sort          []string
 	Collation     string
 	Offset, Limit int
@@ -515,6 +516,18 @@ func (t *Owner) LoadObjectSet(store *records.Store, c platform.Caller, set platf
 		return page, "", err
 	}
 	page, err := r.loadObjects(node, w)
+	if err == nil && !w.SkipLive && w.Project == nil && len(r.types[node.object].entity.Info().LiveRules) > 0 {
+		for i, row := range page.Records {
+			projected, restricted := t.projectLive(store, r.c, node.object, row, now)
+			page.Records[i] = projected
+			if len(restricted) > 0 {
+				if page.LiveRestricted == nil {
+					page.LiveRestricted = map[string][]string{}
+				}
+				page.LiveRestricted[records.Header(reflect.ValueOf(row)).ID] = restricted
+			}
+		}
+	}
 	return page, node.object, err
 }
 

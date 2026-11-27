@@ -2238,7 +2238,7 @@ export type FieldInfo = {
   required?: boolean;
   search?: boolean;
   readOnly?: boolean;
-  provenance?: "formula" | "from" | "action";
+  provenance?: "formula" | "from" | "action" | "live";
   fromField?: string;
   default?: string;
   aliasOf?: string;
@@ -3660,6 +3660,7 @@ export type OntologyField = {
   aliasOf?: string;
   when?: string;
   default?: string;
+  live?: Expr;
   formulaExpr?: Expr;
   from?: Expr;
   formula?: string;
@@ -4790,6 +4791,7 @@ export type RecordFieldProvenance = {
 };
 
 export type RecordPage = {
+  liveRestricted?: Record<string, string[]>;
   actions?: Record<string, RecordAction[]>;
   refs?: Record<string, Record<string, string>>;
   records: unknown[];

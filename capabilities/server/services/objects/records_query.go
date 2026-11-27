@@ -12,12 +12,13 @@ import (
 )
 
 type RecordPage struct {
-	Actions map[string][]RecordAction                  `json:"actions,omitempty"`
-	Refs    map[string]map[string]string               `json:"refs,omitempty"`
-	Records []any                                      `json:"records"`
-	Total   int                                        `json:"total"`
-	Partial bool                                       `json:"partial,omitempty"`
-	Formats map[string]map[string]platform.FieldFormat `json:"formats,omitempty"`
+	LiveRestricted map[string][]string                        `json:"liveRestricted,omitempty"`
+	Actions        map[string][]RecordAction                  `json:"actions,omitempty"`
+	Refs           map[string]map[string]string               `json:"refs,omitempty"`
+	Records        []any                                      `json:"records"`
+	Total          int                                        `json:"total"`
+	Partial        bool                                       `json:"partial,omitempty"`
+	Formats        map[string]map[string]platform.FieldFormat `json:"formats,omitempty"`
 }
 
 func (t *Owner) recordsRead(m platform.Member, typ string, q platform.Query, now time.Time) (RecordPage, *platform.Error) {
@@ -35,7 +36,7 @@ func (t *Owner) recordSelectionFrom(s *records.Store, m platform.Member, typ str
 	return t.recordSelectionForCallerFrom(s, t.caller(m, ""), typ, q, now, false)
 }
 
-func (t *Owner) recordSelectionForCallerFrom(s *records.Store, c platform.Caller, typ string, q platform.Query, now time.Time, format bool) (RecordPage, *platform.Error) {
+func (t *Owner) recordSelectionForCallerFrom(s *records.Store, c platform.Caller, typ string, q platform.Query, now time.Time, format bool, skipLive ...bool) (RecordPage, *platform.Error) {
 	c.Member = t.authorizationMember(c.Member)
 	around, err := t.traversalAround(s, c.Member, typ, q)
 	if err != nil {
@@ -44,7 +45,7 @@ func (t *Owner) recordSelectionForCallerFrom(s *records.Store, c platform.Caller
 	if q.Set != nil && q.CheckSet() != nil {
 		return RecordPage{}, &platform.Error{Code: pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT}
 	}
-	page, _, err := t.LoadObjectSet(s, c, q.ObjectSet(typ, around), Window{Sort: q.Sort, Offset: q.Offset, Limit: q.Limit, Format: format}, now)
+	page, _, err := t.LoadObjectSet(s, c, q.ObjectSet(typ, around), Window{Sort: q.Sort, Offset: q.Offset, Limit: q.Limit, Format: format, SkipLive: len(skipLive) > 0 && skipLive[0]}, now)
 	return page, err
 }
 
@@ -68,7 +69,7 @@ func (t *Owner) SelectionFrom(store *records.Store, m platform.Member, typ strin
 
 func (t *Owner) readRecordFrom(store *records.Store, c platform.Caller, typ, id string, now time.Time) (json.RawMessage, *platform.Error) {
 	domain, _ := json.Marshal([]any{[]any{"id", "=", id}})
-	page, refusal := t.recordSelectionForCallerFrom(store, c, typ, platform.Query{Domain: domain, Limit: 1, BusinessTime: &platform.BusinessTime{All: true}}, now, false)
+	page, refusal := t.recordSelectionForCallerFrom(store, c, typ, platform.Query{Domain: domain, Limit: 1, BusinessTime: &platform.BusinessTime{All: true}}, now, false, true)
 	if refusal != nil {
 		return nil, refusal
 	}
@@ -87,7 +88,7 @@ func (t *Owner) readRecordFrom(store *records.Store, c platform.Caller, typ, id 
 		var fields map[string]json.RawMessage
 		changed := false
 		for _, field := range et.Info().Fields {
-			if len(field.Index) == 0 || field.Index[0] == 0 || field.Supplemental {
+			if field.Provenance == "live" || len(field.Index) == 0 || field.Index[0] == 0 || field.Supplemental {
 				continue
 			}
 			original := value.FieldByIndex(field.Index)
@@ -118,5 +119,9 @@ func (t *Owner) readRecordFrom(store *records.Store, c platform.Caller, typ, id 
 }
 
 func (t *Owner) ReadRecordFrom(store *records.Store, c platform.Caller, typ, id string, now time.Time) (json.RawMessage, *platform.Error) {
-	return t.readRecordFrom(store, c, typ, id, now)
+	raw, err := t.readRecordFrom(store, c, typ, id, now)
+	if err != nil {
+		return nil, err
+	}
+	return t.projectLiveRaw(store, c, typ, raw, now), nil
 }

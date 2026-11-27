@@ -140,6 +140,9 @@ func resolveDomainField(info platform.RecordTypeInfo, name string) (domainField,
 	case !ok:
 		return domainField{}, fmt.Errorf("unknown field %s", name)
 	}
+	if f.Provenance == "live" {
+		return domainField{}, fmt.Errorf("live field %s cannot be filtered", name)
+	}
 	class := classOther
 	switch f.Type {
 	case "integer", "decimal", "money", "boolean":

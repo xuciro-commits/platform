@@ -8,7 +8,10 @@ import (
 	"unicode"
 )
 
-type exprField struct{ kind, ref string }
+type exprField struct {
+	kind, ref, inverse string
+	live               bool
+}
 
 type exprScope struct {
 	objects map[string]map[string]exprField
@@ -398,14 +401,18 @@ func (s exprScope) resolve(name string) (exprField, string, []string, error) {
 		}
 		root, rest = parts[0]+"."+parts[1], parts[2:]
 	case "item":
-		if s.item == "" || len(parts) != 2 {
+		if s.item == "" {
 			return exprField{}, "", nil, fmt.Errorf("%s is used outside an aggregate", name)
 		}
-		f, ok := s.objects[s.item][parts[1]]
+		if len(parts) < 2 {
+			return exprField{}, "", nil, fmt.Errorf("%s needs a field", name)
+		}
+		var ok bool
+		f, ok = s.objects[s.item][parts[1]]
 		if !ok {
 			return exprField{}, "", nil, fmt.Errorf("%s has no field %s", s.item, parts[1])
 		}
-		return f, name, nil, nil
+		root, rest = "item."+parts[1], parts[2:]
 	default:
 		var ok bool
 		f, ok = s.objects[s.self][parts[0]]

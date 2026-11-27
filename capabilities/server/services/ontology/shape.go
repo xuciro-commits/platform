@@ -43,7 +43,7 @@ func CheckFields(fields []Field, known func(string) bool, states ...State) error
 			return fmt.Errorf("the field name %q is not lower-case letters and digits", f.Name)
 		case seen[f.Name]:
 			return fmt.Errorf("the field %q is declared twice", f.Name)
-		case f.Name == "id" || f.Name == "state" || f.Name == "created" || f.Name == "changed" || f.Name == "revision" || f.Name == "archived":
+		case f.Name == "livewithheld" || f.Name == "id" || f.Name == "state" || f.Name == "created" || f.Name == "changed" || f.Name == "revision" || f.Name == "archived":
 			return fmt.Errorf("the field %q is the platform's own", f.Name)
 		case f.Title == "":
 			return fmt.Errorf("the field %q has no label", f.Name)
@@ -61,6 +61,8 @@ func CheckFields(fields []Field, known func(string) bool, states ...State) error
 			return fmt.Errorf("the field %q names how it is seen from elsewhere but refers to nothing", f.Name)
 		case f.Inverse != "" && !publication.ValidName(f.Inverse):
 			return fmt.Errorf("the relation name %q of field %q is not lower-case letters and digits", f.Inverse, f.Name)
+		case f.Live != nil && (f.Formula != "" || f.FormulaExpr != nil || f.From != nil || f.Default != "" || f.AliasOf != "" || f.Required || f.Search || f.Inverse != "" || f.Type == "attachment" || len(f.Write) > 0):
+			return fmt.Errorf("field %s live must be a read-only, non-indexed expression without a stored value", f.Name)
 		case f.AliasOf != "" && (!publication.ValidName(f.AliasOf) || f.AliasOf == f.Name || f.Formula != "" || f.FormulaExpr != nil):
 			return fmt.Errorf("the field %q needs a direct read alias without a formula", f.Name)
 		}

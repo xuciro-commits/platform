@@ -372,6 +372,9 @@ func (b *Build) checkObjectRules(o ontology.Object, engines ...platform.RuleEngi
 		return err
 	}
 	lookup := ruleLookup(o, b.conditionLookup)
+	if err := ontology.CheckStoredFormulas(o, lookup); err != nil {
+		return err
+	}
 	if _, err := ontology.FormulaOrder(o.Fields); err != nil {
 		return err
 	}
@@ -391,6 +394,14 @@ func (b *Build) checkObjectRules(o ontology.Object, engines ...platform.RuleEngi
 		return nil
 	}
 	for _, f := range o.Fields {
+		if f.Live != nil {
+			if platform.RuleFieldKind(f.Type) != platform.RuleFieldKind(f.Live.Kind) {
+				return fmt.Errorf("field %s live result type differs", f.Name)
+			}
+			if err := check(*f.Live, ruleSpec(o, ontology.Action{}, o.Reads), "field "+f.Name+" live"); err != nil {
+				return err
+			}
+		}
 		if f.FormulaExpr != nil {
 			if platform.RuleFieldKind(f.Type) != platform.RuleFieldKind(f.FormulaExpr.Kind) {
 				return fmt.Errorf("field %s formula result type differs", f.Name)

@@ -30,6 +30,9 @@ func CompileOrder(info platform.RecordTypeInfo, names []string) (SortOrder, erro
 	for _, name := range names {
 		bare := strings.TrimPrefix(name, "-")
 		field, ok := info.Field(bare)
+		if field.Provenance == "live" {
+			return SortOrder{}, fmt.Errorf("live field %s cannot be sorted", bare)
+		}
 		if !ok && bare != "id" && bare != "created" && bare != "changed" {
 			return SortOrder{}, fmt.Errorf("query sort field %s is unavailable", bare)
 		}

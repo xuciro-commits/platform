@@ -52,7 +52,7 @@ func CheckDataSources(o Object) error {
 	seen := map[string]bool{}
 	fields := map[string]bool{}
 	for _, field := range o.Fields {
-		fields[field.Name] = !field.ReadOnly && field.AliasOf == "" && field.Formula == "" && field.FormulaExpr == nil
+		fields[field.Name] = field.Live == nil && !field.ReadOnly && field.AliasOf == "" && field.Formula == "" && field.FormulaExpr == nil
 	}
 	for _, source := range o.DataSources {
 		identity := source.Kind + "/" + source.Source
@@ -82,7 +82,7 @@ func CheckPropertyField(f Field, property platform.PropertyType) error {
 }
 
 func CheckValueTypeField(f Field, valueType platform.ValueType) error {
-	if f.Choices != "" || f.Ref != "" || f.Inverse != "" || f.Property != nil || f.Formula != "" || f.FormulaExpr != nil {
+	if f.Choices != "" || f.Ref != "" || f.Inverse != "" || f.Property != nil || f.Live != nil || f.Formula != "" || f.FormulaExpr != nil {
 		return fmt.Errorf("a field bound to a value type cannot declare another field shape")
 	}
 	return valueType.CheckField(platform.FieldInfo{Name: f.Name, Type: f.Type, Title: f.Title})
@@ -111,7 +111,7 @@ func CheckDefaults(o Object) error {
 		if f.Default == "" {
 			continue
 		}
-		if f.ReadOnly || f.AliasOf != "" || f.Formula != "" || f.FormulaExpr != nil {
+		if f.Live != nil || f.ReadOnly || f.AliasOf != "" || f.Formula != "" || f.FormulaExpr != nil {
 			return fmt.Errorf("field %s cannot declare a default when read-only or calculated", f.Name)
 		}
 		switch {

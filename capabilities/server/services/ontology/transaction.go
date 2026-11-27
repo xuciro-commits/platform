@@ -112,11 +112,11 @@ func CheckTransactions(object Object, ctx TransactionContext, engines ...platfor
 		proposalFields := map[string]bool{}
 		declaredReadOnly := map[string]bool{}
 		for _, field := range object.Fields {
-			declaredReadOnly[field.Name] = field.ReadOnly && field.Formula == "" && field.FormulaExpr == nil && field.AliasOf == ""
+			declaredReadOnly[field.Name] = field.Live == nil && field.ReadOnly && field.Formula == "" && field.FormulaExpr == nil && field.AliasOf == ""
 		}
 		if action.Adoption != nil {
 			for _, field := range object.Fields {
-				if field.ReadOnly && field.SourceType == "generated" && field.Formula == "" && field.FormulaExpr == nil && field.AliasOf == "" {
+				if field.Live == nil && field.ReadOnly && field.SourceType == "generated" && field.Formula == "" && field.FormulaExpr == nil && field.AliasOf == "" {
 					proposalFields[field.Name] = true
 				}
 			}
