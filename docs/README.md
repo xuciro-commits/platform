@@ -79,6 +79,7 @@
 
 - 后端行为改动：优先 `make test RUN=K13`（受影响编号，`< 5s`）或 `make test-fast`（`< 10s`）；涉及 SQL 方言或存储时跑 `make test-pg RUN=K13`。
 - 前端行为改动：`make trunk SPEC=crm`（可通过 `TRUNK_ARGS='--grep ...'` 缩到单条）；SPEC 按文件名精确匹配（可用空格指定多个 spec），自动分配空闲端口并只灌该 spec 所需租户，与运行中的开发环境互不干扰。
+- 账本变异验收：按需运行 `node scripts/mutate-ledger.mjs`，或在命令后指定变异名称。隔离源码，先运行 K47–K49 原版，再逐一编译变异、核对预期断言失败；编译失败不计检出。
 - `make trunk-changed` 按 `scripts/trunk-affected.mjs` 的受影响图只跑明确映射的 spec；影响过广返回非零并要求指定 `SPEC`，绝不自动跑全量。
 - 跨层去重：不为单个内部函数写单元测试，严禁伪造旧路由或内存桩的自欺测试；界面前置状态优先经真实 `submit` 注入；若自动编号、分配或授权的行为本身依赖界面入口，必须先证明两种路径等价。
 - 纯文档或规约：`node scripts/check-docs.mjs`；修改测试调度器才运行 `make test-runner`。已通过的相同检查不因准备提交而重跑。

@@ -98,6 +98,19 @@ func TestInvariantK47LedgerFactsAndProjection(t *testing.T) {
 			t.Fatalf("mutable ledger action declared: %s", schema)
 		}
 	}
+	for id, row := range live.Projection.Type(fact).Rows().All() {
+		et := live.Projection.Type(fact)
+		changed := *row
+		changed.Value = records.Copy(et.Info().Go, row.Value.Interface())
+		records.Header(changed.Value).Archived = true
+		if err := et.CheckLedgerRow(changed.Value, row); err == nil {
+			t.Fatal("ledger preflight allowed editing an accepted fact")
+		}
+		if err := et.SetRow(id, &changed); err == nil {
+			t.Fatal("ledger store allowed editing an accepted fact")
+		}
+		break
+	}
 	et := live.Projection.Type(balance)
 	for id, row := range et.Rows().All() {
 		copy := *row
