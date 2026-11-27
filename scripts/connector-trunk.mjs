@@ -6,8 +6,11 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 
 const [command, ...args] = process.argv.slice(2);
-const selected = args.filter((arg) => arg.endsWith(".spec.ts"));
-if (selected.length && !selected.some((arg) => arg.endsWith("connector.spec.ts"))) {
+const selected = args.filter((arg) => /\.spec\.ts(?::\d+)*$/.test(arg));
+const named = (spec) => selected.some((arg) => new RegExp(`(?:^|/)${spec}\\.spec\\.ts(?::\\d+)*$`).test(arg));
+// On PostgreSQL, official.spec.ts picked together with other specs depends on the whole trunk project (playwright.config.ts), which includes connector.spec.ts.
+const runsConnector = !selected.length || named("connector") || (named("official") && selected.some((arg) => !/official\.spec\.ts/.test(arg)));
+if (!runsConnector) {
   const child = spawn(command, args, { stdio: "inherit" });
   child.on("exit", (code, signal) => { process.exitCode = code ?? (signal ? 1 : 0); });
 } else {
