@@ -194,7 +194,7 @@ test-voice:
 	@$(TIMED) test-voice bash -c 'cd capabilities/voice && $(GO) test -race -count=1 ./...'
 
 verify:
-	@$(TIMED) verify $(MAKE) --no-print-directory _verify
+	@GO="$(GO)" $(TIMED) verify $(PACKAGE_INPUTS) $(MAKE) --no-print-directory _verify
 
 _verify:
 	mkdir -p .build/trunk

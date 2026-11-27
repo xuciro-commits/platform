@@ -16,7 +16,7 @@ const rules = [
   [/^\.(githooks|claude|grepai|codegraph)\//, []],
   [/^Makefile$/, []],
   [/^scripts\/(check-[^/]+|test-results(?:\.test)?|trunk-affected|make-step)\.mjs$/, []],
-  [/^scripts\/package-fixtures(?:\.lock\.json|\.mjs)$/, ["builder", "connector", "crm", "crm-records", "package-extension", "marketplace", "package-upgrade", "party-upgrade", "package-library", "package-apps", "official", "phone", "package-lifecycle"]],
+  [/^(?:package-fixtures\.lock\.json|scripts\/package-fixtures\.mjs)$/, ["builder", "connector", "crm", "crm-records", "package-extension", "marketplace", "package-upgrade", "party-upgrade", "package-library", "package-apps", "official", "phone", "package-lifecycle"]],
   [/^frontend\/e2e\/([a-z0-9-]+)\.spec\.ts$/, (match) => [match[1]]],
   [/^frontend\/e2e\/package-inputs\.ts$/, ["marketplace", "package-upgrade", "party-upgrade", "package-library", "package-apps", "official"]],
   [/^frontend\/src\/apps\/delivery\//, ["package-lifecycle", "package-extension", "marketplace", "package-upgrade", "party-upgrade", "package-library", "package-apps", "official"]],
