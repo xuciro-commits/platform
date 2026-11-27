@@ -122,6 +122,14 @@
 | Capability package | 能力包 | 带能力契约或它的实现；入口只在声明了 `uses` 的应用里 | architecture |
 | Extension package | 扩展包 | 只给一个应用加字段、动作、流程或视图；与客户扩展同一机制，随包交付 | architecture |
 | Platform feature | 平台特性 | 每个类型都有、由界面运行时给的能力（评论、附件、打印预览）；不是包 | architecture |
+| Ledger | 账本 | 记录是过账事实的类型：建后不可改，只能冲正；按键汇总成余额 | domain |
+| Posting | 过账 | 新建一条账本事实；同一次接受里更新它的余额 | domain |
+| Reversal | 冲正 | 系统动作 `reverse`：新建一条度量取反、指回原事实的事实，原事实标“已冲正” | domain |
+| Balance | 余额 | 账本按声明的键与度量维护的只读对象；可按任意日期读，可由事实重建 | domain |
+| Live value | 现算值 | 读穿别人记录的派生字段（`live`）：读取时按读者权限算，不存储 | domain |
+| Provenance | 出处 | 一个数字由哪些记录组成：宿主给出的对象集定义，点开就是那些记录 | ux |
+| Summary view | 汇总视图 | 列表的第五种布局：分组、度量、小计与期间；不是报表设计器 | ux |
+| Note page | 说明页 | 只有标题与一段文字的菜单项，不对应对象 | ux |
 | Contribution slot | 贡献位 | 界面上允许别的包放入口的位置：记录页动作菜单、“管理 → 主数据” | frontend |
 | Marketplace | 市场 | 列出可安装的产品版本，按种类、行业与业务领域筛选 | 交付 |
 | Domain | 业务领域 | 市场的分类标签（销售、人事、库存），不是能力 | 交付 |
