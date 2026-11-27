@@ -108,7 +108,7 @@
   11-26 演练：全新 PG 上 official 门槛路径 8 条全过（5.5 分钟，含安装、转化、按角色看数、赢单、升级、扩展、停机重启、备份恢复）；导入（crm :411）、邀请（:533）通过。
   挡路一项已修：official 与别的用例同选时会带上整个 trunk，连接器 HTTPS 夹具却没起，connector.spec.ts:29 拿不到地址。
   模拟客户第 1 天（11-26）：租户切换里没有 sim——夹具宿主是改租户表之前起的，重启后已有（运维，不改代码）；
-  租户切换的“新建工作区”跳到 `/host/tenants`，那里只有列表，没有创建入口。宿主已有 `POST /v1/host/tenants`（模板 + 首位管理员），缺界面：列表页加“新建工作区”对话框，宿主管理员可见，trunk 加一步。
+  租户切换的“新建工作区”跳到 `/host/tenants`，那里只有列表，没有创建入口——已修：列表页加“新建工作区”对话框（标识、名称、模板、首位管理员），经 `POST /v1/host/tenants` 创建；workspace “a host administrator creates a workspace”。
 
 ## 二、能力底座与受管服务（[#13](https://github.com/xuciro-commits/platform/issues/13)）
 

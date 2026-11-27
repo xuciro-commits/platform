@@ -1,6 +1,8 @@
+import { createElement } from "react";
 import type { Api } from "../../host";
 import { t } from "../../i18n";
 import { listPage } from "../../pages/ListEntry";
+import { NewWorkspaceDialog } from "../../pages/NewWorkspaceDialog";
 
 export default listPage<Api.HostOverview, Api.HostTenantView>({
   title: "Tenants",
@@ -19,4 +21,6 @@ export default listPage<Api.HostOverview, Api.HostTenantView>({
     { key: "started", header: "Started", width: 140, kind: "time", text: (tenant) => tenant.started ?? "" },
   ],
   groups: [{ key: "lifecycle", label: "Lifecycle", of: (tenant) => t(tenant.lifecycle ?? "active") }],
+  createLabel: "New workspace",
+  creator: ({ onClose }) => createElement(NewWorkspaceDialog, { onClose }),
 });

@@ -92,7 +92,7 @@ export function listPage<Answer, Row>(definition: ListDefinition<Answer, Row>) {
         : column;
     }), [declared, catalog]);
     const create = definition.actions?.create ? action(definition.actions.create) : undefined;
-    const creatable = create && !create.payload.some((parameter) => parameter.required && !enterable(parameter));
+    const creatable = create ? !create.payload.some((parameter) => parameter.required && !enterable(parameter)) : Boolean(definition.creator && !definition.actions?.create && first.status === "ready");
     const importTarget = first.status === "ready" && definition.import ? definition.import(first.data, action) : undefined;
     const [creating, setCreating] = useState(false);
     const [importing, setImporting] = useState(false);
@@ -181,7 +181,7 @@ export function listPage<Answer, Row>(definition: ListDefinition<Answer, Row>) {
         />
         {importing && importTarget && <Suspense fallback={null}><ImportWizard target={importTarget} onClose={() => setImporting(false)} /></Suspense>}
         {act.element}
-        {creating && create && definition.creator && definition.creator({ onClose: () => setCreating(false) })}
+        {creating && creatable && definition.creator && definition.creator({ onClose: () => setCreating(false) })}
         {creating && create && !definition.creator && (
           <ActionDialog action={create} heading={t(create.title)} confirm={t("Create")} onClose={() => setCreating(false)} onDone={() => setCreating(false)}
             perform={async (payload) => void (await send(create, typeof payload.id === "string" ? payload.id : nameOf(payload), payload))} />

@@ -179,6 +179,24 @@ test("tenants: switching keeps the entry and replaces what the page shows", asyn
   await expect(opportunity).toBeVisible();
 });
 
+test("tenants: a host administrator creates a workspace from the switcher", async ({ page }) => {
+  await signIn(page);
+  const id = `ws-${Date.now().toString(36)}`;
+  await page.getByRole("navigation", { name: "Primary navigation" }).getByRole("button", { name: "acceptance", exact: true }).click();
+  await page.getByRole("menuitem", { name: "New workspace", exact: true }).click();
+  await expect(page).toHaveURL(/\/host\/tenants$/);
+  await page.getByRole("button", { name: "New workspace", exact: true }).click();
+  const dialog = page.getByRole("dialog", { name: "New workspace" });
+  await dialog.getByLabel("Workspace ID").fill("1bad");
+  await expect(dialog.getByRole("button", { name: "Create", exact: true })).toBeDisabled();
+  await dialog.getByLabel("Workspace ID").fill(id);
+  await dialog.getByLabel("Name").fill("Bluestone trial");
+  await dialog.getByLabel("First administrator").fill("dana@example.com");
+  await dialog.getByRole("button", { name: "Create", exact: true }).click();
+  await expect(dialog).toHaveCount(0);
+  await expect(page.getByRole("row").filter({ hasText: id })).toBeVisible();
+});
+
 
 test("sign-in: a work account signs in by password or single sign-on and lands where it was", async ({ page }) => {
   await page.route("**/v1/sign-in", (route) => route.fulfill({ json: { issuer: new URL("/auth/v1/", page.url()).href, client: "platform-web" } }));
