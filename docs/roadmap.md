@@ -17,8 +17,8 @@
 
 | 波 | 执行 | 主题 | 拥有的路径（服务端在 `capabilities/server/` 下，界面在 `frontend/` 下） |
 |---|---|---|---|
-| 一 | GPT | 账本与派生（4.1、4.2） | `kernel/**`、`expr/**`、`services/{ontology,objects,actions}/**`、`services/resources/authoring` 的公式与表达式、`cmd/pkg/{expr,sugar}.go`、K47–K49 |
-| 二 | GPT | 组合与交付（阶段 3 收口、4.3、4.4） | `services/devops/**`、`cmd/pkg` 其余、`host/package_*`、K50–K51；仓库根 `deploy/`、`scripts/`（检查脚本除外）、`Makefile`、`.github/` |
+| 一 | GPT | 账本与派生（4.1、4.2） | `kernel/**`、`expr/**`、`services/{ontology,objects,actions}/**`、`services/resources/authoring` 的公式与表达式、`cmd/pkg/{expr,sugar,objects}.go` 及其测试、`platform/` 中仅账本与派生所需的 SDK 类型与读写契约、K47–K49 |
+| 二 | GPT | 组合与交付（阶段 3 收口、4.3、4.4） | `services/devops/**`、`cmd/pkg` 其余（不含第一波的文件及测试）、`host/package_*`、K50–K51；仓库根 `deploy/`、`scripts/`（检查脚本除外）、`Makefile`、`.github/` |
 | 二（界面） | | | `e2e/playwright.config.ts`、`src/apps/delivery/**`、`src/pages/Package*`、`src/pages/Capabilities.tsx` |
 | 三 | Gemini | 单据体验（4.5、4.6） | `frontend/src/**` 中不属于第二波的部分；服务端只有 `platform/definition.go` 的 `AppGroup` 与 `services/apps` 的菜单投影 |
 
