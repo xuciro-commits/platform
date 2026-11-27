@@ -321,6 +321,7 @@ func (d *Console) prepareAccessGrant(c platform.Caller, request *AccessRequest) 
 		}
 		s := &pb.Submission{TenantId: c.Tenant, PrincipalId: c.ID, Authority: PlatformApp, IdempotencyKey: "access-grant:" + request.ID,
 			Target: &pb.EntityRef{Type: MemberType, Id: request.Requester}, Schema: &pb.SchemaRef{Name: SchemaGrant, Version: 1}, Payload: payload}
+		d.detachMember(request.Requester)
 		return d.decideMember(c, s)
 	}
 	return nil, &platform.Error{Code: pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT}

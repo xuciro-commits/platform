@@ -101,6 +101,22 @@ func TestInvariantAccessRequestAppliesGrantOnApproval(t *testing.T) {
 	submit("requester", "REQ2", controlowner.SchemaAccessRequest, map[string]any{
 		"scope": "role", "app": "platform", "role": "auditor", "reason": "Audit the tenant",
 	})
+	admin, _ := tn.Member("request-admin")
+	prepared := tn.submission(controlowner.SchemaAccessApprove, controlowner.AccessRequestType, "REQ2", map[string]any{})
+	prepared.Authority, prepared.PrincipalId = "platform", admin.ID
+	entryCount := len(tn.entries)
+	draft := tn.newStagedDecision()
+	if _, refusal := decideAcceptedAs(tn.App("platform"), draft, admin, prepared, invariantClock, false); refusal != nil {
+		t.Fatalf("prepare role approval: %v", refusal)
+	}
+	stagedMember, _ := draft.stateApp(tn.App("platform")).(*controlowner.Console).MemberByID("requester")
+	if !stagedMember.Holds("platform", "auditor") {
+		t.Fatal("the private approval decision did not prepare the grant")
+	}
+	beforeCommit, _ := tn.Member("requester")
+	if beforeCommit.Holds("platform", "auditor") || len(tn.entries) != entryCount {
+		t.Fatal("an uncommitted access approval modified the live directory")
+	}
 	submit("request-admin", "REQ2", controlowner.SchemaAccessApprove, map[string]any{})
 	current, _ = tn.Member("requester")
 	if !current.Holds("platform", "auditor") {

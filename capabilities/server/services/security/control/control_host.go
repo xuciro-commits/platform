@@ -417,6 +417,26 @@ func (d *Console) ApplyAcceptedState(raw json.RawMessage) error {
 	return nil
 }
 
+// detachDirectory and detachMember are called under d.mu before preparing
+// directory mutations, including mutations nested inside access approval.
+func (d *Console) detachDirectory() {
+	if !d.directoryShared {
+		return
+	}
+	d.acceptedState, d.acceptedDigest, d.acceptedValid = nil, "", false
+	d.members, d.subjects = maps.Clone(d.members), maps.Clone(d.subjects)
+	d.profiles, d.tokens = maps.Clone(d.profiles), maps.Clone(d.tokens)
+	d.directoryShared = false
+}
+
+func (d *Console) detachMember(id string) {
+	d.detachDirectory()
+	if member := d.members[id]; member != nil {
+		copy := clone(member)
+		d.members[id] = &copy
+	}
+}
+
 func (d *Console) Submit(c platform.Caller, s *pb.Submission, now time.Time) (*pb.ChangeRecord, *platform.Error) {
 	return d.authority.Receive(c, s, now, nil, func() (func(*pb.ChangeRecord), *platform.Error) {
 		declared, _ := d.authority.Catalog().Action(s.GetSchema().GetName())
@@ -425,13 +445,8 @@ func (d *Console) Submit(c platform.Caller, s *pb.Submission, now time.Time) (*p
 		}
 		if declared.Target == MemberType || declared.Target == ProfileType || declared.Target == platform.MarkingType || declared.Target == runtimeprotocol.RoleType || declared.Target == runtimeprotocol.PolicyType || declared.Target == runtimeprotocol.TeamType || declared.Target == TokenType {
 			d.mu.Lock()
-			if d.directoryShared && (declared.Target == MemberType || declared.Target == ProfileType || declared.Target == TokenType) {
-				d.acceptedState = nil
-				d.acceptedDigest = ""
-				d.acceptedValid = false
-				d.members, d.subjects = maps.Clone(d.members), maps.Clone(d.subjects)
-				d.profiles, d.tokens = maps.Clone(d.profiles), maps.Clone(d.tokens)
-				d.directoryShared = false
+			if declared.Target == MemberType || declared.Target == ProfileType || declared.Target == TokenType {
+				d.detachDirectory()
 			}
 			id := s.GetTarget().GetId()
 			if declared.Target == MemberType {
@@ -440,10 +455,7 @@ func (d *Console) Submit(c platform.Caller, s *pb.Submission, now time.Time) (*p
 					ids = slices.Collect(maps.Keys(d.members))
 				}
 				for _, memberID := range ids {
-					if member := d.members[memberID]; member != nil {
-						copy := clone(member)
-						d.members[memberID] = &copy
-					}
+					d.detachMember(memberID)
 				}
 			}
 			if declared.Target == ProfileType {
