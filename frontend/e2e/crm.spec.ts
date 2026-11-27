@@ -184,6 +184,39 @@ test("crm: lead and deal move on the kanban", async ({ page }) => {
 });
 
 
+test("crm: date filters stay available while reference choices load", async ({ page }) => {
+  await signIn(page);
+  await page.setViewportSize({ width: 1600, height: 900 });
+  let release!: () => void;
+  const held = new Promise<void>((resolve) => { release = resolve; });
+  let requested = false;
+  await page.route(/\/v1\/records\/crm\.organization\?/, async (route) => {
+    requested = true;
+    await held;
+    await route.continue();
+  });
+  try {
+    await page.goto("/ontology/objects/crm.deal");
+    await expect.poll(() => requested).toBe(true);
+    const organization = page.getByRole("combobox", { name: "Organization filter", exact: true });
+    await expect(organization).toBeVisible();
+    const date = page.getByRole("combobox", { name: "Expected close filter", exact: true });
+    if (!(await date.count())) await page.getByRole("button", { name: /more filters?$/ }).click();
+    await date.click();
+    const next = page.getByRole("radio", { name: "Next 30 days", exact: true });
+    await expect(next).toBeVisible();
+    const response = page.waitForResponse((r) => r.url().includes("/v1/records/crm.organization?") && r.ok());
+    release();
+    await response;
+    await expect(next).toBeVisible();
+    await next.click();
+    await expect(page).toHaveURL(/expectedclose.*after.*expectedclose.*before/);
+  } finally {
+    release();
+    await page.unrouteAll({ behavior: "wait" });
+  }
+});
+
 test("crm: a lead with a note and a task converts into an organization, contact and deal, and the deal is won", async ({ page }) => {
   test.setTimeout(120000);
   await signIn(page);

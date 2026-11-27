@@ -220,7 +220,7 @@ function shape(described: Described, declared: Declared, listPath: string, extra
         text: say(field),
         kind: kindOf(field),
         choices: field.name === lifecycle?.field ? states.map((state) => t(state.title)) : titles(field),
-        options: field.oneOf ? undefined : options[field.name],
+        options: field.oneOf ? undefined : options[field.name] ?? (field.type === "member" || field.type === "reference" ? [] : undefined),
         boolean: field.type === "boolean",
         chip: field.type !== "money",
         hiddenByDefault: !defaults.includes(field),
