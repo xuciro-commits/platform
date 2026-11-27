@@ -691,4 +691,42 @@ test("semantic: currency settings, minor units, compact KPIs, person cards, refe
   await zhDialog.getByRole("button", { name: /^(Close|关闭)$/ }).first().click();
   await expect(page.getByText("¥125K CNY")).toBeVisible();
 });
+
+test("summary: group deals by stage and owner, drill down to matching list, and drill down from dashboard metric card", async ({ page }) => {
+  await as(page, "manager-1");
+  await page.goto("/crm/crm.deal");
+  await page.getByRole("radio", { name: "Summary", exact: true }).click();
+  await page.getByRole("combobox", { name: "Group by", exact: true }).click();
+  await page.getByRole("option", { name: "Stage", exact: true }).click();
+  await page.getByRole("combobox", { name: "Then by", exact: true }).click();
+  await page.getByRole("option", { name: "Deal owner", exact: true }).click();
+  await page.getByRole("combobox", { name: "Measure", exact: true }).click();
+  await page.getByRole("option", { name: "Sum · Amount", exact: true }).click();
+
+  const summaryTable = page.getByRole("table", { name: "Summary", exact: true });
+  await expect(summaryTable).toBeVisible();
+  await expect(summaryTable.getByRole("row", { name: /Subtotal/ }).first()).toBeVisible();
+  await expect(summaryTable.getByRole("row", { name: /Totals/ })).toBeVisible();
+
+  const firstDetailRow = summaryTable.locator("tbody tr").first();
+  const countLink = firstDetailRow.getByRole("link").first();
+  const expectedCount = Number((await countLink.innerText()).replace(/,/g, "").trim());
+  expect(expectedCount).toBeGreaterThan(0);
+
+  await countLink.click();
+  await expect(page).toHaveURL(/\/crm\/crm\.deal\?view=/);
+  await expect(page.getByRole("radio", { name: "Table", exact: true })).toBeChecked();
+  await expect(page.locator("tbody tr")).toHaveCount(expectedCount);
+
+  await page.goto("/crm/dashboard");
+  const openLeadsCard = page.getByRole("main").getByRole("link", { name: "Open leads", exact: true });
+  await expect(openLeadsCard).toBeVisible();
+  const cardText = await openLeadsCard.locator("..").innerText();
+  const leadMatch = cardText.match(/(\d+)\s*$/);
+  expect(leadMatch).toBeTruthy();
+  const expectedLeads = Number(leadMatch![1]);
+  await openLeadsCard.locator("..").click();
+  await expect(page).toHaveURL(/\/crm\/crm\.lead/);
+  await expect(page.locator("tbody tr")).toHaveCount(expectedLeads);
+});
 });

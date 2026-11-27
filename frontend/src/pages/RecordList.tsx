@@ -20,7 +20,7 @@ import { RecordPage } from "./RecordPage";
 import { type Dot, dots, Transitions } from "./Transitions";
 import { isCodeField, isEmailField, isPercentField, isPhoneField, isUrlField, parseQuantity } from "../semantic";
 import { money, plain, present } from "./values";
-import { domainOf, ganttSpan, hasFilters, monthSpan, newView, readView, shownMonth, type ViewState } from "./view";
+import { domainOf, ganttSpan, hasFilters, monthSpan, newView, parseDomain, readView, reportView, shownMonth, type ViewState } from "./view";
 
 type Row = Record<string, unknown>;
 type Creator = ComponentType<{ onClose: () => void; onDone: (id: string) => void }>;
@@ -160,7 +160,7 @@ function keyOf(field: Api.FieldInfo | undefined, title: string) {
 
 type RecordShape = ListShape<Api.RecordPage, Row>;
 
-function shape(described: Described, declared: Declared, listPath: string, extra?: Pick<RecordShape, "board" | "calendar" | "gantt" | "bulk" | "detail">, options: Options = {}): RecordShape {
+function shape(described: Described, declared: Declared, listPath: string, extra?: Pick<RecordShape, "board" | "calendar" | "gantt" | "bulk" | "detail" | "summary">, options: Options = {}): RecordShape {
   const lifecycle = described.lifecycle;
   const states = lifecycle?.states ?? [];
   const linked = (field: Api.FieldInfo, row: Row) => described.members(field).find((member) => row[member.name]) ?? field;
@@ -274,7 +274,7 @@ export function recordList(declared: Declared) {
   }, { recordType: declared.type });
 }
 
-export function Records({ declared, listPath, id, back, primaryExtra, initialCreate }: { declared: Declared; listPath: string; id?: string; back?: Back; primaryExtra?: ReactNode; initialCreate?: boolean }) {
+export function Records({ declared, listPath, id, back, primaryExtra, initialCreate, report }: { declared: Declared; listPath: string; id?: string; back?: Back; primaryExtra?: ReactNode; initialCreate?: boolean; report?: string }) {
   const pending = useMemo<ListShape<Api.RecordPage, Row>>(() => ({ title: declared.title ?? "", about: declared.about, rows: () => [], id: () => "", columns: [] }), [declared]);
   const types = useRead<Api.EntityInfo[]>("/v1/entities");
   const actions = useRead<Api.Action[]>("/v1/actions");
@@ -286,8 +286,9 @@ export function Records({ declared, listPath, id, back, primaryExtra, initialCre
   const currentSearch = useSearch();
   const fallback = useMemo(() => {
     const columns = described ? shape(described, declared, listPath).columns.filter((column) => !column.hiddenByDefault).map((column) => column.key) : [];
-    return described?.entity.view == null ? newView(columns) : readView(JSON.stringify(described.entity.view), newView(columns));
-  }, [declared, described, listPath]);
+    const baseView = described?.entity.view == null ? newView(columns) : readView(JSON.stringify(described.entity.view), newView(columns));
+    return reportView(baseView, described?.entity.view, report);
+  }, [declared, described, listPath, report]);
   const view = useMemo(() => readView(new URLSearchParams(currentSearch).get("view"), fallback), [currentSearch, fallback]);
   const externalDomain = new URLSearchParams(currentSearch).get("domain") ?? "";
   const dateFields = useMemo(() => described?.entity.fields.filter((field) => field.type === "date" || field.type === "datetime") ?? [], [described]);
@@ -497,7 +498,8 @@ export function Records({ declared, listPath, id, back, primaryExtra, initialCre
   const definition = useMemo(() => {
     if (!described) return pending;
     const effective = editRowsAllowed ? described : { ...described, edit: undefined, editable: new Set<string>() };
-    const baseShape = shape(effective, declared, listPath, { board, calendar, gantt, bulk, detail }, options);
+    const summary = { described, listPath, baseDomain: [...domainOf(view.filters, choiceOf), ...parseDomain(externalDomain)], options };
+    const baseShape = shape(effective, declared, listPath, { board, calendar, gantt, bulk, detail, summary }, options);
     const extColumns = extensions.length > 0
       ? extensionListColumns(extensions, extPages, new Set(baseShape.columns.map((column) => column.header)))
       : [];
@@ -511,7 +513,7 @@ export function Records({ declared, listPath, id, back, primaryExtra, initialCre
       unfiltered: records.unfiltered,
       page: { total: records.total, loaded: records.loaded, hasMore: records.hasMore, loading: records.loading, loadMore: records.loadMore },
     };
-  }, [described, declared, listPath, pending, board, calendar, gantt, bulk, options, detail, extensions, extPages, records.total, records.unfiltered, records.loaded, records.hasMore, records.loading, records.loadMore]);
+  }, [described, declared, listPath, pending, board, calendar, gantt, bulk, options, detail, extensions, extPages, records.total, records.unfiltered, records.loaded, records.hasMore, records.loading, records.loadMore, externalDomain, view.filters]);
   const exportList = async () => {
     setExportFailure("");
     try {

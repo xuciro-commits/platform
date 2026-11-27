@@ -1,6 +1,8 @@
 import type { ReactNode } from "react";
 import type { CellEdit } from "./PropertyField";
 import type { Dot } from "./Transitions";
+import type { Described } from "./describe";
+import type { Options } from "./options";
 
 export type ListColumnKind =
   | "string"
@@ -77,6 +79,13 @@ export type ListGantt<Row> = {
   move?: (id: string, startField: string, endField: string, start: string, end: string) => Done;
 };
 
+export type ListSummary = {
+  described: Described;
+  listPath: string;
+  baseDomain: unknown[][];
+  options: Options;
+};
+
 export type ListShape<Answer, Row> = {
   title: string;
   about: string;
@@ -88,6 +97,7 @@ export type ListShape<Answer, Row> = {
   board?: ListBoard<Row>;
   calendar?: ListCalendar<Row>;
   gantt?: ListGantt<Row>;
+  summary?: ListSummary;
   bulk?: (ids: string[], clear: () => void) => ReactNode;
   detail?: (id: string) => ReactNode;
   peekType?: string;

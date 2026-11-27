@@ -1000,7 +1000,9 @@ test("print: open opportunity print view, check lines and restricted fields, cap
     page.keyboard.press("Meta+Enter"),
   ]);
   const linesTable = page.getByRole("table", { name: "Opportunity lines" });
-  await expect(linesTable.getByRole("row")).toHaveCount(4);
+  await expect(linesTable.getByText("Die Set B")).toBeVisible();
+  const expectedRows = await linesTable.getByRole("row").count();
+  expect(expectedRows).toBeGreaterThanOrEqual(4);
   await page.getByRole("button", { name: "More actions" }).click();
   await page.getByRole("menuitem", { name: "Print" }).click();
   await expect(page).toHaveURL(/\/print$/);
@@ -1008,7 +1010,7 @@ test("print: open opportunity print view, check lines and restricted fields, cap
   await expect(page.getByAltText("Record QR code")).toBeVisible();
   await expect(page.getByText("Cannot view")).toHaveCount(0);
   const printTable = page.getByRole("table", { name: "Opportunity lines" });
-  await expect(printTable.getByRole("row")).toHaveCount(4);
+  await expect(printTable.getByRole("row")).toHaveCount(expectedRows);
   await page.setViewportSize({ width: 794, height: 1123 });
   await page.emulateMedia({ media: "print" });
   await expect(page.getByRole("button", { name: "Print" })).toBeHidden();

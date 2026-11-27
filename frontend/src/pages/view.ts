@@ -6,7 +6,7 @@ export type StickyEdge = "none" | "one" | "two";
 export type GanttScale = "day" | "week" | "month";
 export type ViewState = {
   version: 1;
-  layout: "table" | "board" | "calendar" | "gantt";
+  layout: "table" | "board" | "calendar" | "gantt" | "summary";
   columns: string[];
   sort: ViewSort[];
   filters: PowerSearchFilter[];
@@ -22,6 +22,9 @@ export type ViewState = {
   density: Density;
   stickyStart: StickyEdge;
   stickyEnd: StickyEdge;
+  measure?: string;
+  from?: string;
+  to?: string;
 };
 
 const densities: Density[] = ["compact", "balanced", "spacious"];
@@ -43,7 +46,7 @@ export function readView(raw: string | null, fallback: ViewState): ViewState {
     const subGroup = group === "none" || rawSub === group ? "none" : rawSub;
     return {
       version: 1,
-      layout: value.layout === "board" || value.layout === "calendar" || value.layout === "gantt" ? value.layout : "table",
+      layout: value.layout === "board" || value.layout === "calendar" || value.layout === "gantt" || value.layout === "summary" ? value.layout : "table",
       columns: Array.isArray(value.columns) ? value.columns.filter((column): column is string => typeof column === "string") : fallback.columns,
       sort: Array.isArray(value.sort) ? value.sort.filter((sort): sort is ViewSort => Boolean(sort && typeof sort.sortKey === "string" && (sort.direction === "ascending" || sort.direction === "descending"))) : [],
       filters: Array.isArray(value.filters) ? value.filters.filter((filter): filter is PowerSearchFilter => Boolean(filter && typeof filter.field === "string" && typeof filter.operator === "string" && filter.value)) : [],
@@ -59,6 +62,9 @@ export function readView(raw: string | null, fallback: ViewState): ViewState {
       density: densities.find((density) => density === value.density) ?? fallback.density,
       stickyStart: edges.find((edge) => edge === value.stickyStart) ?? fallback.stickyStart,
       stickyEnd: edges.find((edge) => edge === value.stickyEnd) ?? fallback.stickyEnd,
+      ...(typeof value.measure === "string" && value.measure ? { measure: value.measure } : fallback.measure ? { measure: fallback.measure } : {}),
+      ...(typeof value.from === "string" && value.from ? { from: value.from } : fallback.from ? { from: fallback.from } : {}),
+      ...(typeof value.to === "string" && value.to ? { to: value.to } : fallback.to ? { to: fallback.to } : {}),
     };
   } catch {
     return fallback;
@@ -162,4 +168,33 @@ export function ganttSpan(month: string, scale: GanttScale) {
   const days = scale === "day" ? 49 : 112;
   const end = new Date(start.getTime() + days * 86400000);
   return { start: start.toISOString().slice(0, 10), end: end.toISOString().slice(0, 10), days };
+}
+
+export type NamedReport = { name: string; title?: string; group?: string; subGroup?: string; measure?: string; dates?: string; from?: string; to?: string };
+
+export function reportView(base: ViewState, entityView: unknown, report?: string): ViewState {
+  if (!report) return base;
+  const reports = (entityView as { reports?: NamedReport[] } | undefined)?.reports;
+  const found = reports?.find((candidate) => candidate.name === report);
+  if (!found) return { ...base, layout: "summary" };
+  return {
+    ...base,
+    layout: "summary",
+    group: found.group ?? base.group,
+    subGroup: found.subGroup ?? base.subGroup,
+    measure: found.measure,
+    dates: found.dates ?? base.dates,
+    from: found.from,
+    to: found.to,
+  };
+}
+
+export function parseDomain(raw: string): unknown[][] {
+  if (!raw) return [];
+  try {
+    const parsed = JSON.parse(raw) as unknown;
+    return Array.isArray(parsed) ? (parsed.filter(Array.isArray) as unknown[][]) : [];
+  } catch {
+    return [];
+  }
 }

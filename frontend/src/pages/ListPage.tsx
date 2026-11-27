@@ -15,7 +15,7 @@ import type { TableColumn, TablePlugin } from "@astryxdesign/core/Table";
 import { ToggleButton } from "@astryxdesign/core/ToggleButton";
 import { useMediaQuery } from "@astryxdesign/core/hooks";
 import { colorVars } from "@astryxdesign/core/theme/tokens.stylex";
-import { AdjustmentsHorizontalIcon, ArrowPathIcon, ArrowsPointingInIcon, ArrowsPointingOutIcon, Bars3BottomLeftIcon, CalendarDaysIcon, MagnifyingGlassIcon, TableCellsIcon, ViewColumnsIcon } from "@heroicons/react/24/outline";
+import { AdjustmentsHorizontalIcon, ArrowPathIcon, ArrowsPointingInIcon, ArrowsPointingOutIcon, Bars3BottomLeftIcon, CalendarDaysIcon, ChartBarIcon, MagnifyingGlassIcon, TableCellsIcon, ViewColumnsIcon } from "@heroicons/react/24/outline";
 import { AdjustmentsHorizontalIcon as AdjustmentsHorizontalSolidIcon } from "@heroicons/react/24/solid";
 import * as stylex from "@stylexjs/stylex";
 import { lazy, type ReactNode, Suspense, useEffect, useMemo, useState } from "react";
@@ -41,6 +41,7 @@ export type { ListColumn, ListGroup, ListShape, Move } from "./listShape";
 const BoardView = lazy(() => import("./BoardView").then((module) => ({ default: module.BoardView })));
 const CalendarView = lazy(() => import("./CalendarView").then((module) => ({ default: module.CalendarView })));
 const GanttView = lazy(() => import("./GanttView").then((module) => ({ default: module.GanttView })));
+const SummaryView = lazy(() => import("./SummaryView").then((module) => ({ default: module.SummaryView })));
 
 const textKey = "__text";
 const fillKey = "__fill";
@@ -109,6 +110,7 @@ export function ListView<Answer, Row>({ definition, read, primary, back, exportR
   const board = view.layout === "board" ? lanes : undefined;
   const calendar = view.layout === "calendar" && definition.calendar?.fields.length ? definition.calendar : undefined;
   const gantt = view.layout === "gantt" && definition.gantt ? definition.gantt : undefined;
+  const summary = view.layout === "summary" && definition.summary ? definition.summary : undefined;
   const dateField = calendar ? (calendar.fields.find((field) => field.key === view.dates) ?? calendar.fields[0]).key : "";
   const orderedColumns = useMemo(() => {
     const ordered = view.columns.flatMap((key) => definition.columns.find((column) => column.key === key) ?? []);
@@ -362,12 +364,13 @@ export function ListView<Answer, Row>({ definition, read, primary, back, exportR
                         {powerToggle}
                         <Divider orientation="vertical" />
                         <HStack gap={1} vAlign="center" wrap="wrap" role="group" aria-label={t("View options")}>
-                          {(lanes || Boolean(definition.calendar?.fields.length) || Boolean(definition.gantt)) && (
+                          {(lanes || Boolean(definition.calendar?.fields.length) || Boolean(definition.gantt) || Boolean(definition.summary)) && (
                             <SegmentedControl size="sm" label={t("Layout")} value={view.layout} onChange={(layout) => update({ layout: layout as ViewState["layout"], lanes: lanes?.key ?? view.lanes })}>
                               <SegmentedControlItem value="table" label={t("Table")} icon={<Icon icon={TableCellsIcon} size="sm" />} />
                               {lanes && <SegmentedControlItem value="board" label={t("Board")} icon={<Icon icon={ViewColumnsIcon} size="sm" />} />}
                               {Boolean(definition.calendar?.fields.length) && <SegmentedControlItem value="calendar" label={t("Calendar")} icon={<Icon icon={CalendarDaysIcon} size="sm" />} />}
                               {Boolean(definition.gantt) && <SegmentedControlItem value="gantt" label={t("Gantt")} icon={<Icon icon={Bars3BottomLeftIcon} size="sm" />} />}
+                              {Boolean(definition.summary) && <SegmentedControlItem value="summary" label={t("Summary")} icon={<Icon icon={ChartBarIcon} size="sm" />} />}
                             </SegmentedControl>
                           )}
                           {group && grouped.l1Keys.length > 0 && view.layout === "table" && (
@@ -524,7 +527,19 @@ export function ListView<Answer, Row>({ definition, read, primary, back, exportR
                 />
               </Suspense>
             )}
-            {ready && shown.length > 0 && !board && !calendar && !gantt && (
+            {ready && summary && (
+              <Suspense fallback={<VStack gap={2} paddingInline={gutter}><Skeleton height={240} /></VStack>}>
+                <SummaryView
+                  described={summary.described}
+                  listPath={summary.listPath}
+                  view={view}
+                  baseDomain={summary.baseDomain}
+                  options={summary.options}
+                  update={update}
+                />
+              </Suspense>
+            )}
+            {ready && shown.length > 0 && !board && !calendar && !gantt && !summary && (
               <VStack key="table" height="100%" paddingInline={gutter} xstyle={motionStyles.fadeEnter}>
                 <Table
                   data={rows.slice(first, last)}

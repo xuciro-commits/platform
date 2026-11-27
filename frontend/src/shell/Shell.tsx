@@ -71,6 +71,18 @@ function installedApps(views: Api.ApplicationView[], entities: Api.EntityInfo[])
         : [];
     });
     if (!sections.length) return [];
+    const seenReports = new Set(sections.flatMap((section) => sectionItems(section)).filter((entry) => entry.kind === "report").map((entry) => `${entry.object}:${entry.report}`));
+    const appObjects = Array.from(new Set(sections.flatMap((section) => sectionItems(section)).flatMap((entry) => entry.object ? [entry.object] : [])));
+    const declaredReports: NavItem[] = appObjects.flatMap((objectType) => {
+      const entity = entities.find((candidate) => candidate.type === objectType);
+      const reports = (entity?.view as { reports?: { name: string; title?: string }[] } | undefined)?.reports ?? [];
+      return reports.flatMap((rep): NavItem[] => {
+        if (!rep.name || seenReports.has(`${objectType}:${rep.name}`)) return [];
+        seenReports.add(`${objectType}:${rep.name}`);
+        return [{ id: `${objectType}--${rep.name}`, label: rep.title || rep.name, icon: ChartBarIcon, kind: "report", object: objectType, report: rep.name }];
+      });
+    });
+    if (declaredReports.length > 0) sections.push({ id: "reports", title: "Reports", items: declaredReports });
     const allItems = sections.flatMap((section) => sectionItems(section));
     const hasDashboardEntry = allItems.some((page) => page.id === "dashboard" || page.kind === "dashboard");
     const dashboard = view.dashboard?.length ? view.dashboard : undefined;
@@ -167,7 +179,7 @@ export function Shell() {
     : item.kind === "note" ? <NotePage key={`${app.id}/${item.id}`} title={item.label} body={item.body ?? ""} />
     : app.dashboard && (item.id === "dashboard" || item.kind === "dashboard") ? <AppDashboard key={app.id} title={item.label} blocks={app.dashboard} listOf={(type) => listOf(app, type)} />
     : app.group === "installed" && item.settings ? <SettingsTables key={`${app.id}/${item.id}`} title={item.label} types={item.settings} />
-    : app.group === "installed" && item.object && listPath ? <Records key={`${app.id}/${item.id}`} declared={{ title: item.label, about: item.description ?? "", type: item.object }} listPath={listPath} id={segments[3]} />
+    : app.group === "installed" && item.object && listPath ? <Records key={`${app.id}/${item.id}`} declared={{ title: item.label, about: item.description ?? "", type: item.object }} listPath={listPath} id={segments[3]} report={item.report} />
     : null;
   if (segments[segments.length - 1] === "print") {
     return (
