@@ -200,10 +200,15 @@ test("shape: every record page has the same header, tabs and rail", async ({ pag
     await expect(page.getByRole("complementary").getByRole("heading", { level: 3, name: "Record" })).toBeVisible();
   };
   await visit("Ontology", "Objects", "Opportunities", "冲压线改造");
+  await page.route("**/v1/records/sales.opportunity/OPP-001/sections/history", async (route) => {
+    await new Promise((resolve) => setTimeout(resolve, 500));
+    await route.continue();
+  });
   await page.getByRole("link", { name: "Activity" }).click();
   await expect(page).toHaveURL(/\/activity(?:\?|$)/);
-  const earlier = page.getByRole("button", { name: /earlier changes$/ });
-  if (await earlier.isVisible()) await earlier.click();
+  const earlier = page.getByRole("button", { name: "2 earlier changes", exact: true });
+  await expect(earlier).toBeVisible();
+  await earlier.click();
   await expect(page.getByRole("listitem", { name: "Subject: 冲压线改造" })).toBeVisible();
   await visit("Ontology", "Objects", "Customers", "北风工具");
   await visit("Ontology", "Object types", null, "Opportunity");
