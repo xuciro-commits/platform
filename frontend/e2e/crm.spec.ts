@@ -515,13 +515,10 @@ test("invite: an administrator invites colleagues by customer account and grants
 test("naming: two new activities get consecutive numbers", async ({ page }) => {
   await as(page, "manager-1");
   const create = async (subject: string) => {
-    await page.goto("/crm/crm.activity");
-    await page.getByRole("button", { name: "New", exact: true }).click();
-    const form = page.getByRole("dialog");
-    await form.getByRole("textbox", { name: "Subject" }).fill(subject);
-    await form.getByRole("button", { name: "Create", exact: true }).click();
-    await expect(page).toHaveURL(/\/crm\/crm\.activity\/ACT-\d{4}-\d{5}$/);
-    return Number(page.url().slice(-5));
+    const answer = await submit(page, "crm.activity.create", "crm.activity", "", { subject }, 0);
+    const id = answer.record.submission.target.id as string;
+    expect(id).toMatch(/^ACT-\d{4}-\d{5}$/);
+    return Number(id.slice(-5));
   };
   const first = await create(`Numbered one ${unique()}`);
   const second = await create(`Numbered two ${unique()}`);

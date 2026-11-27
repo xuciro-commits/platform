@@ -337,8 +337,14 @@ test("official tenant: CRM upgrades to the next authoritative version and retain
   await expect(property(page, "Source channel")).toContainText("行业峰会");
   await expect(property(page, "Qualification note")).toContainText("预算与决策链已核实");
   await page.getByRole("button", { name: "More actions", exact: true }).click();
-  await expect(page.getByRole("menuitem", { name: "Verify qualification", exact: true })).toBeVisible();
-  await page.keyboard.press("Escape");
+  await page.getByRole("menuitem", { name: "Verify qualification", exact: true }).click();
+  const verify = page.getByRole("dialog", { name: "Verify qualification", exact: true });
+  await verify.getByRole("textbox", { name: /^Qualification note/ }).fill("升级后复核通过");
+  await verify.getByRole("button", { name: "Verify qualification", exact: true }).click();
+  await expect(verify).toBeHidden();
+  await page.reload();
+  await expect(property(page, "Source channel")).toContainText("行业峰会");
+  await expect(property(page, "Qualification note")).toContainText("升级后复核通过");
 });
 
 test("official tenant: a lead keeps its number and revision across snapshot and replay restarts", async () => {

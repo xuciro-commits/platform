@@ -4,7 +4,7 @@ import { cpSync, existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, 
 import { createServer } from "node:net";
 import { join } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
-import { layers, seedPlan } from "./trunk-seeds.mjs";
+import { layers, seedPlan, securityAPIPlan } from "./trunk-seeds.mjs";
 
 const root = fileURLToPath(new URL("../", import.meta.url));
 const build = join(root, ".build");
@@ -202,7 +202,7 @@ if (mode === "--browser" && args.includes("--list")) {
   await checked(args[0], args.slice(1), process.env, join(root, "frontend"));
   process.exit(0);
 }
-if (!["--browser", "--host", "--backend", "--clean"].includes(mode)) throw Error("Specify --browser, --host, --backend or --clean");
+if (!["--browser", "--host", "--backend", "--security", "--clean"].includes(mode)) throw Error("Specify --browser, --host, --backend, --security or --clean");
 const pg = await pool();
 if (mode === "--clean") {
   await withCacheLock(async () => {
@@ -224,10 +224,19 @@ if (mode === "--clean") {
   try {
     run(process.env.GO || "go", ["build", "-trimpath", "-o", bin, "./cmd/platform-server"], join(root, "capabilities/server"));
     const [seedPort, hostPort, controlPort, pagePort] = await freePorts(4);
-    const plan = seedPlan(args, mode === "--host");
+    const plan = mode === "--security" ? securityAPIPlan : seedPlan(args, mode === "--host");
     if (plan.cache && process.env.TRUNK_FRESH !== "1") await cloneBaseline(pg, work, bin, db, seedPort, plan);
     else { createDB(pg, db); await seed(work, bin, pg, db, seedPort, plan); }
-    if (mode === "--host") {
+    if (mode === "--security") {
+      const proc = start(bin, hostArgs(work, pg, db, hostPort), { ...process.env, PLATFORM_PACKAGES_DIR: "" }, join(root, "capabilities/server"));
+      try {
+        await ready(proc, hostPort);
+        await checked(process.execPath, ["--test", join(root, "scripts/pg-security.test.mjs")], { ...process.env, PLATFORM_SECURITY_TEST_HOST: "http://127.0.0.1:" + hostPort });
+        const count = Number(sql(pg, "select count(*) from journal", db));
+        if (!(count > 0)) throw Error("Security PostgreSQL journal is empty");
+        console.log("security: " + count + " journal entries in PostgreSQL");
+      } finally { await stop(proc); }
+    } else if (mode === "--host") {
       const port = 18511;
       console.log("frontend-host: PostgreSQL at http://127.0.0.1:" + port);
       const proc = start(bin, hostArgs(work, pg, db, port), { ...process.env, PLATFORM_PACKAGES_DIR: "" }, join(root, "capabilities/server"));

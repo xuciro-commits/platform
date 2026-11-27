@@ -80,7 +80,7 @@
 - 后端行为改动：优先 `make test RUN=K13`（受影响编号，`< 5s`）或 `make test-fast`（`< 10s`）；涉及 SQL 方言或存储时跑 `make test-pg RUN=K13`。
 - 前端行为改动：`make trunk SPEC=crm`（可通过 `TRUNK_ARGS='--grep ...'` 缩到单条）；自动分配空闲端口并只灌该 spec 所需租户，与运行中的开发环境互不干扰。
 - `make trunk-changed` 按 `scripts/trunk-affected.mjs` 的受影响图只跑明确映射的 spec；影响过广返回非零并要求指定 `SPEC`，绝不自动跑全量。
-- 跨层去重：不为单个内部函数写单元测试，严禁伪造旧路由或内存桩的自欺测试；界面前置状态一律经 `submit` 接口秒级注入，浏览器只走要验证的交互步。
+- 跨层去重：不为单个内部函数写单元测试，严禁伪造旧路由或内存桩的自欺测试；界面前置状态优先经真实 `submit` 注入；若自动编号、分配或授权的行为本身依赖界面入口，必须先证明两种路径等价。
 - 纯文档或规约：`node scripts/check-docs.mjs`；修改测试调度器才运行 `make test-runner`。已通过的相同检查不因准备提交而重跑。
 
 ### Trunk 场景与租户
@@ -93,9 +93,9 @@
 | Runtime · 通用运行时 | `make trunk LAYER=runtime` | 星河科技（acceptance）；切换工作区时加一个空的对照租户 |
 | Business · 业务组合 | `make trunk LAYER=business` | 复用星河科技，按需要加入 CRM、电话和协作权限场景 |
 | Delivery · 包交付 | `make trunk LAYER=delivery` | 空租户、历史版本、已安装版本等互斥状态按需创建；真实安装、升级与恢复 |
-| Security · 安全隔离 | `make trunk LAYER=security` | 两个独立安全租户，加一个非成员租户；附件、记录、越权验证 |
+| Security · 安全隔离 | `make trunk LAYER=security` | 浏览器验证授权 UI 与撤权后的实时行为；纯 API 隔离由 `make test-security-pg` 创建两个独立安全租户和一个非成员租户 |
 
-日常 `make frontend-host` 只建星河科技一个租户；单 spec 不加载无关租户。全量验收覆盖四层的全部场景，不把演示、测试租户保留在开发或生产实例。
+日常 `make frontend-host` 只建星河科技一个租户；单 spec 不加载无关租户。全量验收覆盖四层常规场景和独立 API 安全验收，不把演示、测试租户保留在开发或生产实例。
 默认单 worker，当前有串行依赖的用例共享所属场景状态；不同执行批次的数据库、文件目录和宿主互不共享，尚不宣称每个用例或每个 worker 完全隔离。
 
 测试池按 PostgreSQL 镜像 ID 创建专用本机容器（仅回环地址），不使用开发/生产数据库。
@@ -104,12 +104,31 @@
 交付、安全、电话及连接器专项从新库实际构建初始状态；全量发布不使用基准。
 基准与运行目录均在忽略的 `.build/` 下。用 `make trunk-cache-clean` 删除当前工作树的基准，不删除运行库或常驻容器；异常中断遗留的锁需确认无活动进程后清理。
 
+### Trunk 用例准入与精简
+
+Trunk 是真实用户行为的最小验收集合，不是业务功能清单；用例数只作预算，不作删除指标。
+新增或保留用例时逐项回答：
+
+1. 验收哪项平台能力或真实交付链路？
+2. 为什么必须由浏览器验证，而非内核或真实 HTTP API？
+3. 是否已有后端不变量覆盖相同失败条件？
+4. 是否已有 Trunk 验证相同的用户路径，能否合并断言？
+5. 前置状态是否能通过真实提交准备，而不重复操作界面？
+6. 是否必须新建租户，现有场景为什么不可复用？
+7. 是 Platform 的能力，还是产品 Package 自己的业务规则？
+8. 属于哪一层、何时运行，失败证据和成功条件是什么？
+
+替代用例实测覆盖原有独立断言后才删除旧用例；不以改名、放宽断言或隐藏失败实现精简。
+包自有规则优先由包库验收；未确认包库存在等价验收之前，保留平台当前覆盖。
+路由注册与入口文件的一一对应由静态门禁检查，浏览器只抽取有行为风险的页面，不遍历全部页面标题。
+模拟万行数据的窗口化测试仅验证前端渲染，不证明数据库容量；通过 `make trunk-special` 单独执行。
+
 ### 发版怎样验
 
 1. 在干净的候选提交上验收，记录 `git rev-parse HEAD`；确保该提交的 GitHub 轻量 CI 通过。
 2. 本地具备 Docker、`platform-postgres:18-vector` 镜像、前端依赖与 Chrome；缺少环境先补齐，不改成内存全量代替。
-3. 执行 `make verify`，固定全量参数，后端失败不启动浏览器。两套测试共用专用常驻 PostgreSQL 实例，各自新建独立数据库；浏览器全量从真实初始状态执行，不复用基准。
-4. 核对 `.build/check/test-results.json` 与 `.build/trunk/playwright-results.json`：失败、跳过、未执行、零用例或不稳定通过均不能算全量通过。
+3. 执行 `make verify`，固定全量参数，后端失败不启动浏览器。后端不变量、HTTP 安全与浏览器验收使用专用常驻 PostgreSQL 池中的独立数据库；浏览器全量从真实初始状态执行，不复用基准。
+4. 核对 HTTP 安全验收退出码，以及 `.build/check/test-results.json` 与 `.build/trunk/playwright-results.json`：失败、跳过、未执行、零用例或不稳定通过均不能算全量通过。
 5. 验收后候选提交或相关工作区字节变化，重新核对受影响的证据；不得把旧提交的报告冒充新提交的全量通过。
 6. 同一提交的 CI 与本地验收均通过才打 Tag。GitHub Release 工作流只构建、签发和发布制品，不再运行重型测试。
 
@@ -123,6 +142,7 @@
 | `GATES="race" bash deploy/dev/kernel-gates.sh` | 并发、同步与共享状态变更 |
 | `make verify-sql` | 写入、重启与恢复专项 |
 | `make load-sql` | 容量、导入、延迟和吞吐专项 |
+| `make trunk-special` | 模拟大列表的浏览器窗口化专项，不进入常规 Trunk |
 | `bash deploy/dev/kernel-gates.sh quick` | 仅定点 K1/K13；其他专项显式选 GATES |
 
 不要把专项命令拼成日常默认全量。内存环境的 `make test` 保留供内核专项使用；浏览器不存在内存执行入口。

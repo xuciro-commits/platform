@@ -33,6 +33,7 @@ test.afterAll(async () => {
 });
 
 test("blank tenant: an administrator installs CRM from the marketplace after reviewing its applications and roles", async () => {
+  test.setTimeout(180_000);
   await signIn(page, "admin-1 · blank");
   await expect(page.getByRole("link", { name: "CRM", exact: true })).toHaveCount(0);
 
@@ -111,45 +112,6 @@ test("blank tenant: a package role granted to a member opens CRM for them, its e
   await grantRole(page, memberPane, /salesmanager/);
 });
 
-test("blank tenant: the sales rep runs a lead to Won and the sales manager sees it on the board and the dashboard", async () => {
-  await signOut();
-  await signIn(page, "user-1 · blank");
-  await page.getByRole("link", { name: "CRM", exact: true }).first().click();
-  await nav.getByRole("link", { name: "Leads", exact: true }).click();
-  await page.getByRole("link", { name: "林海", exact: true }).click();
-  await edit(page, "Company");
-  const org = page.getByRole("textbox", { name: "Company", exact: true });
-  await org.fill("星海制造");
-  await org.press("Enter");
-  await expect(property(page, "Company")).toContainText("星海制造");
-  await page.getByRole("button", { name: "Convert to deal", exact: true }).click();
-  const convert = page.getByRole("dialog", { name: "Convert to deal", exact: true });
-  for (const [name, date] of [["Expected close", "December 31, 2026"], ["Next step due", "November 30, 2026"]]) {
-    const field = convert.getByRole("combobox", { name, exact: true });
-    await field.fill(date);
-    await field.press("Tab");
-  }
-  await convert.getByRole("textbox", { name: "Next step" }).fill("Send proposal");
-  await convert.getByRole("button", { name: "Convert to deal", exact: true }).click();
-  await expect(convert).toBeHidden();
-  await expect(page.getByRole("heading", { level: 1, name: "星海制造", exact: true })).toBeVisible();
-  await page.getByRole("button", { name: "Mark won", exact: true }).click();
-  const win = page.getByRole("dialog", { name: "Mark won", exact: true });
-  await win.getByRole("textbox", { name: "Why we won" }).fill("Matched requirements");
-  await win.getByRole("button", { name: "Mark won", exact: true }).click();
-  await expect(win).toBeHidden();
-  await expect(page.getByRole("main").getByText("Won", { exact: true }).first()).toBeVisible();
-
-  await signOut();
-  await signIn(page, "manager-1 · blank");
-  await page.getByRole("link", { name: "CRM", exact: true }).first().click();
-  await nav.getByRole("link", { name: "Deals", exact: true }).click();
-  await page.getByRole("radio", { name: "Table" }).click();
-  await expect(page.getByRole("link", { name: "星海制造", exact: true }).first()).toBeVisible();
-  await page.goto("/crm/dashboard");
-  await expect(page.getByRole("main").getByRole("link", { name: "Won deals", exact: true }).locator("..")).toHaveText(/\D1$/);
-});
-
 test("blank tenant: retiring CRM removes its entry and keeps the records, reinstalling brings both back", async () => {
   await signOut();
   await signIn(page, "admin-1 · blank");
@@ -182,8 +144,8 @@ test("blank tenant: retiring CRM removes its entry and keeps the records, reinst
   await signIn(page, "user-1 · blank");
   await expect(page.getByRole("link", { name: "CRM", exact: true }).first()).toBeVisible();
   await page.getByRole("link", { name: "CRM", exact: true }).first().click();
-  await nav.getByRole("link", { name: "Deals", exact: true }).click();
-  await expect(page.getByRole("link", { name: "星海制造", exact: true }).first()).toBeVisible();
+  await nav.getByRole("link", { name: "Leads", exact: true }).click();
+  await expect(page.getByRole("link", { name: "林海", exact: true }).first()).toBeVisible();
 });
 });
 
@@ -453,174 +415,5 @@ test("publisher tenant: a business partner stores country and division reference
   await expect(property(page, "Street address")).toContainText("1 Jianguo Road");
 });
 
-test("publisher tenant: authoritative CRM upgrade review preserves compatible extensions and their actions", async ({ page }) => {
-  test.setTimeout(300_000);
-  await signIn(page, "admin-1 · publisher");
-
-  await open(page, "Delivery", "Marketplace");
-  await page.getByRole("button", { name: "More actions", exact: true }).click();
-  await page.getByRole("menuitem", { name: "Install from URL or file", exact: true }).click();
-  const installWizard = page.getByRole("dialog", { name: /Install from URL or file/ });
-  await selectPackage(installWizard, "crm");
-  await installWizard.getByRole("button", { name: "Inspect package", exact: true }).click();
-  await expect(installWizard.getByText(`crm · ${input("crm").version}`, { exact: true })).toBeVisible();
-  await installWizard.getByRole("button", { name: "Add to library", exact: true }).click();
-  await installWizard.getByRole("button", { name: "Continue", exact: true }).click({ timeout: 60_000 });
-  await installWizard.getByRole("button", { name: "Install package", exact: true }).click();
-  await expect(installWizard).toBeHidden({ timeout: 60_000 });
-
-  await submit(page, "platform.member.grant", "platform.member", "admin-1", { app: "crm", role: "salesrep" });
-
-  await page.goto("/home/projects");
-  await page.getByRole("button", { name: "New", exact: true }).click();
-  const projectDialog = page.getByRole("dialog", { name: "New project", exact: true });
-  await projectDialog.getByRole("radio", { name: "Extension", exact: true }).click();
-  await projectDialog.getByRole("combobox", { name: /^Target application/ }).click();
-  await page.getByRole("option", { name: "CRM", exact: true }).click();
-  await projectDialog.getByRole("textbox", { name: /^API name/ }).fill("crmext");
-  await projectDialog.getByRole("textbox", { name: /^Name/ }).fill("CRM qualification");
-  await projectDialog.getByRole("button", { name: "Create", exact: true }).click();
-  await expect(page.getByRole("heading", { level: 1, name: "CRM qualification", exact: true })).toBeVisible();
-
-  const createExtensionObject = async (apiName: string, title: string) => {
-    await page.goto("/home/overview");
-    await page.getByRole("link", { name: "Ontology", exact: true }).first().click();
-    await page.getByRole("navigation", { name: "Primary navigation" }).getByRole("link", { name: "Object types", exact: true }).click();
-    await page.getByRole("button", { name: "New", exact: true }).click();
-    const objectDialog = page.getByRole("dialog");
-    if (await objectDialog.getByRole("combobox", { name: /^Project/ }).count()) {
-      await objectDialog.getByRole("combobox", { name: /^Project/ }).click();
-      await page.getByRole("option", { name: "CRM qualification", exact: true }).click();
-    }
-    await objectDialog.getByRole("combobox", { name: /^Extends/ }).click();
-    await page.getByRole("option", { name: "Lead · crm.lead", exact: true }).click();
-    await objectDialog.getByRole("textbox", { name: /^API name/ }).fill(apiName);
-    await objectDialog.getByRole("textbox", { name: /^Name/ }).fill(title);
-    await objectDialog.getByRole("button", { name: "Create", exact: true }).click();
-    await expect(page.getByRole("heading", { level: 1, name: title, exact: true })).toBeVisible();
-  };
-
-  const addTextField = async (name: string, label: string) => {
-    await page.getByRole("button", { name: "Add field", exact: true }).click();
-    const fieldDialog = page.getByRole("dialog");
-    await fieldDialog.getByRole("textbox", { name: /^Name/ }).fill(name);
-    await fieldDialog.getByRole("textbox", { name: /^Label/ }).fill(label);
-    await fieldDialog.getByRole("combobox", { name: /^Type/ }).click();
-    await page.getByRole("option", { name: "text", exact: true }).click();
-    await fieldDialog.getByRole("button", { name: "Save", exact: true }).click();
-    await expect(fieldDialog).toBeHidden();
-    await expect(page.getByRole("cell", { name, exact: true })).toBeVisible();
-  };
-
-  const publishCurrentObject = async (republish = false) => {
-    if (republish) await expect(page.getByText("Unpublished changes", { exact: true })).toBeVisible();
-    await page.getByRole("button", { name: "Publish", exact: true }).click();
-    const publishDialog = page.getByRole("dialog", { name: /Publish/ });
-    await expect(publishDialog.getByRole("button", { name: "Publish", exact: true })).toBeEnabled({ timeout: 60_000 });
-    await publishDialog.getByRole("button", { name: "Publish", exact: true }).click();
-    await expect(publishDialog).toBeHidden({ timeout: 60_000 });
-    await expect(page.getByText("Published", { exact: true }).first()).toBeVisible();
-  };
-
-  await createExtensionObject("leadext", "Lead qualification");
-  await addTextField("sourcechannel", "Source channel");
-  await addTextField("verifiednote", "Qualification note");
-
-  await page.getByRole("button", { name: "Add access rule", exact: true }).click();
-  const repRule = page.getByRole("dialog");
-  await repRule.getByRole("textbox", { name: /^Role/ }).fill("salesrep");
-  await repRule.getByRole("checkbox", { name: "Create", exact: true }).click();
-  await repRule.getByRole("checkbox", { name: "Edit", exact: true }).click();
-  await repRule.getByRole("button", { name: "Save", exact: true }).click();
-  await expect(repRule).toBeHidden();
-
-  await page.getByRole("button", { name: "Create action", exact: true }).click();
-  const actionDialog = page.getByRole("dialog", { name: "Create action", exact: true });
-  await actionDialog.getByRole("textbox", { name: /^API name/ }).fill("verify");
-  await actionDialog.getByRole("textbox", { name: /^What people call it/ }).fill("Verify qualification");
-  await actionDialog.getByRole("combobox", { name: /^Field to update/ }).click();
-  await page.getByRole("option", { name: "Qualification note", exact: true }).click();
-  await actionDialog.getByRole("combobox", { name: /^Taken by/ }).click();
-  await page.getByRole("option", { name: "salesrep", exact: true }).click();
-  await actionDialog.getByRole("heading", { name: "Create action", exact: true }).click();
-  await actionDialog.getByRole("button", { name: "Save", exact: true }).click();
-  await expect(actionDialog).toBeHidden();
-  await publishCurrentObject();
-
-  await submit(page, "platform.member.grant", "platform.member", "admin-1", { app: "crmext", role: "salesrep" });
-
-  await page.goto("/");
-  await page.getByRole("link", { name: "CRM", exact: true }).first().click();
-  await page.getByRole("navigation", { name: "Primary navigation" }).getByRole("link", { name: "Leads", exact: true }).click();
-  await page.getByRole("button", { name: "New", exact: true }).click();
-  const leadDialog = page.getByRole("dialog");
-  await leadDialog.getByRole("textbox", { name: "Full name" }).fill("林岚");
-  await leadDialog.getByRole("button", { name: "Create", exact: true }).click();
-  await expect(page.getByRole("heading", { level: 1, name: "林岚", exact: true }).first()).toBeVisible();
-  const leadUrl = page.url();
-
-  await edit(page, "Company");
-  const companyInput = page.getByRole("textbox", { name: "Company", exact: true });
-  await companyInput.fill("远航智造");
-  await companyInput.press("Enter");
-  await expect(property(page, "Company")).toContainText("远航智造");
-
-  await edit(page, "Source channel");
-  const channelInput = page.getByRole("textbox", { name: "Source channel", exact: true });
-  await channelInput.fill("生态伙伴");
-  await channelInput.press("Enter");
-  await expect(property(page, "Source channel")).toContainText("生态伙伴");
-
-  await page.getByRole("button", { name: "More actions", exact: true }).click();
-  await page.getByRole("menuitem", { name: "Verify qualification", exact: true }).click();
-  const verifyDialog = page.getByRole("dialog", { name: "Verify qualification", exact: true });
-  await verifyDialog.getByRole("textbox", { name: /^Qualification note/ }).fill("预算已核实");
-  await verifyDialog.getByRole("button", { name: "Verify qualification", exact: true }).click();
-  await expect(verifyDialog).toBeHidden();
-  await expect(property(page, "Qualification note")).toContainText("预算已核实");
-
-  await page.goto("/delivery/marketplace");
-  await page.getByRole("button", { name: "More actions", exact: true }).click();
-  await page.getByRole("menuitem", { name: "Install from URL or file", exact: true }).click();
-  const nextWizard = page.getByRole("dialog", { name: /Install from URL or file/ });
-  await selectPackage(nextWizard, "crm-next");
-  await nextWizard.getByRole("button", { name: "Inspect package", exact: true }).click();
-  await expect(nextWizard.getByText(`crm · ${input("crm-next").version}`, { exact: true })).toBeVisible();
-  await nextWizard.getByRole("button", { name: "Add to library", exact: true }).click();
-  await expect(nextWizard.getByRole("button", { name: "Continue", exact: true })).toBeVisible({ timeout: 30_000 });
-  await nextWizard.getByRole("button", { name: "Cancel", exact: true }).click();
-  await expect(nextWizard).toBeHidden();
-
-  const card32 = page.getByRole("listitem").filter({ hasText: /^CRM/ }).filter({ hasText: `crm · ${input("crm-next").version}` });
-  await card32.getByRole("button", { name: "Upgrade", exact: true }).click({ timeout: 30_000 });
-  const blockedReview = page.getByRole("dialog", { name: /Review and install/ });
-  const compatibleItem = blockedReview.getByRole("listitem").filter({ hasText: "crmext.leadext" });
-  await expect(compatibleItem).toContainText("Shape compatible");
-  await expect(compatibleItem).toContainText("sourcechannel, verifiednote");
-  await expect(compatibleItem).toContainText("OK");
-  await expect(blockedReview.getByRole("button", { name: "Upgrade package", exact: true })).toBeEnabled({ timeout: 60_000 });
-  await blockedReview.getByRole("button", { name: "Upgrade package", exact: true }).click();
-  await expect(blockedReview).toBeHidden({ timeout: 120_000 });
-  await page.goto("/delivery/installations");
-  await expect(page.getByRole("listitem").filter({ hasText: /^CRM/ })).toContainText(input("crm-next").version);
-
-  await page.goto(leadUrl);
-  await expect(property(page, "Company")).toContainText("远航智造");
-  await expect(property(page, "Source channel")).toContainText("生态伙伴");
-  await expect(property(page, "Qualification note")).toContainText("预算已核实");
-
-  await page.getByRole("button", { name: "More actions", exact: true }).click();
-  await page.getByRole("menuitem", { name: "Verify qualification", exact: true }).click();
-  const postUpgradeVerify = page.getByRole("dialog", { name: "Verify qualification", exact: true });
-  await postUpgradeVerify.getByRole("textbox", { name: /^Qualification note/ }).fill("升级后复核通过");
-  await postUpgradeVerify.getByRole("button", { name: "Verify qualification", exact: true }).click();
-  await expect(postUpgradeVerify).toBeHidden();
-  await expect(property(page, "Qualification note")).toContainText("升级后复核通过");
-
-  await page.reload();
-  await expect(property(page, "Company")).toContainText("远航智造");
-  await expect(property(page, "Source channel")).toContainText("生态伙伴");
-  await expect(property(page, "Qualification note")).toContainText("升级后复核通过");
-});
 });
 

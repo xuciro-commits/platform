@@ -149,6 +149,7 @@ export default defineConfig({
   fullyParallel: true,
   workers: 1,
   reporter: [["list"]],
+  ...(process.env.TRUNK_SPECIAL === "performance" ? { grep: /@performance/ } : { grepInvert: /@performance/ }),
   projects: splitOfficial
     ? [
         { name: "trunk", testMatch: selectedNonOfficial, testIgnore: /official\.spec\.ts/ },

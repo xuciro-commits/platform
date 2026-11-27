@@ -4,22 +4,24 @@ const SCENARIOS = {
     gantt: { tenants: ["acceptance"] },
     workspace: { tenants: ["acceptance", "publisher"], seed: ["acceptance"] },
     builder: { tenants: ["acceptance"], acceptanceCrm: true },
+    "i18n-grouping": { tenants: ["acceptance", "phone"] },
   },
   business: {
     crm: { tenants: ["acceptance", "crm"], acceptanceCrm: true },
     phone: { tenants: ["phone"], fresh: true },
-    "i18n-grouping": { tenants: ["acceptance", "phone"] },
-    rebac: { tenants: ["acceptance", "rebac", "crm"] },
     connector: { tenants: ["acceptance"], fresh: true },
   },
   delivery: {
+    "package-lifecycle": { tenants: ["acceptance"], fresh: true },
     official: { tenants: ["official"], fresh: true },
     marketplace: { tenants: ["blank", "upgrade", "publisher", "library", "party-upgrade"], fresh: true },
   },
   security: {
-    "tenant-security": { tenants: ["audit-a", "audit-b", "library"], seed: [], fresh: true },
+    rebac: { tenants: ["acceptance", "rebac", "crm"] },
+    "tenant-security": { tenants: ["audit-a"], seed: [], fresh: true },
   },
 };
+export const securityAPIPlan = { specs: [], tenants: ["audit-a", "audit-b", "library"], seed: [], acceptanceCrm: false, cache: false };
 export const layers = Object.fromEntries(Object.entries(SCENARIOS).map(([layer, specs]) => [layer, Object.keys(specs)]));
 const specsByName = Object.assign({}, ...Object.values(SCENARIOS));
 export function seedPlan(args, interactive = false) {

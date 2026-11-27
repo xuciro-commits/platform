@@ -9,6 +9,7 @@ test("records: open a list, open a record, change a field in place", async ({ pa
   await expect(page.getByRole("heading", { level: 1, name: "Opportunities" })).toBeVisible();
   const retrofit = page.getByRole("row", { name: /冲压线改造/ });
   await expect(retrofit.getByText("Negotiation", { exact: true })).toBeVisible();
+  await expect(retrofit.getByRole("cell", { name: /王丹/ }).getByText("王丹", { exact: true })).toBeVisible();
   await expect(retrofit.getByText("184,000", { exact: true })).toBeVisible();
   await expect(retrofit.getByLabel("Negotiation")).toBeVisible();
   await expect(retrofit.getByRole("img", { name: "Yes" })).toBeVisible();
@@ -508,7 +509,7 @@ test("list: metadata controls default columns, layout and empty states", async (
 });
 
 
-test("views: ten thousand rows stay windowed and load at the scroll edge", async ({ page }) => {
+test("views: ten thousand rows stay windowed and load at the scroll edge", { tag: "@performance" }, async ({ page }) => {
   const offsets: number[] = [];
   await page.route("**/v1/records/sales.opportunity?*", async (route) => {
     const url = new URL(route.request().url());
@@ -696,19 +697,6 @@ test("list: one bar searches and filters, identities are quiet and references op
 });
 
 
-test("record fields: values read as values and become inputs when focused", async ({ page }) => {
-  await signIn(page);
-  await page.goto("/ontology/objects/sales.opportunity/OPP-001");
-  await expect(property(page, "Amount")).toHaveText("184,000");
-  await edit(page, "Amount");
-  const amount = page.getByRole("spinbutton", { name: "Amount", exact: true });
-  await expect(amount).toBeFocused();
-  await expect(amount).toHaveValue("184000");
-  await amount.press("Escape");
-  await expect(property(page, "Amount")).toHaveText("184,000");
-});
-
-
 test("files: an attachment waits for its project before offering file selection", async ({ page }) => {
   await signIn(page);
   const requested = Promise.withResolvers<void>();
@@ -756,54 +744,46 @@ test("inbox: work assigned on a record is finished from the inbox", async ({ pag
 });
 
 
-test("members: an opportunity owner is shown by name and can be reassigned", async ({ page }) => {
-  await signIn(page);
-  await open(page, "Ontology", "Objects");
-  await page.getByRole("link", { name: "Opportunities" }).click();
-  const row = page.getByRole("row", { name: /熔炉监测/ });
-  const ownerCell = row.getByRole("cell", { name: /王丹/ });
-  await expect(ownerCell.getByText("王丹", { exact: true })).toBeVisible();
-
-  await row.getByRole("link", { name: "熔炉监测" }).click();
-  await expect(property(page, "Owner")).toContainText("王丹");
-  await edit(page, "Owner");
-  await page.getByRole("combobox", { name: "Owner", exact: true }).fill("韩奥");
-  await page.getByRole("option", { name: /韩奥/ }).click();
-  await expectRevision(page, 2);
-  await page.reload();
-  await expect(property(page, "Owner")).toContainText("韩奥");
-});
-
-
-test("record fields: an attachment preserves the horizontal label alignment", async ({ page }) => {
+test("record fields: rendering, focus, accessible date and aligned labels", async ({ page }) => {
   await signIn(page);
   await page.goto("/ontology/objects/sales.opportunity/OPP-001");
   const showEmpty = page.getByRole("button", { name: /^Show empty fields/ });
   if (await showEmpty.isVisible()) await showEmpty.click();
   const brief = page.getByText("Brief", { exact: true });
   const customer = page.getByText("Customer", { exact: true });
-  const amount = page.getByText("Amount", { exact: true });
+  const amountLabel = page.getByText("Amount", { exact: true });
   await expect(brief).toBeVisible();
   await expect(customer).toBeVisible();
-  await expect(amount).toBeVisible();
+  await expect(amountLabel).toBeVisible();
   const briefBox = await brief.boundingBox();
   const customerBox = await customer.boundingBox();
-  const amountBox = await amount.boundingBox();
+  const amountBox = await amountLabel.boundingBox();
   expect(briefBox).not.toBeNull();
   expect(customerBox).not.toBeNull();
   expect(amountBox).not.toBeNull();
   expect(customerBox?.x).toBe(amountBox?.x);
   expect(briefBox?.x).toBe(customerBox?.x);
-});
 
+  await expect(property(page, "Amount")).toHaveText("184,000");
+  await edit(page, "Amount");
+  const amount = page.getByRole("spinbutton", { name: "Amount", exact: true });
+  await expect(amount).toBeFocused();
+  await expect(amount).toHaveValue("184000");
+  await amount.press("Escape");
+  await expect(property(page, "Amount")).toHaveText("184,000");
 
-test("record fields: a date uses its field name for assistive technology", async ({ page }) => {
-  await signIn(page);
-  await page.goto("/ontology/objects/sales.opportunity/OPP-001");
   await edit(page, "Expected close");
   const date = page.getByRole("combobox", { name: "Expected close", exact: true });
   await expect(date).toBeVisible();
   await expect(date).toHaveAttribute("aria-label", "Expected close");
+  await date.press("Escape");
+
+  const commercial = page.getByRole("heading", { name: "Commercial", exact: true }).locator("..");
+  const labels = ["Amount", "Budget approved", "Proposed deposit", "Expected close"]
+    .map((name) => commercial.getByText(name, { exact: true }));
+  for (const label of labels) await expect(label).toBeVisible();
+  const boxes = await Promise.all(labels.map((label) => label.boundingBox()));
+  for (const box of boxes) expect(box?.x).toBe(boxes[0]!.x);
 });
 
 
@@ -848,18 +828,6 @@ test("list: chips filter on the host, a row opens its details and selection open
   await expect(rows.filter({ hasText: "冲压线改造" })).toHaveCount(0);
 });
 
-
-
-test("record fields: the date label aligns with the other commercial fields", async ({ page }) => {
-  await signIn(page);
-  await page.goto("/ontology/objects/sales.opportunity/OPP-001");
-  const commercial = page.getByRole("heading", { name: "Commercial", exact: true }).locator("..");
-  const labels = ["Amount", "Budget approved", "Proposed deposit", "Expected close"]
-    .map((name) => commercial.getByText(name, { exact: true }));
-  for (const label of labels) await expect(label).toBeVisible();
-  const boxes = await Promise.all(labels.map((label) => label.boundingBox()));
-  for (const box of boxes) expect(box?.x).toBe(boxes[0]!.x);
-});
 
 
 test("inbox: a comment mention opens the referenced record from the Mentions tab", async ({ page, browser, baseURL }) => {

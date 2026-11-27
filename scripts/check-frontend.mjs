@@ -93,6 +93,13 @@ for (const text of readFileSync(join(src, "apps.ts"), "utf8").split("\n")) {
   if (item) menu.add(`${menuApp}/${item[1]}`);
 }
 
+for (const entry of menu) {
+  const files = ["ts", "tsx"].filter(ext => {
+    try { return statSync(join(src, "apps", entry + "." + ext)).isFile(); } catch { return false; }
+  });
+  if (files.length !== 1) report("apps.ts", 1, `"${entry}" must have exactly one registered page module (found ${files.length}).`);
+}
+
 for (const path of walk(src)) {
   const file = relative(src, path);
   if (vendored(file) || !/\.(ts|tsx)$/.test(file) || file.endsWith(".d.ts")) continue;

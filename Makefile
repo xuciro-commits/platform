@@ -13,7 +13,7 @@ STEP := bash scripts/make-step.sh
 PACKAGE_INPUTS := node "$(CURDIR)/scripts/package-fixtures.mjs" --
 export GOPROXY
 
-.PHONY: help hooks bootstrap setup local docker infra infra-down build-compute dev dev-light host lite build bundle contract local-update packages fast check check-frontend verify verify-sql load-sql frontend-host frontend-dev trunk trunk-changed trunk-cache-clean test test-fast test-runner test-pg test-voice
+.PHONY: help hooks bootstrap setup local docker infra infra-down build-compute dev dev-light host lite build bundle contract local-update packages fast check check-frontend verify verify-sql load-sql frontend-host frontend-dev trunk trunk-special trunk-changed trunk-cache-clean test test-fast test-runner test-pg test-security-pg test-voice
 
 help:
 	@bash -c '\
@@ -35,6 +35,8 @@ help:
 	printf "  %s%-18s%s %s  %s%s%s\n" "$$C" "test" "$$R" "服务端测试（6 分片并行，含非宿主包）" "$$D" "RUN=K13 只跑指定编号" "$$R"; \
 	printf "  %s%-18s%s %s  %s%s%s\n" "$$C" "trunk" "$$R" "PostgreSQL 浏览器主干验收（常驻池、隔离数据库）" "$$D" "SPEC=crm 或 LAYER=runtime，HEADED=1 可看过程" "$$R"; \
 	printf "  %s%-18s%s %s  %s%s%s\n" "$$C" "trunk-changed" "$$R" "只跑已明确映射的主干用例文件" "$$D" "BASE=origin/main 连同已提交的改动" "$$R"; \
+	printf "  %s%-18s%s %s\n" "$$C" "test-security-pg" "$$R" "真实 PG 的纯 HTTP 租户隔离验收"; \
+	printf "  %s%-18s%s %s\n" "$$C" "trunk-special" "$$R" "浏览器大列表窗口化专项"; \
 	printf "  %s%-18s%s %s\n" "$$C" "verify" "$$R" "发版前：一次 PostgreSQL 服务端全量 + 一次 PostgreSQL 浏览器全量"; \
 	printf "  %s%-18s%s %s\n" "$$C" "verify-sql" "$$R" "临时 PostgreSQL 写入与重启恢复验收"; \
 	printf "\n%s构建与发行%s\n" "$$B" "$$R"; \
@@ -148,10 +150,17 @@ check-frontend:
 	@printf '\033[32m✓ 新前端检查全部通过\033[0m\n\n'
 
 trunk:
-	GO="$(GO)" $(PACKAGE_INPUTS) node scripts/trunk-postgres.mjs --browser $(if $(LAYER),--layer "$(LAYER)") $(PNPM) exec playwright test -c e2e $(foreach spec,$(SPEC),$(spec).spec.ts) $(if $(HEADED),--headed) $(TRUNK_ARGS)
+	TRUNK_SPECIAL= GO="$(GO)" $(PACKAGE_INPUTS) node scripts/trunk-postgres.mjs --browser $(if $(LAYER),--layer "$(LAYER)") $(PNPM) exec playwright test -c e2e $(foreach spec,$(SPEC),$(spec).spec.ts) $(if $(HEADED),--headed) $(TRUNK_ARGS)
+
+trunk-special:
+	TRUNK_SPECIAL=performance GO="$(GO)" $(PACKAGE_INPUTS) node scripts/trunk-postgres.mjs --browser $(PNPM) exec playwright test -c e2e records.spec.ts $(if $(HEADED),--headed) $(TRUNK_ARGS)
 
 test-pg:
 	GO="$(GO)" $(PACKAGE_INPUTS) node scripts/trunk-postgres.mjs --backend '$(RUN)'
+	$(if $(RUN),:,$(MAKE) test-security-pg)
+
+test-security-pg:
+	GO="$(GO)" node scripts/trunk-postgres.mjs --security
 
 trunk-cache-clean:
 	node scripts/trunk-postgres.mjs --clean

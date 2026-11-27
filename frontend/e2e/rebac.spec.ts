@@ -196,3 +196,16 @@ test("custom role draft survives a real permissions refresh", async ({ page }) =
   await submit(page, "platform.role.remove", "platform.role", key, {});
   await submit(page, "platform.role.remove", "platform.role", concurrent, {});
 });
+
+test("gate: builders and users see no administration entries", async ({ browser }) => {
+  for (const seat of ["builder-1", "user-1"]) {
+    const context = await browser.newContext();
+    const member = await context.newPage();
+    await member.goto("/");
+    await member.getByRole("button", { name: seat, exact: true }).click();
+    await expect(member.getByRole("link", { name: "Home", exact: true })).toBeVisible();
+    await expect(member.getByRole("link", { name: "Admin", exact: true })).toHaveCount(0);
+    await expect(member.getByRole("link", { name: "Host", exact: true })).toHaveCount(0);
+    await context.close();
+  }
+})
