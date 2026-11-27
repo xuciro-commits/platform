@@ -15,7 +15,9 @@ const schema = protocol + "rule_schema.go";
 const k47 = "TestInvariantK47LedgerFactsAndProjection";
 const k48 = "TestInvariantK48LedgerReversalAndClose";
 const k49 = "TestInvariantK49LiveDerivedReadsCurrentSources";
+const k55 = "TestInvariantK55LedgerValuationAndDepletion";
 const mutations = [
+  ["prior-balance", schema, "if completeKeys {", "if false && completeKeys {", k55, "weighted outbound amt ="],
   ["balance-constraint", ledger, 'if err != nil || string(result.Value.Data) != "true" {', 'if err != nil || (false && string(result.Value.Data) != "true") {', k47, "concurrent 6+6:"],
   ["immutable-fact", store, "} else if !reflect.DeepEqual(prior.Value.Interface(), value.Value.Interface()) {", "} else if false && !reflect.DeepEqual(prior.Value.Interface(), value.Value.Interface()) {", k47, "ledger store allowed editing an accepted fact"],
   ["reverse-once", ledger, "if f.reverses == f.id || p.reversed.Has(f.reverses) {", "if f.reverses == f.id {", k48, "reverse B refusal:"],
@@ -54,11 +56,12 @@ try {
     copyFileSync(join(root, path), target);
   }
   compile();
-  const original = test("^TestInvariantK(47|48|49)");
+  const original = test("^TestInvariantK(47|48|49|55)");
   if (original.status !== 0 || !/^--- PASS: TestInvariantK47LedgerFactsAndProjection /m.test(original.output) ||
       !/^--- PASS: TestInvariantK48LedgerReversalAndClose /m.test(original.output) ||
       !/^--- PASS: TestInvariantK49LiveDerivedReadsCurrentSources /m.test(original.output) ||
-      !/^--- PASS: TestInvariantK49StoredFormulaRejectsForeignReference /m.test(original.output)) {
+      !/^--- PASS: TestInvariantK49StoredFormulaRejectsForeignReference /m.test(original.output) ||
+      !/^--- PASS: TestInvariantK55LedgerValuationAndDepletion /m.test(original.output)) {
     throw Error("Original invariants did not pass\n" + original.output);
   }
   console.log("baseline passed\n" + original.output);
