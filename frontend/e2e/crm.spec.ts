@@ -344,6 +344,9 @@ test("dashboard: the CRM home shows its pipeline numbers and charts, and each bl
 
 test("calendar: activities sit on their due dates, the month pages, a drag reschedules and an activity opens its record", async ({ page }) => {
   await as(page, "manager-1");
+  await page.goto(`/crm/crm.activity?view=${encodeURIComponent(JSON.stringify({ version: 1, layout: "calendar", month: "2027-06" }))}`);
+  await expect(page.getByRole("heading", { level: 3, name: "June 2027", exact: true })).toBeVisible();
+  await expect(page.getByRole("button", { name: "New", exact: true })).toBeVisible();
   const subject = `安排北境合同签署 ${unique()}`;
   await activity(page, { subject, due: "2026-11-18", deal: "demo-deal-1" });
   await page.goto(`/crm/crm.activity?view=${encodeURIComponent(JSON.stringify({ version: 1, layout: "calendar", month: "2026-11" }))}`);

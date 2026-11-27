@@ -205,19 +205,19 @@ export const apps: App[] = [
     icon: TruckIcon,
     sections: [
       {
+        title: "Install",
+        items: [
+          { id: "marketplace", label: "Marketplace", icon: BuildingStorefrontIcon },
+          { id: "installations", label: "Installations", icon: WrenchScrewdriverIcon },
+        ],
+      },
+      {
         title: "Release",
         items: [
           { id: "products", label: "Products", icon: CubeIcon },
           { id: "versions", label: "Versions", icon: TagIcon },
           { id: "test-plans", label: "Test plans", icon: BeakerIcon },
           { id: "sample-sets", label: "Sample sets", icon: QueueListIcon },
-        ],
-      },
-      {
-        title: "Install",
-        items: [
-          { id: "marketplace", label: "Marketplace", icon: BuildingStorefrontIcon },
-          { id: "installations", label: "Installations", icon: WrenchScrewdriverIcon },
         ],
       },
     ],
@@ -251,10 +251,10 @@ export const apps: App[] = [
       {
         title: "People",
         items: [
-          { id: "organization", label: "Organization", icon: BuildingOffice2Icon },
-          { id: "people", label: "People", icon: UserIcon },
           { id: "members", label: "Members", icon: UsersIcon },
+          { id: "people", label: "People", icon: UserIcon },
           { id: "teams", label: "Teams", icon: UserGroupIcon },
+          { id: "organization", label: "Organization", icon: BuildingOffice2Icon },
         ],
       },
       {

@@ -271,6 +271,12 @@ test("entries: record types open as lists and dropped entries are gone from the 
   await expect(menu.getByRole("link", { name: "Recent", exact: true })).toHaveCount(0);
   await page.getByRole("link", { name: "Apps" }).click();
   await expect(menu.getByRole("link", { name: "Templates", exact: true })).toHaveCount(0);
+  await page.getByRole("link", { name: "Delivery", exact: true }).click();
+  await expect(page).toHaveURL(/\/delivery\/marketplace$/);
+  await expect(page.getByRole("heading", { level: 1, name: "Marketplace", exact: true })).toBeVisible();
+  await page.getByRole("link", { name: "Admin", exact: true }).click();
+  await expect(page).toHaveURL(/\/admin\/members$/);
+  await expect(page.getByRole("heading", { level: 1, name: "Members", exact: true })).toBeVisible();
 });
 
 

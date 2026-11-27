@@ -489,7 +489,11 @@ export function Records({ declared, listPath, id, back, primaryExtra, initialCre
     <BatchActions described={described} ids={ids} clear={clear} records={records.answer} />
   )) || undefined;
   const editRowsAllowed = Boolean(described?.edit) && (kept.length === 0 || kept.some((row) => allowed(String(row.id), described!.edit!.schema)));
-  const createAllowed = Boolean(described?.create) && (kept.length === 0 || !described?.edit || editRowsAllowed);
+  const createCheck = useRead<Api.ActionCheckResult>(
+    described?.create && !id ? `/v1/actions/${encodeURIComponent(described.create.schema)}/check` : null,
+    described?.create && !id ? { target: { object: described.type, id: "_new" } } : undefined,
+  );
+  const createAllowed = Boolean(described?.create) && createCheck.status === "ready" && Boolean(createCheck.data.allowed);
   const definition = useMemo(() => {
     if (!described) return pending;
     const effective = editRowsAllowed ? described : { ...described, edit: undefined, editable: new Set<string>() };

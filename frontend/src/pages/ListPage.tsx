@@ -345,7 +345,7 @@ export function ListView<Answer, Row>({ definition, read, primary, back, exportR
               {definition.page?.loading && <ProgressBar label={t("Loading…")} isLabelHidden isIndeterminate xstyle={styles.progress} />}
               <Section variant="transparent" padding={gutter} paddingBlockStart={3} paddingBlockEnd={3} xstyle={styles.toolbarContainer}>
                 <VStack gap={4}>
-                  <PageTitle title={t(definition.title)} back={back && { href: back.href, label: t(back.label) }} actions={(!empty || dirty || Boolean(board)) && primary} />
+                  <PageTitle title={t(definition.title)} back={back && { href: back.href, label: t(back.label) }} actions={(!empty || dirty || Boolean(board) || Boolean(calendar) || Boolean(gantt)) && primary} />
                   {toolbar && (
                     <HStack gap={3} vAlign="center" wrap="wrap" minHeight={32}>
                       <StackItem size="fill" xstyle={styles.toolbarPrimary}>

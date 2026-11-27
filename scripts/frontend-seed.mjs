@@ -49,23 +49,24 @@ async function connect(tenant, subject = "admin") {
   };
   session.submit = (type, id, action, payload, authority = "build", expectedRevision = 0) => session.send(`${type}.${action}`, type, id, payload, authority, expectedRevision);
   session.wordRevisions = new Map();
-  session.packageRevision = 0;
+  session.packageRevisions = new Map();
   return session;
 }
 
 async function importPackage(session, path) {
   const content = JSON.parse(readFileSync(new URL(path, import.meta.url), "utf8"));
   const inspected = await session.call("/v1/packages/inspect", { content });
-  const accepted = await session.submit("platform.package", inspected.descriptor.id, "import", { id: inspected.descriptor.id, digest: inspected.digest }, "platform", session.packageRevision);
-  session.packageRevision = accepted.revision;
+  const id = inspected.descriptor.id;
+  const accepted = await session.submit("platform.package", id, "import", { id, digest: inspected.digest }, "platform", session.packageRevisions.get(id) ?? 0);
+  session.packageRevisions.set(id, accepted.revision);
   return content;
 }
 
 async function installPackage(session, path) {
-  session.packageRevision = 0;
   const descriptor = await importPackage(session, path);
-  const installed = await session.submit("platform.package", descriptor.id, "install", { id: descriptor.id, version: descriptor.version }, "platform", session.packageRevision);
-  session.packageRevision = installed.revision;
+  const id = descriptor.id;
+  const installed = await session.submit("platform.package", id, "install", { id, version: descriptor.version }, "platform", session.packageRevisions.get(id) ?? 0);
+  session.packageRevisions.set(id, installed.revision);
   return descriptor;
 }
 
@@ -255,7 +256,11 @@ const tenantPackages = {
     profiles: { root: "系统管理员", "admin-1": "王丹", "builder-1": "韩奥", "manager-1": "赵敏", "user-1": "田雪" },
   },
   official: { packages: partyPackages, grants: {} },
-  sim: { packages: partyPackages, grants: {} },
+  sim: {
+    packages: partyPackages,
+    imports: ["./frontend-fixtures/crm-official-0.3.1.json", "./frontend-fixtures/crm-official-0.3.2.json"],
+    grants: {},
+  },
   phone: {
     packages: [...partyPackages, "./frontend-fixtures/call-0.1.0.json", "./frontend-fixtures/phone-0.1.1.json", "./frontend-fixtures/crm-official-0.3.3.json"],
     grants: { "user-1": [["party", "user"], ["phone", "agent"], ["crm", "salesrep"]], "manager-1": [["party", "user"], ["phone", "gateway"]] },
@@ -283,6 +288,7 @@ await Promise.all(["blank", "rebac", "upgrade", "publisher", "official", "phone"
   if (!plan) return;
   const installed = [];
   for (const path of plan.packages) installed.push(await installPackage(empty, path));
+  for (const path of plan.imports ?? []) await importPackage(empty, path);
   await empty.refresh();
   for (const [member, roles] of Object.entries(plan.grants)) {
     let revision = 0;
