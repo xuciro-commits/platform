@@ -268,6 +268,9 @@ func CompileProcess(p protocol.Process, execution ProcessExecution) platform.Flo
 					var value string
 					_ = json.Unmarshal(raw, &value)
 					at, parseErr := time.Parse(time.RFC3339Nano, value)
+					if parseErr != nil {
+						at, parseErr = time.Parse(time.DateOnly, value)
+					}
 					if parseErr != nil || at.Year() < 1 {
 						return time.Time{}, platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "Wait deadline must be a readable timestamp")
 					}

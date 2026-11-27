@@ -13,6 +13,10 @@ import (
 )
 
 func (f *Flows) Interested(names []string, e platform.Event) bool {
+	s := e.Record.GetSubmission()
+	if strings.HasSuffix(s.GetSchema().GetName(), ".archive") {
+		return true
+	}
 	for _, versions := range f.defs {
 		if d := versions[len(versions)-1]; slices.ContainsFunc(d.Start.On, func(on string) bool { return slices.Contains(names, on) }) {
 			return true
@@ -28,15 +32,18 @@ func (f *Flows) Interested(names []string, e platform.Event) bool {
 			}
 		}
 	}
-	s := e.Record.GetSubmission()
 	return s.GetSchema().GetName() == "work.task.complete" && e.App == protocol.WorkApp
 }
 
 func (f *Flows) Listen(c platform.Caller, e platform.Event, names []string, now time.Time) *platform.Error {
 	s := e.Record.GetSubmission()
+	archived := strings.HasSuffix(s.GetSchema().GetName(), ".archive")
 	for _, id := range slices.Sorted(maps.Keys(f.defs)) {
 		latest, _ := f.latest(id)
 		if latest.Start.Type != "" {
+			if archived {
+				continue
+			}
 			for _, ref := range e.Changed {
 				key, ok := strings.CutPrefix(ref, latest.Start.Type+"/")
 				if !ok {
@@ -86,6 +93,16 @@ func (f *Flows) Listen(c platform.Caller, e platform.Event, names []string, now 
 		return readErr
 	}
 	for _, x := range running {
+		if archived && x.Subject != "" && slices.Contains(e.Changed, x.Subject) {
+			if err := f.step(c, x.ID, now, func(ss *session, in *FlowInstance) {
+				ss.stopPaths(in)
+				in.State, in.Tokens = "canceled", nil
+				ss.trace(in, "", "canceled", "subject archived", s.GetPrincipalId())
+			}); err != nil {
+				return err
+			}
+			continue
+		}
 		d := f.def(x.Flow, x.Version)
 
 		if d == nil {

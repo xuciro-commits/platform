@@ -774,6 +774,7 @@
   "Restricted data does not leave as CSV": "受限密级数据禁止导出为 CSV",
   "Restricted fields": "受限字段掩码",
   "Restricted fields withheld on this record": "该记录上被掩码隐藏的受限字段",
+  "Restricted item": "受限事项",
   "Retail": "零售",
   "Retained": "已保留",
   "Retired": "已退役",

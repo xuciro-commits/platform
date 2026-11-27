@@ -370,13 +370,17 @@ func CheckProcess(p protocol.Process, entity platform.RecordType, lookup Process
 					if json.Unmarshal(step.WaitUntil.Value, &value) != nil {
 						return problem("a deadline must be a timestamp")
 					}
-					if at, err := time.Parse(time.RFC3339Nano, value); err != nil || at.Year() < 1 {
+					at, err := time.Parse(time.RFC3339Nano, value)
+					if err != nil {
+						at, err = time.Parse(time.DateOnly, value)
+					}
+					if err != nil || at.Year() < 1 {
 						return problem("a deadline must be a timestamp")
 					}
 				}
 				if step.WaitUntil.Source == "subject" {
 					field, err := fieldOf(step.WaitUntil.Path)
-					if err != nil || field.Type != "datetime" {
+					if err != nil || field.Type != "datetime" && field.Type != "date" {
 						return problem("a deadline must read a declared timestamp")
 					}
 				}

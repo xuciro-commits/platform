@@ -1,4 +1,5 @@
 import { type Api, type Read, useRead, useReads } from "../host";
+import { t } from "../i18n";
 
 export type InboxItem = {
   id: string;
@@ -89,10 +90,12 @@ export function useInbox() {
   const closed = (tasks.data.records as Api.InboxTask[]).filter((task) => task.state !== "open" && !open.has(task.id));
   const taskItems = [...open.values(), ...closed].map((task): InboxItem => {
     const note = byKey.get(taskKey(task.id));
+    const withheld = Boolean((task as { withheld?: boolean }).withheld);
+    const title = task.title?.trim() || (withheld ? t("Restricted item") : task.ref || task.id);
     return {
       id: task.id,
       kind: "task",
-      title: task.title,
+      title,
       body: task.body,
       ref: task.ref,
       from: task.created.by ?? task.app,
@@ -106,7 +109,18 @@ export function useInbox() {
   const known = new Set(taskItems.map((item) => taskKey(item.id)));
   const noteItems = notes.data
     .filter((note) => !known.has(note.key ?? ""))
-    .map((note): InboxItem => ({ id: note.id, kind: "notification", title: note.title, body: note.body, ref: note.ref, from: note.app, at: note.at, unread: !note.read, open: true, note }));
+    .map((note): InboxItem => ({
+      id: note.id,
+      kind: "notification",
+      title: note.title?.trim() || note.ref || note.id,
+      body: note.body,
+      ref: note.ref,
+      from: note.app,
+      at: note.at,
+      unread: !note.read,
+      open: true,
+      note,
+    }));
   const items = [...followed.data, ...taskItems, ...noteItems].sort((a, b) => b.at.localeCompare(a.at));
   return { status, reason, items };
 }

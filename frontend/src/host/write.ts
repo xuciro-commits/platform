@@ -50,7 +50,8 @@ export async function submit(action: Api.Action, id: string, payload: Record<str
   const scopes: string[] = [];
   if (authority) scopes.push(`owner:${authority}`);
   if (action.target === "notification" || action.schema.includes("notification")) scopes.push("notifications");
-  if (action.target || scopes.length > 0) changedScopes(action.target ? [action.target] : undefined, scopes);
+  if (!action.schema.endsWith(".edit")) changed();
+  else if (action.target || scopes.length > 0) changedScopes(action.target ? [action.target] : undefined, scopes);
   else changed();
   return { ...answer.record, id: answer.record.submission?.target?.id || id };
 }
