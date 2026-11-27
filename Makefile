@@ -12,7 +12,7 @@ GOPROXY ?= https://goproxy.cn,direct
 STEP := bash scripts/make-step.sh
 export GOPROXY
 
-.PHONY: help hooks bootstrap setup local docker infra infra-down build-compute dev dev-light host lite build bundle contract local-update packages check check-frontend verify verify-sql load-sql frontend-host frontend-dev trunk trunk-pg trunk-changed test test-pg test-voice
+.PHONY: help hooks bootstrap setup local docker infra infra-down build-compute dev dev-light host lite build bundle contract local-update packages check check-frontend verify verify-sql load-sql frontend-host frontend-dev trunk trunk-pg trunk-changed test test-runner test-pg test-voice
 
 help:
 	@bash -c '\
@@ -31,7 +31,7 @@ help:
 	printf "  %s%-18s%s %s\n" "$$C" "check-frontend" "$$R" "新前端静态门禁、类型检查与生产构建"; \
 	printf "  %s%-18s%s %s  %s%s%s\n" "$$C" "trunk" "$$R" "新前端浏览器主干验收" "$$D" "SPEC=crm 只跑一个文件，HEADED=1 可看过程" "$$R"; \
 	printf "  %s%-18s%s %s  %s%s%s\n" "$$C" "trunk-changed" "$$R" "只跑改动影响到的主干用例文件" "$$D" "BASE=origin/main 连同已提交的改动" "$$R"; \
-	printf "  %s%-18s%s %s  %s%s%s\n" "$$C" "test" "$$R" "内核不变量测试" "$$D" "RUN=K13 只跑指定编号" "$$R"; \
+	printf "  %s%-18s%s %s  %s%s%s\n" "$$C" "test" "$$R" "服务端测试（含非宿主包）" "$$D" "RUN=K13 只跑指定编号" "$$R"; \
 	printf "  %s%-18s%s %s\n" "$$C" "verify" "$$R" "check + check-frontend + test + trunk 全量验收"; \
 	printf "  %s%-18s%s %s\n" "$$C" "verify-sql" "$$R" "临时 PostgreSQL 写入与重启恢复验收"; \
 	printf "\n%s构建与发行%s\n" "$$B" "$$R"; \
@@ -146,7 +146,7 @@ check-frontend:
 	@printf '\033[32m✓ 新前端检查全部通过\033[0m\n\n'
 
 trunk:
-	cd frontend && node ../scripts/connector-trunk.mjs $(PNPM) exec playwright test -c e2e $(foreach spec,$(SPEC),$(spec).spec.ts) $(if $(HEADED),--headed)
+	cd frontend && node ../scripts/connector-trunk.mjs $(PNPM) exec playwright test -c e2e $(foreach spec,$(SPEC),$(spec).spec.ts) $(if $(HEADED),--headed) $(TRUNK_ARGS)
 
 trunk-pg:
 	@set -e; name=platform-trunk-pg-$$$$; port=$$((55432 + $${TRUNK_PORT_OFFSET:-0})); \
@@ -154,7 +154,7 @@ trunk-pg:
 	trap 'docker rm -f '$$name' >/dev/null' EXIT; \
 	until docker exec $$name pg_isready -h 127.0.0.1 -U postgres -d trunk >/dev/null 2>&1; do sleep 1; done; \
 	docker exec $$name createdb -U postgres trunk_restore; \
-	cd frontend && TRUNK_DATABASE="postgres://postgres@127.0.0.1:$$port/trunk?sslmode=disable" TRUNK_RESTORE_DATABASE="postgres://postgres@127.0.0.1:$$port/trunk_restore?sslmode=disable" node ../scripts/connector-trunk.mjs $(PNPM) exec playwright test -c e2e $(foreach spec,$(SPEC),$(spec).spec.ts) $(if $(HEADED),--headed); \
+	cd frontend && TRUNK_DATABASE="postgres://postgres@127.0.0.1:$$port/trunk?sslmode=disable" TRUNK_RESTORE_DATABASE="postgres://postgres@127.0.0.1:$$port/trunk_restore?sslmode=disable" node ../scripts/connector-trunk.mjs $(PNPM) exec playwright test -c e2e $(foreach spec,$(SPEC),$(spec).spec.ts) $(if $(HEADED),--headed) $(TRUNK_ARGS); \
 	rows=$$(docker exec $$name psql -U postgres -d trunk -tAc 'select count(*) from journal'); \
 	echo "trunk-pg: $$rows journal entries in PostgreSQL"; test "$$rows" -gt 0
 
@@ -163,16 +163,19 @@ test-pg:
 	docker run -d --rm --name $$name -e POSTGRES_HOST_AUTH_METHOD=trust -e POSTGRES_DB=bench -p 127.0.0.1:$$port:5432 platform-postgres:18-vector >/dev/null; \
 	trap 'docker rm -f '$$name' >/dev/null' EXIT; \
 	until docker exec $$name pg_isready -h 127.0.0.1 -U postgres -d bench >/dev/null 2>&1; do sleep 1; done; \
-	cd capabilities/server && PLATFORM_BENCH_DATABASE="postgres://postgres@127.0.0.1:$$port/bench?sslmode=disable" $(GO) test -count=1 -run '$(or $(RUN),.)' ./host/
+	PLATFORM_BENCH_DATABASE="postgres://postgres@127.0.0.1:$$port/bench?sslmode=disable" GO="$(GO)" node scripts/check-invariants.mjs '$(RUN)' --require-no-skip
 
 trunk-changed:
 	@specs="$$(node scripts/trunk-affected.mjs $(BASE))"; \
 	if [ -z "$$specs" ]; then echo "没有影响主干用例的改动"; \
-	elif [ "$$specs" = all ]; then cd frontend && node ../scripts/connector-trunk.mjs $(PNPM) exec playwright test -c e2e $(if $(HEADED),--headed); \
-	else echo "只跑：$$specs"; cd frontend && node ../scripts/connector-trunk.mjs $(PNPM) exec playwright test -c e2e $$specs $(if $(HEADED),--headed); fi
+	elif [ "$$specs" = all ]; then cd frontend && node ../scripts/connector-trunk.mjs $(PNPM) exec playwright test -c e2e $(if $(HEADED),--headed) $(TRUNK_ARGS); \
+	else echo "只跑：$$specs"; cd frontend && node ../scripts/connector-trunk.mjs $(PNPM) exec playwright test -c e2e $$specs $(if $(HEADED),--headed) $(TRUNK_ARGS); fi
 
-test:
-	node scripts/check-invariants.mjs '$(RUN)'
+test-runner:
+	node --test scripts/test-results.test.mjs
+
+test: test-runner
+	GO="$(GO)" node scripts/check-invariants.mjs '$(RUN)'
 
 test-voice:
 	cd capabilities/voice && $(GO) test -race -count=1 ./...
