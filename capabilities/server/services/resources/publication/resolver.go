@@ -7,6 +7,7 @@ import (
 )
 
 type Resolver struct {
+	Describes                 *DescribeCache
 	CheckPage                 func(platform.Page) error
 	CheckFrozenQueries        func(platform.Page, map[platform.AssetRef]platform.ReleaseAsset) error
 	Safety                    func(platform.Page) (platform.Page, error)

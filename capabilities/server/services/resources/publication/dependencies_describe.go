@@ -11,7 +11,7 @@ import (
 	"platformserver/platform"
 )
 
-func (resolver Resolver) describeAsset(asset platform.ReleaseAsset, historical bool) (platform.Dependencies, error) {
+func (resolver Resolver) describeAssetFresh(asset platform.ReleaseAsset, historical bool) (platform.Dependencies, error) {
 	out := platform.Dependencies{Ref: asset.Ref, Requires: []platform.AssetRef{}, Provides: []platform.Capability{}, Version: asset.SourceVersion}
 	if err := asset.Ref.Check(); err != nil {
 		return out, err

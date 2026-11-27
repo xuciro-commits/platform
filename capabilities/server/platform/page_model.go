@@ -5,15 +5,25 @@ import (
 	"fmt"
 	"strings"
 	"sync"
+	"sync/atomic"
 )
 
 func modelRef(typ string) AssetRef {
 	return AssetRef{App: OwnerOfType(typ), Kind: AssetObject, Name: typ}
 }
 
-var hostedApps sync.Map
+var (
+	hostedApps       sync.Map
+	hostedGeneration atomic.Uint64
+)
 
-func HostApp(id string) { hostedApps.Store(id, true) }
+func HostApp(id string) {
+	if _, loaded := hostedApps.LoadOrStore(id, true); !loaded {
+		hostedGeneration.Add(1)
+	}
+}
+
+func HostedGeneration() uint64 { return hostedGeneration.Load() }
 
 func OwnerOfType(typ string) string {
 	app, _, _ := strings.Cut(typ, ".")

@@ -1,8 +1,6 @@
 package platform
 
-import (
-	"time"
-)
+import "time"
 
 type AIProvider struct {
 	ID      string `json:"id"`

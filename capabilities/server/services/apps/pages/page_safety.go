@@ -114,8 +114,11 @@ func CheckSafety(p platform.Page) error {
 	return checkEvents(safe)
 }
 
+var publicationDescribes = publication.NewDescribeCache()
+
 func PublicationResolver() publication.Resolver {
 	return publication.Resolver{
+		Describes: publicationDescribes,
 		CheckPage: CheckSafety, CheckFrozenQueries: CheckFrozenQueries,
 		Safety: Safety, PageDependencies: PageDependencies, PageNavigationEdge: PageNavigationEdge,
 		PageQueryReferences: QueryReferences, PageComputeResources: computeResources, PageEventNavigation: eventNavigation,

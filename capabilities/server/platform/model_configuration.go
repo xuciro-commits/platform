@@ -1,8 +1,6 @@
 package platform
 
-import (
-	"time"
-)
+import "time"
 
 type ModelCapabilities struct {
 	Source                string    `json:"source"`

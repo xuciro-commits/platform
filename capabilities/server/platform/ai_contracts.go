@@ -1,8 +1,6 @@
 package platform
 
-import (
-	"encoding/json"
-)
+import "encoding/json"
 
 type Agent struct {
 	Name, Title, Description, Instructions, Model string

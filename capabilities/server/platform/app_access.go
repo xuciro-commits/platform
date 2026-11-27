@@ -1,8 +1,6 @@
 package platform
 
-import (
-	"slices"
-)
+import "slices"
 
 type CustomRole struct {
 	ID      string   `json:"id"`
