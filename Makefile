@@ -12,6 +12,7 @@ GOPROXY ?= https://goproxy.cn,direct
 STEP := bash scripts/make-step.sh
 TIMED := node "$(CURDIR)/scripts/timing.mjs" run
 PACKAGE_INPUTS := node "$(CURDIR)/scripts/package-fixtures.mjs" --
+PACKAGE_INPUTS_LAZY := node "$(CURDIR)/scripts/package-fixtures.mjs" --lazy --
 export GOPROXY
 
 .PHONY: _check _check-frontend _test-pg _verify help hooks bootstrap setup local docker infra infra-down build-compute dev dev-light host lite build bundle contract local-update packages fast check check-frontend verify verify-sql load-sql frontend-host frontend-dev trunk trunk-special trunk-changed trunk-cache-clean test test-fast test-runner test-pg test-security-pg test-voice
@@ -97,7 +98,7 @@ host:
 	.build/host/platform-server $(ARGS)
 
 frontend-host:
-	@GO="$(GO)" $(TIMED) frontend-host $(PACKAGE_INPUTS) node scripts/trunk-postgres.mjs --host
+	@GO="$(GO)" $(TIMED) frontend-host $(PACKAGE_INPUTS_LAZY) node scripts/trunk-postgres.mjs --host
 
 frontend-dev:
 	$(PNPM) --dir frontend dev
@@ -157,10 +158,10 @@ _check-frontend:
 	@printf '\033[32m✓ 新前端检查全部通过\033[0m\n\n'
 
 trunk:
-	@TRUNK_SPECIAL= GO="$(GO)" $(TIMED) trunk $(if $(filter --list,$(TRUNK_ARGS)),,$(PACKAGE_INPUTS)) node scripts/trunk-postgres.mjs --browser $(if $(LAYER),--layer "$(LAYER)") $(PNPM) exec playwright test -c e2e $(foreach spec,$(SPEC),$(spec).spec.ts) $(if $(HEADED),--headed) $(TRUNK_ARGS)
+	@TRUNK_SPECIAL= GO="$(GO)" $(TIMED) trunk $(if $(filter --list,$(TRUNK_ARGS)),,$(PACKAGE_INPUTS_LAZY)) node scripts/trunk-postgres.mjs --browser $(if $(LAYER),--layer "$(LAYER)") $(PNPM) exec playwright test -c e2e $(foreach spec,$(SPEC),$(spec).spec.ts) $(if $(HEADED),--headed) $(TRUNK_ARGS)
 
 trunk-special:
-	@TRUNK_SPECIAL=performance GO="$(GO)" $(TIMED) trunk-special $(if $(filter --list,$(TRUNK_ARGS)),,$(PACKAGE_INPUTS)) node scripts/trunk-postgres.mjs --browser $(PNPM) exec playwright test -c e2e records.spec.ts $(if $(HEADED),--headed) $(TRUNK_ARGS)
+	@TRUNK_SPECIAL=performance GO="$(GO)" $(TIMED) trunk-special $(if $(filter --list,$(TRUNK_ARGS)),,$(PACKAGE_INPUTS_LAZY)) node scripts/trunk-postgres.mjs --browser $(PNPM) exec playwright test -c e2e records.spec.ts $(if $(HEADED),--headed) $(TRUNK_ARGS)
 
 test-pg:
 	@$(TIMED) test-pg $(MAKE) --no-print-directory _test-pg

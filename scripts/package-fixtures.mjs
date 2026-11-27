@@ -33,6 +33,7 @@ function verifyReady(root, selected = Object.keys(lock.packages)) {
     return false;
   }
   if (inputs.revision !== lock.revision || !inputs.packages) return false;
+  if (inputs.lazy) return true;
   for (const name of selected) {
     const spec = lock.packages[name];
     const entry = inputs.packages[name];
@@ -52,16 +53,61 @@ export function fixtureRoot() {
   return root;
 }
 
+function downloadSyncWithRetry(url, file, attempts = 4) {
+  let lastError;
+  for (let attempt = 1; attempt <= attempts; attempt += 1) {
+    const args = [
+      "--fail", "--silent", "--show-error", "--location",
+      "--connect-timeout", "15", "--max-time", "60",
+      ...(attempt > 1 ? ["--http1.1"] : []),
+      "--output", file, url,
+    ];
+    try {
+      command("curl", args);
+      return;
+    } catch (error) {
+      lastError = error;
+    }
+  }
+  throw lastError;
+}
+
+function materializeOne(root, name) {
+  const spec = lock.packages[name];
+  if (!spec) throw Error("Unknown package input " + name);
+  const file = join(root, name + ".json");
+  if (!existsSync(file)) {
+    if (spec.url) {
+      measure("按需下载包 " + name, () => downloadSyncWithRetry(spec.url, file));
+    } else {
+      const source = existsSync(join(root, "source")) ? join(root, "source") : measure("拉取锁定包源码", () => checkout(root));
+      const pkg = join(root, "pkg");
+      if (!existsSync(pkg)) measure("编译包工具", () => command(process.env.GO || "go", ["build", "-o", pkg, "./cmd/pkg"], join(platform, "capabilities/server")));
+      measure("按需构建包 " + name, () => command(pkg, ["build", "-o", file, join(source, "packages", spec.source)]));
+    }
+  }
+  const bytes = readFileSync(file), checksum = sha(bytes), descriptor = JSON.parse(bytes);
+  if (descriptor.id !== spec.id || descriptor.version !== spec.version || (spec.sha256 && spec.sha256 !== checksum)) {
+    throw Error("Test package identity or digest mismatch: " + name);
+  }
+  return { ...spec, sha256: checksum, file, bytes };
+}
+
 export function packageInput(name) {
   const root = fixtureRoot();
-  const entry = JSON.parse(readFileSync(join(root, "inputs.json"), "utf8")).packages[name];
-  if (!entry) throw Error("Unknown package input " + name);
-  const file = join(root, name + ".json");
-  const bytes = readFileSync(file);
+  const manifest = JSON.parse(readFileSync(join(root, "inputs.json"), "utf8"));
   const spec = lock.packages[name];
-  if (!spec || entry.id !== spec.id || entry.version !== spec.version || entry.url !== spec.url || entry.source !== spec.source ||
-      sha(bytes) !== entry.sha256 || (spec.sha256 && spec.sha256 !== entry.sha256)) throw Error("Test package identity or digest mismatch: " + name);
-  return { ...entry, file, bytes };
+  if (!spec) throw Error("Unknown package input " + name);
+  const file = join(root, name + ".json");
+  if (manifest.lazy && !existsSync(file)) return materializeOne(root, name);
+  const entry = manifest.packages?.[name];
+  if (!entry) throw Error("Unknown package input " + name);
+  const bytes = readFileSync(file);
+  const checksum = sha(bytes);
+  const expected = entry.sha256 || spec.sha256;
+  if (entry.id !== spec.id || entry.version !== spec.version || entry.url !== spec.url || entry.source !== spec.source ||
+      (expected && checksum !== expected)) throw Error("Test package identity or digest mismatch: " + name);
+  return { ...entry, sha256: checksum, file, bytes };
 }
 
 export function fixtureRelease(name) {
@@ -74,11 +120,59 @@ export function seedPackageRequest(name) {
   return { contentBase64: entry.bytes.toString("base64"), expectedSha256: entry.sha256 };
 }
 
+const pause = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+
+async function downloadWithRetry(url, file, attempts = 4) {
+  let lastError;
+  for (let attempt = 1; attempt <= attempts; attempt += 1) {
+    const args = [
+      "--fail", "--silent", "--show-error", "--location",
+      "--connect-timeout", "15", "--max-time", "60",
+      ...(attempt > 1 ? ["--http1.1"] : []),
+      "--output", file, url,
+    ];
+    try {
+      await download("curl", args, { cwd: platform, env: sanitizedEnv(), timeout: 65_000 });
+      return;
+    } catch (error) {
+      lastError = error;
+      if (attempt < attempts) await pause(1000 * attempt);
+    }
+  }
+  throw lastError;
+}
+
+async function runPool(items, limit, worker) {
+  const results = new Array(items.length);
+  let next = 0;
+  await Promise.all(Array.from({ length: Math.min(limit, items.length) }, async () => {
+    while (next < items.length) {
+      const index = next++;
+      try {
+        results[index] = { status: "fulfilled", value: await worker(items[index]) };
+      } catch (reason) {
+        results[index] = { status: "rejected", reason };
+      }
+    }
+  }));
+  return results;
+}
+
 function checkout(root) {
   const dir = join(root, "source");
   mkdirSync(dir, { recursive: true });
   command("git", ["init", "-q"], dir);
-  command("git", ["fetch", "--quiet", "--depth=1", lock.repository, lock.revision], dir);
+  let lastError;
+  for (let attempt = 1; attempt <= 3; attempt += 1) {
+    try {
+      command("git", ["fetch", "--quiet", "--depth=1", lock.repository, lock.revision], dir);
+      lastError = undefined;
+      break;
+    } catch (error) {
+      lastError = error;
+    }
+  }
+  if (lastError) throw lastError;
   command("git", ["checkout", "--quiet", "--detach", "FETCH_HEAD"], dir);
   if (command("git", ["rev-parse", "HEAD"], dir) !== lock.revision) throw Error("Unexpected package repository revision");
   return dir;
@@ -88,10 +182,11 @@ async function prepare(root) {
   const source = measure("拉取锁定包源码", () => checkout(root));
   const pkg = join(root, "pkg");
   measure("编译包工具", () => command(process.env.GO || "go", ["build", "-o", pkg, "./cmd/pkg"], join(platform, "capabilities/server")));
-  const results = await Promise.allSettled(Object.entries(lock.packages).map(async ([name, entry]) => {
+  const entries = Object.entries(lock.packages);
+  const results = await runPool(entries, 2, async ([name, entry]) => {
     const file = join(root, name + ".json");
     if (entry.url) {
-      await measure("下载包 " + name, () => download("curl", ["--fail", "--silent", "--show-error", "--location", "--max-time", "60", "--output", file, entry.url], { cwd: platform, env: sanitizedEnv(), timeout: 60_000 }));
+      await measure("下载包 " + name, () => downloadWithRetry(entry.url, file));
     } else {
       measure("构建包 " + name, () => command(pkg, ["build", "-o", file, join(source, "packages", entry.source)]));
     }
@@ -99,7 +194,7 @@ async function prepare(root) {
     if (descriptor.id !== entry.id || descriptor.version !== entry.version || (entry.sha256 && entry.sha256 !== checksum)) throw Error("Package identity or digest mismatch: " + name);
     console.error("package input:", name, entry.version, entry.url ? "release" : "remote source " + lock.revision.slice(0, 8));
     return [name, { ...entry, sha256: checksum }];
-  }));
+  });
   const failed = results.filter(result => result.status === "rejected");
   if (failed.length) throw new AggregateError(failed.map(result => result.reason), "Package input preparation failed");
   const inputs = Object.fromEntries(results.map(result => result.value));
@@ -111,13 +206,21 @@ async function prepareInputs(root) {
   if (!verifyReady(root)) throw Error("Prepared package inputs do not match the lock");
 }
 
-async function runWithInputs(args) {
+async function runWithInputs(args, lazy = false) {
   const inherited = process.env.PLATFORM_TEST_PACKAGES_DIR;
-  if (inherited && !verifyReady(inherited)) throw Error("Inherited package inputs do not match the lock");
+  if (inherited && !verifyReady(inherited, Object.keys(lock.packages), true)) throw Error("Inherited package inputs do not match the lock");
   const root = inherited || mkdtempSync(join(tmpdir(), "platform-package-inputs-"));
   try {
-    if (!inherited) await prepareInputs(root);
-    else note("复用本次验收的包输入");
+    if (!inherited) {
+      if (lazy) {
+        writeFileSync(join(root, "inputs.json"), JSON.stringify({ revision: lock.revision, lazy: true, packages: lock.packages }));
+        note("仅写入外部包清单（按需加载）");
+      } else {
+        await prepareInputs(root);
+      }
+    } else if (!lazy && !verifyReady(inherited, Object.keys(lock.packages), false)) {
+      await prepareInputs(inherited);
+    } else note("复用本次验收的包输入");
     const child = spawn(args[0], args.slice(1), { stdio: "inherit", env: { ...process.env, PLATFORM_TEST_PACKAGES_DIR: root } });
     const stop = (signal) => child.kill(signal);
     process.once("SIGINT", () => stop("SIGINT"));
@@ -142,6 +245,7 @@ if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.ur
     } finally {
       rmSync(root, { recursive: true, force: true });
     }
-  } else if (args[0] === "--" && args[1]) await runWithInputs(args.slice(1));
-  else throw Error("Use --revision, --check [--install], or -- <command>");
+  } else if (args[0] === "--lazy" && args[1] === "--" && args[2]) await runWithInputs(args.slice(2), true);
+  else if (args[0] === "--" && args[1]) await runWithInputs(args.slice(1), false);
+  else throw Error("Use --revision, --check [--install], [--lazy] -- <command>");
 }
