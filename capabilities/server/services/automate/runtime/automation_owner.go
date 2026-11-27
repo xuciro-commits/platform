@@ -239,8 +239,9 @@ func (f *Flows) HasUnboundRunningDependency(typ string) (bool, error) {
 func (f *Flows) hasRunningDependency(typ string, unboundOnly bool) (bool, error) {
 	c := f.host.Automation(platform.Caller{Replaying: true}, ID)
 	found := false
+	scan := scanBindings{}
 	err := f.eachRunning(c, func(row FlowInstance) error {
-		binding, err := f.binding(row)
+		binding, err := f.binding(scan, row)
 		depends := strings.HasPrefix(row.Subject, typ+"/") || slices.ContainsFunc(binding.Assets, func(ref platform.AssetRef) bool {
 			return ref.Kind == platform.AssetObject && ref.Name == typ
 		})

@@ -2,6 +2,7 @@ package runtime
 
 import (
 	"cmp"
+	"encoding/json"
 	"fmt"
 	"maps"
 	runtimeprotocol "platformserver/kernel/protocol"
@@ -173,20 +174,44 @@ func (f *Flows) check(m platform.Manifest, fl platform.Flow) (*flowDef, error) {
 
 func (f *Flows) Check() error {
 	c := f.host.Automation(platform.Caller{Replaying: true}, ID)
-	return f.eachRunning(c, f.checkBinding)
+	scan := scanBindings{}
+	return f.eachRunning(c, func(x FlowInstance) error {
+		_, err := f.binding(scan, x)
+		return err
+	})
 }
 
 func (f *Flows) checkBinding(x FlowInstance) error {
-	_, err := f.binding(x)
+	_, err := f.binding(nil, x)
 	return err
 }
 
-func (f *Flows) binding(x FlowInstance) (runtimeprotocol.FlowBinding, error) {
+// scanBindings remembers host bindings during one scan of running instances.
+// A binding depends only on the flow version and the instance's starting
+// release, and the tenant does not change during a scan, so instances that
+// share them are bound once instead of rebuilding the release assets each time.
+type scanBindings map[string]scanBinding
+
+type scanBinding struct {
+	bound runtimeprotocol.FlowBinding
+	err   error
+}
+
+func (f *Flows) binding(scan scanBindings, x FlowInstance) (runtimeprotocol.FlowBinding, error) {
 	d := f.def(x.Flow, x.Version)
 	if d == nil {
 		return runtimeprotocol.FlowBinding{}, fmt.Errorf("flow instance %s runs %s version %d, which the code no longer declares", x.ID, x.Flow, x.Version)
 	}
-	bound, err := f.host.BindFlow(d.app, d.Name, d.Version, runtimeprotocol.FlowBinding{Dependencies: x.Dependencies, Release: x.Release, Applications: x.Applications, Existing: true})
+	applications, _ := json.Marshal(x.Applications)
+	key := fmt.Sprintf("%s\x00%d\x00%s\x00%s\x00%s", x.Flow, x.Version, x.Dependencies, x.Release, applications)
+	memo, seen := scan[key]
+	if !seen {
+		memo.bound, memo.err = f.host.BindFlow(d.app, d.Name, d.Version, runtimeprotocol.FlowBinding{Dependencies: x.Dependencies, Release: x.Release, Applications: x.Applications, Existing: true})
+		if scan != nil {
+			scan[key] = memo
+		}
+	}
+	bound, err := memo.bound, memo.err
 	if err != nil {
 		return bound, fmt.Errorf("flow instance %s: %w", x.ID, err)
 	}
