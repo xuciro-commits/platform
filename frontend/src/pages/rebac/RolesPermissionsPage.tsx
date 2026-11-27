@@ -463,9 +463,8 @@ export function RolesPermissionsPage() {
         }
       />
 
-      {saveAction && (
+      {saveAction && dialogOpen && (
         <CustomRoleDialog
-          isOpen={dialogOpen}
           editing={editingRole}
           permissions={permList}
           saveAction={saveAction}

@@ -8,7 +8,7 @@ import { Selector } from "@astryxdesign/core/Selector";
 import { Text } from "@astryxdesign/core/Text";
 import { TextInput } from "@astryxdesign/core/TextInput";
 import { useToast } from "@astryxdesign/core/Toast";
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import { type Api, reread } from "../../host";
 import { t } from "../../i18n";
 import { reasonOf, send } from "../act";
@@ -18,13 +18,11 @@ function slugRoleId(input: string): string {
 }
 
 export function CustomRoleDialog({
-  isOpen,
   editing,
   permissions,
   saveAction,
   onClose,
 }: {
-  isOpen: boolean;
   editing: Api.CustomRole | null;
   permissions: Api.AppPermissions[];
   saveAction: Api.Action;
@@ -49,16 +47,7 @@ export function CustomRoleDialog({
   const [busy, setBusy] = useState(false);
   const [failure, setFailure] = useState("");
 
-  useEffect(() => {
-    if (!isOpen) return;
-    setApp(editing?.app ?? appOptions[0]?.value ?? "");
-    setRoleId(editing?.id ?? "");
-    setTitle(editing?.title ?? "");
-    setSelectedActions(editing?.actions ?? []);
-    setFailure("");
-  }, [isOpen, editing, appOptions]);
-
-  const chosenApp = editing ? editing.app : appOptions.some((item) => item.value === app) ? app : appOptions[0]?.value ?? "";
+  const chosenApp = appOptions.some((item) => item.value === app) ? app : "";
   const actionChoices = useMemo(() => {
     const entry = permissions.find((item) => item.app === chosenApp);
     if (!entry) return [];
@@ -76,7 +65,7 @@ export function CustomRoleDialog({
   }, [permissions, chosenApp]);
 
   const effectiveId = editing ? editing.id : slugRoleId(roleId || title);
-  const canSave = !busy && Boolean(chosenApp && effectiveId && selectedActions.length > 0);
+  const canSave = !busy && Boolean(chosenApp && effectiveId && selectedActions.length > 0) && selectedActions.every((id) => actionChoices.some((choice) => choice.value === id));
 
   const submitRole = async () => {
     if (!canSave) return;
@@ -97,8 +86,6 @@ export function CustomRoleDialog({
       setBusy(false);
     }
   };
-
-  if (!isOpen) return null;
 
   return (
     <Dialog isOpen onOpenChange={(open) => !open && !busy && onClose()} width={620} purpose="form">
