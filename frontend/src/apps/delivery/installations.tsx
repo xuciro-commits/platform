@@ -10,6 +10,7 @@ import { type Api, useRead } from "../../host";
 import { t } from "../../i18n";
 import { navigate } from "../../router";
 import { PageTitle, useGutter } from "../../pages/frame";
+import { PackageAccessDialog } from "../../pages/PackageAccessDialog";
 import { destinationOf, PackagePostInstallPanel } from "../../pages/PackagePostInstallPanel";
 import { PackageReview } from "../../pages/PackageReview";
 
@@ -40,6 +41,8 @@ export default function Installations() {
   const packages = useRead<Api.PackageView[]>("/v1/packages");
   const [selected, setSelected] = useState<{ view: Api.PackageView; mode: "install" | "manage" }>();
   const [installedIds, setInstalledIds] = useState<string[]>(readJustInstalled);
+  const [accessFor, setAccessFor] = useState<string[]>(readJustInstalled);
+  const closeAccess = () => setAccessFor([]);
   const gutter = useGutter();
   const rows = packages.status === "ready" ? packages.data.filter((view) => view.installed?.version === view.descriptor.version) : [];
 
@@ -109,7 +112,21 @@ export default function Installations() {
           </LayoutContent>
         }
       />
-      {selected && <PackageReview view={selected.view} mode={selected.mode} close={() => setSelected(undefined)} done={() => setSelected(undefined)} />}
+      {selected && (
+        <PackageReview
+          view={selected.view}
+          mode={selected.mode}
+          close={() => setSelected(undefined)}
+          done={(ids) => {
+            setSelected(undefined);
+            if (ids?.length) {
+              setInstalledIds(ids);
+              setAccessFor(ids);
+            }
+          }}
+        />
+      )}
+      {accessFor.length > 0 && <PackageAccessDialog ids={accessFor} onClose={closeAccess} />}
     </>
   );
 }

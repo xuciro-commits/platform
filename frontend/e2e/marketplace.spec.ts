@@ -49,7 +49,13 @@ test("blank tenant: an administrator installs CRM from the marketplace after rev
   await review.getByRole("button", { name: "Install package", exact: true }).click();
   await expect(page).toHaveURL(/\/delivery\/installations$/, { timeout: 30_000 });
   await expect(page.getByRole("listitem").filter({ hasText: /^CRM/ })).toContainText("active");
+  const access = page.getByRole("dialog", { name: "Who can use it" });
+  await expect(access).toContainText("Nobody holds a role in CRM yet");
+  await expect(access.getByRole("button", { name: "People", exact: true })).toContainText("(you)");
   await expect(page.getByRole("link", { name: "CRM", exact: true })).toHaveCount(0);
+  await access.getByRole("button", { name: "Grant access", exact: true }).click();
+  await expect(access).toHaveCount(0);
+  await expect(page.getByRole("link", { name: "CRM", exact: true }).first()).toBeVisible();
 });
 
 test("blank tenant: a package role granted to a member opens CRM for them, its empty pipeline shows every stage, and revoking it closes it", async () => {
@@ -178,6 +184,11 @@ test("blank tenant: retiring CRM removes its entry and keeps the records, reinst
   await reinstall.getByRole("button", { name: "Reinstall package", exact: true }).click();
   await expect(reinstall).toBeHidden();
   await expect(crmRow).toContainText("active");
+  const access = page.getByRole("dialog", { name: "Who can use it" });
+  await expect(access.getByRole("combobox", { name: "Role in CRM" })).toBeVisible();
+  await access.getByRole("button", { name: "Skip for now", exact: true }).click();
+  await expect(access).toHaveCount(0);
+  await expect(page.getByText(/stays hidden from anyone without a role/).first()).toBeVisible();
 
   await signOut();
   await signIn(page, "user-1 · blank");
