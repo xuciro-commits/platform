@@ -1,6 +1,7 @@
 package apps_test
 
 import (
+	"platformserver/kernel/protocol"
 	"platformserver/platform"
 	"platformserver/services/apps"
 	"platformserver/services/apps/pages"
@@ -23,9 +24,7 @@ func TestTwoLevelNavigationAndNotePageProjection(t *testing.T) {
 						ID:        "guides",
 						Title:     "Guides",
 						Collapsed: true,
-						Entries: []platform.AppMenuEntry{
-							{Kind: "note", ID: "sop", Title: "SOP", Body: "Follow standard checklist."},
-						},
+						Entries:   platform.Raw([]protocol.AppMenuEntry{{Kind: "note", ID: "sop", Title: "SOP", Body: "Follow standard checklist."}}),
 					},
 					{
 						ID:    "restricted",
@@ -53,7 +52,7 @@ func TestTwoLevelNavigationAndNotePageProjection(t *testing.T) {
 						ID:    "l2",
 						Title: "L2",
 						Groups: []platform.AppGroup{
-							{ID: "l3", Title: "L3", Entries: []platform.AppMenuEntry{{Kind: "note", ID: "n", Title: "N", Body: "x"}}},
+							{ID: "l3", Title: "L3", Entries: platform.Raw([]protocol.AppMenuEntry{{Kind: "note", ID: "n", Title: "N", Body: "x"}})},
 						},
 					},
 				},

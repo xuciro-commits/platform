@@ -27,7 +27,11 @@ func CheckApplicationGroups(a platform.Application) error {
 		if depth > 1 && len(g.Groups) > 0 {
 			return fmt.Errorf("the group %q nests more than two levels", g.Title)
 		}
-		if len(g.Pages) == 0 && len(g.Entries) == 0 && len(g.Groups) == 0 {
+		var entries []protocol.AppMenuEntry
+		if len(g.Entries) > 0 && json.Unmarshal(g.Entries, &entries) != nil {
+			return fmt.Errorf("the group %q has invalid menu entries", g.Title)
+		}
+		if len(g.Pages) == 0 && len(entries) == 0 && len(g.Groups) == 0 {
 			return fmt.Errorf("the group %q holds no page", g.Title)
 		}
 		checkPage := func(page string) error {
@@ -45,7 +49,7 @@ func CheckApplicationGroups(a platform.Application) error {
 				return err
 			}
 		}
-		for _, entry := range g.Entries {
+		for _, entry := range entries {
 			switch entry.Kind {
 			case "", "page":
 				if err := checkPage(entry.Page); err != nil {

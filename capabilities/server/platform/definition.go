@@ -10,35 +10,30 @@ import (
 type AssetKind string
 
 const (
-	AssetObject          AssetKind = "object"
-	AssetObjectTypeGroup AssetKind = "object-type-group"
-	AssetLinkType        AssetKind = "link-type"
-	AssetPropertyType    AssetKind = "property-type"
-	AssetValueType       AssetKind = "value-type"
-	AssetAction          AssetKind = "action"
-	AssetPage            AssetKind = "page"
-	AssetApp             AssetKind = "app"
-	AssetQuery           AssetKind = "query"
-	AssetFlow            AssetKind = "flow"
-	AssetFunction        AssetKind = "function"
-	AssetAgent           AssetKind = "agent"
-	AssetEvaluation      AssetKind = "evaluation-set"
-	AssetTestPlan        AssetKind = "test-plan"
-	AssetCompute         AssetKind = "compute"
-	AssetConnection      AssetKind = "connection"
-	AssetSource          AssetKind = "source"
-	AssetListener        AssetKind = "listener"
-	AssetDataset         AssetKind = "dataset"
-	AssetMediaSet        AssetKind = "mediaset"
-	AssetSchedule        AssetKind = "schedule"
-	AssetPipeline        AssetKind = "pipeline"
-	AssetWriteback       AssetKind = "writeback"
-	AssetMatching        AssetKind = "matching"
-	AssetSampleSet       AssetKind = "sample-set"
-	AssetProtocol        AssetKind = "protocol"
-	AssetInterface       AssetKind = "interface"
-	AssetObservation     AssetKind = "observation"
-	AssetProduct         AssetKind = "product"
+	AssetObject, AssetObjectTypeGroup AssetKind = "object", "object-type-group"
+	AssetLinkType, AssetPropertyType  AssetKind = "link-type", "property-type"
+	AssetValueType, AssetAction       AssetKind = "value-type", "action"
+	AssetPage, AssetApp               AssetKind = "page", "app"
+	AssetQuery, AssetFlow             AssetKind = "query", "flow"
+	AssetFunction                     AssetKind = "function"
+	AssetAgent                        AssetKind = "agent"
+	AssetEvaluation                   AssetKind = "evaluation-set"
+	AssetTestPlan                     AssetKind = "test-plan"
+	AssetCompute                      AssetKind = "compute"
+	AssetConnection                   AssetKind = "connection"
+	AssetSource                       AssetKind = "source"
+	AssetListener                     AssetKind = "listener"
+	AssetDataset                      AssetKind = "dataset"
+	AssetMediaSet                     AssetKind = "mediaset"
+	AssetSchedule                     AssetKind = "schedule"
+	AssetPipeline                     AssetKind = "pipeline"
+	AssetWriteback                    AssetKind = "writeback"
+	AssetMatching                     AssetKind = "matching"
+	AssetSampleSet                    AssetKind = "sample-set"
+	AssetProtocol                     AssetKind = "protocol"
+	AssetInterface                    AssetKind = "interface"
+	AssetObservation                  AssetKind = "observation"
+	AssetProduct                      AssetKind = "product"
 )
 
 type NamedQuery struct {
@@ -104,25 +99,15 @@ type ApplicationPageReplacement struct {
 	View string `json:"view"`
 	Page string `json:"page"`
 }
-type AppMenuEntry struct {
-	Kind   string `json:"kind,omitempty"`
-	ID     string `json:"id,omitempty"`
-	Title  string `json:"title,omitempty"`
-	Body   string `json:"body,omitempty"`
-	Page   string `json:"page,omitempty"`
-	Object string `json:"object,omitempty"`
-	Report string `json:"report,omitempty"`
-}
-
 type AppGroup struct {
-	ID        string         `json:"id,omitempty"`
-	Title     string         `json:"title"`
-	Roles     []string       `json:"roles,omitempty"`
-	Pages     []string       `json:"pages,omitempty"`
-	Entries   []AppMenuEntry `json:"entries,omitempty"`
-	Groups    []AppGroup     `json:"groups,omitempty"`
-	Collapsed bool           `json:"collapsed,omitempty"`
-	Layout    string         `json:"layout,omitempty"`
+	ID        string          `json:"id,omitempty"`
+	Title     string          `json:"title"`
+	Roles     []string        `json:"roles,omitempty"`
+	Pages     []string        `json:"pages,omitempty"`
+	Entries   json.RawMessage `json:"entries,omitempty"`
+	Groups    []AppGroup      `json:"groups,omitempty"`
+	Collapsed bool            `json:"collapsed,omitempty"`
+	Layout    string          `json:"layout,omitempty"`
 }
 
 func IconName(s string) bool {

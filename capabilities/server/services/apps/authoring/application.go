@@ -135,7 +135,7 @@ func groupDescriptors(src []protocol.Group) []platform.AppGroup {
 			Title:     g.Title,
 			Roles:     slices.Clone(g.Roles),
 			Pages:     slices.Clone(g.Pages),
-			Entries:   slices.Clone(g.Entries),
+			Entries:   entriesBody(g.Entries),
 			Groups:    groupDescriptors(g.Groups),
 			Collapsed: g.Collapsed,
 			Layout:    g.Layout,
@@ -146,6 +146,14 @@ func groupDescriptors(src []protocol.Group) []platform.AppGroup {
 
 func ApplicationDescriptor(a protocol.Application) platform.Application {
 	return platform.Application{Languages: a.Languages, Profile: a.Profile, Header: a.Header, Name: a.Name, Title: a.Title, Description: a.Description, Icon: a.Icon, Surface: a.Surface, Pages: slices.Clone(a.Pages), Groups: groupDescriptors(a.Groups), Dashboard: dashboardBody(a.Dashboard), Resources: slices.Clone(a.Resources), Concepts: a.Concepts, UIProfile: a.UIProfile, Variables: a.Variables, Queries: a.Queries, Extends: a.Extends, Entry: a.Entry, Replacements: slices.Clone(a.Replacements)}
+}
+
+func entriesBody(entries []protocol.AppMenuEntry) json.RawMessage {
+	if len(entries) == 0 {
+		return nil
+	}
+	body, _ := json.Marshal(entries)
+	return body
 }
 
 func dashboardBody(blocks []protocol.DashboardBlock) json.RawMessage {

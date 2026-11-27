@@ -377,7 +377,7 @@ export type AppGroup = {
   title: string;
   roles?: string[];
   pages?: string[];
-  entries?: AppMenuEntry[];
+  entries?: unknown;
   groups?: AppGroup[];
   collapsed?: boolean;
   layout?: string;
@@ -397,16 +397,6 @@ export type AppInfo = {
   consumes: string[];
   emits: EffectKind[];
   interfaces: Interface[];
-};
-
-export type AppMenuEntry = {
-  kind?: string;
-  id?: string;
-  title?: string;
-  body?: string;
-  page?: string;
-  object?: string;
-  report?: string;
 };
 
 export type AppPermissions = {

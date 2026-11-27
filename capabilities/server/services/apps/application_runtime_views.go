@@ -140,7 +140,11 @@ func applicationMenu(groups []platform.AppGroup, pages []protocol.ApplicationPag
 				used[name] = true
 			}
 		}
-		for _, entry := range group.Entries {
+		var rawEntries []protocol.AppMenuEntry
+		if len(group.Entries) > 0 {
+			_ = json.Unmarshal(group.Entries, &rawEntries)
+		}
+		for _, entry := range rawEntries {
 			switch entry.Kind {
 			case "", "page":
 				if page, ok := visible[entry.Page]; ok {

@@ -1,8 +1,11 @@
 package pages
 
 import (
+	"encoding/json"
 	"maps"
 	"slices"
+
+	"platformserver/kernel/protocol"
 
 	"platformserver/platform"
 	"platformserver/services/resources/publication"
@@ -38,7 +41,11 @@ func ProjectApplication(registered platform.Definition, projection publication.A
 		for _, name := range g.Pages {
 			hiddenByGroup[name] = true
 		}
-		for _, entry := range g.Entries {
+		var rawEntries []protocol.AppMenuEntry
+		if len(g.Entries) > 0 {
+			_ = json.Unmarshal(g.Entries, &rawEntries)
+		}
+		for _, entry := range rawEntries {
 			if (entry.Kind == "" || entry.Kind == "page") && entry.Page != "" {
 				hiddenByGroup[entry.Page] = true
 			}
@@ -57,8 +64,12 @@ func ProjectApplication(registered platform.Definition, projection publication.A
 		for _, name := range g.Pages {
 			shownByGroup[name] = true
 		}
-		entries := make([]platform.AppMenuEntry, 0, len(g.Entries))
-		for _, entry := range g.Entries {
+		var parsedEntries []protocol.AppMenuEntry
+		if len(g.Entries) > 0 {
+			_ = json.Unmarshal(g.Entries, &parsedEntries)
+		}
+		entries := make([]protocol.AppMenuEntry, 0, len(parsedEntries))
+		for _, entry := range parsedEntries {
 			switch entry.Kind {
 			case "", "page":
 				if entry.Page != "" && !closed(entry.Page) {
@@ -77,7 +88,11 @@ func ProjectApplication(registered platform.Definition, projection publication.A
 				entries = append(entries, entry)
 			}
 		}
-		g.Entries = entries
+		if len(entries) > 0 {
+			g.Entries, _ = json.Marshal(entries)
+		} else {
+			g.Entries = nil
+		}
 		subs := make([]platform.AppGroup, 0, len(g.Groups))
 		for _, sub := range g.Groups {
 			if projected, ok := projectGroup(sub); ok {
