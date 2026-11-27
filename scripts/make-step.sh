@@ -15,21 +15,14 @@ else
   C_GREEN="" C_RED="" C_DIM="" C_BOLD="" C_RESET=""
 fi
 
-start_ns=$(python3 -c 'import time; print(int(time.monotonic()*1000))' 2>/dev/null || echo 0)
-tmp=$(mktemp)
+tmp=$(mktemp) || exit 1
 trap 'rm -f "$tmp"' EXIT
 
-bash -c "$*" >"$tmp" 2>&1
+printf '  %s[%s] → %s %s%s\n' "$C_DIM" "$(date +%H:%M:%S)" "$idx" "$label" "$C_RESET"
+TIMEFORMAT='%3R'
+elapsed=$( { time bash -c "$*" >"$tmp" 2>&1; } 2>&1 )
 rc=$?
-
-end_ns=$(python3 -c 'import time; print(int(time.monotonic()*1000))' 2>/dev/null || echo 0)
-if [[ "$start_ns" -gt 0 && "$end_ns" -ge "$start_ns" ]]; then
-  ms=$((end_ns - start_ns))
-  sec=$(awk -v ms="$ms" 'BEGIN { printf "%.1fs", ms/1000 }')
-  dur=" ${C_DIM}(${sec})${C_RESET}"
-else
-  dur=""
-fi
+dur=" ${C_DIM}($(date +%H:%M:%S) · ${elapsed}s)${C_RESET}"
 
 if [[ "$rc" -eq 0 ]]; then
   printf '  %s✓%s %s%s%s %s%s\n' "$C_GREEN" "$C_RESET" "$C_DIM" "$idx" "$C_RESET" "$label" "$dur"
