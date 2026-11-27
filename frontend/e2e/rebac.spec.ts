@@ -3,7 +3,7 @@ import { open, signIn } from "./support";
 
 test.describe.serial("ReBAC governance and self-service lifecycle", () => {
   test("self-service request, withdraw, inbox & admin approval, and temporary grant revocation", async ({ page }) => {
-    await signIn(page, "user-1 · blank");
+    await signIn(page, "user-1 · rebac");
     await expect(page.getByText("Request access to an application or project to start working in this workspace.")).toBeVisible();
     await page.getByRole("button", { name: "Request access", exact: true }).click();
 
@@ -37,7 +37,7 @@ test.describe.serial("ReBAC governance and self-service lifecycle", () => {
     await expect(page.getByRole("dialog", { name: "Request access" })).toHaveCount(0);
     await settings.getByRole("button", { name: "Close", exact: true }).click();
 
-    await signIn(page, "admin-1 · blank");
+    await signIn(page, "admin-1 · rebac");
     await open(page, "Home", "Inbox");
     const inboxRow = page.getByRole("row").filter({ hasText: /Access request/i }).first();
     await expect(inboxRow).toBeVisible();

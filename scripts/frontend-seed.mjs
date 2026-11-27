@@ -239,7 +239,7 @@ const tenantPackages = {
   },
 };
 
-await Promise.all(["blank", "upgrade", "publisher", "official", "phone"].map(async (name) => {
+await Promise.all(["blank", "rebac", "upgrade", "publisher", "official", "phone"].map(async (name) => {
   const empty = await connect(name).catch(() => undefined);
   if (!empty) return;
   const existing = await empty.call("/v1/members");
