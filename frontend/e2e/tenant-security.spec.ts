@@ -191,3 +191,28 @@ test("tenant isolation: a refused application catalog cannot resurrect cached re
   await invoke("refresh");
   await expect.poll(() => invoke("latest")).toEqual({ status: "refused", href: "/ontology/objects/probe.object/one" });
 });
+
+
+test("tenant isolation: formatted person names cannot survive a session switch or directory refusal", async ({ page }) => {
+  let refused = false;
+  await page.route("**/v1/member-directory", route => {
+    const tenant = route.request().headers()["platform-tenant"];
+    return refused ? route.fulfill({ status: 403, json: { error: "refused" } })
+      : route.fulfill({ json: [{ id: "same-id", name: tenant === "audit-a" ? "Private Alpha" : "Private Beta" }] });
+  });
+  await page.route("**/v1/enterprise", route => route.fulfill({ json: { elements: [], relationships: [] } }));
+  await openScopeProbe(page);
+  await page.evaluate(async () => {
+    const modulePath = "/e2e/read-scope-probe.tsx";
+    const { mountPersonScopeProbe } = await import(modulePath);
+    Object.assign(window, { personScopeProbe: mountPersonScopeProbe() });
+  });
+  const invoke = (method: "latest" | "refresh" | "switchTenant") => page.evaluate(name =>
+    (window as unknown as { personScopeProbe: Record<string, () => unknown> }).personScopeProbe[name](), method);
+  await expect.poll(() => invoke("latest")).toEqual({ status: "ready", name: "Private Alpha" });
+  expect(await invoke("switchTenant")).toEqual({ status: "loading", name: "Unnamed member" });
+  await expect.poll(() => invoke("latest")).toEqual({ status: "ready", name: "Private Beta" });
+  refused = true;
+  await invoke("refresh");
+  await expect.poll(() => invoke("latest")).toEqual({ status: "refused", name: "Unnamed member" });
+});

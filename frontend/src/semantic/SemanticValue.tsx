@@ -19,7 +19,7 @@ import {
   unwrapPlain,
 } from "./format";
 import { MoneyValue, NumberValue, PercentValue, QuantityValue } from "./MoneyValue";
-import { cachedPersonName, PersonStack, PersonValue } from "./PersonValue";
+import { personName, PersonStack, PersonValue } from "./PersonValue";
 import { ReferenceListValue, ReferenceValue } from "./ReferenceValue";
 import { ChoiceValue, StatusValue, TagListValue } from "./StatusAndTags";
 import { AttachmentValue, BooleanValue, CodeValue, ContactValue, parseAttachment, TemporalValue, UrlValue } from "./TemporalAndScalar";
@@ -46,7 +46,7 @@ export function formatSemanticText(field: Api.FieldInfo, value: unknown, name?: 
   if (name) return name;
   if (field.type === "member") {
     const str = String(given);
-    return cachedPersonName(str) ?? t("Unnamed member");
+    return personName(str) ?? t("Unnamed member");
   }
   if (field.type === "choice" && typeof given === "string") {
     const idx = field.choices?.indexOf(given) ?? -1;

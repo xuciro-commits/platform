@@ -27,7 +27,6 @@ export {
 } from "./format";
 export { MoneyValue, NumberValue, PercentValue, QuantityValue } from "./MoneyValue";
 export {
-  cachedPersonName,
   EntityAvatar,
   MemberLabel,
   PersonAvatar,

@@ -5,8 +5,8 @@ import { HStack, VStack } from "@astryxdesign/core/Layout";
 import { MetadataList, MetadataListItem } from "@astryxdesign/core/MetadataList";
 import { Heading, Text } from "@astryxdesign/core/Text";
 import { Token } from "@astryxdesign/core/Token";
-import { type ComponentProps, useMemo, useState } from "react";
-import { type Api, useRead } from "../host";
+import { type ComponentProps, useState } from "react";
+import { type Api, readSnapshot, useRead } from "../host";
 import { t } from "../i18n";
 import { defaultAvatarFor, useAvatarDirectory, useAvatarUrl } from "../pages/avatars";
 import { avatarSizeOf, type SemanticSize, textTypeOf } from "./types";
@@ -28,66 +28,86 @@ type DirectoryPerson = {
   agent?: boolean;
 };
 
-const cachedNames = new Map<string, string>();
+type Directory = { resolve: (id?: string, name?: string) => DirectoryPerson | undefined };
+type EnterpriseDirectory = Pick<Api.EnterpriseModel, "elements" | "relationships">;
+const emptyMembers: Api.MemberOption[] = [];
+const emptyEnterprise: EnterpriseDirectory = { elements: [], relationships: [] };
+const directories = new WeakMap<Api.MemberOption[], WeakMap<EnterpriseDirectory, Directory>>();
 
-export function cachedPersonName(id?: string): string | undefined {
-  if (!id) return undefined;
-  return cachedNames.get(id);
+function buildDirectory(members: Api.MemberOption[], enterprise: EnterpriseDirectory): Directory {
+  const byId = new Map<string, DirectoryPerson>();
+  const byName = new Map<string, DirectoryPerson>();
+  if (enterprise) {
+    const elements = enterprise.elements as (Api.EnterpriseModel["elements"][number] & { avatar?: string })[];
+    const unitNames = new Map<string, string>();
+    for (const element of elements) {
+      if (element.stereotype === "ActualOrganization" && !element.deleted) {
+        unitNames.set(element.id, element.name);
+      }
+    }
+    const personUnit = new Map<string, string>();
+    for (const rel of enterprise.relationships) {
+      if (rel.source && rel.target && unitNames.has(rel.target) && !personUnit.has(rel.source)) {
+        personUnit.set(rel.source, unitNames.get(rel.target)!);
+      }
+    }
+    for (const element of elements) {
+      if (element.stereotype !== "ActualPerson" || element.deleted) continue;
+      const entry: DirectoryPerson = {
+        id: element.id,
+        name: element.name || element.id,
+        avatar: element.avatar || defaultAvatarFor(element.id),
+        unit: personUnit.get(element.id),
+      };
+      byId.set(entry.id, entry);
+      if (entry.name && !byName.has(entry.name)) byName.set(entry.name, entry);
+    }
+  }
+  if (members) {
+    for (const member of members) {
+      const existing = byId.get(member.id);
+      const entry: DirectoryPerson = {
+        id: member.id,
+        name: member.name || existing?.name || member.id,
+        avatar: member.avatar || existing?.avatar || defaultAvatarFor(member.id),
+        unit: existing?.unit,
+        agent: member.id.startsWith("agent-") || member.id.startsWith("bot-"),
+      };
+      byId.set(entry.id, entry);
+      if (entry.name) byName.set(entry.name, entry);
+    }
+  }
+  return {
+    resolve: (id?: string, name?: string): DirectoryPerson | undefined =>
+      (id ? byId.get(id) : undefined) ?? (name ? byName.get(name) : undefined),
+  };
+}
+
+function directoryOf(members = emptyMembers, enterprise: EnterpriseDirectory = emptyEnterprise): Directory {
+  let byEnterprise = directories.get(members);
+  if (!byEnterprise) {
+    byEnterprise = new WeakMap();
+    directories.set(members, byEnterprise);
+  }
+  let directory = byEnterprise.get(enterprise);
+  if (!directory) {
+    directory = buildDirectory(members, enterprise);
+    byEnterprise.set(enterprise, directory);
+  }
+  return directory;
+}
+
+export function personName(id: string): string | undefined {
+  return directoryOf(
+    readSnapshot<Api.MemberOption[]>("/v1/member-directory"),
+    readSnapshot<Api.EnterpriseModel>("/v1/enterprise"),
+  ).resolve(id)?.name;
 }
 
 export function usePersonDirectory() {
   const members = useRead<Api.MemberOption[]>("/v1/member-directory");
   const enterprise = useRead<Api.EnterpriseModel>("/v1/enterprise");
-  return useMemo(() => {
-    const byId = new Map<string, DirectoryPerson>();
-    const byName = new Map<string, DirectoryPerson>();
-    if (enterprise.status === "ready") {
-      const elements = enterprise.data.elements as (Api.EnterpriseModel["elements"][number] & { avatar?: string })[];
-      const unitNames = new Map<string, string>();
-      for (const element of elements) {
-        if (element.stereotype === "ActualOrganization" && !element.deleted) {
-          unitNames.set(element.id, element.name);
-        }
-      }
-      const personUnit = new Map<string, string>();
-      for (const rel of enterprise.data.relationships) {
-        if (rel.source && rel.target && unitNames.has(rel.target) && !personUnit.has(rel.source)) {
-          personUnit.set(rel.source, unitNames.get(rel.target)!);
-        }
-      }
-      for (const element of elements) {
-        if (element.stereotype !== "ActualPerson" || element.deleted) continue;
-        const entry: DirectoryPerson = {
-          id: element.id,
-          name: element.name || element.id,
-          avatar: element.avatar || defaultAvatarFor(element.id),
-          unit: personUnit.get(element.id),
-        };
-        byId.set(entry.id, entry);
-        cachedNames.set(entry.id, entry.name);
-        if (entry.name && !byName.has(entry.name)) byName.set(entry.name, entry);
-      }
-    }
-    if (members.status === "ready") {
-      for (const member of members.data) {
-        const existing = byId.get(member.id);
-        const entry: DirectoryPerson = {
-          id: member.id,
-          name: member.name || existing?.name || member.id,
-          avatar: member.avatar || existing?.avatar || defaultAvatarFor(member.id),
-          unit: existing?.unit,
-          agent: member.id.startsWith("agent-") || member.id.startsWith("bot-"),
-        };
-        byId.set(entry.id, entry);
-        cachedNames.set(entry.id, entry.name);
-        if (entry.name) byName.set(entry.name, entry);
-      }
-    }
-    return {
-      resolve: (id?: string, name?: string): DirectoryPerson | undefined =>
-        (id ? byId.get(id) : undefined) ?? (name ? byName.get(name) : undefined),
-    };
-  }, [members, enterprise]);
+  return directoryOf(members.status === "ready" ? members.data : undefined, enterprise.status === "ready" ? enterprise.data : undefined);
 }
 
 function toAvatarSize(size?: SemanticSize | AvatarPropSize): AvatarPropSize {

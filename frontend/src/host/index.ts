@@ -1,6 +1,6 @@
 export type { Api } from "./contract";
 export { useLiveChanges } from "./changes";
-export { type Read, changed as reread, useRead, useReads } from "./read";
+export { type Read, changed as reread, readSnapshot, useRead, useReads } from "./read";
 export { HostRefusal, reasonOf, request, requestBlob } from "./request";
 export {
   type SavedAccount,

@@ -7,6 +7,8 @@ import { currentSession, startSession, switchAccount } from "../src/host/session
 import { request } from "../src/host/request";
 import { send } from "../src/host/write";
 import type { Api } from "../src/host/contract";
+import { usePersonDirectory } from "../src/semantic/PersonValue";
+import { formatSemanticText } from "../src/semantic/SemanticValue";
 
 type Answer = { value: string };
 export function mountReadScopeProbe() {
@@ -101,4 +103,27 @@ export function mountRouteScopeProbe() {
   }
   flushSync(() => root.render(<RecordRoutesProvider homes={new Map()}><Probe /></RecordRoutesProvider>));
   return { latest: () => latest, refresh: () => flushSync(() => changed()) };
+}
+
+export function mountPersonScopeProbe() {
+  startSession({ token: "person-a", tenant: "audit-a" });
+  const root = createRoot(document.body.appendChild(document.createElement("div")));
+  let latest = { status: "", name: "" };
+  function Probe() {
+    const read = useRead<Api.MemberOption[]>("/v1/member-directory");
+    usePersonDirectory();
+    useLayoutEffect(() => {
+      latest = { status: read.status, name: formatSemanticText({ type: "member" } as Api.FieldInfo, "same-id") };
+    });
+    return null;
+  }
+  flushSync(() => root.render(<Probe />));
+  return {
+    latest: () => latest,
+    refresh: () => flushSync(() => changed()),
+    switchTenant: () => {
+      flushSync(() => switchAccount("person-b", "audit-b"));
+      return latest;
+    },
+  };
 }

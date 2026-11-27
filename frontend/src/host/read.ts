@@ -191,6 +191,12 @@ function snapshotFor(scope: WatchScope): string {
   return `${globalVersion}:a${anyVersion}`;
 }
 
+export function readSnapshot<Answer>(path: string): Answer | undefined {
+  if (currentSession() !== cacheSession) return undefined;
+  const entry = readCache.get(readKey(sessionGeneration, path));
+  return entry?.seen === snapshotFor(watchScope(path)) ? entry.data as Answer : undefined;
+}
+
 export function useRead<Answer>(path: string | null, body?: unknown): Read<Answer> {
   const session = useSession();
   const generation = syncSession(session);
