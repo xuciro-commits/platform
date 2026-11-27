@@ -55,7 +55,7 @@ export default recordList({
 |---|---|
 | `src/main.tsx` | 挂载：样式、主题、链接适配、外壳 |
 | `src/router.tsx` | 地址即状态：读取路径、跳转、Astryx 链接的适配 |
-| `src/recordRoutes.tsx` | 记录地址解析：装配注入内置入口映射，运行时按已安装应用选择地址 |
+| `src/recordRoutes.tsx` | 记录地址解析：装配注入内置入口映射，运行时按已安装应用选择地址；应用目录仅使用 Host 读取状态，拒绝后不得恢复旧目录 |
 | `src/commandScope.ts` | 页面命令及最近记录的交互契约；外壳实现命令面板 |
 | `src/peekScope.ts` | 打开与关闭记录预览的契约；RecordPeek 持有预览状态和界面 |
 | `src/pages/fieldRules.ts` | 字段输入资格、提交时机与必填规则；不依赖输入控件 |

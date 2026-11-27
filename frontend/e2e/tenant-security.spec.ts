@@ -125,19 +125,25 @@ test("tenant isolation: an existing bearer and live subscription lose record, ex
 });
 
 
-test("tenant isolation: read hooks never display a previous session or path while loading", async ({ page }) => {
+async function openScopeProbe(page: Page) {
   await page.route("**/read-scope-probe.html", route => route.fulfill({ contentType: "text/html", body: "<!doctype html><html><body></body></html>" }));
-  await page.route("**/v1/read-scope-probe/**", async route => {
-    const tenant = route.request().headers()["platform-tenant"];
-    const path = new URL(route.request().url()).pathname.split("/").at(-1);
-    await route.fulfill({ json: { value: tenant + ":" + path } });
-  });
   await page.goto("/read-scope-probe.html");
   await page.evaluate(async () => {
     const refreshPath = "/@react-refresh";
     const refresh = (await import(refreshPath)).default;
     refresh.injectIntoGlobalHook(window);
     Object.assign(window, { $RefreshReg$: () => {}, $RefreshSig$: () => (type: unknown) => type, __vite_plugin_react_preamble_installed__: true });
+  });
+}
+
+test("tenant isolation: read hooks never display a previous session or path while loading", async ({ page }) => {
+  await page.route("**/v1/read-scope-probe/**", async route => {
+    const tenant = route.request().headers()["platform-tenant"];
+    const path = new URL(route.request().url()).pathname.split("/").at(-1);
+    await route.fulfill({ json: { value: tenant + ":" + path } });
+  });
+  await openScopeProbe(page);
+  await page.evaluate(async () => {
     const modulePath = "/e2e/read-scope-probe.tsx";
     const { mountReadScopeProbe } = await import(modulePath);
     Object.assign(window, { readScopeProbe: mountReadScopeProbe() });
@@ -157,16 +163,31 @@ test("tenant isolation: read hooks never display a previous session or path whil
 
 
 test("tenant isolation: late authentication and writes cannot act on a new session", async ({ page }) => {
-  await page.route("**/read-scope-probe.html", route => route.fulfill({ contentType: "text/html", body: "<!doctype html><html><body></body></html>" }));
-  await page.goto("/read-scope-probe.html");
+  await openScopeProbe(page);
   const result = await page.evaluate(async () => {
-    const refreshPath = "/@react-refresh";
-    const refresh = (await import(refreshPath)).default;
-    refresh.injectIntoGlobalHook(window);
-    Object.assign(window, { $RefreshReg$: () => {}, $RefreshSig$: () => (type: unknown) => type, __vite_plugin_react_preamble_installed__: true });
     const modulePath = "/e2e/read-scope-probe.tsx";
     const { probeSessionRequests } = await import(modulePath);
     return probeSessionRequests();
   });
   expect(result).toEqual({ afterOld401: "audit-b", write: "refused", submitted: [], current401Ended: true });
+});
+
+
+test("tenant isolation: a refused application catalog cannot resurrect cached record routes", async ({ page }) => {
+  let refused = false;
+  await page.route("**/v1/applications", route => refused
+    ? route.fulfill({ status: 403, json: { error: "refused" } })
+    : route.fulfill({ json: [{ name: "private-app", menu: [{ entries: [{ object: "probe.object", name: "records" }] }] }] }));
+  await openScopeProbe(page);
+  await page.evaluate(async () => {
+    const modulePath = "/e2e/read-scope-probe.tsx";
+    const { mountRouteScopeProbe } = await import(modulePath);
+    Object.assign(window, { routeScopeProbe: mountRouteScopeProbe() });
+  });
+  const invoke = (method: "latest" | "refresh") => page.evaluate(name =>
+    (window as unknown as { routeScopeProbe: Record<string, () => unknown> }).routeScopeProbe[name](), method);
+  await expect.poll(() => invoke("latest")).toEqual({ status: "ready", href: "/private-app/records/one" });
+  refused = true;
+  await invoke("refresh");
+  await expect.poll(() => invoke("latest")).toEqual({ status: "refused", href: "/ontology/objects/probe.object/one" });
 });

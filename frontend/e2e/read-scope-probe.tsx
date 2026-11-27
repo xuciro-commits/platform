@@ -1,7 +1,8 @@
 import { useLayoutEffect } from "react";
 import { createRoot } from "react-dom/client";
 import { flushSync } from "react-dom";
-import { useRead, useReads } from "../src/host/read";
+import { changed, useRead, useReads } from "../src/host/read";
+import { RecordRoutesProvider, useRecordHref } from "../src/recordRoutes";
 import { currentSession, startSession, switchAccount } from "../src/host/session";
 import { request } from "../src/host/request";
 import { send } from "../src/host/write";
@@ -84,4 +85,20 @@ export async function probeSessionRequests() {
   } finally {
     window.fetch = originalFetch;
   }
+}
+
+export function mountRouteScopeProbe() {
+  startSession({ token: "route-probe", tenant: "audit-a" });
+  const root = createRoot(document.body.appendChild(document.createElement("div")));
+  let latest = { status: "", href: "" };
+  function Probe() {
+    const read = useRead<Api.ApplicationView[]>("/v1/applications");
+    const href = useRecordHref(true);
+    useLayoutEffect(() => {
+      latest = { status: read.status, href: href?.("probe.object", "one") ?? "" };
+    });
+    return null;
+  }
+  flushSync(() => root.render(<RecordRoutesProvider homes={new Map()}><Probe /></RecordRoutesProvider>));
+  return { latest: () => latest, refresh: () => flushSync(() => changed()) };
 }

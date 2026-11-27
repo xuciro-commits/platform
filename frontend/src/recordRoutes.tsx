@@ -1,5 +1,5 @@
 import { createContext, type ReactNode, useCallback, useContext } from "react";
-import { type Api, useRead, useSession } from "./host";
+import { type Api, useRead } from "./host";
 import { usePath } from "./router";
 
 const Homes = createContext<ReadonlyMap<string, string> | null>(null);
@@ -29,8 +29,6 @@ export function useRecordHome(): RecordHome {
   return useCallback((type, id) => recordPath(homeOf(homes, type), id), [homes]);
 }
 
-const remembered = new Map<string, Api.ApplicationView[]>();
-
 type RecordHref = (type: string, id?: string) => string;
 
 export function useRecordHref(): RecordHref;
@@ -38,11 +36,8 @@ export function useRecordHref(waitForApplications: true): RecordHref | null;
 export function useRecordHref(waitForApplications = false): RecordHref | null {
   const homes = useHomes();
   const app = usePath().split("/")[1];
-  const session = useSession();
-  const key = `${session?.tenant} ${session?.token}`;
   const views = useRead<Api.ApplicationView[]>("/v1/applications");
-  if (views.status === "ready") remembered.set(key, views.data);
-  const loaded = views.status === "ready" ? views.data : remembered.get(key);
+  const loaded = views.status === "ready" ? views.data : undefined;
   const resolve = useCallback((type: string, id?: string) => {
     const pageIn = (view?: Api.ApplicationView) => view?.menu?.flatMap((group) => group.entries).find((entry) => entry.object === type);
     const page = pageIn(loaded?.find((view) => (view.name || view.app) === app));
