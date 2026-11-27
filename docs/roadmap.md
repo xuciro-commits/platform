@@ -109,10 +109,13 @@
   模拟客户第 1 天（11-26）：租户切换里没有 sim——夹具宿主是改租户表之前起的，重启后已有（运维，不改代码）；
   租户切换的“新建工作区”跳到 `/host/tenants`，那里只有列表，没有创建入口——已修：列表页加“新建工作区”对话框（标识、名称、模板、首位管理员），经 `POST /v1/host/tenants` 创建；workspace “a host administrator creates a workspace”。
   第 3、6 天挡路已修：扩展项目页无附属对象入口且暴露不可填 JSON 的“保存资源”，创建动作不能按宿主记录阶段设前置条件——过滤必填不可填参数的原始动作，项目页列出归属对象并提供“扩展对象”，`ActionTypeDialog` 支持按自身或 `base.<field>` 生成 `Guard`；builder “extension project”。
-  第 1、2、11 天已修：`Delivery` 默认落 `Marketplace`、`Admin` 默认落 `Members`；`sim` 包库预导入 `CRM 0.3.1` 与 `0.3.2`；
+  第 1、2、11 天已修：`Delivery` 默认落 `Marketplace`、`Admin` 默认落 `Members`；`sim` 包库预导入外部固定版本 `CRM 0.3.0` 与升级版 `0.3.5`（e4dbd68a8）；
   `ListPage` 日历与甘特空月保留顶栏“新建”，`RecordList` 经 `/v1/actions/{schema}/check` 判定新建权限（workspace、crm）。
-  第 1 天导入已修：导入引用与选项支持按应用及工作区译文唯一匹配记录标识与键值，并在接受路径与向导中区分非法选项（“请从列表中选择”）与不可读引用（crm）。
-  第 5 天评论提及已修：`RecordActivity` 评论框输入 `@` 按成员姓名或标识弹出工作区成员候选列表，支持键盘与点击插入 `@<memberId>`（records “comment mention”）。
+  第 1 天导入已修：导入引用与选项支持按应用及工作区译文唯一匹配记录标识与键值，并在接受路径与向导中区分非法选项（“请从列表中选择”）与不可读引用（9d4011481，crm）。
+  第 5 天评论提及已修：`RecordActivity` 评论框输入 `@` 按成员姓名或标识弹出工作区成员候选列表，支持键盘与点击插入 `@<memberId>`（f24c3a93b，records “comment mention”）。
+  第 3、5、9 天与补测已修（92ede0629、c786b1839）：明细行集合带回引用显示名；流程 `waitUntil` 支持 `date`（`YYYY-MM-DD`）且 `.archive`（含清理演示数据）自动取消主体在途流程（K9）；
+  收件箱为受限或空标题事项提供“受限事项”/引用回退标题；非 `.edit` 跨对象动作提交后全局失效读缓存。
+  待完成：用最新 `main` 受控重启 `sim` 宿主，补跑 Day 03/06/11/13/14 客户验收并完成阶段 3 门槛演示。
 
 ## 二、能力底座与受管服务（[#13](https://github.com/xuciro-commits/platform/issues/13)）
 
