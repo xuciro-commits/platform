@@ -317,7 +317,7 @@ func TestInvariantAggregateGroupsByMemberAndNarrowsDerivedFields(t *testing.T) {
 	live.accept(t, lineType+".create", lineType, "L1", map[string]any{"title": "Line 1", "deal": "D1", "score": 70})
 	live.accept(t, lineType+".create", lineType, "L2", map[string]any{"title": "Line 2", "deal": "D2", "score": 140})
 
-	byOwner, err := live.aggregateObjectSet(reader, objects.ObjectSetRequest{
+	byOwner, err := live.AggregateObjectSet(reader, objects.ObjectSetRequest{
 		Set:      platform.ObjectSet{Object: dealType},
 		Groups:   []string{"owner"},
 		Measures: []string{"sum:weighted"},
@@ -326,7 +326,7 @@ func TestInvariantAggregateGroupsByMemberAndNarrowsDerivedFields(t *testing.T) {
 		t.Fatalf("member grouping and readable derived sum failed: rows=%+v err=%v", byOwner.Rows, err)
 	}
 
-	mgrSecret, err := live.aggregateObjectSet(mgr, objects.ObjectSetRequest{
+	mgrSecret, err := live.AggregateObjectSet(mgr, objects.ObjectSetRequest{
 		Set:      platform.ObjectSet{Object: dealType},
 		Measures: []string{"sum:secretscore"},
 	}, invariantClock)
@@ -334,7 +334,7 @@ func TestInvariantAggregateGroupsByMemberAndNarrowsDerivedFields(t *testing.T) {
 		t.Fatalf("manager secret score sum mismatch: rows=%+v err=%v", mgrSecret.Rows, err)
 	}
 
-	repSecret, err := live.aggregateObjectSet(reader, objects.ObjectSetRequest{
+	repSecret, err := live.AggregateObjectSet(reader, objects.ObjectSetRequest{
 		Set:      platform.ObjectSet{Object: dealType},
 		Measures: []string{"sum:secretscore"},
 	}, invariantClock)
@@ -342,7 +342,7 @@ func TestInvariantAggregateGroupsByMemberAndNarrowsDerivedFields(t *testing.T) {
 		t.Fatalf("salesrep leaked unreadable derived source in aggregate: rows=%+v err=%v", repSecret.Rows, err)
 	}
 
-	if _, probeErr := live.aggregateObjectSet(reader, objects.ObjectSetRequest{
+	if _, probeErr := live.AggregateObjectSet(reader, objects.ObjectSetRequest{
 		Set:      platform.ObjectSet{Object: dealType, Domain: platform.Raw([][]any{{"secretscore", "=", 70}})},
 		Measures: []string{"count"},
 	}, invariantClock); probeErr == nil || probeErr.Code != pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT {

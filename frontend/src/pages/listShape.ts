@@ -98,6 +98,7 @@ export type ListShape<Answer, Row> = {
   calendar?: ListCalendar<Row>;
   gantt?: ListGantt<Row>;
   summary?: ListSummary;
+  notices?: string[];
   bulk?: (ids: string[], clear: () => void) => ReactNode;
   detail?: (id: string) => ReactNode;
   peekType?: string;

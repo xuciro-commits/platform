@@ -17,6 +17,7 @@ import { numeric, type Described } from "./describe";
 import { useGutter } from "./frame";
 import type { Options } from "./options";
 import { present } from "./values";
+import { LedgerPeriodSummary } from "./LedgerPeriodSummary";
 import type { ViewState } from "./view";
 
 type SummaryProps = {
@@ -98,7 +99,24 @@ export function SummaryView({ described, listPath, view, baseDomain, options, up
     [activeMeasure.value],
   );
 
-  const read = useRead<Api.RecordsAggregate>("/v1/object-sets/aggregate", {
+  const ledgerPeriod = useMemo(() => {
+    if (!view.from && !view.to) return null;
+    const sumField = activeMeasure.fn === "sum" && activeMeasure.field ? activeMeasure.field.name : undefined;
+    if (described.entity.balanceOf) {
+      const mField = sumField ?? described.entity.fields.find((f) => numeric.has(f.type))?.name;
+      return mField ? { balanceType: described.type, factType: described.entity.balanceOf, measureField: mField } : null;
+    }
+    const balances = described.entity.ledger?.balances ?? [];
+    for (const bal of balances) {
+      const keysSet = new Set(bal.keys ?? []);
+      if (!groups.every((g) => keysSet.has(g))) continue;
+      const mField = sumField && bal.measures.includes(sumField) ? sumField : (!sumField ? bal.measures[0] : undefined);
+      if (mField) return { balanceType: `${described.type}.${bal.name}`, factType: described.type, measureField: mField };
+    }
+    return null;
+  }, [described, groups, activeMeasure, view.from, view.to]);
+
+  const read = useRead<Api.RecordsAggregate>(ledgerPeriod ? null : "/v1/object-sets/aggregate", ledgerPeriod ? undefined : {
     set: fullDomain.length ? { object: described.type, domain: fullDomain } : { object: described.type },
     groups,
     measures,
@@ -249,7 +267,7 @@ export function SummaryView({ described, listPath, view, baseDomain, options, up
           options={measureOptions.map((m) => ({ value: m.value, label: m.label }))}
           onChange={(next) => update({ measure: next })}
         />
-        {activeDate && (
+        {(activeDate || Boolean(described.entity.balanceOf)) && (
           <>
             {dateFields.length > 1 && (
               <Selector
@@ -278,13 +296,27 @@ export function SummaryView({ described, listPath, view, baseDomain, options, up
         )}
       </HStack>
 
-      {read.status === "loading" && <Skeleton height={180} />}
-      {read.status === "error" && <Banner status="error" title={t("Summary could not be loaded")} description={read.reason} />}
-      {read.status === "refused" && <Banner status="warning" title={t("You do not have access to this data")} description={read.reason} />}
-      {read.status === "ready" && rows.length === 0 && (
+      {ledgerPeriod && (
+        <LedgerPeriodSummary
+          described={described}
+          balanceType={ledgerPeriod.balanceType}
+          factType={ledgerPeriod.factType}
+          listPath={listPath}
+          view={view}
+          baseDomain={baseDomain}
+          groups={groups}
+          measureField={ledgerPeriod.measureField}
+          renderGroupCell={renderGroupCell}
+          labelOf={labelOf}
+        />
+      )}
+      {!ledgerPeriod && read.status === "loading" && <Skeleton height={180} />}
+      {!ledgerPeriod && read.status === "error" && <Banner status="error" title={t("Summary could not be loaded")} description={read.reason} />}
+      {!ledgerPeriod && read.status === "refused" && <Banner status="warning" title={t("You do not have access to this data")} description={read.reason} />}
+      {!ledgerPeriod && read.status === "ready" && rows.length === 0 && (
         <EmptyState headingLevel={3} title={t("No summary data")} />
       )}
-      {read.status === "ready" && rows.length > 0 && (
+      {!ledgerPeriod && read.status === "ready" && rows.length > 0 && (
         <VStack xstyle={styles.tableWrap}>
         <Table aria-label={t("Summary")} density="compact">
           <TableHeader>

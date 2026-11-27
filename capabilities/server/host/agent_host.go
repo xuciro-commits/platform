@@ -75,7 +75,7 @@ func (h hostView) AgentObjects(reader platform.Member, op string, raw json.RawMe
 			return page, object, err
 		},
 		Aggregate: func(q agentowner.ObjectQuery, now time.Time) (any, *platform.Error) {
-			return h.t.aggregateObjectSet(reader, objects.ObjectSetRequest{Set: q.Set, Sort: q.Sort, Offset: q.Offset, Limit: q.Limit,
+			return h.t.AggregateObjectSet(reader, objects.ObjectSetRequest{Set: q.Set, Sort: q.Sort, Offset: q.Offset, Limit: q.Limit,
 				Groups: q.Groups, Measures: q.Measures, Window: q.Window, Histogram: q.Histogram, MaxRows: q.MaxRows, Collection: q.Collection, Format: q.Format}, now)
 		},
 	}.ObserveRaw(op, raw, now)

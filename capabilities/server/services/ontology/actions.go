@@ -298,3 +298,25 @@ func ActionCriteria(o Object, app, builderRole string, a Action, lookup func(str
 	}
 	return plan, nil
 }
+
+func OptionalUses(a Action) []string {
+	if len(a.Uses) == 0 || a.Transaction == nil {
+		return nil
+	}
+	total, optional := map[string]int{}, map[string]int{}
+	WalkTxnSteps(a.Transaction.Steps, func(step platform.TxnStep) {
+		if step.Request != nil {
+			total[step.Request.Use]++
+			if step.Request.Optional {
+				optional[step.Request.Use]++
+			}
+		}
+	})
+	var out []string
+	for _, used := range a.Uses {
+		if total[used] > 0 && total[used] == optional[used] {
+			out = append(out, used)
+		}
+	}
+	return out
+}

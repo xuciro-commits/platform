@@ -443,8 +443,8 @@ export function ListView<Answer, Row>({ definition, read, primary, back, exportR
               </VStack>
             )}
             {read.status === "refused" && <EmptyState headingLevel={2} title={t("You cannot see this list")} description={read.reason || t("Ask an administrator of this workspace for access.")} />}
-            {ready && shown.length === 0 && !dirty && !calendar && !board && !gantt && <EmptyState headingLevel={2} title={t("Nothing here yet")} description={t(definition.about)} actions={primary} />}
-            {ready && shown.length === 0 && dirty && !calendar && !board && !gantt && (
+            {ready && shown.length === 0 && !dirty && !calendar && !board && !gantt && !summary && <EmptyState headingLevel={2} title={t("Nothing here yet")} description={t(definition.about)} actions={primary} />}
+            {ready && shown.length === 0 && dirty && !calendar && !board && !gantt && !summary && (
               <EmptyState
                 headingLevel={2}
                 icon={<Icon icon={MagnifyingGlassIcon} size="lg" />}
@@ -457,6 +457,11 @@ export function ListView<Answer, Row>({ definition, read, primary, back, exportR
                   </>
                 }
               />
+            )}
+            {Boolean(definition.notices?.length) && (
+              <VStack gap={2} paddingInline={gutter} paddingBlockEnd={3}>
+                {definition.notices?.map((cap) => <Banner key={cap} status="info" title={t("{capability} not connected").replace("{capability}", t(cap))} />)}
+              </VStack>
             )}
             {failure && (
               <VStack paddingInline={gutter} paddingBlockEnd={4} xstyle={motionStyles.bannerEnter}>

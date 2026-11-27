@@ -76,7 +76,7 @@ func TestInvariantK47LedgerFactsAndProjection(t *testing.T) {
 	if after := read(restored); string(after) != string(before) {
 		t.Fatalf("snapshot balance differs: %s != %s", after, before)
 	}
-	period, refusal := live.aggregateObjectSet(live.member(t), objects.ObjectSetRequest{Set: platform.ObjectSet{Object: balance}, Groups: []string{"bucket"}, Measures: []string{"sum:qty"}, From: "2026-10-01", To: "2026-10-31"}, invariantClock)
+	period, refusal := live.AggregateObjectSet(live.member(t), objects.ObjectSetRequest{Set: platform.ObjectSet{Object: balance}, Groups: []string{"bucket"}, Measures: []string{"sum:qty"}, From: "2026-10-01", To: "2026-10-31"}, invariantClock)
 	if refusal != nil || len(period.Rows) != 1 {
 		t.Fatalf("ledger period: %+v %v", period, refusal)
 	}

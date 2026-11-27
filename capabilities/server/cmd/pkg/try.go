@@ -27,10 +27,12 @@ import (
 	"platformserver/services/ai"
 	agentevaluation "platformserver/services/ai/evaluation"
 	"platformserver/services/devops/packages"
+	"platformserver/services/objects"
 	authoring "platformserver/services/resources/authoring"
 	"platformserver/services/security"
 	controlowner "platformserver/services/security/control"
 	"platformserver/services/work"
+	"sync"
 )
 
 const (
@@ -58,10 +60,28 @@ type tryPerson struct {
 	Units map[string]string `yaml:"units"`
 }
 
+type tryPeriod struct {
+	Object     string           `yaml:"object"`
+	Groups     []string         `yaml:"groups"`
+	Measures   []string         `yaml:"measures"`
+	From       string           `yaml:"from"`
+	To         string           `yaml:"to"`
+	ExpectRows []map[string]any `yaml:"expectRows"`
+}
+
+type tryRace struct {
+	Submissions    []tryStep `yaml:"submissions"`
+	ExpectAccepted int       `yaml:"expectAccepted"`
+	ExpectRefused  int       `yaml:"expectRefused"`
+	ExpectReason   string    `yaml:"expectReason"`
+}
+
 type tryStep struct {
 	Do      string         `yaml:"do"`
 	Approve string         `yaml:"approve"`
 	Reject  string         `yaml:"reject"`
+	Period  *tryPeriod     `yaml:"period"`
+	Race    *tryRace       `yaml:"race"`
 	As      string         `yaml:"as"`
 	On      string         `yaml:"on"`
 	Read    string         `yaml:"read"`
@@ -69,6 +89,7 @@ type tryStep struct {
 	Show    []string       `yaml:"show"`
 	Expect  map[string]any `yaml:"expect"`
 	Refused bool           `yaml:"refused"`
+	Reason  string         `yaml:"reason"`
 }
 
 type trial struct {
@@ -101,8 +122,14 @@ func readTryScript(path string) (tryScript, error) {
 				kinds++
 			}
 		}
+		if step.Period != nil {
+			kinds++
+		}
+		if step.Race != nil {
+			kinds++
+		}
 		if kinds != 1 {
-			return script, fmt.Errorf("%s: step %d needs exactly one of do, read, approve and reject", path, i+1)
+			return script, fmt.Errorf("%s: step %d needs exactly one of do, read, approve, reject, period and race", path, i+1)
 		}
 		if _, known := script.Members[step.As]; step.As != "" && !known {
 			return script, fmt.Errorf("%s: step %d acts as %s, who is not under members", path, i+1, step.As)
@@ -379,15 +406,97 @@ func subset(want, got any) bool {
 
 func (tr *trial) run(script tryScript) error {
 	for i, step := range script.Steps {
+		who := tr.member
+		if step.As != "" {
+			who = tr.members[step.As]
+		}
+		if step.Period != nil {
+			fmt.Fprintf(tr.out, "%d. period %s (%s..%s)\n", i+1, step.Period.Object, step.Period.From, step.Period.To)
+			out, refusal := tr.tenant.AggregateObjectSet(who, objects.ObjectSetRequest{
+				Set: platform.ObjectSet{Object: step.Period.Object}, Groups: step.Period.Groups,
+				Measures: step.Period.Measures, From: step.Period.From, To: step.Period.To,
+			}, tr.at)
+			if refusal != nil {
+				return fmt.Errorf("step %d: period refused: %s", i+1, refusal.Message)
+			}
+			var gotRows []map[string]any
+			_ = json.Unmarshal(platform.Raw(out.Rows), &gotRows)
+			for _, wantRaw := range step.Period.ExpectRows {
+				resolved, err := tr.resolve(wantRaw)
+				if err != nil {
+					return fmt.Errorf("step %d: %w", i+1, err)
+				}
+				var want map[string]any
+				_ = json.Unmarshal(platform.Raw(resolved), &want)
+				matched := slices.ContainsFunc(gotRows, func(got map[string]any) bool { return subset(want, got) })
+				if !matched {
+					return fmt.Errorf("step %d: period rows %s did not contain %s", i+1, platform.Raw(gotRows), platform.Raw(want))
+				}
+			}
+			continue
+		}
+		if step.Race != nil {
+			fmt.Fprintf(tr.out, "%d. race (%d submissions)\n", i+1, len(step.Race.Submissions))
+			type prepared struct {
+				who platform.Member
+				sub *pb.Submission
+			}
+			items := make([]prepared, len(step.Race.Submissions))
+			for idx, subStep := range step.Race.Submissions {
+				actor := who
+				if subStep.As != "" {
+					actor = tr.members[subStep.As]
+				}
+				targetRaw, err := tr.resolve(subStep.On)
+				if err != nil {
+					return fmt.Errorf("step %d race[%d]: %w", i+1, idx, err)
+				}
+				input, err := tr.resolve(map[string]any(subStep.With))
+				if err != nil {
+					return fmt.Errorf("step %d race[%d]: %w", i+1, idx, err)
+				}
+				typ, id, _ := strings.Cut(targetRaw.(string), "/")
+				tr.keys++
+				items[idx] = prepared{who: actor, sub: &pb.Submission{
+					TenantId: tr.tenant.ID, PrincipalId: actor.ID, Authority: tr.tenant.AuthorityOf(typ),
+					IdempotencyKey: fmt.Sprintf("try-%d", tr.keys), Target: &pb.EntityRef{Type: typ, Id: id},
+					Schema: &pb.SchemaRef{Name: subStep.Do, Version: 1}, Payload: platform.Raw(input),
+				}}
+			}
+			var wg sync.WaitGroup
+			results := make([]*platform.Error, len(items))
+			for idx, item := range items {
+				wg.Add(1)
+				go func(pos int, p prepared) {
+					defer wg.Done()
+					_, results[pos] = tr.tenant.Submit(p.who, p.sub, tr.at)
+				}(idx, item)
+			}
+			wg.Wait()
+			tr.settle()
+			accepted, refused := 0, 0
+			var reasons []string
+			for _, r := range results {
+				if r == nil {
+					accepted++
+				} else {
+					refused++
+					reasons = append(reasons, r.Message)
+				}
+			}
+			if accepted != step.Race.ExpectAccepted || refused != step.Race.ExpectRefused {
+				return fmt.Errorf("step %d: race got accepted=%d refused=%d (%v), want accepted=%d refused=%d", i+1, accepted, refused, reasons, step.Race.ExpectAccepted, step.Race.ExpectRefused)
+			}
+			if step.Race.ExpectReason != "" && !slices.ContainsFunc(reasons, func(msg string) bool { return strings.Contains(msg, step.Race.ExpectReason) }) {
+				return fmt.Errorf("step %d: race reasons %v did not contain %q", i+1, reasons, step.Race.ExpectReason)
+			}
+			continue
+		}
 		ref, err := tr.resolve(step.On + step.Read + step.Approve + step.Reject)
 		if err != nil {
 			return fmt.Errorf("step %d: %w", i+1, err)
 		}
 		target := ref.(string)
-		who := tr.member
-		if step.As != "" {
-			who = tr.members[step.As]
-		}
 		if step.Approve != "" || step.Reject != "" {
 			verb := map[bool]string{true: "approve", false: "reject"}[step.Approve != ""]
 			fmt.Fprintf(tr.out, "%d. %s %s as %s\n", i+1, verb, target, who.ID)
@@ -424,13 +533,16 @@ func (tr *trial) run(script tryScript) error {
 				if err == nil {
 					return fmt.Errorf("step %d: %s was accepted, the script expects a refusal", i+1, step.Do)
 				}
+				if step.Reason != "" && !strings.Contains(err.Error(), step.Reason) {
+					return fmt.Errorf("step %d: %s refusal %q did not contain %q", i+1, step.Do, err.Error(), step.Reason)
+				}
 				fmt.Fprintf(tr.out, "  refused as expected: %v\n", err)
 				continue
 			}
 			if err != nil {
 				return fmt.Errorf("step %d: %s refused: %w", i+1, step.Do, err)
 			}
-			if (typ == protocol.PackageType || strings.HasPrefix(typ, "enterprise.")) && len(step.Show) == 0 && len(step.Expect) == 0 {
+			if (strings.HasPrefix(typ, "platform.") || strings.HasPrefix(typ, "enterprise.")) && len(step.Show) == 0 && len(step.Expect) == 0 {
 				continue
 			}
 		} else {

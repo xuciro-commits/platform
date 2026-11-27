@@ -16,7 +16,7 @@ func (t *Tenant) Catalog(m platform.Member) []platform.Action {
 	}
 	m = m.WithAuthorization(t.services.Authorization)
 	out := actions.CatalogHooks{Apps: t.LiveApps, Entities: func() []platform.RecordTypeInfo { return t.Entities(m) }, Provider: func(used string) (platform.Service, string, bool) { return t.router().Provider(used) },
-		SchemaVersion: t.actionSchemaVersion}.Of(m)
+		ContractTitle: t.router().ContractTitle, SchemaVersion: t.actionSchemaVersion}.Of(m)
 	t.viewCache().StoreCatalog(gen, key, out)
 	return out
 }

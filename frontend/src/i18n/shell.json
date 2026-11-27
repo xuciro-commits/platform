@@ -61,6 +61,7 @@
   "Close": "关闭",
   "Close the current overlay": "关闭当前浮层",
   "Closed": "已关闭",
+  "Closing": "期末",
   "Color theme": "配色",
   "Command palette": "命令面板",
   "Commands": "命令",
@@ -81,6 +82,7 @@
   "Daily": "每天",
   "Dark": "深色",
   "Date format": "日期格式",
+  "Decrease": "减少",
   "Define": "定义",
   "Dependencies": "依赖",
   "Description": "描述",
@@ -137,6 +139,7 @@
   "In the workspace": "工作台内",
   "Inbox": "收件箱",
   "Incompatible shape": "字段形状不兼容",
+  "Increase": "增加",
   "Ingest": "接入",
   "Install": "安装",
   "Install your first application to bring your workspace to life.": "安装第一个应用，开始搭建你的工作区。",
@@ -214,6 +217,7 @@
   "Open logs": "打开日志",
   "Open records": "打开记录",
   "Open {app}": "打开{app}",
+  "Opening": "期初",
   "Operate": "运维",
   "Or": "或",
   "Outcome": "结果",
@@ -428,5 +432,6 @@
   "name@company.com": "name@company.com",
   "records": "条记录",
   "records with data": "条有数据的记录",
-  "unread": "条未读"
+  "unread": "条未读",
+  "{capability} not connected": "{capability}未接入"
 }

@@ -506,14 +506,18 @@ export function Records({ declared, listPath, id, back, primaryExtra, initialCre
     const columns = extColumns.length > 0
       ? [...baseShape.columns.slice(0, -1), ...extColumns, ...baseShape.columns.slice(-1)]
       : baseShape.columns;
+    const notices = actions.status === "ready"
+      ? Array.from(new Set(actions.data.filter((a) => a.target === described.type).flatMap((a) => a.unconnected ?? [])))
+      : undefined;
     return {
       ...baseShape,
+      notices,
       columns,
       remote: "all" as const,
       unfiltered: records.unfiltered,
       page: { total: records.total, loaded: records.loaded, hasMore: records.hasMore, loading: records.loading, loadMore: records.loadMore },
     };
-  }, [described, declared, listPath, pending, board, calendar, gantt, bulk, options, detail, extensions, extPages, records.total, records.unfiltered, records.loaded, records.hasMore, records.loading, records.loadMore, externalDomain, view.filters]);
+  }, [described, declared, listPath, pending, board, calendar, gantt, bulk, options, detail, extensions, extPages, records.total, records.unfiltered, records.loaded, records.hasMore, records.loading, records.loadMore, externalDomain, view.filters, actions]);
   const exportList = async () => {
     setExportFailure("");
     try {

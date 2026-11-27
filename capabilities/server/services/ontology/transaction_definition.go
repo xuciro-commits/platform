@@ -124,6 +124,7 @@ func WithTxnRow(spec platform.RuleReadSpec, info platform.RecordTypeInfo) platfo
 	for _, field := range ruleprotocol.ConstraintEntity(info).Fields {
 		spec.Inputs["row."+field.Name] = platform.ExprType{Kind: platform.RuleFieldKind(field.Type), Object: field.Ref}
 	}
+	spec.Inputs["row.id"] = platform.ExprType{Kind: "text"}
 	spec.Inputs["row.$subject"] = platform.ExprType{Kind: "reference", Object: info.Type}
 	return spec
 }

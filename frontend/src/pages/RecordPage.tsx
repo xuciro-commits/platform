@@ -192,6 +192,10 @@ export function RecordPage({ described, id, listPath, listTitle, instances, enti
     [extensions, extActionMap],
   );
 
+  const unconnected = useMemo(
+    () => Array.from(new Set(catalog.filter((action) => action.target === described.type).flatMap((action) => action.unconnected ?? []))),
+    [catalog, described.type],
+  );
   const isProjectRecord = described.type === "build.app";
   const tabs = [
     { value: "details", label: "Details" },
@@ -323,6 +327,9 @@ export function RecordPage({ described, id, listPath, listTitle, instances, enti
                 <VStack gap={6}>
                   {editor.stale && <VStack xstyle={motionStyles.bannerEnter}><Banner status="info" title={t("This record has new changes")} /></VStack>}
                   {refusal && <VStack xstyle={motionStyles.bannerEnter}><Banner status="error" title={t("Not done")} description={refusal} /></VStack>}
+                  {unconnected.map((cap) => (
+                    <Banner key={cap} status="info" title={t("{capability} not connected").replace("{capability}", t(cap))} />
+                  ))}
                   <FieldGroup described={detail} editor={editor} sections={body.sections} direction="horizontal-labels" focusEmpty={fresh} fold={!fresh} refs={refs} restricted={restricted} />
                   {isProjectRecord && (
                     <ProjectObjectsSection

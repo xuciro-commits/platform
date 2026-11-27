@@ -498,7 +498,22 @@ func (b *Runtime) transactAttempt(c platform.Caller, receipt *pb.ChangeRecord, t
 				if frame != "" {
 					target += "-" + frame
 				}
-				c.Request(receipt, platform.Request{Protocol: protocol, Action: action, Target: target, Payload: payload, Deferred: step.Request.Deferred})
+				if step.Request.Key != nil {
+					val, err := ruleprotocol.RuleAssignment(*step.Request.Key, scope, c, subject, facts, now, b.Lookup)
+					if err != nil {
+						return err
+					}
+					custom := constructionText(val)
+					if custom == "" {
+						return platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "Capability request key must not be empty")
+					}
+					target = custom
+				}
+				customKey := ""
+				if step.Request.Key != nil {
+					customKey = receipt.GetChangeId() + ":" + protocol + "#" + action + ":" + target
+				}
+				c.Request(receipt, platform.Request{Protocol: protocol, Action: action, Target: target, Key: customKey, Payload: payload, Deferred: step.Request.Deferred, Optional: step.Request.Optional})
 				continue
 			}
 			if step.Work != nil {

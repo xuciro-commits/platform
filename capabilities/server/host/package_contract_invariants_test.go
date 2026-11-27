@@ -234,3 +234,172 @@ func TestInvariantK50PackageContractClosure(t *testing.T) {
 		t.Fatal("reinstall did not restore the bound entry")
 	}
 }
+
+func TestInvariantK50OptionalDeferredRequestAndKey(t *testing.T) {
+	source := newInvariantTenant(t, "optional-request-source")
+	const contract = "sample.post/1"
+	const ledgerType = "invariantproject.entry"
+	source.accept(t, "build.object.create", build.ObjectType, "ENTRY", map[string]any{
+		"name": "entry", "title": "Entry", "ledger": true,
+		"protocols": []protocol.ProtocolBinding{{Name: "sample.post", Version: 1, Actions: map[string]string{"post": "create", "reverse": "reverse"}}},
+		"fields":    []map[string]any{{"name": "bucket", "title": "Bucket", "type": "text", "required": true}, {"name": "qty", "title": "Quantity", "type": "integer", "required": true}},
+		"balances":  []map[string]any{{"name": "balance", "title": "Balance", "keys": []string{"bucket"}, "measures": []string{"qty"}}},
+	})
+	source.accept(t, "build.object.publish", build.ObjectType, "ENTRY", nil)
+	providers := source.router().Providers(contract)
+	if len(providers) != 1 {
+		t.Fatalf("ledger protocol provider: %+v", providers)
+	}
+	var actions []protocol.ContractAction
+	for _, a := range providers[0].Provision.Protocol.Actions {
+		name := strings.TrimPrefix(a.Schema, contract+"#")
+		actions = append(actions, protocol.ContractAction{Name: name, Title: a.Title, Payload: a.Payload})
+	}
+	source.accept(t, "build.contract.create", build.ContractType, "CONTRACT", map[string]any{"name": "sample.post", "major": 1, "title": "Posting", "actions": actions})
+	source.accept(t, "build.contract.publish", build.ContractType, "CONTRACT", map[string]any{})
+
+	const docType = "invariantproject.voucher"
+	docObj := invariantObject("voucher", "Voucher")
+	docObj["states"] = []ontology.State{{Name: "draft", Title: "Draft"}, {Name: "posted", Title: "Posted"}, {Name: "voided", Title: "Voided"}}
+	source.accept(t, "build.object.create", build.ObjectType, "VOUCHER", docObj)
+	source.accept(t, "build.object.publish", build.ObjectType, "VOUCHER", nil)
+
+	keyExpr := &platform.Expr{Op: "concat", Kind: "text", Args: []platform.Expr{
+		{Kind: "text", Lit: &platform.ExprLiteral{Value: platform.Raw("DOC-")}},
+		platform.ExprReference("text", "id"),
+	}}
+	postAct := ontology.Action{
+		Name: "post", Title: "Post", From: []string{"draft"}, Roles: []string{ontology.BuilderRole}, Uses: []string{contract + "#post"},
+		Transaction: &platform.BusinessTxn{Subject: docType, Steps: []platform.TxnStep{
+			{Name: "mark", Kind: "update", Target: platform.TxnRef{Type: docType, ID: "$subject"}, Changes: []platform.TxnSet{{Field: "state", Expr: &platform.Expr{Kind: "choice", Lit: &platform.ExprLiteral{Value: platform.Raw("posted")}}}}},
+			{Name: "send", Kind: "request", Request: &platform.TxnRequest{
+				Deferred: true, Optional: true, Key: keyExpr, Use: contract + "#post",
+				Payload: []platform.TxnSet{
+					{Field: "bucket", Expr: &platform.Expr{Kind: "text", Lit: &platform.ExprLiteral{Value: platform.Raw("MAIN")}}},
+					{Field: "qty", Expr: &platform.Expr{Kind: "integer", Lit: &platform.ExprLiteral{Value: platform.Raw(10)}}},
+				},
+			}},
+		}},
+	}
+	voidAct := ontology.Action{
+		Name: "void", Title: "Void", From: []string{"posted"}, Roles: []string{ontology.BuilderRole}, Uses: []string{contract + "#reverse"},
+		Transaction: &platform.BusinessTxn{Subject: docType, Steps: []platform.TxnStep{
+			{Name: "mark", Kind: "update", Target: platform.TxnRef{Type: docType, ID: "$subject"}, Changes: []platform.TxnSet{{Field: "state", Expr: &platform.Expr{Kind: "choice", Lit: &platform.ExprLiteral{Value: platform.Raw("voided")}}}}},
+			{Name: "undo", Kind: "request", Request: &platform.TxnRequest{
+				Deferred: true, Optional: true, Key: keyExpr, Use: contract + "#reverse",
+			}},
+		}},
+	}
+	for id, def := range map[string]ontology.Action{"POST": postAct, "VOID": voidAct} {
+		source.accept(t, "build.actiontype.create", build.ActionTypeType, id, map[string]any{"name": docType + "." + def.Name, "object": docType, "definition": def})
+		source.accept(t, "build.actiontype.publish", build.ActionTypeType, id, nil)
+	}
+	source.accept(t, "build.object.publish", build.ObjectType, "VOUCHER", nil)
+
+	assets, err := source.App(build.ID).(*build.Build).ReleaseAssets()
+	if err != nil {
+		t.Fatal(err)
+	}
+	providerCand, err := PublicationResolver().Candidate([]platform.AssetRef{{App: build.ID, Kind: platform.AssetObject, Name: ledgerType}}, assets)
+	if err != nil {
+		t.Fatal(err)
+	}
+	providerPkg := platform.PackageDescriptor{ID: "provider", Version: "1.0.0", Namespace: "provider", Title: "Provider", Contracts: &platform.PackageContracts{Provides: []string{contract}}, Blueprint: &platform.PackageBlueprint{Roots: []platform.AssetRef{{App: build.ID, Kind: platform.AssetObject, Name: ledgerType}}, Assets: providerCand.Assets}}
+
+	consumerRoots := []platform.AssetRef{{App: build.ID, Kind: platform.AssetObject, Name: docType}, {App: build.ID, Kind: protocol.AssetContract, Name: "sample.post"}}
+	consumerCand, err := PublicationResolver().Candidate(consumerRoots, assets)
+	if err != nil {
+		t.Fatal(err)
+	}
+	consumerPkg := platform.PackageDescriptor{ID: "consumer", Version: "1.0.0", Namespace: "consumer", Title: "Consumer", Contracts: &platform.PackageContracts{Optional: []string{contract}}, Blueprint: &platform.PackageBlueprint{Roots: consumerRoots, Assets: consumerCand.Assets}}
+
+	seat := protocol.Seat{Subjects: []string{"opt-admin"}, Member: platform.Member{ID: "opt-admin", Roles: map[string]string{"platform": "admin", "invariantproject": ontology.BuilderRole}}}
+	target := newInvariantTenant(t, "optional-request-target", seat)
+	admin, _ := target.Member("opt-admin")
+	submitPkg := func(id, schema string, payload any) {
+		t.Helper()
+		s := target.submission(schema, protocol.PackageType, id, payload)
+		s.Authority, s.PrincipalId = "platform", admin.ID
+		if _, refusal := target.Submit(admin, s, invariantClock); refusal != nil {
+			t.Fatalf("%s %s: %v", schema, id, refusal)
+		}
+	}
+	install := func(d platform.PackageDescriptor) {
+		t.Helper()
+		view, err := target.InspectPackage(context.Background(), protocol.PackageInspectRequest{Content: platform.Raw(d)})
+		if err != nil || !view.Precheck.OK {
+			t.Fatalf("inspect %s: %+v %v", d.ID, view.Precheck, err)
+		}
+		submitPkg(d.ID, packages.SchemaPackageImport, map[string]any{"id": d.ID, "digest": view.Digest})
+		submitPkg(d.ID, packages.SchemaPackageInstall, map[string]any{"id": d.ID, "version": d.Version, "namespace": d.Namespace})
+	}
+
+	install(consumerPkg)
+	const installedDoc = "consumer.voucher"
+	const installedLedger = "provider.entry"
+	findPost := func(l *invariantTenant) (platform.Action, bool) {
+		for _, a := range l.Catalog(l.member(t)) {
+			if a.Schema == installedDoc+".post" {
+				return a, true
+			}
+		}
+		return platform.Action{}, false
+	}
+	act, ok := findPost(target)
+	if !ok || !slices.Equal(act.Unconnected, []string{"Posting"}) {
+		t.Fatalf("expected visible optional action with Unconnected=[Posting], got ok=%v act=%+v", ok, act)
+	}
+	target.accept(t, installedDoc+".create", installedDoc, "C1", map[string]any{"note": "standalone"})
+	target.accept(t, installedDoc+".post", installedDoc, "C1", map[string]any{})
+	if len(target.Effects(invariantClock)) != 0 {
+		t.Fatalf("unbound optional request must not enqueue effects: %+v", target.Effects(invariantClock))
+	}
+
+	install(providerPkg)
+	bind := target.submission(controlowner.SchemaProtocolBind, controlowner.ProtocolType, contract, map[string]any{"provider": build.ID})
+	bind.PrincipalId, bind.Authority = admin.ID, "platform"
+	if _, refusal := target.Submit(admin, bind, invariantClock); refusal != nil {
+		t.Fatalf("bind: %v", refusal)
+	}
+	if act, ok = findPost(target); !ok || len(act.Unconnected) != 0 {
+		t.Fatalf("bound optional action must clear Unconnected: ok=%v act=%+v", ok, act)
+	}
+
+	target.accept(t, installedDoc+".create", installedDoc, "C2", map[string]any{"note": "connected"})
+	target.accept(t, installedDoc+".post", installedDoc, "C2", map[string]any{})
+	target.Dispatch(invariantClock.Add(time.Second))
+	factView, refusal := target.RecordOf(t.Context(), target.member(t), installedLedger, "DOC-C2", invariantClock)
+	if refusal != nil || !strings.Contains(string(platform.Raw(factView.Record)), `"qty":10`) {
+		t.Fatalf("expected deterministic ledger fact DOC-C2, got %+v %v", factView, refusal)
+	}
+
+	target.accept(t, installedDoc+".void", installedDoc, "C2", map[string]any{})
+	target.Dispatch(invariantClock.Add(2 * time.Second))
+	factAfter, refusal := target.RecordOf(t.Context(), target.member(t), installedLedger, "DOC-C2", invariantClock)
+	if refusal != nil || !strings.Contains(string(platform.Raw(factAfter.Record)), `"reversed":true`) {
+		t.Fatalf("expected DOC-C2 marked reversed, got %s %v", platform.Raw(factAfter.Record), refusal)
+	}
+	balPage, refusal := target.Records(t.Context(), target.member(t), installedLedger+".balance", platform.Query{}, invariantClock)
+	if refusal != nil || len(balPage.Records) != 1 {
+		t.Fatalf("expected balance row after void, got %s %v", platform.Raw(balPage), refusal)
+	}
+	var balRow map[string]any
+	if json.Unmarshal(platform.Raw(balPage.Records[0]), &balRow) != nil || balRow["qty"] != nil && balRow["qty"] != float64(0) {
+		t.Fatalf("expected balance returned to 0 after void, got %v", balRow)
+	}
+
+	submitPkg(providerPkg.ID, packages.SchemaPackageDrain, map[string]any{"id": providerPkg.ID})
+	submitPkg(providerPkg.ID, packages.SchemaPackageRetire, map[string]any{"id": providerPkg.ID})
+	if act, ok = findPost(target); !ok || !slices.Equal(act.Unconnected, []string{"Posting"}) {
+		t.Fatalf("retired provider must restore Unconnected=[Posting]: ok=%v act=%+v", ok, act)
+	}
+	target.accept(t, installedDoc+".create", installedDoc, "C3", map[string]any{"note": "after retire"})
+	target.accept(t, installedDoc+".post", installedDoc, "C3", map[string]any{})
+
+	replayed := target.restore(t, target.entries, seat)
+	replayed.Files = target.files()
+	replayed.invalidateReadImage()
+	if !reflect.DeepEqual(target.recordImage(t), replayed.recordImage(t)) {
+		t.Fatal("replay record image differs")
+	}
+}

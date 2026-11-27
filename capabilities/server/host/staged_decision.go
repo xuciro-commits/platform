@@ -112,7 +112,7 @@ func (d *stagedDecision) Request(c platform.Caller, r *pb.ChangeRecord, q platfo
 			Record: proto.Clone(r).(*pb.ChangeRecord), N: d.NextRequest(c.App + "/" + r.GetChangeId())})
 	} else if effect, err := d.routingTenant().router().PlanDeferredRequest(c, r, q); err != nil {
 		d.FailDecision(err)
-	} else {
+	} else if effect.ID != "" {
 		d.Intents = append(d.Intents, effect)
 	}
 }

@@ -121,9 +121,11 @@ func objectActions(object ontology.Object, entity platform.RecordType) []platfor
 		if len(declared.Uses) == 0 {
 			continue
 		}
+		optional := ontology.OptionalUses(declared)
 		for index := range actions {
 			if actions[index].Schema == entity.Type+"."+declared.Name {
 				actions[index].Uses = slices.Clone(declared.Uses)
+				actions[index].OptionalUses = slices.Clone(optional)
 			}
 		}
 	}

@@ -231,6 +231,7 @@ func txnRowInputs(c platform.Caller, info platform.RecordTypeInfo, raw json.RawM
 		}
 		values["row."+field.Name] = fact
 	}
+	values["row.id"] = platform.ExprValue{Kind: "text", Status: "value", Data: fields["id"]}
 	values["row.$subject"] = platform.ExprValue{Kind: "reference", Status: "value", Data: fields["id"]}
 	return values, nil
 }

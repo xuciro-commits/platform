@@ -683,3 +683,12 @@ func (r Router) BoundContracts() map[string]bool {
 	}
 	return out
 }
+
+func (r Router) ContractTitle(protocol string) string {
+	for _, info := range r.Protocols() {
+		if info.ID == protocol && info.Title != "" {
+			return info.Title
+		}
+	}
+	return protocol
+}

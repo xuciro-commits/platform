@@ -20,6 +20,7 @@ type exprScope struct {
 	steps   map[string]string
 	sets    map[string]string
 	item    string
+	row     string
 	json    bool
 }
 
@@ -400,6 +401,25 @@ func (s exprScope) resolve(name string) (exprField, string, []string, error) {
 			return exprField{}, "", nil, fmt.Errorf("%s is not an earlier step", name)
 		}
 		root, rest = parts[0]+"."+parts[1], parts[2:]
+	case "row":
+		if s.row == "" {
+			return exprField{}, "", nil, fmt.Errorf("%s is used outside a forEach step", name)
+		}
+		if len(parts) < 2 {
+			return exprField{}, "", nil, fmt.Errorf("%s needs a field", name)
+		}
+		if parts[1] == "$subject" {
+			f = exprField{kind: "reference", ref: s.row}
+		} else if parts[1] == "id" {
+			f = exprField{kind: "text"}
+		} else {
+			var ok bool
+			f, ok = s.objects[s.row][parts[1]]
+			if !ok {
+				return exprField{}, "", nil, fmt.Errorf("%s has no field %s", s.row, parts[1])
+			}
+		}
+		root, rest = "row."+parts[1], parts[2:]
 	case "item":
 		if s.item == "" {
 			return exprField{}, "", nil, fmt.Errorf("%s is used outside an aggregate", name)

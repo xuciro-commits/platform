@@ -160,6 +160,8 @@ type Action struct {
 	Payload          []Field           `json:"payload"`
 	Roles            []string          `json:"-"`
 	Uses             []string          `json:"uses,omitempty"`
+	OptionalUses     []string          `json:"optionalUses,omitempty"`
+	Unconnected      []string          `json:"unconnected,omitempty"`
 	Approval         *Approval         `json:"-"`
 	NeedsApproval    bool              `json:"needsApproval,omitempty"`
 	New              bool              `json:"new,omitempty"`

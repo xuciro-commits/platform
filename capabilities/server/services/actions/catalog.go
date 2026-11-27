@@ -11,6 +11,7 @@ type CatalogHooks struct {
 	Apps          func() []platform.Service
 	Entities      func() []platform.RecordTypeInfo
 	Provider      func(used string) (platform.Service, string, bool)
+	ContractTitle func(protocol string) string
 	SchemaVersion func(platform.Service, platform.Action) (platform.SchemaVersion, error)
 }
 
@@ -31,10 +32,26 @@ func (h CatalogHooks) Of(m platform.Member) []platform.Action {
 			if !slices.ContainsFunc(permitted[key], func(p platform.Action) bool { return p.Schema == action.Schema }) || !m.May(a.Manifest().ID, action.Schema, action.Roles).Allow {
 				continue
 			}
+			var unconnected []string
 			if !slices.ContainsFunc(action.Uses, func(used string) bool {
 				owner, schema, _ := h.Provider(used)
-				return owner == nil || !owner.Manifest().Actions.PermitsAny(m.RolesFor(owner.Manifest().ID, schema), schema)
+				if owner == nil {
+					if slices.Contains(action.OptionalUses, used) {
+						protocol, _, _ := strings.Cut(used, "#")
+						title := protocol
+						if h.ContractTitle != nil {
+							title = h.ContractTitle(protocol)
+						}
+						if !slices.Contains(unconnected, title) {
+							unconnected = append(unconnected, title)
+						}
+						return false
+					}
+					return true
+				}
+				return !owner.Manifest().Actions.PermitsAny(m.RolesFor(owner.Manifest().ID, schema), schema)
 			}) {
+				action.Unconnected = unconnected
 				if version, err := h.SchemaVersion(a, action); err == nil {
 					action.SchemaVersion = &version
 				}

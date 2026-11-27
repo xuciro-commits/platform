@@ -208,6 +208,8 @@ export type Action = {
   description: string;
   payload: Field[];
   uses?: string[];
+  optionalUses?: string[];
+  unconnected?: string[];
   needsApproval?: boolean;
   new?: boolean;
   idPrefix?: string;
@@ -5923,6 +5925,8 @@ export type TxnRef = {
 
 export type TxnRequest = {
   deferred?: boolean;
+  optional?: boolean;
+  key?: Expr;
   use: string;
   payload?: TxnSet[];
 };

@@ -24,9 +24,15 @@ func (r Router) PlanDeferredRequest(c platform.Caller, record *pb.ChangeRecord, 
 	}
 	binding, ok := r.Resolve(q.Protocol)
 	if !ok {
+		if q.Optional {
+			return platform.Effect{}, nil
+		}
 		return platform.Effect{}, r.Unavailable(q.Protocol)
 	}
 	key := q.Target
+	if q.Key != "" {
+		key = q.Key
+	}
 	sub, ok := r.Submission(c.ID, q.Protocol, q.Action, q.Target, platform.Raw(q.Payload), key)
 	if !ok || !c.InScope(sub.GetSchema().GetName()) {
 		return platform.Effect{}, platform.Refuse(pb.ErrorCode_ERROR_CODE_POLICY_DENIED, "The requested capability action is unavailable or outside the caller's scope")

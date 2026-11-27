@@ -293,27 +293,64 @@ func expandAction(action *object, base exprScope, at string) error {
 	}
 	list, _ = txn.get("steps")
 	steps, _ := list.([]any)
+	return expandSteps(steps, &s, at)
+}
+
+func expandSteps(steps []any, s *exprScope, at string) error {
 	for _, item := range steps {
 		step := asObject(item)
 		if step == nil {
 			continue
 		}
-		if use, ok := step.values["request"].(string); ok {
-			if err := expandRequest(step, use, s, at); err != nil {
-				return err
-			}
-			continue
-		}
-		target, err := stepTarget(step, s)
-		if err != nil {
-			return fmt.Errorf("%s step %s: %w", at, text(step, "name"), err)
-		}
 		if when, ok := step.get("when"); ok {
-			compiled, err := compileAt(when, s, "boolean", at+" step "+text(step, "name")+" when")
+			compiled, err := compileAt(when, *s, "boolean", at+" step "+text(step, "name")+" when")
 			if err != nil {
 				return err
 			}
 			step.set("when", compiled)
+		}
+		if fe := asObject(step.values["forEach"]); fe != nil {
+			if !step.has("name") {
+				step.set("name", "each")
+			}
+			step.set("kind", "for-each")
+			setName := text(fe, "set")
+			rowType := s.sets[setName]
+			if of := text(fe, "of"); of != "" {
+				f, _, _, err := s.resolve(of)
+				if err != nil || f.kind != "reference" {
+					return fmt.Errorf("%s step %s: invalid forEach of %s", at, text(step, "name"), of)
+				}
+				rowType = ""
+				for candidate, fields := range s.objects {
+					for _, cf := range fields {
+						if cf.ref == f.ref && cf.inverse == setName {
+							rowType = candidate
+						}
+					}
+				}
+			}
+			if rowType == "" {
+				return fmt.Errorf("%s step %s: unknown forEach set %s", at, text(step, "name"), setName)
+			}
+			inner := *s
+			inner.row = rowType
+			subList, _ := fe.get("steps")
+			subSteps, _ := subList.([]any)
+			if err := expandSteps(subSteps, &inner, at+" step "+text(step, "name")); err != nil {
+				return err
+			}
+			continue
+		}
+		if use, ok := step.values["request"].(string); ok {
+			if err := expandRequest(step, use, *s, at); err != nil {
+				return err
+			}
+			continue
+		}
+		target, err := stepTarget(step, *s)
+		if err != nil {
+			return fmt.Errorf("%s step %s: %w", at, text(step, "name"), err)
 		}
 		if set := asObject(step.values["set"]); set != nil {
 			changes := []any{}
@@ -330,7 +367,7 @@ func expandAction(action *object, base exprScope, at string) error {
 					if _, isText := raw.(string); !isText {
 						raw = literalSource(raw)
 					}
-					compiled, err := compileAt(raw, s, want, at+" step "+text(step, "name")+" "+field)
+					compiled, err := compileAt(raw, *s, want, at+" step "+text(step, "name")+" "+field)
 					if err != nil {
 						return err
 					}
@@ -357,7 +394,7 @@ func expandRequest(step *object, use string, s exprScope, at string) error {
 			if _, isText := raw.(string); !isText {
 				raw = literalSource(raw)
 			}
-			compiled, err := compileAt(raw, s, "text", at+" step "+text(step, "name")+" "+field)
+			compiled, err := compileAt(raw, s, "", at+" step "+text(step, "name")+" "+field)
 			if err != nil {
 				return err
 			}
@@ -370,9 +407,19 @@ func expandRequest(step *object, use string, s exprScope, at string) error {
 	}
 	request := &object{}
 	request.set("use", use)
-	if deferred, ok := step.get("deferred"); ok {
-		request.set("deferred", deferred)
-		step.remove("deferred")
+	for _, flag := range []string{"deferred", "optional"} {
+		if v, ok := step.get(flag); ok {
+			request.set(flag, v)
+			step.remove(flag)
+		}
+	}
+	if key, ok := step.get("key"); ok {
+		compiled, err := compileAt(key, s, "text", at+" step "+text(step, "name")+" key")
+		if err != nil {
+			return err
+		}
+		request.set("key", compiled)
+		step.remove("key")
 	}
 	request.set("payload", payload)
 	step.set("kind", "request")
@@ -388,6 +435,23 @@ func stepTarget(step *object, s exprScope) (string, error) {
 		case raw == "$subject":
 			target.set("type", s.self)
 			target.set("id", "$subject")
+		case raw == "$item":
+			if s.row == "" {
+				return "", fmt.Errorf("$item is used outside a forEach step")
+			}
+			target.set("type", s.row)
+			target.set("id", "$item")
+		case strings.HasPrefix(raw, "row."):
+			if s.row == "" {
+				return "", fmt.Errorf("%s is used outside a forEach step", raw)
+			}
+			via := strings.TrimPrefix(raw, "row.")
+			f, ok := s.objects[s.row][via]
+			if !ok || f.kind != "reference" {
+				return "", fmt.Errorf("%s is not a reference of %s", via, s.row)
+			}
+			target.set("type", f.ref)
+			target.set("via", raw)
 		case strings.HasPrefix(raw, "$subject."):
 			via := strings.TrimPrefix(raw, "$subject.")
 			f, ok := s.objects[s.self][via]

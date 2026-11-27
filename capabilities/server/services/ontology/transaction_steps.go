@@ -356,6 +356,12 @@ func checkTypedTxnStep(ctx TransactionContext, step platform.TxnStep, scope plat
 		if !found || verb == "" || !versioned || name == "" || major == "" {
 			return fmt.Errorf("Request steps name a capability contract action as name/major#action")
 		}
+		if q.Optional && !q.Deferred {
+			return fmt.Errorf("Optional capability requests must be deferred")
+		}
+		if err := check(q.Key, "text", "reference"); err != nil {
+			return err
+		}
 		if err := parameters(q.Payload); err != nil {
 			return err
 		}

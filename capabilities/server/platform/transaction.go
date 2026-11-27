@@ -205,6 +205,8 @@ type TxnEffect struct {
 
 type TxnRequest struct {
 	Deferred bool     `json:"deferred,omitempty"`
+	Optional bool     `json:"optional,omitempty"`
+	Key      *Expr    `json:"key,omitempty"`
 	Use      string   `json:"use"`
 	Payload  []TxnSet `json:"payload,omitempty"`
 }
