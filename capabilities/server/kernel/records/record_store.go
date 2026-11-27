@@ -40,6 +40,9 @@ type Store struct {
 }
 
 type Type struct {
+	ledgerPlan         ledgerPlan
+	ledgerImage        ledgerProjection
+	ledgerReady        bool
 	store              *Store
 	indexes            DerivedIndexes
 	info               platform.RecordTypeInfo
@@ -69,7 +72,7 @@ func (s *Store) ForkRecordsLocked() *Store {
 		dirty: s.dirty, recentChanges: s.recentChanges.Fork()}
 	draft.current = s.current.Fork(func(typ string) platform.RecordTypeInfo { return draft.types[typ].info })
 	for typ, et := range s.types {
-		copied := &Type{store: draft, indexes: et.indexes.Fork(), info: et.info, knowledge: et.knowledge, rows: et.rows, fullImage: s.parent != nil && et.fullImage, retainedProjection: et.retainedProjection, formats: et.formats}
+		copied := &Type{store: draft, ledgerPlan: et.ledgerPlan, ledgerImage: et.ledgerImage, ledgerReady: et.ledgerReady, indexes: et.indexes.Fork(), info: et.info, knowledge: et.knowledge, rows: et.rows, fullImage: s.parent != nil && et.fullImage, retainedProjection: et.retainedProjection, formats: et.formats}
 		if copied.rows.Sourced() {
 			copied.rows = copied.rows.Rebind(draft.current.Source(typ, nil))
 		}
@@ -130,6 +133,9 @@ func (s *Store) PromoteRecords(draft *Store) error {
 		}
 	}
 	for typ := range draft.local {
+		if et := s.types[typ]; et != nil && et.info.BalanceOf != "" {
+			s.LiveTouched(typ)
+		}
 		s.changed(typ)
 	}
 	for ref := range draft.writes {
@@ -214,6 +220,7 @@ func (s *Store) Fingerprint(types ...string) (*Store, string, bool) {
 
 func (et *Type) SetRows(rows Index[*Row]) {
 	et.rows, et.fullImage = MemoryRows(rows), true
+	et.ledgerReady = false
 	et.indexes.Reset()
 	if et.store != nil {
 		et.store.changed(et.info.Type)
@@ -223,13 +230,42 @@ func (et *Type) SetRows(rows Index[*Row]) {
 	}
 }
 
-func (et *Type) SetRow(id string, value *Row) {
+func (et *Type) SetRow(id string, value *Row) error {
+	if et.info.BalanceOf != "" {
+		return fmt.Errorf("ledger balance is read-only")
+	}
+	if et.info.Ledger != nil {
+		prior := et.rows.Get(id)
+		if prior == nil {
+			if Header(value.Value).Archived {
+				return fmt.Errorf("ledger facts are immutable")
+			}
+			if err := et.ensureLedger(); err != nil {
+				return err
+			}
+			f, err := ledgerRecord(value.Value)
+			if err != nil {
+				return err
+			}
+			next, err := et.ledgerImage.apply(et.ledgerPlan.replayPlan(), f)
+			if err != nil {
+				return err
+			}
+			et.ledgerImage = next
+			if err := et.updateLedgerBalanceRows(f); err != nil {
+				return err
+			}
+		} else if !reflect.DeepEqual(prior.Value.Interface(), value.Value.Interface()) {
+			return fmt.Errorf("ledger facts are immutable")
+		}
+	}
 	et.indexes.ReplaceReferences(et.info, et.rows, id, value)
 	et.rows.Set(id, value)
 	if et.store != nil {
 		et.store.changed(et.info.Type)
 		et.store.RefreshUniqueIndexes(et.info.Type, id)
 	}
+	return nil
 }
 
 func (et *Type) IndexImage() IndexImage {
@@ -301,7 +337,7 @@ func (s *Store) UniqueChanges() map[string]map[string]string {
 		}
 	}
 	for typ, et := range s.types {
-		if !et.fullImage {
+		if !et.fullImage || et.info.BalanceOf != "" {
 			continue
 		}
 		for id := range et.rows.All() {
@@ -331,6 +367,9 @@ func (s *Store) PrepareUniqueIndexes() {
 
 func (s *Store) UseCurrentRows() {
 	for typ, et := range s.types {
+		if et.info.BalanceOf != "" {
+			continue
+		}
 		et.rows = SourceRows(s.current.Source(typ, nil))
 		et.indexes.Reset()
 		et.fullImage = false
@@ -358,7 +397,9 @@ func (s *Store) AttachHistory(et *Type, id string, r *Row, store persistence.Run
 		}
 		return out
 	}
-	et.SetRow(id, &copy)
+	if err := et.SetRow(id, &copy); err != nil {
+		panic(err)
+	}
 }
 
 func DecodeRowImage(info platform.RecordTypeInfo, raw json.RawMessage, projection *Projection, release, format string) (json.RawMessage, error) {
@@ -421,10 +462,15 @@ func (s *Store) Install(info platform.RecordTypeInfo) error {
 		}
 		et.SetRows(index)
 		delete(s.byGo, before.info.Go)
-	} else if s.current.Backend() != nil && s.current.View() != nil {
+	} else if info.BalanceOf == "" && s.current.Backend() != nil && s.current.View() != nil {
 		et.rows = SourceRows(s.current.Source(info.Type, nil))
 	}
 	s.types[info.Type], s.byGo[info.Go] = et, et
+	if info.BalanceOf != "" {
+		if err := s.rebuildLedgerBalanceLocked(et); err != nil {
+			return err
+		}
+	}
 	s.changed(info.Type)
 	s.generation++
 	return nil

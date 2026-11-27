@@ -101,7 +101,12 @@ func ApplyBatchRows(draft *records.Store, result acceptedformat.Batch, tenant st
 			return err
 		}
 		recovered.RetainOriginal(image.Value)
-		et.SetRow(rec.ID, recovered)
+		if err := et.CheckLedgerReceipt(value, last.GetSubmission().GetSchema().GetName()); err != nil {
+			return err
+		}
+		if err := et.SetRow(rec.ID, recovered); err != nil {
+			return err
+		}
 		draft.TrackWrite(image.Type + "/" + rec.ID)
 		for _, change := range image.History {
 			draft.RememberChange(image.App+"/"+change.Change, image.Type+"/"+rec.ID)

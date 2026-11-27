@@ -418,6 +418,9 @@ func (h TenantSnapshots[Job, Endpoint]) Restore(q *Sequence, raw json.RawMessage
 	if err := h.Definitions(&s, held); err != nil {
 		return err
 	}
+	if err := q.Projection.RebuildLedgerBalances(); err != nil {
+		return err
+	}
 	if err := q.Projection.ValidateLinkConstraints(); err != nil {
 		return err
 	}

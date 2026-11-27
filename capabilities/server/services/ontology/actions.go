@@ -253,6 +253,8 @@ func RuleLookup(o Object, app, builderRole string, lookup func(string) (platform
 			if f.Live != nil {
 				field.Provenance = "live"
 				info.LiveRules[f.Name] = *f.Live
+			} else if o.Ledger && f.Name == "reversed" {
+				field.Provenance = "live"
 			}
 			info.Fields = append(info.Fields, field)
 		}

@@ -64,8 +64,10 @@ type ObjectInstall struct {
 
 func (h ObjectInstall) Run(app platform.Service, e platform.RecordType, actions []platform.Action, pages []platform.Page) error {
 	id := app.Manifest().ID
-	if other := h.Owner(h.Owners["action:"+actions[0].Schema]); other != nil && (other.Manifest().ID != id || other.Authority() != app.Authority()) {
-		return fmt.Errorf("%s: another app owns %s", e.Type, actions[0].Schema)
+	if len(actions) > 0 {
+		if other := h.Owner(h.Owners["action:"+actions[0].Schema]); other != nil && (other.Manifest().ID != id || other.Authority() != app.Authority()) {
+			return fmt.Errorf("%s: another app owns %s", e.Type, actions[0].Schema)
+		}
 	}
 	info, err := records.Describe(id, e, func(reflect.Type) string { return "" })
 	if err != nil {

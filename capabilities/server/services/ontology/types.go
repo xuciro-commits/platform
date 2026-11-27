@@ -11,6 +11,9 @@ import (
 
 type Object struct {
 	platform.Record
+	Ledger               bool                         `json:"ledger,omitempty" title:"Ledger"`
+	ClosedBefore         string                       `json:"closedBefore,omitempty" type:"date" title:"Closed before"`
+	Balances             []Balance                    `json:"balances,omitempty" type:"json" field:"aside"`
 	Name                 string                       `json:"name" field:"required,search" title:"API name" help:"Its name in the platform, lower-case letters and digits" example:"visit"`
 	Namespace            string                       `json:"namespace,omitempty" title:"Application" help:"The project whose application owns this type; set from the project when the type is created"`
 	Title                string                       `json:"title" field:"required,search" title:"Name" help:"What people call it" example:"Visit"`
@@ -47,6 +50,12 @@ type Object struct {
 	State                string                       `json:"state" field:"readonly" choices:"draft,published"`
 	Installed            string                       `json:"installed,omitempty" field:"readonly" title:"Installed as" help:"The type records of it are stored under"`
 	Published            string                       `json:"published,omitempty" field:"readonly,internal" type:"longtext" title:"Installed" help:"What is installed"`
+}
+
+type Balance struct {
+	platform.LedgerBalance
+	Title  string   `json:"title"`
+	Access []Access `json:"access,omitempty"`
 }
 
 type Field struct {

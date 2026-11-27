@@ -74,7 +74,7 @@ func CompileObjectShape(o Object, app, builderRole string) platform.RecordType {
 		if f.SourceType != "" {
 			tag += fmt.Sprintf(` source:"%s"`, f.SourceType)
 		}
-		if f.Live != nil {
+		if f.Live != nil || o.Ledger && f.Name == "reversed" {
 			tag += ` provenance:"live"`
 		} else if f.Formula != "" || f.FormulaExpr != nil {
 			tag += ` provenance:"formula"`
@@ -187,7 +187,7 @@ func CompileObjectShape(o Object, app, builderRole string) platform.RecordType {
 			localRules[field.Name] = *field.FormulaExpr
 		}
 	}
-	return platform.RecordType{DataSources: slices.Clone(o.DataSources), LocalRules: localRules, LiveRules: liveRules, LiveReads: o.Reads, Type: o.Type(), Title: o.Title, Plural: o.Plural, Description: o.Description, Icon: o.Icon, Color: o.Color, Format: FieldFormats(o.Fields), ValueTypeBindings: ValueTypeBindings(o.Fields), PropertyBindings: PropertyBindings(o.Fields), Model: model, Display: display, Naming: o.Naming, ObjectView: o.ObjectView, View: slices.Clone(o.View), Constraints: append(slices.Clone(o.Constraints), OneOfConstraints(o.Fields)...), Sets: o.Sets, Versioning: o.Versioning, VersionPins: o.VersionPins, Implements: slices.Clone(o.Implements), Extends: o.Extends, ExtensionSource: o.ExtensionSource, Derived: derived, Withheld: withheld, EnterpriseUse: o.EnterpriseUse}
+	return platform.RecordType{Ledger: LedgerOf(o), DataSources: slices.Clone(o.DataSources), LocalRules: localRules, LiveRules: liveRules, LiveReads: o.Reads, Type: o.Type(), Title: o.Title, Plural: o.Plural, Description: o.Description, Icon: o.Icon, Color: o.Color, Format: FieldFormats(o.Fields), ValueTypeBindings: ValueTypeBindings(o.Fields), PropertyBindings: PropertyBindings(o.Fields), Model: model, Display: display, Naming: o.Naming, ObjectView: o.ObjectView, View: slices.Clone(o.View), Constraints: append(slices.Clone(o.Constraints), OneOfConstraints(o.Fields)...), Sets: o.Sets, Versioning: o.Versioning, VersionPins: o.VersionPins, Implements: slices.Clone(o.Implements), Extends: o.Extends, ExtensionSource: o.ExtensionSource, Derived: derived, Withheld: withheld, EnterpriseUse: o.EnterpriseUse}
 }
 
 func goType(kind string) reflect.Type {

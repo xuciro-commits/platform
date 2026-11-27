@@ -38,7 +38,20 @@ type Money struct {
 	Currency string `json:"currency"`
 }
 
+type LedgerSpec struct {
+	ClosedBefore string          `json:"closedBefore,omitempty"`
+	Balances     []LedgerBalance `json:"balances"`
+}
+type LedgerBalance struct {
+	Name        string       `json:"name"`
+	Keys        []string     `json:"keys"`
+	Measures    []string     `json:"measures"`
+	Constraints []Constraint `json:"constraints,omitempty"`
+}
+
 type RecordType struct {
+	Ledger            *LedgerSpec
+	BalanceOf         string
 	DataSources       []DataSourceBinding
 	LocalRules        map[string]Expr
 	LiveRules         map[string]Expr
@@ -326,6 +339,8 @@ func (f FieldInfo) Active(valueOf func(field string) string, engines ...RuleEngi
 }
 
 type RecordTypeInfo struct {
+	Ledger          *LedgerSpec         `json:"ledger,omitempty"`
+	BalanceOf       string              `json:"balanceOf,omitempty"`
 	DataSources     []DataSourceBinding `json:"datasources,omitempty"`
 	LocalRules      map[string]Expr     `json:"localRules,omitempty"`
 	LiveRules       map[string]Expr     `json:"-"`

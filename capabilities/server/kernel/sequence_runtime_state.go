@@ -108,6 +108,9 @@ func (s *Sequence) RuntimeStateDelta(o RuntimeOwners) (persistence.StateDelta, e
 		s.Projection.Lock()
 		defer s.Projection.Unlock()
 		for typ, et := range s.Projection.Types() {
+			if et.Info().BalanceOf != "" {
+				continue
+			}
 			for id, r := range et.Rows().All() {
 				image, err := r.Image()
 				if err != nil {

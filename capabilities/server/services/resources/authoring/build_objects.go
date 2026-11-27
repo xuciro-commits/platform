@@ -111,6 +111,9 @@ func (b *Build) conditionLookup(typ string) (platform.RecordTypeInfo, bool) {
 }
 
 func (b *Build) Check(o ontology.Object, id string, engine platform.RuleEngine) error {
+	if err := ontology.CheckLedger(o, engine); err != nil {
+		return err
+	}
 	if err := b.checkName(o.Namespace, o.Name, id); err != nil {
 		return err
 	}
@@ -249,6 +252,9 @@ func (b *Build) install(c platform.Caller, o ontology.Object) *platform.Error {
 		return &platform.Error{Code: pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, Message: err.Error()}
 	}
 	b.installed[entity.Type] = entity
+	if err := ontology.InstallLedgerBalances(c, o, b.host, b.authority, func(e platform.RecordType) { b.installed[e.Type] = e }); err != nil {
+		return platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, err.Error())
+	}
 	b.invalidateManifest()
 	return nil
 }

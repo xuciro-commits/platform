@@ -23,10 +23,30 @@ func (t *Owner) liveLookup(store *records.Store) func(string) (platform.RecordTy
 
 // projectLive never mutates a stored row and is only called outside the store
 // lock: evaluation may read another record or a declared inverse collection.
+func (t *Owner) liveValue(store *records.Store, c platform.Caller, info platform.RecordTypeInfo, field platform.FieldInfo, record any, lookup func(string) (platform.RecordTypeInfo, bool), at time.Time) platform.ExprValue {
+	if info.Ledger != nil && field.Name == "reversed" {
+		var header struct {
+			ID string `json:"id"`
+		}
+		_ = json.Unmarshal(platform.Raw(record), &header)
+		if field.ReadsAny(c.RolesIn(info.Type), c.Rules()) {
+			d := c.Authorize(platform.AuthzRequest{Principal: c.ID, Tenant: c.Tenant, Kind: "read", Type: info.Type, Record: header.ID, Fields: []string{field.Name}}, at)
+			if d.Allow && len(d.Withheld) == 0 {
+				if reversed, err := store.LedgerReversed(info.Type, header.ID); err == nil {
+					return platform.ExprPresent("boolean", reversed)
+				}
+			}
+		}
+		return platform.ExprValue{Kind: "boolean", Status: "withheld"}
+	}
+	v, _ := protocol.LiveField(c, info, field, record, lookup, at)
+	return v
+}
+
 func (t *Owner) projectLive(store *records.Store, c platform.Caller, typ string, record any, at time.Time) (any, []string) {
 	lookup := t.liveLookup(store)
 	info, ok := lookup(typ)
-	if !ok || len(info.LiveRules) == 0 {
+	if !ok || len(info.LiveRules) == 0 && info.Ledger == nil {
 		return record, nil
 	}
 	rv := reflect.ValueOf(record)
@@ -41,7 +61,7 @@ func (t *Owner) projectLive(store *records.Store, c platform.Caller, typ string,
 		}
 		dest := out.FieldByIndex(field.Index)
 		dest.SetZero()
-		value, _ := protocol.LiveField(c, info, field, record, lookup, at)
+		value := t.liveValue(store, c, info, field, record, lookup, at)
 		switch value.Status {
 		case "value":
 			v, err := protocol.ExprGoValue(value)
@@ -64,7 +84,7 @@ func (t *Owner) projectLive(store *records.Store, c platform.Caller, typ string,
 func (t *Owner) projectLiveRaw(store *records.Store, c platform.Caller, typ string, raw json.RawMessage, at time.Time) json.RawMessage {
 	lookup := t.liveLookup(store)
 	info, ok := lookup(typ)
-	if !ok || len(info.LiveRules) == 0 {
+	if !ok || len(info.LiveRules) == 0 && info.Ledger == nil {
 		return raw
 	}
 	var row map[string]json.RawMessage
@@ -77,7 +97,7 @@ func (t *Owner) projectLiveRaw(store *records.Store, c platform.Caller, typ stri
 			continue
 		}
 		delete(row, field.Name)
-		value, _ := protocol.LiveField(c, info, field, raw, lookup, at)
+		value := t.liveValue(store, c, info, field, raw, lookup, at)
 		switch value.Status {
 		case "value":
 			v, err := protocol.ExprGoValue(value)

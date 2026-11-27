@@ -91,12 +91,20 @@ func (s *Store) Put(c platform.Caller, r *pb.ChangeRecord, entity any) *platform
 	if err := s.CheckLinkWriteLocked(et, v); err != nil {
 		return err
 	}
+	if err := et.CheckLedgerReceipt(v, r.GetSubmission().GetSchema().GetName()); err != nil {
+		return platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, err.Error())
+	}
 	prev := et.rows.Get(rec.ID)
+	if err := et.CheckLedgerRow(v, prev); err != nil {
+		return platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, err.Error())
+	}
 	next, refusal := Write(et.info, r, prev, v)
 	if refusal != nil {
 		return refusal
 	}
-	et.SetRow(rec.ID, next)
+	if err := et.SetRow(rec.ID, next); err != nil {
+		return platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, err.Error())
+	}
 	s.generation++
 	s.LiveTouched(et.info.Type)
 	if s.writes != nil {
@@ -135,6 +143,9 @@ func (s *Store) Check(c platform.Caller, entity any, now time.Time) *platform.Er
 	}
 	v := Copy(et.info.Go, entity)
 	platform.ApplyFieldAliases(et.info, v)
+	if err := et.CheckLedgerRow(v, et.rows.Get(Header(v).ID)); err != nil {
+		return platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, err.Error())
+	}
 	previous := reflect.Value{}
 	if old := et.rows.Get(Header(v).ID); old != nil {
 		previous = old.Value

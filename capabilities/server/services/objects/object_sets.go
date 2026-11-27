@@ -516,7 +516,7 @@ func (t *Owner) LoadObjectSet(store *records.Store, c platform.Caller, set platf
 		return page, "", err
 	}
 	page, err := r.loadObjects(node, w)
-	if err == nil && !w.SkipLive && w.Project == nil && len(r.types[node.object].entity.Info().LiveRules) > 0 {
+	if err == nil && !w.SkipLive && w.Project == nil && (len(r.types[node.object].entity.Info().LiveRules) > 0 || r.types[node.object].entity.Info().Ledger != nil) {
 		for i, row := range page.Records {
 			projected, restricted := t.projectLive(store, r.c, node.object, row, now)
 			page.Records[i] = projected

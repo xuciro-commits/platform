@@ -24,7 +24,7 @@ func (t *Owner) RecordSetPage(m platform.Member, root platform.RecordTypeInfo, i
 	if refusal != nil {
 		return page, refusal
 	}
-	if info, ok := t.entity(result.Object); ok && len(info.LiveRules) > 0 {
+	if info, ok := t.entity(result.Object); ok && (len(info.LiveRules) > 0 || info.Ledger != nil) {
 		for i, row := range result.Records {
 			result.Records[i] = t.projectLiveRaw(t.Store, c, result.Object, row, now)
 		}

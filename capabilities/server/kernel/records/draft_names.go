@@ -29,7 +29,9 @@ func (s *Store) DraftMatches(typ, name string, reopen, managed bool) (int, error
 			Header(value).Archived = false
 			copy := *row
 			copy.Value = value
-			et.SetRow(id, &copy)
+			if err := et.SetRow(id, &copy); err != nil {
+				panic(err)
+			}
 			s.TrackWrite(et.Info().Type + "/" + id)
 			archived = false
 		}

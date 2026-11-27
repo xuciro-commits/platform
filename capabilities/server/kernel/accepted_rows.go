@@ -172,7 +172,15 @@ func ApplyDirectRows(base *records.Store, rows []acceptedformat.InputRow, member
 			}
 		}
 		recovered.RetainOriginal(image.Value)
-		et.SetRow(image.ID, recovered)
+		if et.Info().Ledger != nil || et.Info().BalanceOf != "" {
+			return nil, fmt.Errorf("direct input cannot write ledger facts or balances")
+		}
+		if err := et.CheckLedgerRow(value, prior); err != nil {
+			return nil, err
+		}
+		if err := et.SetRow(image.ID, recovered); err != nil {
+			return nil, err
+		}
 		draft.TrackWrite(image.Type + "/" + image.ID)
 		if et.Knowledge() {
 			draft.MarkDirty(image.Type + "/" + image.ID)

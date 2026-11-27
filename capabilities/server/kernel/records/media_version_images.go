@@ -50,7 +50,9 @@ func ApplyMediaVersionImages(store *Store, snapshots []platform.MediaSetVersion)
 		}
 		row := &Row{Value: reflect.ValueOf(&snapshot).Elem()}
 		row.RetainOriginal(platform.Raw(snapshot))
-		versions.SetRow(snapshot.ID, row)
+		if err := versions.SetRow(snapshot.ID, row); err != nil {
+			return err
+		}
 		store.TrackWrite(platform.MediaSetVersionType + "/" + snapshot.ID)
 	}
 	return nil

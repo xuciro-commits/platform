@@ -349,6 +349,9 @@ func when(f platform.FieldInfo) string {
 }
 
 func builtinAction(e platform.RecordType, verb string) (platform.ActionType, bool) {
+	if verb == "reverse" && e.Ledger != nil && e.Standard.Create {
+		return platform.ActionType{Name: verb}, true
+	}
 	if verb == "create" && e.Standard.Create || verb == "edit" && e.Standard.Edit || verb == "archive" && e.Standard.Archive || verb == "restore" && e.Standard.Restore {
 		return platform.ActionType{Name: verb}, true
 	}
@@ -398,6 +401,9 @@ func executeAction(c platform.Caller, e platform.RecordType, t platform.ActionTy
 			return nil, notFound()
 		}
 		v.Elem().Set(reflect.ValueOf(existing))
+	}
+	if t.Name == "reverse" {
+		return reverseLedgerAction(c, e, s, existing, now)
 	}
 	switch t.Name {
 	case "create", "edit", "archive", "restore":

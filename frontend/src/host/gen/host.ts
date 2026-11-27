@@ -2077,6 +2077,8 @@ export type EnterpriseUsageItem = {
 };
 
 export type EntityInfo = {
+  ledger?: LedgerSpec;
+  balanceOf?: string;
   datasources?: DataSourceBinding[];
   localRules?: Record<string, Expr>;
   enterpriseUse?: Expr;
@@ -2708,6 +2710,18 @@ export type Layer = {
   reason: string;
   role?: string;
   policy?: string;
+};
+
+export type LedgerBalance = {
+  name: string;
+  keys: string[];
+  measures: string[];
+  constraints?: Constraint[];
+};
+
+export type LedgerSpec = {
+  closedBefore?: string;
+  balances: LedgerBalance[];
 };
 
 export type LifecycleInfo = {

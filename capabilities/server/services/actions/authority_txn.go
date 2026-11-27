@@ -95,7 +95,7 @@ func (l *authority) ApplyTxnRecord(c platform.Caller, r *pb.ChangeRecord, e plat
 		if !found || !f.ReadOnly {
 			continue
 		}
-		if f.Provenance == "live" {
+		if f.Provenance == "live" || e.Ledger != nil && name == "reverses" {
 			return platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "A live field cannot be written")
 		}
 		var state string

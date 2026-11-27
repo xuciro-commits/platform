@@ -41,7 +41,7 @@ func Describe(app string, e Entity, typeOf func(reflect.Type) string) (EntityInf
 	if t == nil || t.Kind() != reflect.Struct || t.NumField() == 0 || t.Field(0).Type != reflect.TypeFor[Record]() || !t.Field(0).Anonymous {
 		return EntityInfo{}, fmt.Errorf("entity %s: the model must be a struct embedding platform.Record first", e.Type)
 	}
-	info := EntityInfo{DataSources: slices.Clone(e.DataSources), LocalRules: e.LocalRules, LiveRules: e.LiveRules, LiveReads: e.LiveReads, EnterpriseUse: e.EnterpriseUse, Type: e.Type, Title: e.Title, Description: e.Description, Synonyms: e.Synonyms, KnowledgeFiles: e.KnowledgeFiles, App: app, Display: e.Display, Naming: e.Naming, ObjectView: e.ObjectView, View: slices.Clone(e.View), Go: t, Scope: e.Scope, Fields: []FieldInfo{}, Standard: []string{}, Implements: e.Implements, Extends: e.Extends, ExtensionSource: e.ExtensionSource, Constraints: append(slices.Clone(e.Constraints), protocol.VersioningConstraints(e.Versioning)...), Sets: e.Sets, Versioning: e.Versioning, VersionPins: slices.Clone(e.VersionPins)}
+	info := EntityInfo{Ledger: e.Ledger, BalanceOf: e.BalanceOf, DataSources: slices.Clone(e.DataSources), LocalRules: e.LocalRules, LiveRules: e.LiveRules, LiveReads: e.LiveReads, EnterpriseUse: e.EnterpriseUse, Type: e.Type, Title: e.Title, Description: e.Description, Synonyms: e.Synonyms, KnowledgeFiles: e.KnowledgeFiles, App: app, Display: e.Display, Naming: e.Naming, ObjectView: e.ObjectView, View: slices.Clone(e.View), Go: t, Scope: e.Scope, Fields: []FieldInfo{}, Standard: []string{}, Implements: e.Implements, Extends: e.Extends, ExtensionSource: e.ExtensionSource, Constraints: append(slices.Clone(e.Constraints), protocol.VersioningConstraints(e.Versioning)...), Sets: e.Sets, Versioning: e.Versioning, VersionPins: slices.Clone(e.VersionPins)}
 	info.RecordFormat, info.RecordImages = e.RecordFormat, slices.Clone(e.RecordImages)
 	if err := checkRecordImageFormats(info); err != nil {
 		return EntityInfo{}, err
@@ -168,6 +168,9 @@ func Describe(app string, e Entity, typeOf func(reflect.Type) string) (EntityInf
 				info.Lifecycle.Transitions = append(info.Lifecycle.Transitions, TransitionInfo{Name: t.Name, Schema: e.Type + "." + t.Name, Title: title, From: from, To: to, ToInput: inputName})
 			}
 		}
+	}
+	if e.Ledger != nil && e.Standard.Create {
+		info.Standard = append(info.Standard, e.Type+".reverse")
 	}
 	for _, x := range [][2]any{{e.Standard.Create, ".create"}, {e.Standard.Edit, ".edit"}, {e.Standard.Archive, ".archive"}, {e.Standard.Restore, ".restore"}} {
 		if x[0].(bool) {

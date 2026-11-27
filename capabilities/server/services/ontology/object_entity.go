@@ -22,6 +22,9 @@ func CompileObjectEntity(o Object, env ObjectRuntimeEnvironment) platform.Record
 	entity := CompileObjectShape(o, AppID, BuilderRole)
 	std, scope, roles := CompileAccess(o, BuilderRole, UserRole)
 	std.Restore = std.Archive && !slices.ContainsFunc(o.Actions, func(action Action) bool { return action.Name == "restore" })
+	if o.Ledger {
+		std.Edit, std.Archive, std.Restore = false, false, false
+	}
 	entity.Standard, entity.Scope = std, scope
 	entity.Lifecycle = compileLifecycle(o, roles, env)
 	entity.TransactionDestination = TransactionDestination

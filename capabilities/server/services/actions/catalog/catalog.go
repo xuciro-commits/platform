@@ -98,6 +98,9 @@ func EntityActions(e platform.RecordType) []platform.Action {
 		out = append(out, platform.Action{Schema: e.Type + ".create", Target: e.Type, New: true, Capability: capability, Title: "Create " + strings.ToLower(info.Title),
 			Description: "Create " + article(info.Title) + ".", Payload: fields, Roles: roles(e.Standard, "create")})
 	}
+	if e.Ledger != nil && e.Standard.Create {
+		out = append(out, platform.Action{Schema: e.Type + ".reverse", Target: e.Type, Capability: capability, Title: "Reverse " + strings.ToLower(info.Title), Description: "Post an opposite fact without editing the original.", Payload: []platform.Field{{Name: "on", Type: "date", Description: "Business date"}}, Roles: roles(e.Standard, "create")})
+	}
 	if e.Standard.Edit {
 		out = append(out, platform.Action{RecordEdit: true, Schema: e.Type + ".edit", Target: e.Type, Capability: capability, Title: "Edit " + strings.ToLower(info.Title),
 			Description: "Change fields of " + article(info.Title) + "; fields left out keep their value.", Payload: editable, Roles: roles(e.Standard, "edit")})

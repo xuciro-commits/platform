@@ -16,7 +16,7 @@ func LiveField(c platform.Caller, info platform.RecordTypeInfo, field platform.F
 		return value, nil
 	}
 	expr, ok := info.LiveRules[field.Name]
-	if !ok {
+	if !ok && !(info.Ledger != nil && field.Name == "reversed") {
 		return value, nil
 	}
 	var header struct {
@@ -34,6 +34,17 @@ func LiveField(c platform.Caller, info platform.RecordTypeInfo, field platform.F
 		return value, nil
 	}
 	c = c.Deeper()
+	if info.Ledger != nil && field.Name == "reversed" {
+		raw, err := c.ReadRecord(info.Type, header.ID, at)
+		if err != nil {
+			return value, nil
+		}
+		var fields map[string]json.RawMessage
+		if json.Unmarshal(raw, &fields) == nil && (string(fields["reversed"]) == "true" || string(fields["reversed"]) == "false") {
+			return platform.ExprValue{Kind: "boolean", Status: "value", Data: fields["reversed"]}, []string{info.Type + "/" + header.ID}
+		}
+		return value, nil
+	}
 	spec := platform.RuleReadSpec{Object: info.Type}
 	if info.LiveReads != nil {
 		spec.Collections = info.LiveReads.Collections

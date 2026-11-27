@@ -322,6 +322,9 @@ func assign(f reflect.Value, x any) error {
 }
 
 func (b *Build) normalizeObjectRules(o *ontology.Object) error {
+	if err := ontology.NormalizeLedger(o); err != nil {
+		return err
+	}
 	viewFields := make([]publication.ViewField, len(o.Fields))
 	for i, f := range o.Fields {
 		viewFields[i] = publication.ViewField{Name: f.Name, Type: f.Type, Ref: f.Ref}

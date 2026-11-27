@@ -59,7 +59,12 @@ func InstallAcceptedRecord(draft *records.Store, et *records.Type, result accept
 		return err
 	}
 	recovered.RetainOriginal(result.Row.Value)
-	et.SetRow(rec.ID, recovered)
+	if err := et.CheckLedgerReceipt(value, receipt.GetSubmission().GetSchema().GetName()); err != nil {
+		return err
+	}
+	if err := et.SetRow(rec.ID, recovered); err != nil {
+		return err
+	}
 	draft.TrackWrite(result.Row.Type + "/" + rec.ID)
 	draft.RememberChange(result.App+"/"+receipt.GetChangeId(), result.Row.Type+"/"+rec.ID)
 	if et.Knowledge() {

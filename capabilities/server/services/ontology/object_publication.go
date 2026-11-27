@@ -529,7 +529,7 @@ func ObjectPublication(env ObjectPublicationEnvironment) publication.Hooks {
 					return fmt.Errorf("install accepted object: %w", err)
 				}
 				env.Installed(entity)
-				return nil
+				return InstallLedgerBalances(platform.Caller{Replaying: true}, published, env.Host(), env.Authority(), env.Installed)
 			},
 		}},
 		ReadFrozen: func(raw json.RawMessage) (json.RawMessage, error) {
