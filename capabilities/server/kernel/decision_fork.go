@@ -20,6 +20,7 @@ func (d Decision) Fork(owner func(string) platform.Service) (Decision, bool) {
 		fork.BusinessRefusals[key] = acceptedformat.CloneBusinessFact(fact)
 	}
 	fork.CallbackWrites = maps.Clone(d.CallbackWrites)
+	fork.AIWrites = maps.Clone(d.AIWrites)
 	if d.CallbackOrigin != nil {
 		origin := *d.CallbackOrigin
 		origin.Output = slices.Clone(origin.Output)

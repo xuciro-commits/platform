@@ -10,6 +10,22 @@ export type AIApplicationTotal = {
   costUnknown: number;
 };
 
+export type AICaller = {
+  kind: string;
+  name?: string;
+  version?: string;
+  tool?: string;
+  model?: string;
+  event?: string;
+  run?: string;
+  input?: number;
+  output?: number;
+  cached?: number;
+  cost?: number;
+  due?: string;
+  approvedBy?: string;
+};
+
 export type AIFunction = {
   proposal?: ProposalPolicy;
   conversation?: boolean;
@@ -4857,6 +4873,7 @@ export type RecordSectionView = {
   section: string;
   partial?: boolean;
   history?: RecordChange[];
+  ai?: Record<string, AICaller>;
   refs?: Record<string, Record<string, string>>;
   people?: Record<string, string>;
   related?: Related[];
@@ -4938,6 +4955,7 @@ export type RecordView = {
   restrictedFields?: RestrictedField[];
   record: unknown;
   history?: RecordChange[];
+  ai?: Record<string, AICaller>;
   related?: Related[];
   processes?: unknown[];
   approvals?: unknown[];

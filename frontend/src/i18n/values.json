@@ -1066,5 +1066,16 @@
   "Optional contract": "可选契约",
   "Provider in this package": "本包提供实现",
   "Connected entries": "已接入的入口",
-  "Entries awaiting provider activation": "等待提供方启用的入口"
+  "Entries awaiting provider activation": "等待提供方启用的入口",
+  "Provenance": "来由",
+  "Tool": "工具",
+  "Trigger event": "触发事件",
+  "Turn": "轮次",
+  "Usage": "用量",
+  "Delegation": "委派",
+  "MCP client": "MCP 客户端",
+  "Approved by": "批准人",
+  "Input": "输入",
+  "Output": "输出",
+  "Cost": "费用"
 }

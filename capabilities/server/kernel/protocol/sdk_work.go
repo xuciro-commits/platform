@@ -44,18 +44,19 @@ type ApprovalOwner interface {
 }
 
 type AICaller struct {
-	Kind    string    `json:"kind"`
-	Name    string    `json:"name,omitempty"`
-	Version string    `json:"version,omitempty"`
-	Tool    string    `json:"tool,omitempty"`
-	Model   string    `json:"model,omitempty"`
-	Event   string    `json:"event,omitempty"`
-	Run     string    `json:"run,omitempty"`
-	Input   int       `json:"input,omitempty"`
-	Output  int       `json:"output,omitempty"`
-	Cached  int       `json:"cached,omitempty"`
-	Cost    float64   `json:"cost,omitempty"`
-	Due     time.Time `json:"due,omitzero"`
+	Kind       string    `json:"kind"`
+	Name       string    `json:"name,omitempty"`
+	Version    string    `json:"version,omitempty"`
+	Tool       string    `json:"tool,omitempty"`
+	Model      string    `json:"model,omitempty"`
+	Event      string    `json:"event,omitempty"`
+	Run        string    `json:"run,omitempty"`
+	Input      int       `json:"input,omitempty"`
+	Output     int       `json:"output,omitempty"`
+	Cached     int       `json:"cached,omitempty"`
+	Cost       float64   `json:"cost,omitempty"`
+	Due        time.Time `json:"due,omitzero"`
+	ApprovedBy string    `json:"approvedBy,omitempty"`
 }
 
 func WithAICaller(m platform.Member, ai *AICaller) platform.Member {

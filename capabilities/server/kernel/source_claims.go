@@ -1,8 +1,10 @@
 package kernel
 
 import (
+	"encoding/json"
 	"fmt"
 	"slices"
+	"strings"
 	"time"
 
 	"google.golang.org/protobuf/proto"
@@ -40,10 +42,23 @@ func (c SourceClaims) Prepare(tenant, typ, id, change string, prepared *ClaimSet
 	}
 	facts := make([]*pb.Fact, 0, len(prepared.Claims))
 	for _, claim := range prepared.Claims {
-		fact := &pb.Fact{TenantId: tenant, Kind: pb.FactKind_FACT_KIND_CLAIM, Subject: &pb.EntityRef{Type: typ, Id: id}, Attribute: claim.Attribute,
+		subjectType, subjectID, subjectChange, attr, payload := typ, id, change, claim.Attribute, claim.Payload
+		if strings.HasPrefix(claim.Attribute, "$ai/") {
+			var batch AIBatchClaim
+			var ok bool
+			if json.Unmarshal(claim.Payload, &batch) != nil {
+				return nil, fmt.Errorf("invalid ai source claim payload")
+			}
+			subjectType, subjectID, ok = strings.Cut(batch.Target, "/")
+			if !ok || subjectType == "" || subjectID == "" || batch.Change == "" {
+				return nil, fmt.Errorf("invalid ai source claim target")
+			}
+			subjectChange, attr, payload = batch.Change, "$ai", platform.Raw(batch.Caller)
+		}
+		fact := &pb.Fact{TenantId: tenant, Kind: pb.FactKind_FACT_KIND_CLAIM, Subject: &pb.EntityRef{Type: subjectType, Id: subjectID}, Attribute: attr,
 			Schema:         &pb.SchemaRef{Name: "integration.claim", Version: 1},
 			Provenance:     &pb.Provenance{Source: &pb.Provenance_ConnectorId{ConnectorId: claim.Connector}, SourceTime: timestamppb.New(claim.SourceTime), Confidence: 1},
-			IdempotencyKey: typ + "/" + id + "/" + change + "/" + claim.Attribute, Payload: claim.Payload}
+			IdempotencyKey: subjectType + "/" + subjectID + "/" + subjectChange + "/" + attr, Payload: payload}
 		if old := c.Facts.Accepted(tenant, fact.IdempotencyKey); old != nil && !proto.Equal(old.GetFact(), fact) {
 			return nil, fmt.Errorf("source claim idempotency conflict")
 		}
@@ -72,9 +87,14 @@ func (c SourceClaims) Apply(tenant, typ, id, change string, at time.Time, prepar
 		}
 	}
 	target := &pb.EntityRef{Type: typ, Id: id}
-	if _, failure := c.Identity.Resolve(target); failure != nil {
-		if failure := c.Identity.Create(target); failure != nil {
-			return fmt.Errorf("accepted source identity: %v", failure)
+	hasConnectorClaim := prepared.Origin != "" || slices.ContainsFunc(prepared.Claims, func(cl acceptedformat.SourceClaim) bool {
+		return !strings.HasPrefix(cl.Connector, "ai:")
+	})
+	if hasConnectorClaim {
+		if _, failure := c.Identity.Resolve(target); failure != nil {
+			if failure := c.Identity.Create(target); failure != nil {
+				return fmt.Errorf("accepted source identity: %v", failure)
+			}
 		}
 	}
 	if prepared.Origin != "" {

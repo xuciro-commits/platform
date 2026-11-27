@@ -27,6 +27,7 @@ type RecordView struct {
 	RestrictedFields []RestrictedField               `json:"restrictedFields,omitempty"`
 	Record           any                             `json:"record"`
 	History          []records.RecordChange          `json:"history,omitempty"`
+	AI               map[string]protocol.AICaller    `json:"ai,omitempty"`
 	Related          []Related                       `json:"related,omitempty"`
 	Processes        []any                           `json:"processes,omitempty"`
 	Approvals        []any                           `json:"approvals,omitempty"`
@@ -67,6 +68,7 @@ type RecordSectionView struct {
 	Section    string                       `json:"section"`
 	Partial    bool                         `json:"partial,omitempty"`
 	History    []records.RecordChange       `json:"history,omitempty"`
+	AI         map[string]protocol.AICaller `json:"ai,omitempty"`
 	Refs       map[string]map[string]string `json:"refs,omitempty"`
 	People     map[string]string            `json:"people,omitempty"`
 	Related    []Related                    `json:"related,omitempty"`
@@ -195,13 +197,14 @@ func (t *Owner) recordSection(m platform.Member, typ, id, section string, now ti
 		out.Processes, out.Tasks, out.Approvals, out.Partial = t.recordWork(m, typ, id, now)
 	case RecordSectionHistory:
 		out.History = t.recordHistory(base)
+		out.AI = t.recordAIHistory(typ, id, out.History)
 		out.Refs, out.Partial = t.historyNames(m, typ, out.History, now)
 	case RecordSectionComments:
 		out.Comments, out.Following, out.Partial = t.recordComments(m, typ, id, now)
 	default:
 		return RecordSectionView{}, &platform.Error{Code: pb.ErrorCode_ERROR_CODE_NOT_FOUND}
 	}
-	out.People = t.people(out.History, out.Activity, out.Comments)
+	out.People = t.people(out.History, aiApprovedPeople(out.AI), out.Activity, out.Comments)
 	return out, nil
 }
 
@@ -216,6 +219,7 @@ func (t *Owner) recordDetail(m platform.Member, typ, id string, now time.Time, s
 			base.view.Related, _ = t.recordRelated(m, base, now)
 		case RecordSectionHistory:
 			base.view.History = t.recordHistory(base)
+			base.view.AI = t.recordAIHistory(typ, id, base.view.History)
 		}
 	}
 	return base.view, nil
@@ -409,4 +413,35 @@ func (t *Owner) RecordSection(m platform.Member, typ, id, section string, now ti
 
 func (t *Owner) RecordDetail(m platform.Member, typ, id string, now time.Time, sections ...string) (RecordView, *platform.Error) {
 	return t.recordDetail(m, typ, id, now, sections...)
+}
+
+func (t *Owner) recordAIHistory(typ, id string, history []records.RecordChange) map[string]protocol.AICaller {
+	if t.Claims == nil || len(history) == 0 {
+		return nil
+	}
+	var out map[string]protocol.AICaller
+	for _, ch := range history {
+		rec := t.Claims.Accepted(t.TenantID, typ+"/"+id+"/"+ch.Change+"/$ai")
+		if rec == nil {
+			continue
+		}
+		var caller protocol.AICaller
+		if json.Unmarshal(rec.GetFact().GetPayload(), &caller) == nil && caller.Kind != "" {
+			if out == nil {
+				out = map[string]protocol.AICaller{}
+			}
+			out[ch.Change] = caller
+		}
+	}
+	return out
+}
+
+func aiApprovedPeople(ai map[string]protocol.AICaller) []records.RecordChange {
+	var out []records.RecordChange
+	for _, c := range ai {
+		if c.ApprovedBy != "" {
+			out = append(out, records.RecordChange{By: c.ApprovedBy})
+		}
+	}
+	return out
 }

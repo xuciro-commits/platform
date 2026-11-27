@@ -314,6 +314,14 @@ func (d *Decision) Put(c platform.Caller, r *pb.ChangeRecord, entity any) *platf
 		if !slices.Contains(d.Changed[key], ref) {
 			d.Changed[key] = append(d.Changed[key], ref)
 		}
+		if !c.Automation && r.GetChangeId() != "" {
+			if ai := protocol.ReadAICaller(c.Member); ai != nil {
+				if d.AIWrites == nil {
+					d.AIWrites = map[string]AIWrite{}
+				}
+				d.AIWrites[ref+"\x00"+r.GetChangeId()] = AIWrite{Target: ref, Change: r.GetChangeId(), Caller: *ai}
+			}
+		}
 	}
 	return err
 }

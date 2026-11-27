@@ -32,6 +32,18 @@ type mcpClientInfo struct {
 	Version string `json:"version"`
 }
 
+type mcpCallMeta struct {
+	Model string `json:"model"`
+	Event string `json:"event"`
+	Run   string `json:"run"`
+	Usage struct {
+		Input  int     `json:"input"`
+		Output int     `json:"output"`
+		Cached int     `json:"cached"`
+		Cost   float64 `json:"cost"`
+	} `json:"usage"`
+}
+
 var mcpSessions struct {
 	mu      sync.Mutex
 	order   []string
@@ -114,6 +126,7 @@ func (g Tools) Serve(w http.ResponseWriter, r *http.Request, m platform.Member) 
 			ClientInfo      mcpClientInfo  `json:"clientInfo"`
 			Name            string         `json:"name"`
 			Arguments       map[string]any `json:"arguments"`
+			Meta            mcpCallMeta    `json:"_meta"`
 		} `json:"params"`
 	}
 	decoder := json.NewDecoder(r.Body)
@@ -158,27 +171,55 @@ func (g Tools) Serve(w http.ResponseWriter, r *http.Request, m platform.Member) 
 	case "ping":
 		reply(map[string]any{})
 	case "tools/list":
-		reply(map[string]any{"tools": g.List(withMCPCaller(m, client, ""))})
+		reply(map[string]any{"tools": g.List(withMCPCaller(m, client, "", mcpCallMeta{}))})
 	case "tools/call":
-		reply(g.Call(r.Context(), requestOrigin(r), withMCPCaller(m, client, req.Params.Name), req.Params.Name, req.Params.Arguments))
+		reply(g.Call(r.Context(), requestOrigin(r), withMCPCaller(m, client, req.Params.Name, req.Params.Meta), req.Params.Name, req.Params.Arguments))
 	default:
 		writeJSON(w, http.StatusOK, rpcError(req.ID, -32601, "method not found"))
 	}
 }
 
-func withMCPCaller(m platform.Member, client mcpClientInfo, tool string) platform.Member {
-	if existing := runtimeprotocol.ReadAICaller(m); existing != nil {
-		if existing.Tool == "" && tool != "" {
-			existing.Tool = tool
+func withMCPCaller(m platform.Member, client mcpClientInfo, tool string, meta mcpCallMeta) platform.Member {
+	caller := runtimeprotocol.ReadAICaller(m)
+	if caller == nil {
+		caller = &runtimeprotocol.AICaller{
+			Kind:    "mcp",
+			Name:    cmp.Or(strings.TrimSpace(client.Name), "mcp-client"),
+			Version: strings.TrimSpace(client.Version),
 		}
-		return runtimeprotocol.WithAICaller(m, existing)
+	} else {
+		if caller.Name == "" {
+			caller.Name = strings.TrimSpace(client.Name)
+		}
+		if caller.Version == "" {
+			caller.Version = strings.TrimSpace(client.Version)
+		}
 	}
-	return runtimeprotocol.WithAICaller(m, &runtimeprotocol.AICaller{
-		Kind:    "mcp",
-		Name:    cmp.Or(strings.TrimSpace(client.Name), "mcp-client"),
-		Version: strings.TrimSpace(client.Version),
-		Tool:    strings.TrimSpace(tool),
-	})
+	if caller.Tool == "" && tool != "" {
+		caller.Tool = strings.TrimSpace(tool)
+	}
+	if meta.Model != "" {
+		caller.Model = strings.TrimSpace(meta.Model)
+	}
+	if meta.Event != "" {
+		caller.Event = strings.TrimSpace(meta.Event)
+	}
+	if meta.Run != "" {
+		caller.Run = strings.TrimSpace(meta.Run)
+	}
+	if meta.Usage.Input > 0 {
+		caller.Input = meta.Usage.Input
+	}
+	if meta.Usage.Output > 0 {
+		caller.Output = meta.Usage.Output
+	}
+	if meta.Usage.Cached > 0 {
+		caller.Cached = meta.Usage.Cached
+	}
+	if meta.Usage.Cost > 0 {
+		caller.Cost = meta.Usage.Cost
+	}
+	return runtimeprotocol.WithAICaller(m, caller)
 }
 
 func requestOrigin(r *http.Request) string {

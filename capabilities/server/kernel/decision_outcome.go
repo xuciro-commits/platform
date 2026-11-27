@@ -1,7 +1,12 @@
 package kernel
 
 import (
+	"crypto/sha256"
+	"encoding/hex"
+	"encoding/json"
 	"errors"
+	"maps"
+	"slices"
 	"time"
 
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
@@ -38,6 +43,9 @@ func (d *Decision) Outcome(src ResultSources, h OutcomeHooks, app string, s *pb.
 		return raw, refusal, err
 	}
 	raw, err = d.SealResult(src, app, s, record, now)
+	if err == nil {
+		source = d.mergeAISourceClaims(raw, s, record, source, now)
+	}
 	if err == nil && source != nil {
 		raw, err = acceptedformat.AttachSourceClaims(raw, source.Origin, source.Claims)
 		if err == nil {
@@ -87,4 +95,65 @@ func (d *Decision) TakeTxnStep() *platform.Error {
 	}
 	d.TransactionSteps++
 	return nil
+}
+
+func (d *Decision) mergeAISourceClaims(raw []byte, s *pb.Submission, record *pb.ChangeRecord, source *ClaimSet, now time.Time) *ClaimSet {
+	if len(d.AIWrites) == 0 || record == nil {
+		return source
+	}
+	var env struct {
+		Kind string `json:"kind"`
+	}
+	if json.Unmarshal(raw, &env) != nil {
+		return source
+	}
+	at := now.UTC()
+	topTarget := Target(s)
+	var aiClaims []acceptedformat.SourceClaim
+	if env.Kind != "record-batch" {
+		w, ok := d.AIWrites[topTarget+"\x00"+record.GetChangeId()]
+		if !ok || w.Caller.Kind == "" {
+			return source
+		}
+		aiClaims = append(aiClaims, acceptedformat.SourceClaim{
+			Attribute:  "$ai",
+			Connector:  "ai:" + w.Caller.Kind,
+			SourceTime: at,
+			Payload:    platform.Raw(w.Caller),
+		})
+	} else {
+		usedRoot := false
+		for _, k := range slices.Sorted(maps.Keys(d.AIWrites)) {
+			w := d.AIWrites[k]
+			if w.Caller.Kind == "" {
+				continue
+			}
+			if !usedRoot && w.Target == topTarget && w.Change == record.GetChangeId() {
+				usedRoot = true
+				aiClaims = append(aiClaims, acceptedformat.SourceClaim{
+					Attribute:  "$ai",
+					Connector:  "ai:" + w.Caller.Kind,
+					SourceTime: at,
+					Payload:    platform.Raw(w.Caller),
+				})
+				continue
+			}
+			sum := sha256.Sum256([]byte(w.Target + "\x00" + w.Change))
+			aiClaims = append(aiClaims, acceptedformat.SourceClaim{
+				Attribute:  "$ai/" + w.Change + "/" + hex.EncodeToString(sum[:4]),
+				Connector:  "ai:" + w.Caller.Kind,
+				SourceTime: at,
+				Payload:    platform.Raw(AIBatchClaim{Target: w.Target, Change: w.Change, Caller: w.Caller}),
+			})
+		}
+	}
+	if len(aiClaims) == 0 {
+		return source
+	}
+	if source == nil {
+		return &ClaimSet{Claims: aiClaims}
+	}
+	merged := *source
+	merged.Claims = append(slices.Clone(source.Claims), aiClaims...)
+	return &merged
 }

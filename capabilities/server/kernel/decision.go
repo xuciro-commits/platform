@@ -54,6 +54,7 @@ type Decision struct {
 	OperationCancels  map[string]bool
 	ObservationInput  *platform.ObservationDecisionEvidence
 	CallbackWrites    map[string]CallbackWrite
+	AIWrites          map[string]AIWrite
 	Rules             ConstraintRules
 	DirectRows        func([]acceptedformat.InputRow, string, time.Time) error
 	BusinessQuery     func(platform.RecordTypeInfo, platform.Query, platform.Member, time.Time) platform.Query
@@ -162,4 +163,16 @@ type ConstraintRules struct {
 	RuleQuery   func(app, name string, version int) (platform.NamedQuery, int, bool)
 	Binding     func(platform.AssetBinding) (*platform.Definition, bool)
 	Trace       func() func(platform.DecisionTrace)
+}
+
+type AIWrite struct {
+	Target string
+	Change string
+	Caller protocol.AICaller
+}
+
+type AIBatchClaim struct {
+	Target string            `json:"target"`
+	Change string            `json:"change"`
+	Caller protocol.AICaller `json:"caller"`
 }

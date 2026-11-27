@@ -168,6 +168,7 @@ PrepareProjectRefusesNonManager|非管理者不能准备项目
 K50OptionalDeferredRequestAndKey|可选延迟契约请求与行级幂等键
 K52AskFirstHoldsAIActionsUntilInboxApproval|先问动作由 AI 调用时转入收件箱提问并经批准执行一次
 K53MCPTypeGeneratedToolSurface|MCP 工具面按可读类型生成对象集查询工具并按已发布动作生成执行工具
+K54AIProvenanceSourceSlot|AI 写入在已接受结果来源槽位记录来由并在重放与快照恢复后一致呈现
 AskObjectActions|包检查校验对象与动作的 ask 先问声明
 `.trim().split("\n").map(line => line.split("|")));
 

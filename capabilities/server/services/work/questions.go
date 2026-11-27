@@ -234,6 +234,7 @@ func (w *Work) finishQuestion(c platform.Caller, r *pb.ChangeRecord, record any,
 			requester.Agent = q.AgentCaller
 			if q.Caller != nil {
 				cp := *q.Caller
+				cp.ApprovedBy = q.AnsweredBy
 				requester = runtimeprotocol.WithAICaller(requester, &cp)
 			}
 			requester.AIContext = true

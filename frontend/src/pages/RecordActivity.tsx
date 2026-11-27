@@ -4,10 +4,12 @@ import { Card } from "@astryxdesign/core/Card";
 import { Icon } from "@astryxdesign/core/Icon";
 import { HStack, StackItem, VStack } from "@astryxdesign/core/Layout";
 import { List, ListItem } from "@astryxdesign/core/List";
+import { MetadataList, MetadataListItem } from "@astryxdesign/core/MetadataList";
 import { Switch } from "@astryxdesign/core/Switch";
 import { SegmentedControl, SegmentedControlItem } from "@astryxdesign/core/SegmentedControl";
 import { Text } from "@astryxdesign/core/Text";
 import { TextArea } from "@astryxdesign/core/TextArea";
+import { Token } from "@astryxdesign/core/Token";
 import { colorVars, radiusVars, spacingVars } from "@astryxdesign/core/theme/tokens.stylex";
 import { ChatBubbleLeftIcon, ChevronDownIcon, ChevronRightIcon, DocumentTextIcon, PencilSquareIcon } from "@heroicons/react/24/outline";
 import * as stylex from "@stylexjs/stylex";
@@ -23,7 +25,7 @@ import { plain, present } from "./values";
 type Comment = { id: string; text: string; by: string; created: { at: string } };
 type Note = { at: string; title: string; text: string; by: string };
 type ChangeLine = { field: string; before?: string; after: string };
-type ChangeEvent = { kind: "change"; key: string; at: string; by: string; title: string; changes: ChangeLine[] };
+type ChangeEvent = { kind: "change"; key: string; at: string; by: string; title: string; changes: ChangeLine[]; ai?: Api.AICaller };
 type Event =
   | ChangeEvent
   | { kind: "comment"; key: string; at: string; by: string; text: string }
@@ -54,17 +56,27 @@ function collapse(events: Event[]): TimelineItem[] {
   const result: TimelineItem[] = [];
   for (const event of events) {
     const prev = result.at(-1);
-    if (event.kind === "change" && prev && prev.kind === "change" && prev.by === event.by) {
+    if (event.kind === "change" && !event.ai && prev && prev.kind === "change" && !prev.ai && prev.by === event.by) {
       result[result.length - 1] = { kind: "group", key: prev.key, at: prev.at, by: prev.by, items: [prev, event] };
       continue;
     }
-    if (event.kind === "change" && prev && prev.kind === "group" && prev.by === event.by) {
+    if (event.kind === "change" && !event.ai && prev && prev.kind === "group" && prev.by === event.by) {
       prev.items.push(event);
       continue;
     }
     result.push(event);
   }
   return result;
+}
+
+function formatAIUsage(locale: string, ai: Api.AICaller): string {
+  const num = new Intl.NumberFormat(locale);
+  const parts: string[] = [];
+  if (typeof ai.input === "number" && ai.input > 0) parts.push(`${t("Input")} ${num.format(ai.input)}`);
+  if (typeof ai.output === "number" && ai.output > 0) parts.push(`${t("Output")} ${num.format(ai.output)}`);
+  if (typeof ai.cached === "number" && ai.cached > 0) parts.push(`${t("Cached")} ${num.format(ai.cached)}`);
+  if (typeof ai.cost === "number" && ai.cost > 0) parts.push(`${t("Cost")} $${ai.cost.toFixed(4)}`);
+  return parts.join(" · ");
 }
 
 function findMentionToken(value: string, cursor: number): { start: number; end: number; query: string } | null {
@@ -189,9 +201,11 @@ export function RecordActivity({ described, id, comments, catalog, entities }: {
   }
   const events: Event[] = [];
   if (history.status === "ready") {
+    const aiByChange = history.data.ai ?? {};
     for (const change of history.data.history ?? []) {
       events.push({
         kind: "change", key: change.change, at: change.at, by: change.by, title: t(described.action(change.schema)?.title ?? "Changed"),
+        ai: aiByChange[change.change],
         changes: change.fields.flatMap((entry) => {
           const field = described.field(entry.field);
           if (!field) return [];
@@ -318,7 +332,11 @@ export function RecordActivity({ described, id, comments, catalog, entities }: {
           const last = position === items.length - 1;
           const actor = person(item.by);
           const glyph = item.kind === "comment" ? ChatBubbleLeftIcon : item.kind === "activity" ? DocumentTextIcon : item.kind === "followup" ? item.item.icon : PencilSquareIcon;
-          const open = item.kind === "group" && expanded.has(item.key);
+          const open = (item.kind === "group" || (item.kind === "change" && Boolean(item.ai))) && expanded.has(item.key);
+          const ai = item.kind === "change" ? item.ai : undefined;
+          const aiUsage = ai ? formatAIUsage(locale, ai) : "";
+          const aiKind = ai ? (ai.kind === "delegation" ? t("Delegation") : ai.kind === "mcp" ? t("MCP client") : ai.kind) : "";
+          const aiCallerText = ai ? [actor, aiKind, ai.name ? `${ai.name}${ai.version ? ` v${ai.version}` : ""}` : ""].filter(Boolean).join(" · ") : "";
           return (
             <HStack key={item.key} id={item.key} gap={3} vAlign="stretch">
               <VStack gap={1} xstyle={styles.rail}>
@@ -331,12 +349,58 @@ export function RecordActivity({ described, id, comments, catalog, entities }: {
                     <HStack gap={1} vAlign="center" wrap="wrap">
                       {item.kind === "comment" ? <Text type="body" weight="medium">{actor}</Text> : <PersonLabel id={item.by} name={actor} size="xsm" weight="medium" />}
                       <Text type="body" color="secondary">{item.kind === "comment" ? t("Commented") : item.kind === "group" ? item.items[0].title : item.kind === "followup" ? item.item.kind : item.title}</Text>
+                      {ai && <Token size="sm" color="blue" label={t("AI")} />}
                     </HStack>
                     <HStack xstyle={styles.stamp}>
                       <TemporalValue value={item.at} kind="datetime" mode="relative" size="xs" surface="inline" />
                     </HStack>
                   </HStack>
                   {item.kind === "change" && item.changes.length > 0 && renderChanges(item.changes)}
+                  {ai && (
+                    <HStack>
+                      <Button variant="ghost" size="sm" label={t("Provenance")}
+                        icon={<Icon icon={open ? ChevronDownIcon : ChevronRightIcon} size="sm" />} onClick={() => toggleGroup(item.key)} />
+                    </HStack>
+                  )}
+                  {ai && open && (
+                    <Card padding={3}>
+                      <MetadataList>
+                        <MetadataListItem label={t("Caller")}>
+                          <Text type="supporting">{aiCallerText}</Text>
+                        </MetadataListItem>
+                        {ai.approvedBy && (
+                          <MetadataListItem label={t("Approved by")}>
+                            <Text type="supporting">{person(ai.approvedBy)}</Text>
+                          </MetadataListItem>
+                        )}
+                        {ai.tool && (
+                          <MetadataListItem label={t("Tool")}>
+                            <Text type="supporting">{ai.tool}</Text>
+                          </MetadataListItem>
+                        )}
+                        {ai.model && (
+                          <MetadataListItem label={t("Model")}>
+                            <Text type="supporting">{ai.model}</Text>
+                          </MetadataListItem>
+                        )}
+                        {ai.event && (
+                          <MetadataListItem label={t("Trigger event")}>
+                            <Text type="supporting">{ai.event}</Text>
+                          </MetadataListItem>
+                        )}
+                        {ai.run && (
+                          <MetadataListItem label={t("Turn")}>
+                            <Text type="supporting">{ai.run}</Text>
+                          </MetadataListItem>
+                        )}
+                        {aiUsage && (
+                          <MetadataListItem label={t("Usage")}>
+                            <Text type="supporting">{aiUsage}</Text>
+                          </MetadataListItem>
+                        )}
+                      </MetadataList>
+                    </Card>
+                  )}
                   {item.kind === "group" && item.items[0].changes.length > 0 && renderChanges(item.items[0].changes)}
                   {item.kind === "group" && (
                     <HStack>

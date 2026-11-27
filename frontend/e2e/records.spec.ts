@@ -427,6 +427,47 @@ test("activity: a comment and an inline change appear in one timeline", async ({
   await expect(following).toBeChecked();
   await following.click();
   await expect(following).not.toBeChecked();
+
+  const session = await page.evaluate(() => JSON.parse(sessionStorage.getItem("platform:session")!) as { token: string; tenant: string });
+  const mcpHeaders = { authorization: `Bearer ${session.token}`, "platform-tenant": session.tenant, "content-type": "application/json" };
+  const initResp = await page.request.post("/mcp", {
+    headers: mcpHeaders,
+    data: { jsonrpc: "2.0", id: 1, method: "initialize", params: { protocolVersion: "2025-06-18", clientInfo: { name: "claude-code", version: "2.1.311" } } },
+  });
+  expect(initResp.ok()).toBeTruthy();
+  const mcpSession = initResp.headers()["mcp-session-id"];
+  const callResp = await page.request.post("/mcp", {
+    headers: { ...mcpHeaders, "Mcp-Session-Id": mcpSession },
+    data: {
+      jsonrpc: "2.0",
+      id: 2,
+      method: "tools/call",
+      params: {
+        name: "sales_opportunity_edit",
+        arguments: { target: "OPP-004", payload: { next: "AI verified delivery schedule" } },
+        _meta: {
+          model: "claude-sonnet-4-6",
+          event: "evt-scan-7",
+          run: "turn-12",
+          usage: { input: 1240, output: 185, cached: 600, cost: 0.0065 },
+        },
+      },
+    },
+  });
+  expect(callResp.ok()).toBeTruthy();
+  expect(((await callResp.json()) as { result?: { isError?: boolean } }).result?.isError).toBe(false);
+
+  await page.reload();
+  await page.getByRole("link", { name: "Activity", exact: true }).click();
+  await expect(page.getByRole("listitem", { name: "Next step: Confirm scanner quantities → AI verified delivery schedule", exact: true })).toBeVisible();
+  await expect(page.getByRole("main").last().getByText("AI", { exact: true })).toBeVisible();
+  await page.getByRole("button", { name: "Provenance", exact: true }).click();
+  await expect(page.getByText(/claude-code.*2\.1\.311/)).toBeVisible();
+  await expect(page.getByText("sales_opportunity_edit", { exact: true })).toBeVisible();
+  await expect(page.getByText("claude-sonnet-4-6", { exact: true })).toBeVisible();
+  await expect(page.getByText("evt-scan-7", { exact: true })).toBeVisible();
+  await expect(page.getByText("turn-12", { exact: true })).toBeVisible();
+  await expect(page.getByText(/1,240.*185/)).toBeVisible();
 });
 
 

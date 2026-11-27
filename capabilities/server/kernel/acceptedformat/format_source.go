@@ -14,7 +14,7 @@ func ValidateSourceClaims(claims []SourceClaim, origin string, required, forbidd
 	for _, claim := range claims {
 		kind, source, ok := strings.Cut(claim.Connector, ":")
 		if claim.Attribute == "" || len(claim.Attribute) > 128 || seen[claim.Attribute] || !ok || source == "" ||
-			kind != "source" && kind != "pipeline" && kind != "dataset" || claim.SourceTime.IsZero() ||
+			kind != "source" && kind != "pipeline" && kind != "dataset" && kind != "ai" || claim.SourceTime.IsZero() ||
 			len(claim.Payload) == 0 || len(claim.Payload) > 64<<10 || !json.Valid(claim.Payload) {
 			return fmt.Errorf("source claim has an invalid attribute, connector, time or payload")
 		}
@@ -48,7 +48,14 @@ func AttachSourceClaims(raw []byte, origin string, claims []SourceClaim) ([]byte
 		return encoded, err
 	}
 	result, _, err := DecodeRecord(raw)
-	if err != nil || result.Kind != "record" {
+	aiOnly := origin == "" && len(claims) > 0
+	for _, c := range claims {
+		if !strings.HasPrefix(c.Connector, "ai:") {
+			aiOnly = false
+			break
+		}
+	}
+	if err != nil || (result.Kind != "record" && !(aiOnly && (result.Kind == "pure-transition" || result.Kind == "publication"))) {
 		return nil, fmt.Errorf("source claim requires an accepted object record: %v", err)
 	}
 	result.Version, result.Origin, result.Claims = RecordClaimVersion, origin, claims

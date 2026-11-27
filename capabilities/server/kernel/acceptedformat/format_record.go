@@ -11,6 +11,7 @@ import (
 	"platformserver/kernel/records"
 	persistence "platformserver/kernel/store"
 	"platformserver/platform"
+	"slices"
 	"strings"
 	"time"
 )
@@ -97,8 +98,10 @@ func DecodeRecord(raw []byte) (Record, *pb.ChangeRecord, error) {
 	}
 	verb, ok := strings.CutPrefix(sub.GetSchema().GetName(), result.Row.Type+".")
 	standard := verb == "create" || verb == "edit" || verb == "archive"
-	publication := result.Version == RecordVersion && result.Kind == "publication" && verb == "publish"
-	pureTransition := result.Version == RecordVersion && !standard && verb != "publish" && result.Kind == "pure-transition"
+	aiOnly := result.Origin == "" && len(result.Claims) > 0 && !slices.ContainsFunc(result.Claims, func(c SourceClaim) bool { return !strings.HasPrefix(c.Connector, "ai:") })
+	validAuxVersion := result.Version == RecordVersion || (result.Version == RecordClaimVersion && aiOnly)
+	publication := validAuxVersion && result.Kind == "publication" && verb == "publish"
+	pureTransition := validAuxVersion && !standard && verb != "publish" && result.Kind == "pure-transition"
 	if !ok || !(standard && result.Kind == "record" || publication || pureTransition) {
 		return result, nil, fmt.Errorf("accepted result is outside the supported generated action family")
 	}
