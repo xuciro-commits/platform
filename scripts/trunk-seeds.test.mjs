@@ -22,16 +22,17 @@ test("development and ordinary runtime do not create unrelated tenants", () => {
   assert.equal(workspace.cache, true);
 });
 
-test("security and real installation scenarios do not clone seeded state", () => {
+test("empty-seed security scenarios skip baseline cache while seeded scenarios reuse isolated clones", () => {
   const security = seedPlan(["tenant-security.spec.ts"]);
   assert.deepEqual(security.tenants, ["audit-a"]);
   assert.deepEqual(securityAPIPlan.tenants, ["audit-a", "audit-b", "library"]);
   assert.equal(securityAPIPlan.cache, false);
   assert.deepEqual(security.seed, []);
-  for (const spec of ["tenant-security", "official", "marketplace", "package-upgrade", "party-upgrade", "package-library", "package-apps", "connector", "phone"]) {
-    assert.equal(seedPlan([spec + ".spec.ts"]).cache, false);
+  assert.equal(security.cache, false);
+  for (const spec of ["official", "marketplace", "package-upgrade", "party-upgrade", "package-library", "package-apps", "connector", "phone"]) {
+    assert.equal(seedPlan([spec + ".spec.ts"]).cache, true);
   }
-  assert.equal(seedPlan([]).cache, false);
+  assert.equal(seedPlan([]).cache, true);
 });
 
 test("scenario tenant templates have unique stable IDs and Chinese display names", () => {

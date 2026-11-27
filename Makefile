@@ -187,7 +187,7 @@ verify:
 	mkdir -p .build/trunk
 	rm -f .build/trunk/playwright-results.json
 	$(MAKE) test-pg RUN=
-	TRUNK_FRESH=1 PLAYWRIGHT_JSON_OUTPUT_FILE="$(CURDIR)/.build/trunk/playwright-results.json" $(MAKE) trunk SPEC= LAYER= HEADED= TRUNK_ARGS='--workers=1 --reporter=list,json --forbid-only --fail-on-flaky-tests'
+	TRUNK_CACHE_BINARY=1 PLAYWRIGHT_JSON_OUTPUT_FILE="$(CURDIR)/.build/trunk/playwright-results.json" $(MAKE) trunk SPEC= LAYER= HEADED= TRUNK_ARGS='--workers=1 --reporter=list,json --forbid-only --fail-on-flaky-tests'
 	node -e 'const {stats} = require("./.build/trunk/playwright-results.json"); if (!stats.expected || stats.skipped !== 0 || stats.unexpected !== 0 || stats.flaky !== 0) process.exit(1)'
 
 verify-sql:

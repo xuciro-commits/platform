@@ -18,7 +18,8 @@ const flags = new Set(rawArgs.filter(arg => arg.startsWith("--")));
 const pattern = rawArgs.find(arg => !arg.startsWith("--")) || "";
 const strict = flags.has("--require-no-skip");
 const smallOnly = flags.has("--tier=small");
-const workers = process.env.PLATFORM_BENCH_DATABASE ? 1 : Math.min(availableParallelism(), 6);
+const benchDatabases = (process.env.PLATFORM_BENCH_DATABASES || "").split(",").map(s => s.trim()).filter(Boolean);
+const workers = benchDatabases.length ? benchDatabases.length : (process.env.PLATFORM_BENCH_DATABASE ? 1 : Math.min(availableParallelism(), 6));
 
 mkdirSync(root + ".build/check", { recursive: true });
 writeFileSync(evidence, JSON.stringify({ status: "incomplete" }));
@@ -36,8 +37,8 @@ if (!tests.length) {
 }
 const reports = [];
 const measured = {};
-const run = (name, args, cwd, expected = [], collectTimings = false) => new Promise(resolve =>
-  execFile(go, args, { cwd, maxBuffer: 64 << 20 }, (error, stdout, stderr) => {
+const run = (name, args, cwd, expected = [], collectTimings = false, env = process.env) => new Promise(resolve =>
+  execFile(go, args, { cwd, env, maxBuffer: 64 << 20 }, (error, stdout, stderr) => {
     let result;
     try {
       result = summarizeGo(stdout, expected);
@@ -53,8 +54,10 @@ const run = (name, args, cwd, expected = [], collectTimings = false) => new Prom
     resolve();
   }));
 const shards = shardTests(tests, known, workers);
-await Promise.all(shards.map((batch, idx) =>
-  run(`host shard ${idx + 1}/${shards.length}`, ["tool", "test2json", "-t", "-p", "platformserver/host", binary, "-test.v", "-test.run", `^(${batch.join("|")})$`, "-test.count", "1", "-test.timeout", "10m"], pkg, batch, true)));
+await Promise.all(shards.map((batch, idx) => {
+  const shardEnv = benchDatabases[idx] ? { ...process.env, PLATFORM_BENCH_DATABASE: benchDatabases[idx] } : process.env;
+  return run(`host shard ${idx + 1}/${shards.length}`, ["tool", "test2json", "-t", "-p", "platformserver/host", binary, "-test.v", "-test.run", `^(${batch.join("|")})$`, "-test.count", "1", "-test.timeout", "10m"], pkg, batch, true, shardEnv);
+}));
 if (!pattern) {
   const packages = execFileSync(go, ["list", "-f", "{{if or .TestGoFiles .XTestGoFiles}}{{.ImportPath}}{{end}}", "./..."], { cwd: server, encoding: "utf8" })
     .split("\n").filter(name => name.trim() && name !== "platformserver/host");

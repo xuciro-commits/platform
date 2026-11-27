@@ -23,7 +23,7 @@ import { once } from "node:events";
 import { closeSync, existsSync, openSync, readFileSync, statSync } from "node:fs";
 import { createServer } from "node:http";
 
-const bin = ${JSON.stringify(`${work}/platform-server`)};
+const bin = ${JSON.stringify(process.env.PLATFORM_TRUNK_BIN ?? `${work}/platform-server`)};
 const cwd = ${JSON.stringify(`${root}capabilities/server`)};
 const tenantsFile = ${JSON.stringify(`${work}/tenants.json`)};
 const logFile = ${JSON.stringify(`${work}/host.log`)};

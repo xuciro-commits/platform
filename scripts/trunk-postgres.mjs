@@ -2,6 +2,7 @@ import { createHash, randomBytes } from "node:crypto";
 import { execFileSync, spawn } from "node:child_process";
 import { cpSync, existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from "node:fs";
 import { createServer } from "node:net";
+import { availableParallelism } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { layers, seedPlan, securityAPIPlan } from "./trunk-seeds.mjs";
@@ -9,6 +10,7 @@ import { layers, seedPlan, securityAPIPlan } from "./trunk-seeds.mjs";
 const root = fileURLToPath(new URL("../", import.meta.url));
 const build = join(root, ".build");
 const cache = join(build, "trunk-baselines");
+const sharedBin = join(build, "trunk", "platform-server");
 const hash = (...values) => {
   const h = createHash("sha256");
   for (const value of values) { h.update(value); h.update("\0"); }
@@ -17,6 +19,7 @@ const hash = (...values) => {
 const owner = hash(root).slice(0, 10);
 const nonce = randomBytes(10).toString("hex");
 const image = "platform-postgres:18-vector";
+const poolTune = "fast-v1";
 const label = "io.platform.test-pool";
 const sleep = ms => new Promise(resolve => setTimeout(resolve, ms));
 const run = (file, args, cwd = root) => execFileSync(file, args, { cwd, encoding: "utf8", timeout: 180_000, stdio: ["ignore", "pipe", "inherit"] }).trim();
@@ -39,7 +42,6 @@ function start(file, args, env, cwd = root) {
     child.once("error", reject);
     child.once("exit", (code, signal) => resolve(code ?? (signal ? 1 : 0)));
   }).finally(() => children.delete(child));
-  // The caller awaits done, but the readiness loop can observe an early failure first.
   done.catch(() => {});
   return { child, done };
 }
@@ -69,7 +71,7 @@ async function freePorts(count) {
 
 async function pool() {
   const imageID = docker("image", "inspect", "--format", "{{.Id}}", image);
-  const name = "platform-test-pool-" + hash(imageID).slice(0, 12);
+  const name = "platform-test-pool-" + hash(imageID, poolTune).slice(0, 12);
   const inspect = () => {
     try { return JSON.parse(execFileSync("docker", ["inspect", name], { encoding: "utf8", stdio: ["ignore", "pipe", "ignore"] }))[0]; }
     catch { return undefined; }
@@ -77,7 +79,9 @@ async function pool() {
   if (!inspect()) {
     try {
       docker("run", "-d", "--name", name, "--label", label + "=1", "-e", "POSTGRES_HOST_AUTH_METHOD=trust",
-        "-p", "127.0.0.1::5432", imageID);
+        "-p", "127.0.0.1::5432", imageID,
+        "-c", "fsync=off", "-c", "synchronous_commit=off", "-c", "full_page_writes=off",
+        "-c", "shared_buffers=256MB", "-c", "max_connections=200");
     } catch (err) { if (!inspect()) throw err; }
   }
   const info = inspect();
@@ -103,6 +107,7 @@ const sql = (pg, query, db = "postgres") => docker("exec", pg.name, "psql", "-X"
 const createDB = (pg, db, template) => docker("exec", pg.name, "createdb", "-U", "postgres", ...(template ? ["-T", template] : []), db);
 const dropDB = (pg, db) => docker("exec", pg.name, "dropdb", "-U", "postgres", "--if-exists", "--force", db);
 const existsDB = (pg, db) => sql(pg, "select count(*) from pg_database where datname='" + db + "'") === "1";
+
 function tenantFile(work, plan) {
   const tenants = ["frontend-tenants.json", "frontend-security-tenants.json"].flatMap(name => JSON.parse(readFileSync(join(root, "scripts", name), "utf8")));
   const selected = tenants.filter(tenant => plan.tenants.includes(tenant.id));
@@ -156,11 +161,26 @@ function treeDigest(dir) {
     .map(e => join(e.parentPath, e.name)).sort();
   return hash(...entries.flatMap(file => [file.slice(dir.length), readFileSync(file)]));
 }
+async function buildServerBinary() {
+  mkdirSync(join(build, "trunk"), { recursive: true });
+  await withCacheLock(async () => {
+    run(process.env.GO || "go", ["build", "-trimpath", "-o", sharedBin, "./cmd/platform-server"], join(root, "capabilities/server"));
+  });
+  return sharedBin;
+}
 async function cloneBaseline(pg, work, bin, db, port, plan) {
   const inputs = readFileSync(join(process.env.PLATFORM_TEST_PACKAGES_DIR, "inputs.json"));
-  const seedFiles = ["frontend-seed.mjs", "frontend-seed.json", "frontend-tenants.json", "frontend-security-tenants.json", "demo-roster.mjs", "trunk-seeds.mjs", "trunk-postgres.mjs"];
-  const key = hash(pg.id, readFileSync(bin), inputs, JSON.stringify([plan.tenants, plan.seed, plan.acceptanceCrm]),
-    new Date().toISOString().slice(0, 10), ...seedFiles.map(name => readFileSync(join(root, "scripts", name)))).slice(0, 28);
+  const seedFiles = ["frontend-seed.mjs", "frontend-seed.json", "frontend-tenants.json", "frontend-security-tenants.json", "demo-roster.mjs", "trunk-seeds.mjs"];
+  const schemaFiles = ["capabilities/server/kernel/store/migration.go", "capabilities/server/kernel/protocol/schema.go"];
+  const keyParts = [
+    pg.id,
+    inputs,
+    JSON.stringify([plan.tenants, plan.seed, plan.acceptanceCrm]),
+    ...seedFiles.map(name => readFileSync(join(root, "scripts", name))),
+    ...schemaFiles.map(rel => readFileSync(join(root, rel))),
+  ];
+  if (process.env.TRUNK_CACHE_BINARY === "1") keyParts.push(readFileSync(bin));
+  const key = hash(...keyParts).slice(0, 28);
   const base = "trunk_base_" + owner + "_" + key;
   const dir = join(cache, key);
   await withCacheLock(async () => {
@@ -189,6 +209,68 @@ async function cloneBaseline(pg, work, bin, db, port, plan) {
   });
 }
 
+async function runBrowserSpec(pg, bin, baseArgs, spec, jsonOut) {
+  const runNonce = randomBytes(6).toString("hex");
+  const db = "trunk_run_" + runNonce;
+  const restore = "trunk_restore_" + runNonce;
+  const work = mkdtempSync(join(build, "trunk-run-"));
+  const plan = seedPlan([spec + ".spec.ts"], false);
+  const started = Date.now();
+  let success = false;
+  try {
+    const [seedPort, hostPort, controlPort, pagePort] = await freePorts(4);
+    if (plan.cache && process.env.TRUNK_FRESH !== "1") await cloneBaseline(pg, work, bin, db, seedPort, plan);
+    else { createDB(pg, db); await seed(work, bin, pg, db, seedPort, plan); }
+    createDB(pg, restore);
+    const specArgs = [...baseArgs.filter(arg => !/\.spec\.ts(?::\d+)*$/.test(arg)), spec + ".spec.ts"];
+    const env = {
+      ...process.env,
+      PLATFORM_PACKAGES_DIR: "",
+      PLATFORM_TRUNK_BIN: bin,
+      TRUNK_DATABASE: pg.url(db),
+      TRUNK_RESTORE_DATABASE: pg.url(restore),
+      PLATFORM_TRUNK_HOST_PORT: String(hostPort),
+      PLATFORM_TRUNK_CONTROL_PORT: String(controlPort),
+      PLATFORM_TRUNK_PAGE_PORT: String(pagePort),
+      PLATFORM_TRUNK_WORK: work,
+      PLATFORM_TRUNK_SPECS: JSON.stringify([spec]),
+      PLATFORM_TRUNK_FILES: pathToFileURL(join(work, "files")).href,
+      TRUNK_SPLIT_OFFICIAL: "0",
+      ...(jsonOut ? { PLAYWRIGHT_JSON_OUTPUT_FILE: jsonOut } : {}),
+    };
+    await checked(process.execPath, [join(root, "scripts/connector-trunk.mjs"), ...specArgs], env, join(root, "frontend"));
+    const count = Number(sql(pg, "select count(*) from journal", db));
+    if (!(count > 0)) throw Error("Trunk PostgreSQL journal is empty for " + spec);
+    console.log(`[trunk] ✓ ${spec} (${((Date.now() - started) / 1000).toFixed(1)}s, ${count} journal)`);
+    success = !stopped;
+  } finally {
+    if (existsDB(pg, restore)) dropDB(pg, restore);
+    if (existsDB(pg, db)) dropDB(pg, db);
+    if (success) rmSync(work, { recursive: true, force: true });
+    else console.error("trunk evidence retained at " + work);
+  }
+}
+
+function mergePlaywrightJSON(files, target) {
+  const merged = { config: null, suites: [], errors: [], stats: { startTime: new Date().toISOString(), duration: 0, expected: 0, skipped: 0, unexpected: 0, flaky: 0 } };
+  for (const file of files) {
+    if (!existsSync(file)) continue;
+    const part = JSON.parse(readFileSync(file, "utf8"));
+    if (!merged.config && part.config) merged.config = part.config;
+    if (Array.isArray(part.suites)) merged.suites.push(...part.suites);
+    if (Array.isArray(part.errors)) merged.errors.push(...part.errors);
+    if (part.stats) {
+      merged.stats.duration += part.stats.duration ?? 0;
+      merged.stats.expected += part.stats.expected ?? 0;
+      merged.stats.skipped += part.stats.skipped ?? 0;
+      merged.stats.unexpected += part.stats.unexpected ?? 0;
+      merged.stats.flaky += part.stats.flaky ?? 0;
+    }
+    rmSync(file, { force: true });
+  }
+  writeFileSync(target, JSON.stringify(merged, null, 2));
+}
+
 const args = process.argv.slice(2);
 const mode = args.shift();
 if (mode === "--browser" && args[0] === "--layer") {
@@ -211,20 +293,87 @@ if (mode === "--clean") {
     for (const name of readdirSync(cache)) if (/^[a-f0-9]{28}$/.test(name)) rmSync(join(cache, name), { recursive: true, force: true });
   });
 } else if (mode === "--backend") {
-  const db = "trunk_bench_" + nonce;
-  createDB(pg, db);
-  try { await checked(process.execPath, [join(root, "scripts/check-invariants.mjs"), args[0] ?? "", "--require-no-skip"], { ...process.env, PLATFORM_BENCH_DATABASE: pg.url(db) }); }
-  finally { dropDB(pg, db); }
+  const pattern = args[0] ?? "";
+  const requestedShards = Number(process.env.PLATFORM_PG_SHARDS ?? (pattern ? 1 : Math.min(availableParallelism(), 4)));
+  const shardCount = Math.max(1, Math.min(requestedShards, 6));
+  const dbs = Array.from({ length: shardCount }, (_, idx) => `trunk_bench_${nonce}_s${idx}`);
+  for (const db of dbs) createDB(pg, db);
+  try {
+    const urls = dbs.map(db => pg.url(db));
+    await checked(process.execPath, [join(root, "scripts/check-invariants.mjs"), pattern, "--require-no-skip"], {
+      ...process.env,
+      PLATFORM_BENCH_DATABASE: urls[0],
+      PLATFORM_BENCH_DATABASES: urls.join(","),
+    });
+  } finally {
+    for (const db of dbs) if (existsDB(pg, db)) dropDB(pg, db);
+  }
+} else if (mode === "--browser") {
+  mkdirSync(build, { recursive: true });
+  const bin = await buildServerBinary();
+  const plan = seedPlan(args, false);
+  const requestedJobs = Number(process.env.TRUNK_JOBS ?? (plan.specs.length > 1 ? Math.min(plan.specs.length, 3) : 1));
+  const jobs = Math.max(1, Math.min(requestedJobs, plan.specs.length));
+  if (jobs > 1) {
+    const jsonTarget = process.env.PLAYWRIGHT_JSON_OUTPUT_FILE || "";
+    const partFiles = [];
+    const queue = [...plan.specs];
+    const failures = [];
+    console.log(`[trunk] running ${plan.specs.length} specs across ${jobs} isolated PG workers`);
+    await Promise.all(Array.from({ length: jobs }, async () => {
+      while (queue.length > 0 && !stopped) {
+        const spec = queue.shift();
+        const partOut = jsonTarget ? join(build, "trunk", `part-${spec}-${nonce}.json`) : "";
+        if (partOut) partFiles.push(partOut);
+        try {
+          await runBrowserSpec(pg, bin, args, spec, partOut);
+        } catch (err) {
+          failures.push(`${spec}: ${err.message}`);
+        }
+      }
+    }));
+    if (jsonTarget) mergePlaywrightJSON(partFiles, jsonTarget);
+    if (failures.length > 0) throw Error("Trunk failures:\n" + failures.join("\n"));
+  } else {
+    const spec = plan.specs[0];
+    if (plan.specs.length === 1) {
+      await runBrowserSpec(pg, bin, args, spec, process.env.PLAYWRIGHT_JSON_OUTPUT_FILE || "");
+    } else {
+      const db = "trunk_run_" + nonce, restore = "trunk_restore_" + nonce;
+      const work = mkdtempSync(join(build, "trunk-run-"));
+      let success = false;
+      try {
+        const [seedPort, hostPort, controlPort, pagePort] = await freePorts(4);
+        if (plan.cache && process.env.TRUNK_FRESH !== "1") await cloneBaseline(pg, work, bin, db, seedPort, plan);
+        else { createDB(pg, db); await seed(work, bin, pg, db, seedPort, plan); }
+        createDB(pg, restore);
+        const env = { ...process.env, PLATFORM_PACKAGES_DIR: "", PLATFORM_TRUNK_BIN: bin, TRUNK_DATABASE: pg.url(db), TRUNK_RESTORE_DATABASE: pg.url(restore),
+          PLATFORM_TRUNK_HOST_PORT: String(hostPort), PLATFORM_TRUNK_CONTROL_PORT: String(controlPort), PLATFORM_TRUNK_PAGE_PORT: String(pagePort),
+          PLATFORM_TRUNK_WORK: work, PLATFORM_TRUNK_SPECS: JSON.stringify(plan.specs), PLATFORM_TRUNK_FILES: pathToFileURL(join(work, "files")).href,
+          TRUNK_SPLIT_OFFICIAL: plan.specs.includes("official") && plan.specs.length > 1 ? "1" : "0" };
+        await checked(process.execPath, [join(root, "scripts/connector-trunk.mjs"), ...args], env, join(root, "frontend"));
+        const count = Number(sql(pg, "select count(*) from journal", db));
+        if (!(count > 0)) throw Error("Trunk PostgreSQL journal is empty");
+        console.log("trunk: " + count + " journal entries in PostgreSQL");
+        success = !stopped;
+      } finally {
+        interrupt("SIGTERM");
+        if (existsDB(pg, restore)) dropDB(pg, restore);
+        if (existsDB(pg, db)) dropDB(pg, db);
+        if (success) rmSync(work, { recursive: true, force: true });
+        else console.error("trunk evidence retained at " + work);
+      }
+    }
+  }
 } else {
-  const db = "trunk_run_" + nonce, restore = "trunk_restore_" + nonce;
+  const db = "trunk_run_" + nonce;
   mkdirSync(build, { recursive: true });
   const work = mkdtempSync(join(build, "trunk-run-"));
-  const bin = join(work, "platform-server");
+  const bin = await buildServerBinary();
   let success = false;
   try {
-    run(process.env.GO || "go", ["build", "-trimpath", "-o", bin, "./cmd/platform-server"], join(root, "capabilities/server"));
-    const [seedPort, hostPort, controlPort, pagePort] = await freePorts(4);
-    const plan = mode === "--security" ? securityAPIPlan : seedPlan(args, mode === "--host");
+    const [seedPort, hostPort] = await freePorts(2);
+    const plan = mode === "--security" ? securityAPIPlan : seedPlan(args, true);
     if (plan.cache && process.env.TRUNK_FRESH !== "1") await cloneBaseline(pg, work, bin, db, seedPort, plan);
     else { createDB(pg, db); await seed(work, bin, pg, db, seedPort, plan); }
     if (mode === "--security") {
@@ -236,27 +385,16 @@ if (mode === "--clean") {
         if (!(count > 0)) throw Error("Security PostgreSQL journal is empty");
         console.log("security: " + count + " journal entries in PostgreSQL");
       } finally { await stop(proc); }
-    } else if (mode === "--host") {
+    } else {
       const port = 18511;
       console.log("frontend-host: PostgreSQL at http://127.0.0.1:" + port);
       const proc = start(bin, hostArgs(work, pg, db, port), { ...process.env, PLATFORM_PACKAGES_DIR: "" }, join(root, "capabilities/server"));
       await proc.done;
       if (!stopped && proc.child.exitCode !== 0) throw Error("Frontend host failed");
-    } else {
-      createDB(pg, restore);
-      const env = { ...process.env, PLATFORM_PACKAGES_DIR: "", TRUNK_DATABASE: pg.url(db), TRUNK_RESTORE_DATABASE: pg.url(restore),
-        PLATFORM_TRUNK_HOST_PORT: String(hostPort), PLATFORM_TRUNK_CONTROL_PORT: String(controlPort), PLATFORM_TRUNK_PAGE_PORT: String(pagePort),
-        PLATFORM_TRUNK_WORK: work, PLATFORM_TRUNK_SPECS: JSON.stringify(plan.specs), PLATFORM_TRUNK_FILES: pathToFileURL(join(work, "files")).href,
-        TRUNK_SPLIT_OFFICIAL: plan.specs.length === 0 || (plan.specs.includes("official") && plan.specs.length > 1) ? "1" : "0" };
-      await checked(process.execPath, [join(root, "scripts/connector-trunk.mjs"), ...args], env, join(root, "frontend"));
-      const count = Number(sql(pg, "select count(*) from journal", db));
-      if (!(count > 0)) throw Error("Trunk PostgreSQL journal is empty");
-      console.log("trunk: " + count + " journal entries in PostgreSQL");
     }
     success = !stopped || mode === "--host";
   } finally {
     interrupt("SIGTERM");
-    if (existsDB(pg, restore)) dropDB(pg, restore);
     if (existsDB(pg, db)) dropDB(pg, db);
     if (success) rmSync(work, { recursive: true, force: true });
     else console.error("trunk evidence retained at " + work);

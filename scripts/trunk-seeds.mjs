@@ -9,22 +9,22 @@ const SCENARIOS = {
   business: {
     crm: { tenants: ["crm"] },
     "crm-records": { tenants: ["acceptance"], acceptanceCrm: true },
-    phone: { tenants: ["phone"], fresh: true },
-    connector: { tenants: ["acceptance"], fresh: true },
+    phone: { tenants: ["phone"] },
+    connector: { tenants: ["acceptance"] },
   },
   delivery: {
     "package-extension": { tenants: ["acceptance"], acceptanceCrm: true },
-    "package-lifecycle": { tenants: ["acceptance"], fresh: true },
-    official: { tenants: ["official"], fresh: true },
-    marketplace: { tenants: ["blank"], fresh: true },
-    "package-upgrade": { tenants: ["upgrade"], fresh: true },
-    "party-upgrade": { tenants: ["party-upgrade"], fresh: true },
-    "package-library": { tenants: ["library"], fresh: true },
-    "package-apps": { tenants: ["publisher"], fresh: true },
+    "package-lifecycle": { tenants: ["acceptance"] },
+    official: { tenants: ["official"] },
+    marketplace: { tenants: ["blank"] },
+    "package-upgrade": { tenants: ["upgrade"] },
+    "party-upgrade": { tenants: ["party-upgrade"] },
+    "package-library": { tenants: ["library"] },
+    "package-apps": { tenants: ["publisher"] },
   },
   security: {
     rebac: { tenants: ["acceptance", "rebac", "crm"] },
-    "tenant-security": { tenants: ["audit-a"], seed: [], fresh: true },
+    "tenant-security": { tenants: ["audit-a"], seed: [] },
   },
 };
 export const securityAPIPlan = { specs: [], tenants: ["audit-a", "audit-b", "library"], seed: [], acceptanceCrm: false, cache: false };
@@ -38,5 +38,5 @@ export function seedPlan(args, interactive = false) {
   const entries = specs.map(name => specsByName[name]);
   const tenants = [...new Set(entries.flatMap(entry => entry.tenants))].sort();
   const seed = [...new Set(entries.flatMap(entry => entry.seed ?? entry.tenants))].sort();
-  return { specs, tenants, seed, acceptanceCrm: entries.some(entry => entry.acceptanceCrm), cache: named.length > 0 && !entries.some(entry => entry.fresh) };
+  return { specs, tenants, seed, acceptanceCrm: entries.some(entry => entry.acceptanceCrm), cache: seed.length > 0 };
 }
