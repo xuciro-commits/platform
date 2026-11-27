@@ -239,7 +239,14 @@ func (tr *trial) submitAs(who platform.Member, authority, schema, typ, id string
 
 func (tr *trial) settle() {
 	for range tryRounds {
-		if !tr.tenant.Round(tr.at, 1) {
+		progressed := tr.tenant.Round(tr.at, 1)
+		pending := slices.ContainsFunc(tr.tenant.Effects(tr.at), func(x platform.Effect) bool {
+			return x.State == "pending" && !x.Due.After(tr.at)
+		})
+		if pending {
+			tr.tenant.Dispatch(tr.at)
+		}
+		if !progressed && !pending {
 			return
 		}
 	}
