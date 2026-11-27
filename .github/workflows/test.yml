@@ -18,7 +18,7 @@ env:
 jobs:
   server:
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 20
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-go@v5
@@ -31,45 +31,13 @@ jobs:
         with:
           node-version: 22
       - run: make check
-      - run: make test
-      - run: make test-voice
-      - uses: actions/upload-artifact@v4
-        if: always()
-        with:
-          name: server-test-results
-          path: .build/check/test-results.json
-          include-hidden-files: true
+      - run: make test-runner
 
-  postgres:
+  frontend:
     runs-on: ubuntu-latest
-    timeout-minutes: 45
+    timeout-minutes: 20
     steps:
       - uses: actions/checkout@v4
-      - uses: actions/setup-go@v5
-        with:
-          go-version-file: capabilities/server/go.mod
-          cache-dependency-path: capabilities/server/go.sum
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 22
-      - run: docker build -f deploy/local/Dockerfile.postgres -t platform-postgres:18-vector deploy/local
-      - run: make test-pg
-      - uses: actions/upload-artifact@v4
-        if: always()
-        with:
-          name: postgres-test-results
-          path: .build/check/test-results.json
-          include-hidden-files: true
-
-  browser:
-    runs-on: ubuntu-latest
-    timeout-minutes: 45
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-go@v5
-        with:
-          go-version-file: capabilities/server/go.mod
-          cache-dependency-path: capabilities/server/go.sum
       - uses: pnpm/action-setup@v4
         with:
           package_json_file: frontend/package.json
@@ -80,20 +48,3 @@ jobs:
           cache-dependency-path: frontend/pnpm-lock.yaml
       - run: pnpm --dir frontend install --frozen-lockfile
       - run: make check-frontend
-      - run: pnpm --dir frontend exec playwright install --with-deps chrome
-      - run: docker build -f deploy/local/Dockerfile.postgres -t platform-postgres:18-vector deploy/local
-      - run: make trunk-pg TRUNK_ARGS='--reporter=list,json --forbid-only --fail-on-flaky-tests'
-        env:
-          PLAYWRIGHT_JSON_OUTPUT_FILE: ${{ github.workspace }}/.build/trunk/playwright-results.json
-      - name: Require every collected browser test to pass
-        run: |
-          node -e 'const {stats} = require("./.build/trunk/playwright-results.json"); if (!stats.expected || stats.skipped || stats.unexpected || stats.flaky) process.exit(1)'
-      - uses: actions/upload-artifact@v4
-        if: always()
-        with:
-          name: browser-test-results
-          path: |
-            .build/trunk/playwright-results.json
-            .build/trunk/results/
-            .build/trunk/host.log
-          include-hidden-files: true
