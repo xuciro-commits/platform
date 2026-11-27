@@ -26,7 +26,7 @@ func (h hostView) PrepareManagedPackage(c platform.Caller, descriptor platform.P
 		d.Installations = append(d.Installations, installation)
 	}, d.FailDecision)
 	return packages.ManagedPreparation{
-		Managed: managed, Archive: archive, Available: available, At: d.At, Upgrade: upgrade, Downgrade: downgrade, PriorDemo: packages.PriorDemo(h.t.PackageOwner, descriptor.ID),
+		Managed: managed, Archive: archive, Available: available, At: d.At, Upgrade: upgrade, Downgrade: downgrade, PriorDemo: packages.PriorDemo(h.t.PackageOwner, descriptor.ID), PriorOwner: h.t.PackageOwner,
 		Owner: h.t.builders[build.ID], Resolver: PublicationResolver(), Code: h.CodeReleaseAssets,
 		Impact: func(id string, after []platform.ReleaseAsset) (platform.PackageLifecycleImpact, error) {
 			return h.t.packageLifecycleImpact(c.Member, id, after)

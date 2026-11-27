@@ -240,6 +240,9 @@ func (h ResourceBootstrap) Initialize() error {
 		}
 	}
 	for _, definition := range h.Definitions {
+		if definition.Source != "code" {
+			continue
+		}
 		rid := protocol.ResourceID(h.Tenant, definition.Ref)
 		if _, exists := directory[rid]; exists || h.Exists(rid) {
 			continue

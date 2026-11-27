@@ -144,6 +144,24 @@ func TestInvariantK9PackageUpgradeRefusesIncompatibleExtensions(t *testing.T) {
 			t.Fatalf("extension definition lost: %+v", info)
 		}
 	}
+	// A restart must not declare generated package actions to be native platform resources.
+	generated := platform.AssetRef{App: build.ID, Kind: platform.AssetAction, Name: "crm.lead.create"}
+	generatedID := protocol.ResourceID(live.ID, generated)
+	if err := live.initializeResources(invariantClock); err != nil {
+		t.Fatal(err)
+	}
+	if resource, found := build.StoreResourceRow(live.Projection, live.ID, generated); found && resource.ManagedBy == "platform" {
+		t.Fatalf("generated action registered as native: %+v", resource)
+	}
+	if _, found := build.StoreResourceRow(live.Projection, live.ID, generated); !found {
+		// Reproduce the old bootstrap journal entry, rather than editing the store.
+		placeholder := protocol.Resource{Record: platform.Record{ID: generatedID}, Ref: generated, Title: generated.Name, Project: build.WorkspaceProject, State: "active", Version: 1, ManagedBy: "platform"}
+		req := live.submission(build.SchemaResourceRegister, build.ResourceType, "legacy-directory", map[string]any{"resources": []protocol.Resource{placeholder}})
+		req.PrincipalId = ""
+		if refusal := live.submitAutomated(live.App(build.ID), live.automation(build.ID, false), req, invariantClock); refusal != nil {
+			t.Fatal(refusal)
+		}
+	}
 	importDesc(live, v2)
 	r := review(v2)
 	if len(r.Extensions) != 1 || r.Extensions[0].Issue != "" || r.Extensions[0].VersionRange != "^1.0.0" {
@@ -151,6 +169,9 @@ func TestInvariantK9PackageUpgradeRefusesIncompatibleExtensions(t *testing.T) {
 	}
 	if refusal := submit(live, packages.SchemaPackageUpgrade, v2.ID, map[string]any{"id": v2.ID, "version": v2.Version}); refusal != nil {
 		t.Fatalf("compatible upgrade: %s", refusal.Message)
+	}
+	if resource := resourceRecord(t, live, generated); resource.ManagedBy != v2.ID {
+		t.Fatalf("legacy directory ownership not restored: %+v", resource)
 	}
 	checkExtension(live, "Keep extension")
 	live.accept(t, "customer.extra.edit", "customer.extra", "X1", map[string]any{"customerfield": "Action still works"})

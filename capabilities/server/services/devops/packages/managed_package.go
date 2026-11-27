@@ -41,6 +41,7 @@ type ManagedPreparation struct {
 	Upgrade    bool
 	Downgrade  bool
 	PriorDemo  []string
+	PriorOwner PreparationOwner
 	Owner      build.ConstructionDrafts
 	Resolver   publication.Resolver
 	Code       func() ([]platform.ReleaseAsset, error)
@@ -156,7 +157,8 @@ func (p ManagedPreparation) Prepare() (func(*pb.ChangeRecord), map[string][]stri
 	if err != nil {
 		return nil, nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "{reason}", err.Error())
 	}
-	refs, refusal := p.Managed.Owned(code, owned)
+	legacy := p.legacyDirectoryRefs()
+	refs, refusal := p.Managed.Owned(code, owned, legacy)
 	if refusal != nil {
 		return nil, nil, refusal
 	}
@@ -201,7 +203,7 @@ func (p ManagedPreparation) Prepare() (func(*pb.ChangeRecord), map[string][]stri
 	if err != nil {
 		return nil, nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "{reason}", err.Error())
 	}
-	return func(r *pb.ChangeRecord) { p.Managed.Install(r, refs, plans, mediaVersions) }, closures, nil
+	return func(r *pb.ChangeRecord) { p.Managed.Install(r, refs, plans, mediaVersions, legacy) }, closures, nil
 }
 
 func (m Managed) Project() (id, name string) {
@@ -239,7 +241,9 @@ func (m Managed) archive(r *pb.ChangeRecord, resource protocol.Resource, archive
 		resource.State = "archived"
 	}
 	m.Caller.Put(r, resource)
-	m.Caller.Put(r, m.Rows.Archived(resource, archived))
+	if resource.Type != "" && resource.Draft != "" {
+		m.Caller.Put(r, m.Rows.Archived(resource, archived))
+	}
 }
 
 func (m Managed) Archive(r *pb.ChangeRecord) {
@@ -255,7 +259,36 @@ func (m Managed) Archive(r *pb.ChangeRecord) {
 	}
 }
 
-func (m Managed) Owned(code, owned []platform.ReleaseAsset) (map[platform.AssetRef]bool, *platform.Error) {
+func (p ManagedPreparation) legacyDirectoryRefs() map[platform.AssetRef]bool {
+	refs := map[platform.AssetRef]bool{}
+	if p.PriorOwner == nil {
+		return refs
+	}
+	held := p.PriorOwner.InstalledPackages()[p.Descriptor.ID]
+	if held == nil || held.State != "active" {
+		return refs
+	}
+	blueprint, _, err := p.PriorOwner.PreparationBlueprint(held.ID, held.Version)
+	if err != nil {
+		return refs
+	}
+	assets, err := p.Owner.CompleteBlueprintAssets(blueprint.Assets)
+	if err != nil {
+		return refs
+	}
+	for _, asset := range assets {
+		refs[asset.Ref] = true
+	}
+	return refs
+}
+
+func legacyDirectoryEntry(resource protocol.Resource, prior map[platform.AssetRef]bool) bool {
+	return prior[resource.Ref] && resource.ManagedBy == "platform" &&
+		resource.Project == build.WorkspaceProject && resource.Type == "" && resource.Draft == "" &&
+		resource.Folder == "" && resource.Version == 1 && !resource.Archived
+}
+
+func (m Managed) Owned(code, owned []platform.ReleaseAsset, legacy map[platform.AssetRef]bool) (map[platform.AssetRef]bool, *platform.Error) {
 	native := map[platform.AssetRef]bool{}
 	for _, asset := range code {
 		native[asset.Ref] = true
@@ -267,14 +300,14 @@ func (m Managed) Owned(code, owned []platform.ReleaseAsset) (map[platform.AssetR
 		}
 	}
 	for _, resource := range m.Resources {
-		if refs[resource.Ref] && resource.ManagedBy != m.Descriptor.ID {
+		if refs[resource.Ref] && resource.ManagedBy != m.Descriptor.ID && !legacyDirectoryEntry(resource, legacy) {
 			return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "The package cannot replace resource {resource} in another project", resource.Ref.String())
 		}
 	}
 	return refs, nil
 }
 
-func (m Managed) Install(r *pb.ChangeRecord, refs map[platform.AssetRef]bool, plans []protocol.AssetInstallation, media []platform.MediaSetVersion) {
+func (m Managed) Install(r *pb.ChangeRecord, refs map[platform.AssetRef]bool, plans []protocol.AssetInstallation, media []platform.MediaSetVersion, legacy map[platform.AssetRef]bool) {
 	tenant := m.Caller.Member.Tenant
 	projectID, projectName := m.Project()
 	project, _ := platform.Get[protocol.Application](m.Caller, projectID)
@@ -282,7 +315,9 @@ func (m Managed) Install(r *pb.ChangeRecord, refs map[platform.AssetRef]bool, pl
 	m.Caller.Put(r, project)
 	projectRef := platform.AssetRef{App: build.ID, Kind: platform.AssetApp, Name: projectName}
 	m.Caller.Put(r, protocol.Resource{Record: platform.Record{ID: protocol.ResourceID(tenant, projectRef)}, Ref: projectRef, Type: protocol.AppType, Draft: projectID, Project: projectID, Title: m.Descriptor.Title, State: "active", Version: 1, ManagedBy: m.Descriptor.ID})
+	installed := map[platform.AssetRef]bool{}
 	for _, plan := range plans {
+		installed[plan.Ref] = true
 		typ, id, _ := strings.Cut(plan.Record, "/")
 		value, err := m.Rows.Decode(typ, plan.Image)
 		if err != nil {
@@ -305,6 +340,11 @@ func (m Managed) Install(r *pb.ChangeRecord, refs map[platform.AssetRef]bool, pl
 		m.Caller.Put(r, resource)
 	}
 	for _, resource := range m.Resources {
+		if refs[resource.Ref] && !installed[resource.Ref] && legacyDirectoryEntry(resource, legacy) {
+			resource.Project, resource.ManagedBy = projectID, m.Descriptor.ID
+			resource.Version++
+			m.Caller.Put(r, resource)
+		}
 		if resource.ManagedBy == m.Descriptor.ID && resource.Ref != projectRef && !refs[resource.Ref] {
 			m.archive(r, resource, true)
 		}
