@@ -14,6 +14,8 @@ import { defaultThemeSlug, themes } from "./astryx-themes";
 import { useLiveChanges, useSession } from "./host";
 import { useLocale } from "./i18n";
 import { PeekProvider } from "./pages/RecordPeek";
+import { CreateReferenceDialog } from "./pages/ActionDialog";
+import { ReferenceCreation } from "./pages/referenceCreation";
 import { RouterLink } from "./router";
 import { useAppearance } from "./shell/appearance";
 import { Shell } from "./shell/Shell";
@@ -41,9 +43,11 @@ function Root() {
         <LayerProvider>
           <LinkProvider component={RouterLink}>
             <RecordRoutesProvider homes={recordHomes}>
-              <PeekProvider key={`${locale} ${tenant}`}>
-                <Shell />
-              </PeekProvider>
+              <ReferenceCreation.Provider value={CreateReferenceDialog}>
+                <PeekProvider key={`${locale} ${tenant}`}>
+                  <Shell />
+                </PeekProvider>
+              </ReferenceCreation.Provider>
             </RecordRoutesProvider>
           </LinkProvider>
         </LayerProvider>
