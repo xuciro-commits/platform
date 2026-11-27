@@ -1,6 +1,7 @@
 [
   {
     "id": "acceptance",
+    "name": "星河科技",
     "settings": {
       "language": "en",
       "timezone": "UTC",
@@ -67,6 +68,7 @@
   },
   {
     "id": "publisher",
+    "name": "远山实业",
     "settings": {
       "language": "en",
       "timezone": "UTC",
@@ -144,6 +146,7 @@
   },
   {
     "id": "crm",
+    "name": "启明商贸",
     "settings": {
       "language": "en",
       "timezone": "UTC",
@@ -210,6 +213,7 @@
   },
   {
     "id": "blank",
+    "name": "新建企业",
     "settings": {
       "language": "en",
       "timezone": "UTC",
@@ -243,6 +247,7 @@
   },
   {
     "id": "rebac",
+    "name": "协作权限场景",
     "settings": {
       "language": "en",
       "timezone": "UTC",
@@ -269,6 +274,7 @@
   },
   {
     "id": "upgrade",
+    "name": "CRM 升级场景",
     "settings": {
       "language": "en",
       "timezone": "UTC",
@@ -302,6 +308,7 @@
   },
   {
     "id": "library",
+    "name": "市场目录场景",
     "settings": {
       "language": "en",
       "timezone": "UTC",
@@ -321,6 +328,7 @@
   },
   {
     "id": "official",
+    "name": "正式包交付场景",
     "settings": {
       "language": "en",
       "timezone": "UTC",
@@ -370,6 +378,7 @@
   },
   {
     "id": "phone",
+    "name": "云帆客服",
     "settings": {
       "language": "en",
       "timezone": "UTC",
@@ -403,6 +412,7 @@
   },
   {
     "id": "sim",
+    "name": "模拟客户场景",
     "settings": {
       "language": "en",
       "timezone": "UTC",
@@ -452,6 +462,7 @@
   },
   {
     "id": "party-upgrade",
+    "name": "主数据升级场景",
     "settings": {
       "language": "en",
       "timezone": "UTC",

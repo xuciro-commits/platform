@@ -3,9 +3,11 @@ package main
 import (
 	"flag"
 	"log"
+	"net"
 	"os"
 	"platformserver/services/security"
 	controlowner "platformserver/services/security/control"
+	"strings"
 	_ "time/tzdata"
 
 	platformserver "platformserver/host"
@@ -28,6 +30,12 @@ func main() {
 	connectorCert := flag.String("test-connector-cert", os.Getenv("PLATFORM_TRUNK_CONNECTOR_CERT"), "certificate of the connector trunk stub")
 	backup := registerBackupFlags()
 	flag.Parse()
+	if strings.HasPrefix(deployment.Files, "file:") {
+		addr, _, err := net.SplitHostPort(deployment.Addr)
+		if err != nil || net.ParseIP(addr) == nil || !net.ParseIP(addr).IsLoopback() || !*allowLoopback || deployment.Database == "" || deployment.Issuer != "" || deployment.Profile != "delivery" {
+			log.Fatal("file URI storage requires loopback PostgreSQL test host with -allow-loopback-packages")
+		}
+	}
 	if err := actions.ConfigureConnectorTrunk(*connectorOrigin, *connectorCert); err != nil {
 		log.Fatal(err)
 	}

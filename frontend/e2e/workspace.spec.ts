@@ -170,19 +170,19 @@ test("tenants: switching keeps the entry and replaces what the page shows", asyn
     await page.getByRole("group", { name: "Switch workspace" }).getByRole("menuitem", { name: to }).click();
   };
 
-  await tenant("acceptance", "publisher");
+  await tenant("星河科技", "远山实业");
   await expect(page).toHaveURL(/\/ontology\/object-types$/);
-  await expect(page.getByRole("navigation", { name: "Primary navigation" }).getByRole("button", { name: "publisher", exact: true })).toBeVisible();
+  await expect(page.getByRole("navigation", { name: "Primary navigation" }).getByRole("button", { name: "远山实业", exact: true })).toBeVisible();
   await expect(opportunity).toHaveCount(0);
 
-  await tenant("publisher", "acceptance");
+  await tenant("远山实业", "星河科技");
   await expect(opportunity).toBeVisible();
 });
 
 test("tenants: a host administrator creates a workspace from the switcher", async ({ page }) => {
   await signIn(page);
   const id = `ws-${Date.now().toString(36)}`;
-  await page.getByRole("navigation", { name: "Primary navigation" }).getByRole("button", { name: "acceptance", exact: true }).click();
+  await page.getByRole("navigation", { name: "Primary navigation" }).getByRole("button", { name: "星河科技", exact: true }).click();
   await page.getByRole("menuitem", { name: "New workspace", exact: true }).click();
   await expect(page).toHaveURL(/\/host\/tenants$/);
   await page.getByRole("button", { name: "New workspace", exact: true }).click();

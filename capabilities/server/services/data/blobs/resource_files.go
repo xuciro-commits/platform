@@ -72,7 +72,14 @@ type s3Files struct {
 	bucket string
 }
 
-func NewS3Files(ctx context.Context, endpoint string) (platform.FileStore, error) {
+func NewFiles(ctx context.Context, endpoint string) (platform.FileStore, error) {
+	if strings.HasPrefix(endpoint, "file:") {
+		u, err := url.Parse(endpoint)
+		if err != nil || u.Scheme != "file" || u.Host != "" || u.RawQuery != "" || u.Fragment != "" || u.User != nil || !filepath.IsAbs(u.Path) {
+			return nil, fmt.Errorf("files: expected an absolute file URI")
+		}
+		return NewLocalFiles(u.Path)
+	}
 	return openS3Files(ctx, endpoint, true)
 }
 

@@ -105,7 +105,7 @@ func (d *Deployment) Serve(tenants ...*Tenant) (serveErr error) {
 	defer flush(context.Background())
 	var files platform.FileStore
 	if d.Files != "" {
-		store, err := fileowner.NewS3Files(ctx, d.Files)
+		store, err := fileowner.NewFiles(ctx, d.Files)
 		if err != nil {
 			return err
 		}

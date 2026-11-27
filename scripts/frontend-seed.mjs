@@ -300,7 +300,7 @@ const targetExtraTenants = ["acceptance", "blank", "rebac", "upgrade", "publishe
   .filter((name) => !requestedTenants || requestedTenants.has(name));
 
 await Promise.all(targetExtraTenants.map(async (name) => {
-  const empty = await connect(name).catch(() => undefined);
+  const empty = requestedTenants ? await connect(name) : await connect(name).catch(() => undefined);
   if (!empty) return;
   const plan = tenantPackages[name];
   if (plan?.profiles) await members(empty, { members: plan.profiles });

@@ -170,7 +170,7 @@ POST /v1/submissions
 | 本地开发 | `make local` | 热更新，入口 `http://localhost:8495` |
 | 容器 | `make docker` | |
 | 无 Docker | `make lite` | 一个二进制，持久化运行 |
-| 夹具宿主 | `make frontend-host` | 内存宿主加示例销售项目，供新前端对照 |
+| 夹具宿主 | `make frontend-host` | 常驻 PostgreSQL 测试池中独立的演示数据库，仅星河科技租户 |
 
 托管的 SaaS 与装进客户机房的私有部署是同一个二进制；区别只在谁运维、放几个租户。
 租户文件（`-tenants`）里一个租户的 `settings` 是它的设置默认值：管理员没改过的设置取它，没写的取应用声明的默认。

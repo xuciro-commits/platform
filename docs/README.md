@@ -64,8 +64,8 @@
 | 规模 | 单条预算 | 整批目标 | 适用对象与约束 |
 |---|---|---|---|
 | Small（秒级核心） | `<= 1s` | `< 10s` | `make test-fast`、`make test RUN=K…`：内核、表达式、授权与合成最小包不变量；禁用 250 国主数据或全量业务包夹具 |
-| Medium（定点集成） | `<= 5s`（Go）/ `< 30s`（单 spec） | `< 45s` | `make test`（LPT 6 分片并行）与 `make trunk SPEC=…`（动态空闲端口 + 按 spec 仅灌目标租户种子，多任务并行零端口互锁） |
-| Large（发版与重型专项） | `< 60s` | 按需 / 发版一次 | 千行批量回放、跨库备份恢复、`make verify`（临时动态端口 PostgreSQL 全量）、`make load-sql`；日常开发与提交严禁触发 |
+| Medium（定点集成） | `<= 5s`（Go）/ `< 30s`（单 spec） | `< 45s` | `make test`（LPT 6 分片并行）与 `make trunk SPEC=…`（常驻 PG 池 + 按 spec 建独立场景库、动态端口） |
+| Large（发版与重型专项） | `< 60s` | 按需 / 发版一次 | 千行批量回放、跨库备份恢复、`make verify`（常驻 PostgreSQL 池中的新建数据库全量）、`make load-sql`；日常开发与提交严禁触发 |
 
 ### 阶段分工
 
@@ -73,7 +73,7 @@
 |---|---|---|
 | Fast（本地开发与提交） | 定点 `RUN=` / `SPEC=`、提交自动 `make fast` | 开发只跑改到的定点用例；`pre-commit` 只查暂存空白、Go 格式与提交信息（`< 1s`），不编译、不跑测试 |
 | CI（GitHub） | `make check`、`make test-runner`、`make test-fast`、`make check-frontend` | push main / PR 自动执行静态门禁、契约零漂移、秒级核心不变量与前端构建 |
-| Release（本地发版） | `make verify` | 先 `make test-pg`，再 `make trunk-pg`，各一次全量；不用内存全量重复验收 |
+| Release（本地发版） | `make verify` | 先 `make test-pg`，再 `make trunk`，各一次全量；不用内存全量重复验收 |
 
 ### 日常怎样选
 
@@ -83,11 +83,32 @@
 - 跨层去重：不为单个内部函数写单元测试，严禁伪造旧路由或内存桩的自欺测试；界面前置状态一律经 `submit` 接口秒级注入，浏览器只走要验证的交互步。
 - 纯文档或规约：`node scripts/check-docs.mjs`；修改测试调度器才运行 `make test-runner`。已通过的相同检查不因准备提交而重跑。
 
+### Trunk 场景与租户
+
+租户是隔离边界，不是测试功能的计数器。以下四层定义在 `scripts/trunk-seeds.mjs`，每个 spec 必须归属一层；新增用例优先复用现有场景。
+只有必须同时对比不同租户、不同安装状态或权限边界时才新增模板，禁止为单个功能另造租户。稳定英文 ID 用于存储与 API，中文 Name 注入现有租户 name 设置，用于登录后工作区展示；测试语言仍为 en，不能为改显示名改变语言断言。
+
+| 层 | 命令 | 初始状态 |
+|---|---|---|
+| Runtime · 通用运行时 | `make trunk LAYER=runtime` | 星河科技（acceptance）；切换工作区时加一个空的对照租户 |
+| Business · 业务组合 | `make trunk LAYER=business` | 复用星河科技，按需要加入 CRM、电话和协作权限场景 |
+| Delivery · 包交付 | `make trunk LAYER=delivery` | 空租户、历史版本、已安装版本等互斥状态按需创建；真实安装、升级与恢复 |
+| Security · 安全隔离 | `make trunk LAYER=security` | 两个独立安全租户，加一个非成员租户；附件、记录、越权验证 |
+
+日常 `make frontend-host` 只建星河科技一个租户；单 spec 不加载无关租户。全量验收覆盖四层的全部场景，不把演示、测试租户保留在开发或生产实例。
+默认单 worker，当前有串行依赖的用例共享所属场景状态；不同执行批次的数据库、文件目录和宿主互不共享，尚不宣称每个用例或每个 worker 完全隔离。
+
+测试池按 PostgreSQL 镜像 ID 创建专用本机容器（仅回环地址），不使用开发/生产数据库。
+数据库名每次随机；运行结束删除运行库与恢复库，失败保留运行目录证据。
+可复用场景的只读基准按宿主二进制、包输入清单、种子文件、场景、日期及池 ID 定键，同时复制数据库与文件字节。
+交付、安全、电话及连接器专项从新库实际构建初始状态；全量发布不使用基准。
+基准与运行目录均在忽略的 `.build/` 下。用 `make trunk-cache-clean` 删除当前工作树的基准，不删除运行库或常驻容器；异常中断遗留的锁需确认无活动进程后清理。
+
 ### 发版怎样验
 
 1. 在干净的候选提交上验收，记录 `git rev-parse HEAD`；确保该提交的 GitHub 轻量 CI 通过。
 2. 本地具备 Docker、`platform-postgres:18-vector` 镜像、前端依赖与 Chrome；缺少环境先补齐，不改成内存全量代替。
-3. 执行 `make verify`，固定全量参数，后端失败不启动浏览器。两套测试分别使用动态端口临时 PostgreSQL。
+3. 执行 `make verify`，固定全量参数，后端失败不启动浏览器。两套测试共用专用常驻 PostgreSQL 实例，各自新建独立数据库；浏览器全量从真实初始状态执行，不复用基准。
 4. 核对 `.build/check/test-results.json` 与 `.build/trunk/playwright-results.json`：失败、跳过、未执行、零用例或不稳定通过均不能算全量通过。
 5. 验收后候选提交或相关工作区字节变化，重新核对受影响的证据；不得把旧提交的报告冒充新提交的全量通过。
 6. 同一提交的 CI 与本地验收均通过才打 Tag。GitHub Release 工作流只构建、签发和发布制品，不再运行重型测试。
@@ -104,7 +125,7 @@
 | `make load-sql` | 容量、导入、延迟和吞吐专项 |
 | `bash deploy/dev/kernel-gates.sh quick` | 仅定点 K1/K13；其他专项显式选 GATES |
 
-不要把专项命令拼成日常默认全量。内存环境的 `make test`、`make trunk` 全量入口保留供明确需要时使用。
+不要把专项命令拼成日常默认全量。内存环境的 `make test` 保留供内核专项使用；浏览器不存在内存执行入口。
 
 ## 一行怎样算做完
 

@@ -75,7 +75,7 @@ func (f *Flags) Register(addr string) {
 	flag.StringVar(&f.HostAdmins, "host-admins", "", "comma-separated authenticated subjects allowed to administer this host; empty: no host administrators")
 	flag.StringVar(&f.Keys, "oidc-keys", "", "JWKS URL of the issuer, when the server reaches it on another address")
 	flag.StringVar(&f.IdentityProxy, "oidc-proxy", "", "fixed identity service upstream exposed at /auth on this host")
-	flag.StringVar(&f.Files, "files", "", "S3-compatible store of file bytes, http(s)://host:port/bucket, keys from PLATFORM_S3_ACCESS_KEY and PLATFORM_S3_SECRET_KEY (empty: memory)")
+	flag.StringVar(&f.Files, "files", "", "S3-compatible store of file bytes, http(s)://host:port/bucket, keys from PLATFORM_S3_ACCESS_KEY and PLATFORM_S3_SECRET_KEY (empty: memory; loopback test host: absolute file URI)")
 	flag.StringVar(&f.TenantsFile, "tenants", "", "JSON file with the host's tenants, their seats and starting settings; the host console appends to it (empty: the built-in development tenant)")
 	flag.StringVar(&f.TemplatesDir, "templates", "", "directory of tenant templates the host console offers (empty: none)")
 	flag.BoolVar(&f.Project, "project", false, "copy records into PostgreSQL tables per tenant for tools outside the host (needs -database)")

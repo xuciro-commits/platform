@@ -342,7 +342,6 @@ test("official tenant: CRM upgrades to the next authoritative version and retain
 });
 
 test("official tenant: a lead keeps its number and revision across snapshot and replay restarts", async () => {
-  test.skip(!process.env.TRUNK_DATABASE, "PostgreSQL persistence only");
   test.setTimeout(120_000);
   await as("rep-1");
   await crm("Leads");
@@ -389,7 +388,6 @@ test("official tenant: a lead keeps its number and revision across snapshot and 
 });
 
 test("official tenant: exported backup imports into a fresh database and serves the restored tenant", async () => {
-  test.skip(!process.env.TRUNK_DATABASE || !process.env.TRUNK_RESTORE_DATABASE, "PostgreSQL backup restore only");
   test.setTimeout(120_000);
   const restoreLog = await restoreTenantBackup("official");
   expect(restoreLog).toMatch(/restored official from the snapshot at \d+, then replayed 0 entries/);

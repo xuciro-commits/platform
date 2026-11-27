@@ -22,7 +22,7 @@ pnpm --dir frontend install
 make frontend-host
 ```
 
-`make frontend-host` 起一个内存里的宿主（`http://127.0.0.1:18511`），自带一个示例销售项目。
+`make frontend-host` 起一个独立 PostgreSQL 夹具宿主（`http://127.0.0.1:18511`），只创建中文名为「星河科技」的演示租户，自带示例销售项目与 CRM。
 在 `frontend/.env` 里写一行 `PLATFORM_HOST=http://127.0.0.1:18511`，然后另开一个终端：
 
 ```bash

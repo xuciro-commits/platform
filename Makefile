@@ -13,7 +13,7 @@ STEP := bash scripts/make-step.sh
 PACKAGE_INPUTS := node "$(CURDIR)/scripts/package-fixtures.mjs" --
 export GOPROXY
 
-.PHONY: help hooks bootstrap setup local docker infra infra-down build-compute dev dev-light host lite build bundle contract local-update packages fast check check-frontend verify verify-sql load-sql frontend-host frontend-dev trunk trunk-pg trunk-changed test test-fast test-runner test-pg test-voice
+.PHONY: help hooks bootstrap setup local docker infra infra-down build-compute dev dev-light host lite build bundle contract local-update packages fast check check-frontend verify verify-sql load-sql frontend-host frontend-dev trunk trunk-changed trunk-cache-clean test test-fast test-runner test-pg test-voice
 
 help:
 	@bash -c '\
@@ -23,7 +23,7 @@ help:
 	printf "\n%sEIDOS · Platform 常用命令面板%s  %s(输入 make <命令> 执行)%s\n\n" "$$B" "$$R" "$$D" "$$R"; \
 	printf "%s日常启动%s\n" "$$B" "$$R"; \
 	printf "  %s%-18s%s %s\n" "$$C" "local" "$$R" "启动完整热更新环境（新前端 :8495 + 宿主 :18495）"; \
-	printf "  %s%-18s%s %s\n" "$$C" "frontend-host" "$$R" "启动内存夹具宿主（:18511，自带示例 CRM 数据）"; \
+	printf "  %s%-18s%s %s\n" "$$C" "frontend-host" "$$R" "启动 PostgreSQL 夹具宿主（:18511，自带示例 CRM 数据）"; \
 	printf "  %s%-18s%s %s\n" "$$C" "frontend-dev" "$$R" "单独启动新前端热更新（:8496，配合 frontend-host）"; \
 	printf "  %s%-18s%s %s\n" "$$C" "lite" "$$R" "无 Docker 单机持久化运行"; \
 	printf "  %s%-18s%s %s\n" "$$C" "infra-down" "$$R" "停止本地 Docker 容器并保留数据"; \
@@ -33,7 +33,7 @@ help:
 	printf "  %s%-18s%s %s\n" "$$C" "check-frontend" "$$R" "新前端静态门禁、类型检查与生产构建"; \
 	printf "  %s%-18s%s %s  %s%s%s\n" "$$C" "test-fast" "$$R" "秒级核心不变量验收（Small <=1s + 内核子包）" "$$D" "RUN=K13 可缩窄" "$$R"; \
 	printf "  %s%-18s%s %s  %s%s%s\n" "$$C" "test" "$$R" "服务端测试（6 分片并行，含非宿主包）" "$$D" "RUN=K13 只跑指定编号" "$$R"; \
-	printf "  %s%-18s%s %s  %s%s%s\n" "$$C" "trunk" "$$R" "新前端浏览器主干验收（动态端口与按需灌数）" "$$D" "SPEC=crm 只跑一个文件，HEADED=1 可看过程" "$$R"; \
+	printf "  %s%-18s%s %s  %s%s%s\n" "$$C" "trunk" "$$R" "PostgreSQL 浏览器主干验收（常驻池、隔离数据库）" "$$D" "SPEC=crm 或 LAYER=runtime，HEADED=1 可看过程" "$$R"; \
 	printf "  %s%-18s%s %s  %s%s%s\n" "$$C" "trunk-changed" "$$R" "只跑已明确映射的主干用例文件" "$$D" "BASE=origin/main 连同已提交的改动" "$$R"; \
 	printf "  %s%-18s%s %s\n" "$$C" "verify" "$$R" "发版前：一次 PostgreSQL 服务端全量 + 一次 PostgreSQL 浏览器全量"; \
 	printf "  %s%-18s%s %s\n" "$$C" "verify-sql" "$$R" "临时 PostgreSQL 写入与重启恢复验收"; \
@@ -94,9 +94,7 @@ host:
 	.build/host/platform-server $(ARGS)
 
 frontend-host:
-	mkdir -p .build/frontend-host
-	cp scripts/frontend-tenants.json .build/frontend-host/tenants.json
-	$(PACKAGE_INPUTS) bash -c 'node scripts/frontend-seed.mjs & cd capabilities/server && $(GO) run ./cmd/platform-server -addr 127.0.0.1:18511 -tenants ../../.build/frontend-host/tenants.json -host-admins admin,root'
+	GO="$(GO)" $(PACKAGE_INPUTS) node scripts/trunk-postgres.mjs --host
 
 frontend-dev:
 	$(PNPM) --dir frontend dev
@@ -150,35 +148,22 @@ check-frontend:
 	@printf '\033[32m✓ 新前端检查全部通过\033[0m\n\n'
 
 trunk:
-	cd frontend && $(PACKAGE_INPUTS) node ../scripts/connector-trunk.mjs $(PNPM) exec playwright test -c e2e $(foreach spec,$(SPEC),$(spec).spec.ts) $(if $(HEADED),--headed) $(TRUNK_ARGS)
-
-trunk-pg:
-	@set -e; name=platform-trunk-pg-$$$$; \
-	docker run -d --rm --name $$name -e POSTGRES_HOST_AUTH_METHOD=trust -e POSTGRES_DB=trunk -p 127.0.0.1:$${TRUNK_PORT_OFFSET:+$$((55432 + TRUNK_PORT_OFFSET))}:5432 platform-postgres:18-vector -c fsync=off -c full_page_writes=off >/dev/null; \
-	trap 'docker rm -f '$$name' >/dev/null' EXIT; \
-	port=$$(docker port $$name 5432/tcp | head -n1 | awk -F: '{print $$NF}'); \
-	until docker exec $$name pg_isready -h 127.0.0.1 -U postgres -d trunk >/dev/null 2>&1; do sleep 1; done; \
-	docker exec $$name createdb -U postgres trunk_restore; \
-	cd frontend && TRUNK_DATABASE="postgres://postgres@127.0.0.1:$$port/trunk?sslmode=disable" TRUNK_RESTORE_DATABASE="postgres://postgres@127.0.0.1:$$port/trunk_restore?sslmode=disable" $(PACKAGE_INPUTS) node ../scripts/connector-trunk.mjs $(PNPM) exec playwright test -c e2e $(foreach spec,$(SPEC),$(spec).spec.ts) $(if $(HEADED),--headed) $(TRUNK_ARGS); \
-	rows=$$(docker exec $$name psql -U postgres -d trunk -tAc 'select count(*) from journal'); \
-	echo "trunk-pg: $$rows journal entries in PostgreSQL"; test "$$rows" -gt 0
+	GO="$(GO)" $(PACKAGE_INPUTS) node scripts/trunk-postgres.mjs --browser $(if $(LAYER),--layer "$(LAYER)") $(PNPM) exec playwright test -c e2e $(foreach spec,$(SPEC),$(spec).spec.ts) $(if $(HEADED),--headed) $(TRUNK_ARGS)
 
 test-pg:
-	@set -e; name=platform-test-pg-$$$$; \
-	docker run -d --rm --name $$name -e POSTGRES_HOST_AUTH_METHOD=trust -e POSTGRES_DB=bench -p 127.0.0.1:$${TRUNK_PORT_OFFSET:+$$((56432 + TRUNK_PORT_OFFSET))}:5432 platform-postgres:18-vector >/dev/null; \
-	trap 'docker rm -f '$$name' >/dev/null' EXIT; \
-	port=$$(docker port $$name 5432/tcp | head -n1 | awk -F: '{print $$NF}'); \
-	until docker exec $$name pg_isready -h 127.0.0.1 -U postgres -d bench >/dev/null 2>&1; do sleep 1; done; \
-	PLATFORM_BENCH_DATABASE="postgres://postgres@127.0.0.1:$$port/bench?sslmode=disable" GO="$(GO)" $(PACKAGE_INPUTS) node scripts/check-invariants.mjs '$(RUN)' --require-no-skip
+	GO="$(GO)" $(PACKAGE_INPUTS) node scripts/trunk-postgres.mjs --backend '$(RUN)'
+
+trunk-cache-clean:
+	node scripts/trunk-postgres.mjs --clean
 
 trunk-changed:
 	@set -e; specs="$$(node scripts/trunk-affected.mjs $(BASE))"; \
 	if [ -z "$$specs" ]; then echo "没有影响主干用例的改动"; \
 	elif [ "$$specs" = all ]; then echo "影响范围过广：请明确 SPEC 定点验收，或发版前运行 make verify；不自动启动全量。"; exit 2; \
-	else echo "只跑：$$specs"; cd frontend && $(PACKAGE_INPUTS) node ../scripts/connector-trunk.mjs $(PNPM) exec playwright test -c e2e $$specs $(if $(HEADED),--headed) $(TRUNK_ARGS); fi
+	else echo "只跑：$$specs"; $(MAKE) trunk SPEC="$$(printf '%s' "$$specs" | sed 's/\.spec\.ts//g')"; fi
 
 test-runner:
-	node --test scripts/test-results.test.mjs
+	node --test scripts/test-results.test.mjs scripts/trunk-seeds.test.mjs
 
 test-fast:
 	GO="$(GO)" $(PACKAGE_INPUTS) node scripts/check-invariants.mjs '$(RUN)' --tier=small
@@ -193,7 +178,7 @@ verify:
 	mkdir -p .build/trunk
 	rm -f .build/trunk/playwright-results.json
 	$(MAKE) test-pg RUN=
-	PLAYWRIGHT_JSON_OUTPUT_FILE="$(CURDIR)/.build/trunk/playwright-results.json" $(MAKE) trunk-pg SPEC= HEADED= TRUNK_ARGS='--workers=1 --reporter=list,json --forbid-only --fail-on-flaky-tests'
+	TRUNK_FRESH=1 PLAYWRIGHT_JSON_OUTPUT_FILE="$(CURDIR)/.build/trunk/playwright-results.json" $(MAKE) trunk SPEC= LAYER= HEADED= TRUNK_ARGS='--workers=1 --reporter=list,json --forbid-only --fail-on-flaky-tests'
 	node -e 'const {stats} = require("./.build/trunk/playwright-results.json"); if (!stats.expected || stats.skipped !== 0 || stats.unexpected !== 0 || stats.flaky !== 0) process.exit(1)'
 
 verify-sql:

@@ -1,4 +1,4 @@
-import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { writeFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { defineConfig } from "@playwright/test";
 
@@ -7,41 +7,14 @@ const offset = Number(process.env.TRUNK_PORT_OFFSET ?? 0);
 const hostPort = Number(process.env.PLATFORM_TRUNK_HOST_PORT ?? (18521 + offset));
 const controlPort = Number(process.env.PLATFORM_TRUNK_CONTROL_PORT ?? (19521 + offset));
 const pagePort = Number(process.env.PLATFORM_TRUNK_PAGE_PORT ?? (8497 + offset));
-const work = process.env.PLATFORM_TRUNK_HOST_PORT ? `${root}.build/trunk-${hostPort}` : `${root}.build/trunk`;
+const work = process.env.PLATFORM_TRUNK_WORK ?? `${root}.build/trunk`;
+const listOnly = process.argv.includes("--list");
+if (!listOnly && (!process.env.TRUNK_DATABASE || !process.env.TRUNK_RESTORE_DATABASE || !process.env.PLATFORM_TRUNK_WORK)) throw Error("Use make trunk (PostgreSQL required)");
 const host = `http://127.0.0.1:${hostPort}`;
 const page = `http://localhost:${pagePort}`;
 
-const SPEC_SEEDS: Record<string, { tenants: string[]; acceptanceCrm?: boolean }> = {
-  "tenant-security": { tenants: [] },
-  records: { tenants: ["acceptance"] },
-  gantt: { tenants: ["acceptance"] },
-  connector: { tenants: ["acceptance"] },
-  workspace: { tenants: ["acceptance"] },
-  builder: { tenants: ["acceptance"], acceptanceCrm: true },
-  official: { tenants: ["official"] },
-  phone: { tenants: ["phone"] },
-  "i18n-grouping": { tenants: ["acceptance", "phone"] },
-  rebac: { tenants: ["acceptance", "rebac", "crm"] },
-  crm: { tenants: ["acceptance", "crm"], acceptanceCrm: true },
-  marketplace: { tenants: ["blank", "upgrade", "publisher", "library", "party-upgrade"] },
-};
-const ALL_E2E_TENANTS = ["acceptance", "blank", "rebac", "upgrade", "publisher", "official", "phone", "crm", "library", "party-upgrade"];
-
-const cliArgs = process.argv.slice(2);
-const cliFiles = cliArgs.filter((arg, i) => !arg.startsWith("-") && cliArgs[i - 1] !== "-c" && cliArgs[i - 1] !== "--grep" && arg !== "test");
-const pickedSpecs = cliFiles.map((file) => file.match(/(?:^|\/)([a-z0-9-]+)\.spec\.ts(?::\d+)*$/)?.[1] ?? "");
-const scoped = pickedSpecs.length > 0 && pickedSpecs.every((name) => Boolean(SPEC_SEEDS[name]));
-const seedTenants = scoped
-  ? [...new Set(pickedSpecs.flatMap((name) => SPEC_SEEDS[name].tenants))]
-  : ALL_E2E_TENANTS;
-const needAcceptanceCrm = scoped ? pickedSpecs.some((name) => Boolean(SPEC_SEEDS[name].acceptanceCrm)) : true;
-
-if (process.env.TEST_WORKER_INDEX === undefined) {
-  process.env.TRUNK_SPLIT_OFFICIAL = Boolean(process.env.TRUNK_DATABASE) && (cliFiles.length === 0 || (cliFiles.some((f) => f.includes("official")) && cliFiles.some((f) => !f.includes("official")))) ? "1" : "0";
-  mkdirSync(work, { recursive: true });
-  const tenants = JSON.parse(readFileSync(`${root}scripts/frontend-tenants.json`, "utf8"));
-  const securityTenants = JSON.parse(readFileSync(`${root}scripts/frontend-security-tenants.json`, "utf8"));
-  writeFileSync(`${work}/tenants.json`, JSON.stringify([...tenants, ...securityTenants]));
+if (process.env.TEST_WORKER_INDEX === undefined && !listOnly) {
+  if (!process.env.PLATFORM_TRUNK_FILES) throw Error("Missing isolated trunk file store");
   writeFileSync(`${work}/host.log`, "");
   writeFileSync(
   `${work}/supervisor.mjs`,
@@ -56,7 +29,7 @@ const tenantsFile = ${JSON.stringify(`${work}/tenants.json`)};
 const logFile = ${JSON.stringify(`${work}/host.log`)};
 const backupDir = ${JSON.stringify(work)};
 
-let currentDatabase = process.env.TRUNK_DATABASE ?? "";
+let currentDatabase = process.env.TRUNK_DATABASE;
 let child = null;
 let stopping = false;
 let restarting = false;
@@ -69,7 +42,8 @@ async function startHost(snapshotEvery) {
     "-tenants", tenantsFile,
     "-host-admins", "admin,root",
     "-allow-loopback-packages",
-    ...(currentDatabase ? ["-database", currentDatabase] : []),
+    "-database", currentDatabase,
+    "-files", process.env.PLATFORM_TRUNK_FILES,
     ...(snapshotEvery === undefined ? [] : ["-snapshot-every", String(snapshotEvery)]),
   ];
   const fd = openSync(logFile, "a");
@@ -87,7 +61,7 @@ async function startHost(snapshotEvery) {
     if (proc.exitCode !== null || proc.signalCode !== null) {
       throw new Error(readFileSync(logFile, "utf8").slice(from));
     }
-    const ok = await fetch("${host}/healthz").then((r) => r.ok, () => false);
+    const ok = await fetch("${host}/healthz").then(async (r) => { if (!r.ok) return false; const h = await r.json(); if (h.quarantined) throw Error("Quarantined tenants: " + h.quarantined); return true; }, () => false);
     if (ok) return readFileSync(logFile, "utf8").slice(from);
     await new Promise((r) => setTimeout(r, 100));
   }
@@ -164,6 +138,8 @@ await startHost();
 }
 
 const splitOfficial = process.env.TRUNK_SPLIT_OFFICIAL === "1";
+const selectedSpecs: string[] = JSON.parse(process.env.PLATFORM_TRUNK_SPECS ?? "[]");
+const selectedNonOfficial = selectedSpecs.filter(name => name !== "official").map(name => `**/${name}.spec.ts`);
 
 export default defineConfig({
   testDir: ".",
@@ -171,18 +147,18 @@ export default defineConfig({
   timeout: 60_000,
   expect: { timeout: 10_000 },
   fullyParallel: true,
-  workers: 3,
+  workers: 1,
   reporter: [["list"]],
   projects: splitOfficial
     ? [
-        { name: "trunk", testIgnore: /official\.spec\.ts/ },
+        { name: "trunk", testMatch: selectedNonOfficial, testIgnore: /official\.spec\.ts/ },
         { name: "official", testMatch: /official\.spec\.ts/, dependencies: ["trunk"] },
       ]
     : undefined,
   use: { baseURL: page, locale: "en-US", channel: "chrome", trace: "retain-on-failure", actionTimeout: 10_000 },
   webServer: [
     {
-      command: `go build -o ${work}/platform-server ./cmd/platform-server && node ${work}/supervisor.mjs`,
+      command: `node "${work}/supervisor.mjs"`,
       cwd: `${root}capabilities/server`,
       url: `${host}/healthz`,
       timeout: 360_000,
@@ -194,15 +170,13 @@ export default defineConfig({
       },
     },
     {
-      command: `node ../scripts/frontend-seed.mjs && pnpm exec vite --mode trunk --port ${pagePort} --strictPort`,
+      command: `pnpm exec vite --mode trunk --port ${pagePort} --strictPort`,
       cwd: `${root}frontend`,
       url: page,
       timeout: 360_000,
       reuseExistingServer: false,
       env: {
         PLATFORM_HOST: host,
-        PLATFORM_ACCEPTANCE_CRM: needAcceptanceCrm ? "1" : "0",
-        PLATFORM_SEED_TENANTS: seedTenants.length ? seedTenants.join(",") : "none",
       },
     },
   ],

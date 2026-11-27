@@ -1,6 +1,7 @@
 [
   {
     "id": "audit-a",
+    "name": "安全隔离甲",
     "settings": {
       "language": "en",
       "timezone": "UTC",
@@ -30,6 +31,7 @@
   },
   {
     "id": "audit-b",
+    "name": "安全隔离乙",
     "settings": {
       "language": "en",
       "timezone": "UTC",

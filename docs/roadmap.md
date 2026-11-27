@@ -41,7 +41,7 @@
 | 记录：列表、记录页、行内编辑、视图 | 产品级 | `pages/RecordList.tsx`、`RecordPage.tsx`；records 33 项 | — |
 | CRM 包 | 产品级 | crm 17 项、official 8 项 | — |
 | 宿主：接受路径、重放、内存与文件存储 | 能用 | `capabilities/server/kernel`；十三组内核不变量；official 停机重启、备份恢复 | — |
-| PostgreSQL 存储 | 能用 | 3.1a–f；crm 与 official trunk-pg 全过 | 全量 trunk-pg 验收卡在提交长时间占住租户处理通道：一（3.1f，#12） |
+| PostgreSQL 存储 | 能用 | 3.1a–f；crm 与 official 历史 PG 验收全过 | 全量 PG Trunk 验收卡在提交长时间占住租户处理通道：一（3.1f，#12） |
 | 格式纪元冻结 | 产品级 | `kernel/store/migration.go`、`scripts/check-epoch.mjs`；K1 纪元拒绝、备份纪元拒绝 | — |
 | 构建：类型、字段、状态、动作、发布 | 能用 | `services/ontology`；builder 14 项 | — |
 | 条件与表达式编辑器 | 能用 | `pages/ConditionBuilder.tsx`、`ExpressionEditor.tsx`；builder “a condition picked”、“a formula written” | — |
@@ -71,7 +71,7 @@
 灵魂：客户的数据只落在接受路径写下的条目里；重启、换机、从备份恢复，读回的是同一份记录、修订与编号。
 
 - 3.1e 已做（c38925022）：重启恢复页面与应用不再走发布校验，`loadproject.loaditem` 页与带点号的包页能恢复；K1 用例在 PG 上守住记录、历史逐字节一致。
-- 3.1a–d 已做：临时 `platform-postgres:18-vector` 测试库与 `journal` 核对（`make trunk-pg`、`make test-pg`）；血缘标记按变化计数缓存；official 停机重启（快照与重放各一次，5ad02daac）与按格式纪元备份导出/空库恢复（48580d57f、5ad02daac）均已跑通。
+- 3.1a–d 已做：临时 `platform-postgres:18-vector` 测试库与 `journal` 核对（现统一 `make trunk`、`make test-pg`）；血缘标记按变化计数缓存；official 停机重启（快照与重放各一次，5ad02daac）与按格式纪元备份导出/空库恢复（48580d57f、5ad02daac）均已跑通。
 - 3.1f 已做：嵌套 Batch 的授权证据不在外层重复，乐观决策失配一次走锁内决策（d0cba1975）。
   引用记录按 64 条一组填充，满组最后一条带 `#next`，Build 监听器接着填下一组；200 条拆成 4 次 work，单条最大 155 KB（原 477 KB）。
   重启后从下一组续跑、不重做已填的组，结果与一次跑完一致（K1 两条用例）。128 条一组实测 306 KB，超过 256 KB，故取 64。
