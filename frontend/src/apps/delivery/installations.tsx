@@ -42,7 +42,10 @@ export default function Installations() {
   const [selected, setSelected] = useState<{ view: Api.PackageView; mode: "install" | "manage" }>();
   const [installedIds, setInstalledIds] = useState<string[]>(readJustInstalled);
   const [accessFor, setAccessFor] = useState<string[]>(readJustInstalled);
-  const closeAccess = () => setAccessFor([]);
+  const closeAccess = () => {
+    try { sessionStorage.removeItem(JUST_INSTALLED_KEY); } catch {}
+    setAccessFor([]);
+  };
   const gutter = useGutter();
   const rows = packages.status === "ready" ? packages.data.filter((view) => view.installed?.version === view.descriptor.version) : [];
 

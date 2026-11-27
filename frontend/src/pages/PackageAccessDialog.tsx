@@ -14,7 +14,7 @@ import { navigate } from "../router";
 import { reasonOf, send } from "./act";
 import { roleTitle } from "./rebac/shared";
 
-type Unheld = { app: string; title: string; roles: string[] };
+type Unheld = { app: string; title: string; roles: string[]; hasHolders: boolean };
 
 function spaceOf(view: Api.PackageView) {
   return view.installed?.space || view.installed?.namespace || view.descriptor.namespace;
@@ -47,7 +47,7 @@ export function PackageAccessDialog({ ids, onClose }: { ids: string[]; onClose: 
     if (permissions.status !== "ready") return [];
     return permissions.data
       .filter((entry) => spaces.has(entry.app))
-      .map((entry) => ({ app: entry.app, title: t(entry.title || entry.app), roles: entry.roles.filter((item) => item.role !== "*" && item.holders === 0).map((item) => item.role) }))
+      .map((entry) => ({ app: entry.app, title: t(entry.title || entry.app), roles: entry.roles.filter((item) => item.role !== "*" && item.holders === 0).map((item) => item.role), hasHolders: entry.roles.some((item) => item.role !== "*" && item.holders > 0) }))
       .filter((entry) => entry.roles.length > 0);
   }, [permissions, spaces]);
   const settled = [packages, permissions, members, me, catalog].every((read) => read.status !== "loading");
@@ -98,7 +98,9 @@ export function PackageAccessDialog({ ids, onClose }: { ids: string[]; onClose: 
           <LayoutContent>
             <VStack gap={4}>
               <Text type="supporting" color="secondary">
-                {t("Installing grants no access. Nobody holds a role in {apps} yet, so it stays hidden from everyone, you included, until someone gets one.").replace("{apps}", names)}
+                {t(unheld.some((entry) => entry.hasHolders)
+                  ? "Installing grants no new access. Some roles in {apps} have no holders yet. Existing role holders keep their access."
+                  : "Installing grants no access. Nobody holds a role in {apps} yet, so it stays hidden from everyone, you included, until someone gets one.").replace("{apps}", names)}
               </Text>
               {failure && <Banner status="error" title={t("Not saved")} description={failure} />}
               {grant ? (

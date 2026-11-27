@@ -269,6 +269,14 @@ test("upgrade tenant: CRM upgrades to a version with a new optional lead field a
   await expect(review.getByText(/\+ linkedin/)).toBeVisible();
   await review.getByRole("button", { name: "Upgrade package", exact: true }).click();
   await expect(review).toBeHidden({ timeout: 30_000 });
+  await expect(page).toHaveURL(/\/delivery\/installations$/, { timeout: 30_000 });
+  const access = page.getByRole("dialog", { name: "Who can use it" });
+  await expect(access).toContainText("Existing role holders keep their access.");
+  await access.getByRole("button", { name: "Skip for now", exact: true }).click();
+  await expect(access).toHaveCount(0);
+  await page.reload();
+  await expect(page.getByRole("link", { name: "CRM", exact: true }).first()).toBeVisible();
+  await expect(access).toHaveCount(0);
   await open(page, "Delivery", "Installations");
   await expect(page.getByRole("listitem").filter({ hasText: /^CRM/ })).toContainText("0.1.22");
 
