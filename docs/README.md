@@ -103,6 +103,8 @@ Go 测试须在 `scripts/test-purposes.mjs` 登记简短中文用途；每项及
 | Security · 安全隔离 | `make trunk LAYER=security` | 浏览器验证授权 UI 与撤权后的实时行为；纯 API 隔离由 `make test-security-pg` 创建两个独立安全租户和一个非成员租户 |
 
 日常 `make frontend-host` 只建星河科技一个租户；单 spec 不加载无关租户。
+需要跨重启保留的模拟租户必须同时持久化 PostgreSQL 日志和文件仓库；不要将持久日志与临时内存文件混用。
+文件仓库保存已核验的包来源和已安装的密封制品；恢复时必须按原摘要核对，不得用同版本异内容覆盖。
 `builder` 不装 CRM；`crm` 只建启明商贸；`crm-records` 与 `package-extension` 才准备星河科技的 CRM。
 交付拆为 `marketplace`（空企业）、`package-upgrade`（文件导入与 CRM 升级）、`party-upgrade`（主数据迁移）、`package-library`（目录）、`package-apps`（已安装应用）、`package-lifecycle`、`official` 等，互不加载无关业务数据。
 前置状态从已按锁校验的远程制品字节导入，不为每个租户重复下载；真实 HTTPS 安装与市场自动依赖下载仍走产品接口，不以准备缓存替代传输验收。升级场景预置目标版本声明的真实依赖（如尚未发布的 call 从锁定源码构建），不跳过依赖检查。全量验收覆盖四层常规场景和独立 API 安全验收，不把演示、测试租户保留在开发或生产实例。

@@ -17,6 +17,7 @@ const SCENARIOS = {
     "package-lifecycle": { tenants: ["acceptance"] },
     official: { tenants: ["official"] },
     marketplace: { tenants: ["blank"] },
+    "erp-marketplace": { tenants: ["blank"] },
     "package-upgrade": { tenants: ["upgrade"] },
     "party-upgrade": { tenants: ["party-upgrade"] },
     "package-library": { tenants: ["library"] },
