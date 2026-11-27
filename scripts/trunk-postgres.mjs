@@ -6,7 +6,7 @@ import { availableParallelism } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { measure, note } from "./timing.mjs";
-import { layers, seedPlan, securityAPIPlan, countOption, specSelectors } from "./trunk-seeds.mjs";
+import { layers, seedPlan, securityAPIPlan, countOption, specSelectors, playwrightSelectors } from "./trunk-seeds.mjs";
 
 const root = fileURLToPath(new URL("../", import.meta.url));
 const build = join(root, ".build");
@@ -323,7 +323,7 @@ if (mode === "--browser" && args[0] === "--layer") {
   args.push(...layers[layer].map(name => name + ".spec.ts"));
 }
 if (mode === "--browser" && args.includes("--list")) {
-  await measure("收集浏览器用例（不启动宿主）", () => checked(args[0], args.slice(1), process.env, join(root, "frontend")));
+  await measure("收集浏览器用例（不启动宿主）", () => checked(args[0], playwrightSelectors(args.slice(1)), process.env, join(root, "frontend")));
   process.exit(0);
 }
 if (!["--browser", "--host", "--backend", "--security", "--clean"].includes(mode)) throw Error("Specify --browser, --host, --backend, --security or --clean");

@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { readdirSync, readFileSync } from "node:fs";
 import { test } from "node:test";
-import { layers, seedPlan, securityAPIPlan, countOption, specSelectors } from "./trunk-seeds.mjs";
+import { layers, seedPlan, securityAPIPlan, countOption, specSelectors, playwrightSelectors } from "./trunk-seeds.mjs";
 
 test("every Trunk spec belongs to exactly one of four scenarios", () => {
   const files = readdirSync(new URL("../frontend/e2e/", import.meta.url))
@@ -87,4 +87,11 @@ test("per-spec dispatch preserves exact line selectors", () => {
   const args = ["pnpm", "exec", "playwright", "test", "-c", "e2e", "records.spec.ts:42", "e2e/records.spec.ts:52:3", "crm.spec.ts", "--workers=1"];
   assert.deepEqual(specSelectors(args, "records"), ["pnpm", "exec", "playwright", "test", "-c", "e2e", "--workers=1", "records.spec.ts:42", "e2e/records.spec.ts:52:3"]);
   assert.equal(specSelectors(args, "crm").at(-1), "crm.spec.ts");
+});
+
+test("Playwright selects exact spec basenames, including line selectors", () => {
+  const args = playwrightSelectors(["test", "records.spec.ts", "crm-records.spec.ts:12:3", "--list"]);
+  assert.deepEqual(args, ["test", "/records\\.spec\\.ts$", "/crm-records\\.spec\\.ts$:12:3", "--list"]);
+  assert.equal(new RegExp(args[1]).test("/e2e/crm-records.spec.ts"), false);
+  assert.equal(new RegExp(args[1]).test("/e2e/records.spec.ts"), true);
 });

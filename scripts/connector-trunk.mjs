@@ -5,6 +5,7 @@ import { createServer } from "node:https";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { begin } from "./timing.mjs";
+import { playwrightSelectors } from "./trunk-seeds.mjs";
 
 const [command, ...args] = process.argv.slice(2);
 const baseEnv = { ...process.env };
@@ -13,7 +14,7 @@ const selected = args.filter((arg) => /\.spec\.ts(?::\d+)*$/.test(arg));
 const named = (spec) => selected.some((arg) => new RegExp(`(?:^|/)${spec}\\.spec\\.ts(?::\\d+)*$`).test(arg));
 const runsConnector = !selected.length || named("connector") || (named("official") && selected.some((arg) => !/official\.spec\.ts/.test(arg)));
 if (!runsConnector) {
-  const child = spawn(command, args, { stdio: "inherit", env: baseEnv });
+  const child = spawn(command, playwrightSelectors(args), { stdio: "inherit", env: baseEnv });
   process.once("SIGINT", () => child.kill("SIGINT"));
   process.once("SIGTERM", () => child.kill("SIGTERM"));
   child.on("error", () => { process.exitCode = 1; });
@@ -53,7 +54,7 @@ if (!runsConnector) {
   fixtureReady();
   const origin = "https://127.0.0.1:" + server.address().port;
   const env = { ...baseEnv, PLATFORM_TRUNK_CONNECTOR_ORIGIN: origin, PLATFORM_TRUNK_CONNECTOR_CERT: cert, PLATFORM_SECRET_KIT_TRUNK_WRONG: "kit-user:kit-wrong-password", PLATFORM_SECRET_KIT_TRUNK_BASIC: "kit-user:kit-trunk-password", PLATFORM_SECRET_KIT_TRUNK_HMAC: "kit-trunk-signing-key" };
-  const child = spawn(command, args, { stdio: "inherit", env });
+  const child = spawn(command, playwrightSelectors(args), { stdio: "inherit", env });
   const stop = (signal) => child.kill(signal);
   process.once("SIGINT", () => stop("SIGINT"));
   process.once("SIGTERM", () => stop("SIGTERM"));

@@ -29,12 +29,7 @@
 ## 收口（GPT）
 
 拥有：`scripts/`（纯度、变异）、`Makefile` 的 trunk 部分、`frontend/e2e/`、市场卡片 `frontend/src/pages/PackageCard.tsx`、K47–K51 的不变量、租户 `sim`、发版说明。
-顺序：SPEC → 4.1d → 4.2c → 3.x → 4.4b → 4.3c → 门槛演示。4.3c 与演示要 ERP 那波的 4.3d 先落地；没落地就先做别的，都做完还没到就自己在包库补上缺的那块。
-
-### 4.x trunk 的 SPEC 是子串匹配
-
-- `make trunk SPEC=records` 把 `records.spec.ts` 当作模式交给 Playwright，`crm-records.spec.ts` 也被选中，却跑在 records 场景的租户里，报“missing action crm.dealline.create”。
-- 改成按文件名精确选（例如 `/records\.spec\.ts$`）；验收：`SPEC=records` 只跑 records.spec.ts，`SPEC="records crm-records"` 两个都跑且各在自己的场景里通过。
+顺序：4.1d → 4.2c → 3.x → 4.4b → 4.3c → 门槛演示。4.3c 与演示要 ERP 那波的 4.3d 先落地；没落地就先做别的，都做完还没到就自己在包库补上缺的那块。
 
 ### 4.1d 变异验收
 

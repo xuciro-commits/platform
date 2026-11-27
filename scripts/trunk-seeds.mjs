@@ -53,3 +53,10 @@ export function specSelectors(args, spec) {
   const selectors = args.filter(arg => name(arg) === spec);
   return [...args.filter(arg => !name(arg)), ...(selectors.length ? selectors : [spec + ".spec.ts"])];
 }
+
+export function playwrightSelectors(args) {
+  return args.map(arg => {
+    const match = arg.match(/(?:^|\/)([a-z0-9-]+)\.spec\.ts((?::\d+)*)$/);
+    return match ? "/" + match[1] + "\\.spec\\.ts$" + match[2] : arg;
+  });
+}

@@ -78,7 +78,7 @@
 ### 日常怎样选
 
 - 后端行为改动：优先 `make test RUN=K13`（受影响编号，`< 5s`）或 `make test-fast`（`< 10s`）；涉及 SQL 方言或存储时跑 `make test-pg RUN=K13`。
-- 前端行为改动：`make trunk SPEC=crm`（可通过 `TRUNK_ARGS='--grep ...'` 缩到单条）；自动分配空闲端口并只灌该 spec 所需租户，与运行中的开发环境互不干扰。
+- 前端行为改动：`make trunk SPEC=crm`（可通过 `TRUNK_ARGS='--grep ...'` 缩到单条）；SPEC 按文件名精确匹配（可用空格指定多个 spec），自动分配空闲端口并只灌该 spec 所需租户，与运行中的开发环境互不干扰。
 - `make trunk-changed` 按 `scripts/trunk-affected.mjs` 的受影响图只跑明确映射的 spec；影响过广返回非零并要求指定 `SPEC`，绝不自动跑全量。
 - 跨层去重：不为单个内部函数写单元测试，严禁伪造旧路由或内存桩的自欺测试；界面前置状态优先经真实 `submit` 注入；若自动编号、分配或授权的行为本身依赖界面入口，必须先证明两种路径等价。
 - 纯文档或规约：`node scripts/check-docs.mjs`；修改测试调度器才运行 `make test-runner`。已通过的相同检查不因准备提交而重跑。
