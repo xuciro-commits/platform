@@ -136,11 +136,9 @@ test("blank tenant: retiring CRM removes its entry and keeps the records, reinst
   await reinstall.getByRole("button", { name: "Reinstall package", exact: true }).click();
   await expect(reinstall).toBeHidden({ timeout: 120_000 });
   await expect(crmRow).toContainText("active");
-  const access = page.getByRole("dialog", { name: "Who can use it" });
-  await expect(access.getByRole("combobox", { name: "Role in CRM" })).toBeVisible();
-  await access.getByRole("button", { name: "Skip for now", exact: true }).click();
-  await expect(access).toHaveCount(0);
-  await expect(page.getByText(/stays hidden from anyone without a role/).first()).toBeVisible();
+  // All CRM roles already have holders; reinstall preserves those grants.
+  await expect(page.getByRole("link", { name: "CRM", exact: true }).first()).toBeVisible();
+  await expect(page.getByRole("dialog", { name: "Who can use it" })).toHaveCount(0);
 
   await signOut();
   await signIn(page, "user-1 · blank");
