@@ -243,6 +243,14 @@ func TestInvariantK24PackageDemoSeedInstallAndClear(t *testing.T) {
 	if view, refusal := live.RecordOf(t.Context(), admin, typ, "demo-order-1", invariantClock); refusal != nil || !strings.Contains(string(platform.Raw(view.Record)), "sample after an action") {
 		t.Fatalf("a demo record's then steps run after it is created, got %v %v", view.Record, refusal)
 	}
+	for _, action := range []string{packages.SchemaPackageDrain, packages.SchemaPackageRetire, packages.SchemaPackageInstall} {
+		if refusal := submit(action, map[string]any{"id": descriptor.ID, "version": descriptor.Version}); refusal != nil {
+			t.Fatalf("same-version reinstall with demo, %s: %v", action, refusal)
+		}
+	}
+	if ids := recordIDs(); !slices.Equal(ids, []string{"demo-order-1"}) || !appView().HasDemo {
+		t.Fatalf("reinstall must preserve active demo data, got %v", ids)
+	}
 	live.accept(t, typ+".create", typ, "user-order-1", map[string]any{"number": "USER-1", "product": "real", "quantity": 1, "unitcost": 10})
 	offer.Version = "0.1.6"
 	offer.Blueprint.Seed = []json.RawMessage{
@@ -278,6 +286,20 @@ func TestInvariantK24PackageDemoSeedInstallAndClear(t *testing.T) {
 	}
 	if refusal := submit(packages.SchemaPackageRetire, map[string]any{"id": descriptor.ID}); refusal != nil {
 		t.Fatalf("retire: %v", refusal)
+	}
+	if refusal := submit(packages.SchemaPackageInstall, map[string]any{"id": descriptor.ID, "version": offer.Version}); refusal != nil {
+		t.Fatalf("same-version reinstall after clearing demo: %v", refusal)
+	}
+	if ids := recordIDs(); !slices.Equal(ids, []string{"user-order-1"}) || appView().HasDemo {
+		t.Fatalf("reinstall must not restore cleared demo data or claim customer records, got %v", ids)
+	}
+	if view, refusal := live.RecordOf(t.Context(), admin, typ, "user-order-1", invariantClock); refusal != nil || !strings.Contains(string(platform.Raw(view.Record)), "USER-1") {
+		t.Fatalf("reinstall must preserve customer record: %v %v", view.Record, refusal)
+	}
+	for _, action := range []string{packages.SchemaPackageDrain, packages.SchemaPackageRetire} {
+		if refusal := submit(action, map[string]any{"id": descriptor.ID}); refusal != nil {
+			t.Fatalf("retire reinstalled package, %s: %v", action, refusal)
+		}
 	}
 	offer.Version = "0.1.7"
 	clashing, err := live.InspectPackage(t.Context(), protocol.PackageInspectRequest{Content: platform.Raw(offer)})

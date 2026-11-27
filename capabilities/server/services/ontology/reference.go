@@ -160,7 +160,7 @@ func FillSeed(c platform.Caller, pkgID string, seeds []json.RawMessage, demo boo
 			}
 			continue
 		}
-		if !demo || seed.ID == "" {
+		if !demo || seed.ID == "" || seed.Kind == "cleared" {
 			continue
 		}
 		target, installed := model(seed.Type)

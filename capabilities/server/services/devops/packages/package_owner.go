@@ -254,7 +254,7 @@ func (d *Owner) PackageSeed(id string) ([]json.RawMessage, bool) {
 		for _, ref := range held.DemoRecords {
 			typ, id, ok := strings.Cut(ref, "/")
 			if ok && typ != "" && id != "" {
-				seeds = append(seeds, platform.Raw(map[string]string{"type": typ, "id": id}))
+				seeds = append(seeds, platform.Raw(map[string]string{"kind": "cleared", "type": typ, "id": id}))
 			}
 		}
 		if err == nil && descriptor.Blueprint != nil {
@@ -275,7 +275,11 @@ func (d *Owner) PackageSeed(id string) ([]json.RawMessage, bool) {
 		}
 		descriptor = rebound
 	}
-	return slices.Clone(descriptor.Blueprint.Seed), true
+	seeds := slices.DeleteFunc(slices.Clone(descriptor.Blueprint.Seed), func(raw json.RawMessage) bool {
+		var seed struct{ Kind, Type, ID string }
+		return json.Unmarshal(raw, &seed) != nil || seed.Kind != "data" && !slices.Contains(held.DemoRecords, seed.Type+"/"+seed.ID)
+	})
+	return seeds, len(seeds) > 0
 }
 
 func SeedOf(owner PreparationOwner, id string) ([]json.RawMessage, bool) {
@@ -692,7 +696,14 @@ func (d *Owner) decide(c platform.Caller, s *pb.Submission) (func(*pb.ChangeReco
 	if descriptor, err = Rebind(descriptor, namespace); err != nil {
 		return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "{reason}", err.Error())
 	}
-	install, refusal := d.host.PrepareManagedPackage(c, descriptor, available, false, upgrade || rollbackUpgrade, downgrade || rollback && !rollbackUpgrade)
+	reinstall := prior != nil && prior.State == "retired" && prior.Version == descriptor.Version
+	prepared := descriptor
+	if reinstall && descriptor.Blueprint != nil {
+		blueprint := *descriptor.Blueprint
+		blueprint.Seed = nil
+		prepared.Blueprint = &blueprint
+	}
+	install, refusal := d.host.PrepareManagedPackage(c, prepared, available, false, upgrade || rollbackUpgrade, downgrade || rollback && !rollbackUpgrade)
 	if refusal != nil {
 		return nil, refusal
 	}
@@ -708,7 +719,7 @@ func (d *Owner) decide(c platform.Caller, s *pb.Submission) (func(*pb.ChangeReco
 		installed := &protocol.InstalledPackage{ID: descriptor.ID, Version: descriptor.Version, Namespace: descriptor.Namespace,
 			Title: descriptor.Title, State: "active", Contributions: descriptor.Contributions, Digest: descriptor.ArtifactDigest,
 			Artifact: sealed, InstalledAt: now, ChangedAt: now, Space: namespace}
-		if prior != nil && prior.State != "retired" {
+		if prior != nil && (prior.State != "retired" || reinstall) {
 			installed.DemoRecords = slices.Clone(prior.DemoRecords)
 			installed.DemoCleared = prior.DemoCleared
 		} else if descriptor.Blueprint != nil && len(descriptor.Blueprint.Seed) > 0 {
