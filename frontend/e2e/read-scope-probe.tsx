@@ -9,6 +9,7 @@ import { send } from "../src/host/write";
 import type { Api } from "../src/host/contract";
 import { usePersonDirectory } from "../src/semantic/PersonValue";
 import { formatSemanticText } from "../src/semantic/SemanticValue";
+import { useAvatarUrl } from "../src/pages/avatars";
 
 type Answer = { value: string };
 export function mountReadScopeProbe() {
@@ -125,5 +126,27 @@ export function mountPersonScopeProbe() {
       flushSync(() => switchAccount("person-b", "audit-b"));
       return latest;
     },
+  };
+}
+
+export function mountAvatarScopeProbe() {
+  startSession({ token: "avatar-a", tenant: "audit-a" });
+  const root = createRoot(document.body.appendChild(document.createElement("div")));
+  let latest: (string | undefined)[] = [];
+  function Probe() {
+    const first = useAvatarUrl("sha256:" + "a".repeat(64));
+    const second = useAvatarUrl("sha256:" + "a".repeat(64));
+    useLayoutEffect(() => { latest = [first, second]; });
+    return null;
+  }
+  flushSync(() => root.render(<Probe />));
+  return {
+    latest: () => latest,
+    switchTenant: () => {
+      flushSync(() => switchAccount("avatar-b", "audit-b"));
+      return latest;
+    },
+    switchBack: () => flushSync(() => switchAccount("avatar-a", "audit-a")),
+    unmount: () => flushSync(() => root.unmount()),
   };
 }

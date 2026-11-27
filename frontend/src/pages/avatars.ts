@@ -1,5 +1,5 @@
-import { useEffect, useMemo, useState } from "react";
-import { type Api, request, requestBlob, useRead } from "../host";
+import { useMemo } from "react";
+import { type Api, request, useBlobUrl, useRead } from "../host";
 import rawCatalog from "./avatar-catalog.json";
 
 export type AvatarUpload = { avatar: string; contentType: string; size: number };
@@ -35,9 +35,6 @@ export function useAvatarCatalog() {
   return avatarCatalog;
 }
 
-const blobCache = new Map<string, string>();
-const inflight = new Map<string, Promise<string>>();
-
 export function defaultAvatarFor(seed: string) {
   let hash = 2166136261;
   for (let i = 0; i < seed.length; i += 1) {
@@ -69,48 +66,10 @@ export function presetAvatarUrl(value: string, size: 128 | 256 = 128) {
   return `/avatars/global/${size}/gl-001.avif`;
 }
 
-function loadBlobUrl(hash: string) {
-  const cached = blobCache.get(hash);
-  if (cached) return Promise.resolve(cached);
-  const existing = inflight.get(hash);
-  if (existing) return existing;
-  const pending = requestBlob(`/v1/avatars/${encodeURIComponent(hash)}`)
-    .then((blob) => {
-      const url = URL.createObjectURL(blob);
-      blobCache.set(hash, url);
-      return url;
-    })
-    .finally(() => {
-      inflight.delete(hash);
-    });
-  inflight.set(hash, pending);
-  return pending;
-}
-
 export function useAvatarUrl(avatar?: string, seed?: string, size: 128 | 256 = 128) {
   const effective = normalizeAvatarRef(avatar) || (seed ? defaultAvatarFor(seed) : "");
   const hash = effective.startsWith("sha256:") ? effective.slice("sha256:".length) : "";
-  const [resolved, setResolved] = useState<string>(() => (hash ? blobCache.get(hash) ?? "" : ""));
-
-  useEffect(() => {
-    if (!hash) {
-      setResolved("");
-      return;
-    }
-    const cached = blobCache.get(hash);
-    if (cached) {
-      setResolved(cached);
-      return;
-    }
-    let alive = true;
-    void loadBlobUrl(hash).then((url) => {
-      if (alive) setResolved(url);
-    }).catch(() => {
-      if (alive) setResolved("");
-    });
-    return () => { alive = false; };
-  }, [hash]);
-
+  const resolved = useBlobUrl(hash ? `/v1/avatars/${encodeURIComponent(hash)}` : null);
   if (effective.startsWith("default/")) return presetAvatarUrl(effective, size);
   if (hash) return resolved || (seed ? presetAvatarUrl(defaultAvatarFor(seed), size) : undefined);
   return undefined;

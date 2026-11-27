@@ -1,5 +1,6 @@
 export type { Api } from "./contract";
 export { useLiveChanges } from "./changes";
+export { useBlobUrl } from "./blob";
 export { type Read, changed as reread, readSnapshot, useRead, useReads } from "./read";
 export { HostRefusal, reasonOf, request, requestBlob } from "./request";
 export {

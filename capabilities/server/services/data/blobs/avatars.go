@@ -82,7 +82,7 @@ func StreamAvatar(w http.ResponseWriter, files platform.FileStore, tenant, hash 
 		contentType = "application/octet-stream"
 	}
 	w.Header().Set("Content-Type", contentType)
-	w.Header().Set("Cache-Control", "private, max-age=31536000, immutable")
+	w.Header().Set("Cache-Control", "private, no-store")
 	w.Header().Set("X-Content-Type-Options", "nosniff")
 	w.WriteHeader(http.StatusOK)
 	_, _ = w.Write(data)

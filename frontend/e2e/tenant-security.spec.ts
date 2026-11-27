@@ -216,3 +216,49 @@ test("tenant isolation: formatted person names cannot survive a session switch o
   await invoke("refresh");
   await expect.poll(() => invoke("latest")).toEqual({ status: "refused", name: "Unnamed member" });
 });
+
+
+test("tenant isolation: avatar object URLs are scoped to live consumers and the current session", async ({ page }) => {
+  await signIn(page, "admin-1 · audit-a");
+  const headers = await sessionHeaders(page);
+  const png = Buffer.from("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+jR5kAAAAASUVORK5CYII=", "base64");
+  const uploaded = await page.request.post("/v1/avatars", { headers: { ...headers, "content-type": "image/png" }, data: png });
+  expect(uploaded.status()).toBe(200);
+  const { avatar } = await uploaded.json();
+  expect(avatar).toMatch(/^sha256:[a-f0-9]{64}$/);
+  const downloaded = await page.request.get("/v1/avatars/" + avatar.slice(7), { headers });
+  expect(downloaded.status()).toBe(200);
+  expect(downloaded.headers()["cache-control"]).toBe("private, no-store");
+  const requests: string[] = [];
+  await page.route("**/v1/avatars/**", route => {
+    const tenant = route.request().headers()["platform-tenant"];
+    requests.push(tenant);
+    return tenant === "audit-a" ? route.fulfill({ body: "avatar-a", contentType: "image/png" })
+      : route.fulfill({ status: 403, json: { error: "refused" } });
+  });
+  await openScopeProbe(page);
+  await page.evaluate(async () => {
+    const modulePath = "/e2e/read-scope-probe.tsx";
+    const { mountAvatarScopeProbe } = await import(modulePath);
+    Object.assign(window, { avatarScopeProbe: mountAvatarScopeProbe() });
+  });
+  const invoke = (method: "latest" | "switchTenant" | "switchBack" | "unmount") => page.evaluate(name =>
+    (window as unknown as { avatarScopeProbe: Record<string, () => unknown> }).avatarScopeProbe[name](), method);
+  const readable = (url: string) => page.evaluate(href => fetch(href).then(response => response.ok, () => false), url);
+  await expect.poll(async () => (await invoke("latest") as string[])[0]).toMatch(/^blob:/);
+  const first = await invoke("latest") as string[];
+  expect(first[1]).toBe(first[0]);
+  expect(requests).toEqual(["audit-a"]);
+  expect(await readable(first[0])).toBe(true);
+  expect(await invoke("switchTenant")).toEqual([undefined, undefined]);
+  await expect.poll(() => requests).toEqual(["audit-a", "audit-b"]);
+  await expect.poll(() => readable(first[0])).toBe(false);
+  expect(await invoke("latest")).toEqual([undefined, undefined]);
+  await invoke("switchBack");
+  await expect.poll(async () => (await invoke("latest") as string[])[0]).toMatch(/^blob:/);
+  const second = await invoke("latest") as string[];
+  expect(second[0]).not.toBe(first[0]);
+  expect(requests).toEqual(["audit-a", "audit-b", "audit-a"]);
+  await invoke("unmount");
+  await expect.poll(() => readable(second[0])).toBe(false);
+});
