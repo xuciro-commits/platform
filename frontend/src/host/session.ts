@@ -1,4 +1,5 @@
 import { useSyncExternalStore } from "react";
+import { t } from "../i18n";
 
 export type Session = { token: string; tenant: string };
 export type SavedAccount = {
@@ -54,6 +55,14 @@ function subscribe(notify: () => void) {
 
 export function currentSession() {
   return current;
+}
+
+export function requireSession(session: Session | null) {
+  if (session !== current) throw new Error(t("The workspace changed"));
+}
+
+export function endSessionIfCurrent(session: Session | null) {
+  if (session && session === current) endSession();
 }
 
 export function useSession() {

@@ -154,3 +154,19 @@ test("tenant isolation: read hooks never display a previous session or path whil
   expect(JSON.stringify(changed)).not.toContain("audit-b:one");
   await expect.poll(() => invoke("latest")).toEqual({ single: "audit-b:two", many: "audit-b:two" });
 });
+
+
+test("tenant isolation: late authentication and writes cannot act on a new session", async ({ page }) => {
+  await page.route("**/read-scope-probe.html", route => route.fulfill({ contentType: "text/html", body: "<!doctype html><html><body></body></html>" }));
+  await page.goto("/read-scope-probe.html");
+  const result = await page.evaluate(async () => {
+    const refreshPath = "/@react-refresh";
+    const refresh = (await import(refreshPath)).default;
+    refresh.injectIntoGlobalHook(window);
+    Object.assign(window, { $RefreshReg$: () => {}, $RefreshSig$: () => (type: unknown) => type, __vite_plugin_react_preamble_installed__: true });
+    const modulePath = "/e2e/read-scope-probe.tsx";
+    const { probeSessionRequests } = await import(modulePath);
+    return probeSessionRequests();
+  });
+  expect(result).toEqual({ afterOld401: "audit-b", write: "refused", submitted: [], current401Ended: true });
+});

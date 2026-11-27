@@ -1,5 +1,5 @@
 import { t } from "../i18n";
-import { currentSession, endSession } from "./session";
+import { currentSession, endSessionIfCurrent, requireSession, type Session } from "./session";
 
 export class HostRefusal extends Error {
   constructor(
@@ -25,6 +25,7 @@ export function refusal(status: number, body: Failure | null) {
 }
 
 const inflight = new Map<string, Promise<unknown>>();
+let inflightSession: Session | null = null;
 
 export function invalidateRequests() {
   inflight.clear();
@@ -43,37 +44,50 @@ function withAbort<T>(promise: Promise<T>, signal?: AbortSignal): Promise<T> {
   });
 }
 
-async function respond(path: string, options: Options) {
-  const session = currentSession();
+async function respond(path: string, options: Options, session: Session | null) {
+  requireSession(session);
   const headers: Record<string, string> = { ...options.headers };
   if (session) Object.assign(headers, { authorization: `Bearer ${session.token}`, "Platform-Tenant": session.tenant });
   const raw = options.body instanceof Blob ? options.body : undefined;
   const sending = options.body === undefined ? {} : { method: "POST", body: raw ?? JSON.stringify(options.body) };
   if (options.body !== undefined) headers["Content-Type"] = raw ? raw.type || "application/octet-stream" : "application/json";
   const response = await fetch(path, { signal: options.signal, headers, ...sending });
+  requireSession(session);
   if (response.ok) return response;
-  if (response.status === 401) endSession();
+  if (response.status === 401) endSessionIfCurrent(session);
   throw refusal(response.status, await response.json().catch(() => null));
 }
 
 export async function request<Answer>(path: string, options: Options = {}): Promise<Answer> {
+  const session = currentSession();
+  if (inflightSession !== session) {
+    invalidateRequests();
+    inflightSession = session;
+  }
+  const decode = async (response: Response) => {
+    const value = await response.json() as Answer;
+    requireSession(session);
+    return value;
+  };
   if (options.body === undefined && !options.headers) {
-    const session = currentSession();
-    const key = `${session?.tenant ?? ""} ${session?.token ?? ""} ${path}`;
+    const key = path;
     let shared = inflight.get(key) as Promise<Answer> | undefined;
     if (!shared) {
-      shared = respond(path, {}).then((res) => res.json() as Promise<Answer>).finally(() => {
+      shared = respond(path, {}, session).then(decode).finally(() => {
         if (inflight.get(key) === shared) inflight.delete(key);
       });
       inflight.set(key, shared);
     }
     return withAbort(shared, options.signal);
   }
-  return (await respond(path, options)).json();
+  return decode(await respond(path, options, session));
 }
 
 export async function requestBlob(path: string, signal?: AbortSignal) {
-  return (await respond(path, { signal })).blob();
+  const session = currentSession();
+  const blob = await (await respond(path, { signal }, session)).blob();
+  requireSession(session);
+  return blob;
 }
 
 export function reasonOf(problem: unknown) {

@@ -1,6 +1,6 @@
 import { useEffect } from "react";
 import { changedScopes } from "./read";
-import { endSession, useSession } from "./session";
+import { currentSession, endSessionIfCurrent, useSession } from "./session";
 
 type ChangePayload = { seq?: number; types?: string[]; scopes?: string[] };
 
@@ -42,7 +42,9 @@ export function useLiveChanges() {
     const missedTypes = new Set<string>();
     const missedScopes = new Set<string>();
 
+    const owns = () => !closed && currentSession() === session;
     const dispatch = (types?: string[], scopes?: string[]) => {
+      if (!owns()) return;
       if (document.visibilityState !== "visible") {
         if ((!types || types.length === 0) && (!scopes || scopes.length === 0)) missedAll = true;
         else {
@@ -55,7 +57,7 @@ export function useLiveChanges() {
     };
 
     const onVisibility = () => {
-      if (document.visibilityState !== "visible") return;
+      if (!owns() || document.visibilityState !== "visible") return;
       if (missedAll) {
         missedAll = false;
         missedTypes.clear();
@@ -72,7 +74,7 @@ export function useLiveChanges() {
     document.addEventListener("visibilitychange", onVisibility);
 
     const connect = async (delayMs: number) => {
-      if (closed) return;
+      if (!owns()) return;
       const controller = new AbortController();
       active = controller;
       let firstChanged = true;
@@ -81,8 +83,9 @@ export function useLiveChanges() {
           headers: { authorization: `Bearer ${token}`, "Platform-Tenant": tenant },
           signal: controller.signal,
         });
+        if (!owns()) return;
         if (response.status === 401) {
-          endSession();
+          endSessionIfCurrent(session);
           return;
         }
         if (!response.ok || !response.body) throw new Error(`/v1/changes: HTTP ${response.status}`);
@@ -94,7 +97,7 @@ export function useLiveChanges() {
         let buffer = "";
         for (;;) {
           const { done, value } = await reader.read();
-          if (done || closed) break;
+          if (done || !owns()) break;
           buffer += decoder.decode(value, { stream: true });
           for (let end = buffer.indexOf("\n\n"); end >= 0; end = buffer.indexOf("\n\n")) {
             const raw = buffer.slice(0, end);
@@ -112,7 +115,7 @@ export function useLiveChanges() {
       } catch {
         if (closed) return;
       }
-      if (!closed) {
+      if (owns()) {
         timer = window.setTimeout(() => void connect(Math.min(delayMs * 2, 5000)), delayMs);
       }
     };
@@ -124,5 +127,5 @@ export function useLiveChanges() {
       if (timer !== undefined) window.clearTimeout(timer);
       active?.abort();
     };
-  }, [token, tenant]);
+  }, [session, token, tenant]);
 }
