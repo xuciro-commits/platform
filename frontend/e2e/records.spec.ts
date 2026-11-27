@@ -325,14 +325,16 @@ test("lines: add and edit a child row from its parent record", async ({ page }) 
   await page.getByRole("link", { name: "Opportunities" }).click();
   await page.getByRole("link", { name: "冲压线改造" }).click();
   await page.getByRole("button", { name: "Add a row" }).click();
-  const form = page.getByRole("dialog");
-  await form.getByRole("textbox", { name: "Product" }).fill("Press 200t");
-  await form.getByRole("spinbutton", { name: "Quantity" }).fill("2");
-  await form.getByRole("spinbutton", { name: "Unit price" }).fill("1000");
-  await form.getByRole("spinbutton", { name: "Unit price" }).press("Tab");
-  await form.getByRole("button", { name: "Create" }).click();
-  await expect(form).toBeHidden();
   const table = page.getByRole("table", { name: "Opportunity lines" });
+  await table.getByRole("textbox", { name: "Product" }).fill("Press 200t");
+  await table.getByRole("textbox", { name: "Product" }).press("Tab");
+  await table.getByRole("spinbutton", { name: "Quantity" }).fill("2");
+  await table.getByRole("spinbutton", { name: "Quantity" }).press("Tab");
+  await table.getByRole("spinbutton", { name: "Unit price" }).fill("1000");
+  await Promise.all([
+    page.waitForResponse((response) => response.url().includes("/v1/import/") && !response.url().includes("preview=true") && response.ok()),
+    table.getByRole("spinbutton", { name: "Unit price" }).press("Meta+Enter"),
+  ]);
   await expect(property(table, "Product")).toHaveText("Press 200t");
   await page.reload();
   await expect(property(table, "Quantity")).toHaveText("2");
@@ -349,6 +351,52 @@ test("lines: add and edit a child row from its parent record", async ({ page }) 
   await expect(property(table, "Quantity")).toHaveText("3");
   await table.getByRole("button", { name: "Archive row" }).click();
   await expect(property(table, "Product")).toHaveCount(0);
+});
+
+
+test("lines: paste 50 rows with two errors, fix and submit by keyboard", async ({ page }) => {
+  await signIn(page);
+  await open(page, "Ontology", "Objects");
+  await page.getByRole("link", { name: "Opportunities" }).click();
+  await page.getByRole("link", { name: "冲压线改造" }).click();
+  const add = page.getByRole("button", { name: "Add a row" });
+  await add.focus();
+  const lines = Array.from({ length: 50 }, (_, index) => {
+    const num = index + 1;
+    const qty = num === 10 ? "badqty" : "2";
+    const price = num === 35 ? "badprice" : "100";
+    return `Item ${String(num).padStart(2, "0")}\t${qty}\t${price}`;
+  }).join("\n") + "\n";
+  await add.evaluate((element, text) => {
+    const dt = new DataTransfer();
+    dt.setData("text/plain", text);
+    element.dispatchEvent(new ClipboardEvent("paste", { clipboardData: dt, bubbles: true, cancelable: true }));
+  }, lines);
+  const table = page.getByRole("table", { name: "Opportunity lines" });
+  await expect(table.getByRole("row")).toHaveCount(51);
+  await Promise.all([
+    page.waitForResponse((response) => response.url().includes("/v1/import/") && response.url().includes("preview=true") && response.ok()),
+    page.keyboard.press("Meta+Enter"),
+  ]);
+  await expect(page.getByText("2 cells need fixing")).toBeVisible();
+  const badInputs = table.locator("[aria-invalid=\"true\"]");
+  await expect(badInputs).toHaveCount(2);
+  await page.keyboard.type("2");
+  await Promise.all([
+    page.waitForResponse((response) => response.url().includes("/v1/import/") && response.url().includes("preview=true") && response.ok()),
+    page.keyboard.press("Meta+Enter"),
+  ]);
+  await expect(page.getByText("1 cells need fixing")).toBeVisible();
+  await expect(badInputs).toHaveCount(1);
+  await page.keyboard.type("100");
+  await Promise.all([
+    page.waitForResponse((response) => response.url().includes("/v1/import/") && !response.url().includes("preview=true") && response.ok()),
+    page.keyboard.press("Meta+Enter"),
+  ]);
+  await expect(table.getByRole("row", { name: /Totals/ })).toContainText("100");
+  await page.reload();
+  await expect(table.getByRole("row")).toHaveCount(52);
+  await expect(table.getByRole("row", { name: /Totals/ })).toContainText("100");
 });
 
 

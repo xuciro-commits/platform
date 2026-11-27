@@ -177,7 +177,7 @@ export async function readWorkbookSheets(file: File): Promise<WorkbookSheet[] | 
   return sheets.length > 0 ? sheets : null;
 }
 
-function postImportCsv(type: string, rows: Record<string, string>[], preview: boolean): Promise<Api.ImportRow[]> {
+export function postImportCsv(type: string, rows: Record<string, string>[], preview: boolean): Promise<Api.ImportRow[]> {
   if (rows.length === 0) return Promise.resolve([]);
   const names = Object.keys(rows[0]);
   const csv = [names, ...rows.map((row) => names.map((name) => row[name] ?? ""))]
@@ -202,6 +202,20 @@ function choiceOptions(field: Api.FieldInfo): PlanField["choices"] {
     const title = field.choiceTitles?.[index] ?? key;
     return { key, labels: [title, t(title)] };
   });
+}
+
+
+export function importRowErrors(row: Api.ImportRow): Record<string, string> {
+  const errors: Record<string, string> = {};
+  if (row.outcome.startsWith(unreadable)) {
+    const field = row.outcome.slice(unreadable.length);
+    if (field) errors[field] = t("This value cannot be read");
+  }
+  for (const issue of row.error?.issues ?? []) {
+    const field = issue.path?.[0];
+    if (field && !errors[field]) errors[field] = issue.message || row.error?.message || t("Not saved");
+  }
+  return errors;
 }
 
 export function importChoice(raw: string, options?: PlanField["choices"]): string {

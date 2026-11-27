@@ -114,6 +114,8 @@ type PropertyFieldProps = {
   onCommit?(value: unknown): Promise<unknown> | void;
   onClose?: () => void;
   onTab?: (shift: boolean) => void;
+  onEnter?: () => void;
+  onSubmit?: () => void;
 };
 
 export function PropertyField(props: PropertyFieldProps) {
@@ -147,11 +149,20 @@ export function PropertyField(props: PropertyFieldProps) {
   }, [status]);
 
   useEffect(() => {
-    if (!editing) return;
+    if (!props.open) return;
+    initial.current = value;
+    latest.current = value;
+    setDraft(value);
+    setFailure("");
+    setEditing(true);
+  }, [props.open]);
+
+  useEffect(() => {
+    if (!editing && !props.open) return;
     const target = box.current?.querySelector<HTMLElement>("input, textarea, button");
     target?.focus();
     if (target instanceof HTMLButtonElement) target.click();
-  }, [editing]);
+  }, [editing, props.open]);
 
   const finish = () => {
     setEditing(false);
@@ -186,10 +197,18 @@ export function PropertyField(props: PropertyFieldProps) {
     });
   };
   const keys = (event: KeyboardEvent<HTMLElement>) => {
+    if ((event.metaKey || event.ctrlKey) && event.key === "Enter" && props.onSubmit) {
+      event.preventDefault();
+      event.stopPropagation();
+      if (event.target instanceof HTMLInputElement || event.target instanceof HTMLTextAreaElement) event.target.blur();
+      void leave(latest.current).then(() => props.onSubmit?.());
+      return;
+    }
     if (event.key === "Tab" && props.onTab) {
       event.preventDefault();
       event.stopPropagation();
       const shift = event.shiftKey;
+      if (event.target instanceof HTMLInputElement || event.target instanceof HTMLTextAreaElement) event.target.blur();
       void leave(latest.current).then(() => props.onTab?.(shift));
       return;
     }
@@ -209,7 +228,7 @@ export function PropertyField(props: PropertyFieldProps) {
   const shown = open && parameter ? (
     <VStack ref={box} onBlur={blur} onKeyDown={keys} xstyle={shownStatus?.type === "error" ? motionStyles.shakeError : undefined}>
       <ParameterInput parameter={parameter} described={described} value={editing ? draft : value} form={form} referenceName={name} status={shownStatus}
-        labelHidden onChange={change} onEnter={() => void leave(latest.current)} />
+        labelHidden onChange={change} onEnter={() => void leave(latest.current).then(() => props.onEnter?.())} />
     </VStack>
   ) : (
     <HStack ref={surface} id={id} gap={2} vAlign="center" xstyle={parameter ? [styles.surface, motionStyles.overlayBadge, interactionOverlayStyles.backgroundColor, focusOutlineStyles.focusWithin] : [styles.surface, motionStyles.overlayBadge]}

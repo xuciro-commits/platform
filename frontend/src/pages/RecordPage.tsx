@@ -321,7 +321,11 @@ export function RecordPage({ described, id, listPath, listTitle, instances, enti
                   {described.entity.sets?.flatMap((set) => {
                     if (set.direction !== "inverse") return [];
                     const type = entities.find((entry) => entry.type === set.object);
-                    return type ? <RecordLines key={set.name} parent={described.type} id={id} set={set} child={describe(type, catalog)} /> : [];
+                    const initial = described.lifecycle?.initial ?? described.lifecycle?.states?.[0]?.name;
+                    const currentState = described.lifecycle ? String(values[described.lifecycle.field] ?? "") : "";
+                    const pastDraft = Boolean(described.lifecycle && (described.lifecycle.states?.length ?? 0) > 1 && initial && currentState && currentState !== initial);
+                    const readOnly = !editAllowed || Boolean(kept?.archived) || pastDraft;
+                    return type ? <RecordLines key={set.name} parent={described.type} id={id} set={set} child={describe(type, catalog)} readOnly={readOnly} /> : [];
                   })}
                 </VStack>
               )}
