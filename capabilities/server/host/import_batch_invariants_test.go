@@ -286,27 +286,29 @@ func TestImportResolvesLocalizedReferenceAndSeparatesChoiceRefusal(t *testing.T)
 	leadObj["fields"] = []ontology.Field{
 		{Name: "note", Title: "Name", Type: "text", Required: true},
 		{Name: "source", Title: "Source", Type: "reference", Ref: "invariantproject.source"},
-		{Name: "stage", Title: "Stage", Type: "choice", Choices: "new:New,connected:Connected"},
+		{Name: "stage", Title: "Stage", Type: "choice", Choices: "new:New,connected:Connected,a:First,b:Second"},
 	}
 	live.accept(t, "build.object.create", build.ObjectType, "LEAD_OBJ", leadObj)
 	live.accept(t, "build.object.publish", build.ObjectType, "LEAD_OBJ", map[string]any{})
 	live.accept(t, "build.app.edit", "build.app", invariantProject, map[string]any{
 		"resources": []platform.AssetRef{{App: "build", Kind: platform.AssetObject, Name: "invariantproject.source"}, {App: "build", Kind: platform.AssetObject, Name: "invariantproject.lead"}},
-		"languages": map[string]map[string]string{"zh-CN": {"Website": "网站", "Connected": "已联系"}},
+		"languages": map[string]map[string]string{"zh-CN": {"Website": "网站", "Connected": "已联系", "First": "同词", "Second": "同词"}},
 	})
 	live.accept(t, "build.app.publish", "build.app", invariantProject, map[string]any{})
 
 	member := live.member(t)
-	csv := []byte("id,note,source,stage\nL1,Ada,网站,已联系\nL2,Cy,,Pending\nL3,Evan,Ghost,new\n")
+	csv := []byte("id,note,source,stage\nL1,Ada,网站,已联系\nL2,Cy,,Pending\nL3,Evan,Ghost,new\nL4,Bo,website,CONNECTED\nL5,Dup,,同词\n")
 	rows, refusal := live.Import(member, "invariantproject.lead", csv, false, invariantClock)
-	if refusal != nil || len(rows) != 3 {
+	if refusal != nil || len(rows) != 5 {
 		t.Fatalf("import: %+v, %v", rows, refusal)
 	}
-	if rows[0].Outcome != "ok" {
-		t.Fatalf("expected localized row ok, got %+v", rows[0])
+	if rows[0].Outcome != "ok" || rows[3].Outcome != "ok" {
+		t.Fatalf("expected localized and case-insensitive rows ok, got %+v %+v", rows[0], rows[3])
 	}
-	if rows[1].Outcome == "ok" || rows[1].Error == nil || len(rows[1].Error.Issues) == 0 || rows[1].Error.Issues[0].Code != "choice" || rows[1].Error.Issues[0].Message != "Choose a listed value." {
-		t.Fatalf("expected distinct choice issue, got %+v", rows[1])
+	for _, bad := range []protocol.ImportRow{rows[1], rows[4]} {
+		if bad.Outcome == "ok" || bad.Error == nil || len(bad.Error.Issues) == 0 || bad.Error.Issues[0].Code != "choice" || bad.Error.Issues[0].Message != "Choose a listed value." {
+			t.Fatalf("expected distinct choice issue, got %+v", bad)
+		}
 	}
 	if rows[2].Outcome != "ERROR_CODE_INVALID_ARGUMENT: source" {
 		t.Fatalf("expected unreadable reference outcome, got %+v", rows[2])

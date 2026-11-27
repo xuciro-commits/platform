@@ -151,7 +151,23 @@ func TestI18nGatePackagesPermissionsAndWordsEndToEnd(t *testing.T) {
 		if err != nil {
 			t.Fatalf("read fixture %s: %v", rel, err)
 		}
-		preview, err := tn.InspectPackage(t.Context(), protocol.PackageInspectRequest{Content: raw})
+		var offer platform.PackageDescriptor
+		if err := json.Unmarshal(raw, &offer); err != nil {
+			t.Fatalf("unmarshal %s: %v", rel, err)
+		}
+		if offer.Blueprint != nil {
+			offer.Blueprint.Seed = nil
+			for i := range offer.Blueprint.Assets {
+				if offer.Blueprint.Assets[i].Ref.Kind == platform.AssetObject {
+					var body map[string]json.RawMessage
+					if json.Unmarshal(offer.Blueprint.Assets[i].Body, &body) == nil && body["records"] != nil {
+						delete(body, "records")
+						offer.Blueprint.Assets[i].Body = platform.Raw(body)
+					}
+				}
+			}
+		}
+		preview, err := tn.InspectPackage(t.Context(), protocol.PackageInspectRequest{Content: platform.Raw(offer)})
 		if err != nil {
 			t.Fatalf("inspect %s: %v", rel, err)
 		}
@@ -177,7 +193,6 @@ func TestI18nGatePackagesPermissionsAndWordsEndToEnd(t *testing.T) {
 	installFixture("call-0.1.0.json")
 	installFixture("phone-0.1.1.json")
 
-	// 1. Verify /v1/packages translates all 4 package titles & descriptions in zh-CN
 	rawPkgs, refusal := tn.read(adminMember, "packages")
 	if refusal != nil {
 		t.Fatalf("read packages: %v", refusal)
@@ -198,7 +213,6 @@ func TestI18nGatePackagesPermissionsAndWordsEndToEnd(t *testing.T) {
 		}
 	}
 
-	// 2. Verify /v1/permissions translates phone roles & generated/custom actions in zh-CN
 	rawPerms, refusal := tn.read(adminMember, "permissions")
 	if refusal != nil {
 		t.Fatalf("read permissions: %v", refusal)
@@ -226,7 +240,6 @@ func TestI18nGatePackagesPermissionsAndWordsEndToEnd(t *testing.T) {
 		}
 	}
 
-	// 3. Verify /v1/words translates project area ("Places" -> "地点") and Origin ("county" -> "app")
 	words := tn.Words("zh-CN")
 	if slices.ContainsFunc(words.Words, func(w transport.Word) bool { return w.Area == "Places" }) {
 		t.Errorf("expected geo words area to translate Places -> 地点, but found English area Places")

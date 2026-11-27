@@ -3,18 +3,41 @@ import { fileURLToPath } from "node:url";
 import { defineConfig } from "@playwright/test";
 
 const root = fileURLToPath(new URL("../..", import.meta.url));
-const work = `${root}.build/trunk`;
 const offset = Number(process.env.TRUNK_PORT_OFFSET ?? 0);
-const hostPort = 18521 + offset;
-const controlPort = 19521 + offset;
-const pagePort = 8497 + offset;
+const hostPort = Number(process.env.PLATFORM_TRUNK_HOST_PORT ?? (18521 + offset));
+const controlPort = Number(process.env.PLATFORM_TRUNK_CONTROL_PORT ?? (19521 + offset));
+const pagePort = Number(process.env.PLATFORM_TRUNK_PAGE_PORT ?? (8497 + offset));
+const work = process.env.PLATFORM_TRUNK_HOST_PORT ? `${root}.build/trunk-${hostPort}` : `${root}.build/trunk`;
 const host = `http://127.0.0.1:${hostPort}`;
 const page = `http://localhost:${pagePort}`;
 
+const SPEC_SEEDS: Record<string, { tenants: string[]; legacyCrm?: boolean }> = {
+  "tenant-security": { tenants: [] },
+  records: { tenants: ["acceptance"] },
+  gantt: { tenants: ["acceptance"] },
+  connector: { tenants: ["acceptance"] },
+  workspace: { tenants: ["acceptance"] },
+  builder: { tenants: ["acceptance"], legacyCrm: true },
+  official: { tenants: ["official"] },
+  phone: { tenants: ["phone"] },
+  "i18n-grouping": { tenants: ["acceptance", "phone"] },
+  rebac: { tenants: ["acceptance", "rebac", "crm"] },
+  crm: { tenants: ["acceptance", "crm"], legacyCrm: true },
+  marketplace: { tenants: ["blank", "upgrade", "publisher"] },
+};
+const ALL_E2E_TENANTS = ["acceptance", "blank", "rebac", "upgrade", "publisher", "official", "phone", "crm"];
+
+const cliArgs = process.argv.slice(2);
+const cliFiles = cliArgs.filter((arg, i) => !arg.startsWith("-") && cliArgs[i - 1] !== "-c" && cliArgs[i - 1] !== "--grep" && arg !== "test");
+const pickedSpecs = cliFiles.map((file) => file.match(/(?:^|\/)([a-z0-9-]+)\.spec\.ts(?::\d+)*$/)?.[1] ?? "");
+const scoped = pickedSpecs.length > 0 && pickedSpecs.every((name) => Boolean(SPEC_SEEDS[name]));
+const seedTenants = scoped
+  ? [...new Set(pickedSpecs.flatMap((name) => SPEC_SEEDS[name].tenants))]
+  : ALL_E2E_TENANTS;
+const needLegacyCrm = scoped ? pickedSpecs.some((name) => Boolean(SPEC_SEEDS[name].legacyCrm)) : true;
+
 if (process.env.TEST_WORKER_INDEX === undefined) {
-  const args = process.argv.slice(2);
-  const files = args.filter((arg, i) => !arg.startsWith("-") && args[i - 1] !== "-c" && args[i - 1] !== "--grep" && arg !== "test");
-  process.env.TRUNK_SPLIT_OFFICIAL = Boolean(process.env.TRUNK_DATABASE) && (files.length === 0 || (files.some((f) => f.includes("official")) && files.some((f) => !f.includes("official")))) ? "1" : "0";
+  process.env.TRUNK_SPLIT_OFFICIAL = Boolean(process.env.TRUNK_DATABASE) && (cliFiles.length === 0 || (cliFiles.some((f) => f.includes("official")) && cliFiles.some((f) => !f.includes("official")))) ? "1" : "0";
   mkdirSync(work, { recursive: true });
   const packageDir = mkdtempSync(work + "/packages-");
   for (const source of [root + "deploy/packages", root + "deploy/test-packages"]) {
@@ -144,8 +167,8 @@ await new Promise((resolve) => control.listen(${controlPort}, "127.0.0.1", resol
 await startHost();
 `,
 );
-
 }
+
 const splitOfficial = process.env.TRUNK_SPLIT_OFFICIAL === "1";
 
 export default defineConfig({
@@ -182,7 +205,11 @@ export default defineConfig({
       url: page,
       timeout: 360_000,
       reuseExistingServer: false,
-      env: { PLATFORM_HOST: host, PLATFORM_LEGACY_CRM_FIXTURE: "1" },
+      env: {
+        PLATFORM_HOST: host,
+        PLATFORM_LEGACY_CRM_FIXTURE: needLegacyCrm ? "1" : "0",
+        PLATFORM_SEED_TENANTS: seedTenants.length ? seedTenants.join(",") : "none",
+      },
     },
   ],
 });

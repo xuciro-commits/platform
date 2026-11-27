@@ -11,23 +11,32 @@ const specs = readdirSync(resolve(root, "frontend/e2e"))
 
 const ALL = "all";
 const rules = [
-  [/^(docs|study|idea)\//, []],
+  [/^(docs|study|idea|\.github)\//, []],
   [/\.md$/, []],
   [/^\.(githooks|claude|grepai|codegraph)\//, []],
-  [/^frontend\/e2e\/([a-z-]+)\.spec\.ts$/, (match) => [match[1]]],
+  [/^Makefile$/, []],
+  [/^scripts\/(check-[^/]+|test-results(?:\.test)?|trunk-affected|make-step)\.mjs$/, []],
+  [/^frontend\/e2e\/([a-z0-9-]+)\.spec\.ts$/, (match) => [match[1]]],
   [/^frontend\/src\/apps\/delivery\//, ["builder", "marketplace"]],
-  [/^frontend\/src\/apps\/admin\//, ["workspace", "marketplace"]],
+  [/^frontend\/src\/apps\/admin\//, ["rebac", "workspace"]],
   [/^frontend\/src\/apps\/(ontology|logic|apps)\//, ["builder", "records"]],
   [/^frontend\/src\/apps\/(home|ai|data|operations|host)\//, ["workspace"]],
+  [/^frontend\/src\/pages\/GanttView\.tsx$/, ["gantt"]],
+  [/^frontend\/src\/pages\/CallDock\.tsx$/, ["phone"]],
+  [/^frontend\/src\/pages\/Capabilities\.tsx$/, ["connector", "workspace"]],
+  [/^frontend\/src\/pages\/InboxPage\.tsx$/, ["crm", "rebac", "workspace"]],
+  [/^frontend\/src\/pages\/(ActionTypeDialog|ConditionBuilder|ExpressionEditor)\.tsx$/, ["builder"]],
   [/^frontend\/src\/pages\/(Package[A-Za-z]*|FormWizard|MemberRoles)\.tsx$/, ["builder", "marketplace"]],
   [/^frontend\/src\/pages\/(CalendarView|AppDashboard|DashboardPage|ImportWizard)\.tsx$/, ["crm", "workspace"]],
   [/^deploy\/test-packages\/crm(?:\.json|\/)/, ["crm", "marketplace"]],
   [/^scripts\/frontend-fixtures\/(crm-official|geo|party)-[^/]+\.json$/, ["official", "crm", "marketplace"]],
   [/^scripts\/frontend-fixtures\/(projects|assets)-[^/]+\.json$/, ["marketplace"]],
-  [/^frontend\/src\/pages\/(SettingsTables|RecordFollowUps|RecordActivity|BoardView|DotMark)\.tsx$/, ["crm", "official"]],
+  [/^scripts\/frontend-fixtures\/(call|phone)-[^/]+\.json$/, ["phone"]],
+  [/^frontend\/src\/pages\/(SettingsTables|RecordFollowUps|RecordActivity|BoardView|DotMark)\.tsx$/, ["crm", "official", "records"]],
   [/^deploy\/packages\/[^/]+\.json$/, ["builder"]],
   [/^deploy\/packages\/[^/]+\//, []],
   [/^capabilities\/server\/cmd\/pkg\//, []],
+  [/^capabilities\/voice\//, ["phone"]],
 ];
 
 function changedFiles(base) {

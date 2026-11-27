@@ -4,6 +4,10 @@ import { readFileSync } from "node:fs";
 import { enterpriseRosterSteps, resolveMemberProfile } from "./demo-roster.mjs";
 
 const host = process.env.PLATFORM_HOST ?? "http://127.0.0.1:18511";
+const rawSeedTenants = process.env.PLATFORM_SEED_TENANTS;
+if (rawSeedTenants === "none") process.exit(0);
+const requestedTenants = rawSeedTenants ? new Set(rawSeedTenants.split(",").map((s) => s.trim()).filter(Boolean)) : null;
+
 const defaultFiles = ["./frontend-seed.json", ...(process.env.PLATFORM_LEGACY_CRM_FIXTURE === "1" ? ["./crm-project.json"] : [])];
 const files = process.argv.slice(2).length ? process.argv.slice(2) : defaultFiles;
 
@@ -153,97 +157,99 @@ async function words(session, sample) {
   }
 }
 
-const main = await connect("acceptance");
-const projects = await main.call("/v1/records/build.app?limit=500");
-const existingProjects = new Set(projects.records.map((record) => record.name));
+if (!requestedTenants || requestedTenants.has("acceptance")) {
+  const main = await connect("acceptance");
+  const projects = await main.call("/v1/records/build.app?limit=500");
+  const existingProjects = new Set(projects.records.map((record) => record.name));
 
-for (const file of files) {
-  const url = file.startsWith(".") || !file.startsWith("/") ? new URL(file, import.meta.url) : new URL(`file://${file}`);
-  const sample = JSON.parse(readFileSync(url, "utf8"));
-  if (existingProjects.has(sample.project.name)) {
-    console.log(`frontend-seed: project ${sample.project.name} is already there; nothing to do`);
-    continue;
-  }
-
-  await members(main, sample);
-  const revisions = new Map();
-  const project = await main.submit("build.app", sample.project.name, "create", sample.project);
-  revisions.set(`build.app/${sample.project.name}`, project.revision);
-  existingProjects.add(sample.project.name);
-
-  const track = (id, record) => revisions.set(`build.object/${id}`, record.revision);
-  for (const type of sample.types ?? []) {
-    const id = `${sample.project.name}.${type.name}`;
-    const { sets, reads, actions, ...definition } = type.definition;
-    const fields = definition.fields?.map(({ formulaExpr, ...field }) => (formulaExpr && !JSON.stringify(formulaExpr).includes('"agg"') ? { ...field, formulaExpr } : field));
-    track(id, await main.submit("build.object", id, "create", { ...definition, fields, name: type.name, project: sample.project.name }));
-    if (!type.draft) track(id, await main.submit("build.object", id, "publish", {}, "build", 1));
-  }
-
-  for (const type of (sample.types ?? []).filter((each) => !each.draft)) {
-    for (const { name, ...action } of type.definition.actions ?? []) {
-      const id = `${sample.project.name}.${type.name}.${name}`;
-      await main.submit("build.actiontype", id, "create", { name: id, project: sample.project.name, object: `${sample.project.name}.${type.name}`, definition: { name, ...action } });
-      await main.submit("build.actiontype", id, "publish", {}, "build", 1);
+  for (const file of files) {
+    const url = file.startsWith(".") || !file.startsWith("/") ? new URL(file, import.meta.url) : new URL(`file://${file}`);
+    const sample = JSON.parse(readFileSync(url, "utf8"));
+    if (existingProjects.has(sample.project.name)) {
+      console.log(`frontend-seed: project ${sample.project.name} is already there; nothing to do`);
+      continue;
     }
-    if (type.definition.actions?.length) {
+
+    await members(main, sample);
+    const revisions = new Map();
+    const project = await main.submit("build.app", sample.project.name, "create", sample.project);
+    revisions.set(`build.app/${sample.project.name}`, project.revision);
+    existingProjects.add(sample.project.name);
+
+    const track = (id, record) => revisions.set(`build.object/${id}`, record.revision);
+    for (const type of sample.types ?? []) {
       const id = `${sample.project.name}.${type.name}`;
-      track(id, await main.submit("build.object", id, "publish", {}, "build", revisions.get(`build.object/${id}`)));
+      const { sets, reads, actions, ...definition } = type.definition;
+      const fields = definition.fields?.map(({ formulaExpr, ...field }) => (formulaExpr && !JSON.stringify(formulaExpr).includes('"agg"') ? { ...field, formulaExpr } : field));
+      track(id, await main.submit("build.object", id, "create", { ...definition, fields, name: type.name, project: sample.project.name }));
+      if (!type.draft) track(id, await main.submit("build.object", id, "publish", {}, "build", 1));
     }
-  }
 
-  for (const type of sample.types ?? []) {
-    if (!type.definition.sets?.length) continue;
-    const id = `${sample.project.name}.${type.name}`;
-    const revision = revisions.get(`build.object/${id}`);
-    track(id, await main.submit("build.object", id, "edit", { sets: type.definition.sets, reads: type.definition.reads, fields: type.definition.fields }, "build", revision));
-    if (!type.draft) track(id, await main.submit("build.object", id, "publish", {}, "build", revision + 1));
-  }
-
-  await main.refresh();
-  await reference(main, sample);
-  const written = await records(main, sample);
-
-  if (sample.project.name === "sales") {
-    for (const path of ["./frontend-fixtures/production-provider-0.1.4.json", "../deploy/packages/production-provider.json"]) await importPackage(main, path);
-  }
-
-  const steps = sample.project.name === "sales" ? [...(sample.steps ?? []), ...enterpriseRosterSteps()] : (sample.steps ?? []);
-  for (const [schema, type, id, payload] of steps) {
-    let authority = main.authorityFor(type);
-    if (!authority) {
-      await main.refresh();
-      authority = main.authorityFor(type);
+    for (const type of (sample.types ?? []).filter((each) => !each.draft)) {
+      for (const { name, ...action } of type.definition.actions ?? []) {
+        const id = `${sample.project.name}.${type.name}.${name}`;
+        await main.submit("build.actiontype", id, "create", { name: id, project: sample.project.name, object: `${sample.project.name}.${type.name}`, definition: { name, ...action } });
+        await main.submit("build.actiontype", id, "publish", {}, "build", 1);
+      }
+      if (type.definition.actions?.length) {
+        const id = `${sample.project.name}.${type.name}`;
+        track(id, await main.submit("build.object", id, "publish", {}, "build", revisions.get(`build.object/${id}`)));
+      }
     }
-    if (!authority) throw new Error(`${type}: no write authority`);
-    const key = `${type}/${id}`;
-    let input = payload;
-    if (schema === "build.branch.propose") {
-      const { check } = await main.call(`/v1/branches/${encodeURIComponent(id)}/checks`, {});
-      if (!check.passed) throw new Error(`branch ${id}: ${JSON.stringify(check)}`);
-      input = { ...payload, checks: check };
-    }
-    const accepted = await main.send(schema, type, id, input, authority, revisions.get(key) ?? 0);
-    revisions.set(key, accepted.revision);
-  }
 
-  await words(main, sample);
-  console.log(`frontend-seed: ${(sample.types ?? []).length} types (${(sample.types ?? []).filter((each) => each.draft).length} drafts), ${written} records and ${steps.length} steps in project ${sample.project.name} on ${host}`);
-
-  if (sample.install) {
-    const tenant = await connect(sample.install.tenant);
-    for (const path of sample.install.requires ?? []) await installPackage(tenant, path);
-    const descriptor = await installPackage(tenant, sample.install.package);
-    await tenant.refresh();
-    const kinds = new Set(descriptor.blueprint.assets.filter((asset) => asset.ref.kind === "object").map((asset) => asset.ref.name));
-    await members(tenant, sample.install);
-    if (sample.install.copy === false) await filled(tenant, descriptor);
-    const copied = sample.install.copy === false ? 0 : await records(tenant, sample, kinds);
-    if (sample.install.copy !== false) {
-      await reference(tenant, sample, kinds);
-      await words(tenant, sample);
+    for (const type of sample.types ?? []) {
+      if (!type.definition.sets?.length) continue;
+      const id = `${sample.project.name}.${type.name}`;
+      const revision = revisions.get(`build.object/${id}`);
+      track(id, await main.submit("build.object", id, "edit", { sets: type.definition.sets, reads: type.definition.reads, fields: type.definition.fields }, "build", revision));
+      if (!type.draft) track(id, await main.submit("build.object", id, "publish", {}, "build", revision + 1));
     }
-    console.log(`frontend-seed: installed ${descriptor.id}@${descriptor.version} with ${copied} records in tenant ${sample.install.tenant}`);
+
+    await main.refresh();
+    await reference(main, sample);
+    const written = await records(main, sample);
+
+    if (sample.project.name === "sales") {
+      for (const path of ["./frontend-fixtures/production-provider-0.1.4.json", "../deploy/packages/production-provider.json"]) await importPackage(main, path);
+    }
+
+    const steps = sample.project.name === "sales" ? [...(sample.steps ?? []), ...enterpriseRosterSteps()] : (sample.steps ?? []);
+    for (const [schema, type, id, payload] of steps) {
+      let authority = main.authorityFor(type);
+      if (!authority) {
+        await main.refresh();
+        authority = main.authorityFor(type);
+      }
+      if (!authority) throw new Error(`${type}: no write authority`);
+      const key = `${type}/${id}`;
+      let input = payload;
+      if (schema === "build.branch.propose") {
+        const { check } = await main.call(`/v1/branches/${encodeURIComponent(id)}/checks`, {});
+        if (!check.passed) throw new Error(`branch ${id}: ${JSON.stringify(check)}`);
+        input = { ...payload, checks: check };
+      }
+      const accepted = await main.send(schema, type, id, input, authority, revisions.get(key) ?? 0);
+      revisions.set(key, accepted.revision);
+    }
+
+    await words(main, sample);
+    console.log(`frontend-seed: ${(sample.types ?? []).length} types (${(sample.types ?? []).filter((each) => each.draft).length} drafts), ${written} records and ${steps.length} steps in project ${sample.project.name} on ${host}`);
+
+    if (sample.install) {
+      const tenant = await connect(sample.install.tenant);
+      for (const path of sample.install.requires ?? []) await installPackage(tenant, path);
+      const descriptor = await installPackage(tenant, sample.install.package);
+      await tenant.refresh();
+      const kinds = new Set(descriptor.blueprint.assets.filter((asset) => asset.ref.kind === "object").map((asset) => asset.ref.name));
+      await members(tenant, sample.install);
+      if (sample.install.copy === false) await filled(tenant, descriptor);
+      const copied = sample.install.copy === false ? 0 : await records(tenant, sample, kinds);
+      if (sample.install.copy !== false) {
+        await reference(tenant, sample, kinds);
+        await words(tenant, sample);
+      }
+      console.log(`frontend-seed: installed ${descriptor.id}@${descriptor.version} with ${copied} records in tenant ${sample.install.tenant}`);
+    }
   }
 }
 
@@ -273,7 +279,10 @@ const tenantPackages = {
   },
 };
 
-await Promise.all(["blank", "rebac", "upgrade", "publisher", "official", "phone", "sim", "crm"].map(async (name) => {
+const targetExtraTenants = ["blank", "rebac", "upgrade", "publisher", "official", "phone", "sim", "crm"]
+  .filter((name) => !requestedTenants || requestedTenants.has(name));
+
+await Promise.all(targetExtraTenants.map(async (name) => {
   const empty = await connect(name).catch(() => undefined);
   if (!empty) return;
   const plan = tenantPackages[name];

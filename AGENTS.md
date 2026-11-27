@@ -78,13 +78,14 @@
 | 前端 | `pnpm --dir frontend dev`（http://localhost:8496，代理到 `PLATFORM_HOST`） |
 | 夹具宿主 | `make frontend-host`（内存宿主 http://127.0.0.1:18511，自带示例销售项目） |
 | 整套本地运行 | `make local`（入口 http://localhost:8495 是 `frontend/`；宿主日志 `.build/dev/platform-api.log`） |
-| 快速提交检查 | `make fast`：暂存空白与 Go 格式（提交钩子自动执行） |
+| 快速提交检查 | `make fast`：暂存空白与 Go 格式（提交钩子自动执行，`<1s`） |
 | 集成检查 | `make check`：Go 构建、vet 与格式，包边界与形状，产品包，契约，文案，文档，纪元，空白 |
 | 前端检查 | `make check-frontend`（CI；本地按需） |
-| 主干验收 | `make trunk`：自己起宿主、灌数据、起前端，浏览器走一遍演示路径；`HEADED=1` 看着它走；`SPEC=crm` 只跑一个文件 |
+| 秒级不变量 | `make test-fast`：只跑 Small 档（`<=1s`）宿主不变量与内核子包（`<10s`） |
+| 内核不变量 | `make test RUN=K13` 定点跑相关编号；不给 `RUN` 则 6 分片并行跑全部内存不变量 |
+| 主干验收 | `make trunk SPEC=crm`：动态分配空闲端口、按 SPEC 仅灌目标租户种子；`make trunk-changed` 按改动映射运行 |
 | 发版验收 | `make verify`：依次执行全量 `make test-pg` 与严格 `make trunk-pg`，不再跑内存全量；`make load-sql` 等专项按需 |
 | 宿主类型与契约 | `make contract`（改了宿主类型之后） |
-| 内核不变量 | `make test RUN=K13` 定点跑相关编号；不给 `RUN` 跑全部 |
 | 产品包 | `make packages`（刷新作者态源的锁文件，并把夹具一起装进内存租户检查；顶层制品是发布快照，不重建）；试跑动作用 `pkg try` |
 
 验收以 [三档验收](docs/README.md#三档验收) 为唯一规则：日常定点、提交快速检查、GitHub 轻量 CI、发版前本地一次 `make verify`。

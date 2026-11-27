@@ -38,17 +38,17 @@
 
 | 模块 | 成熟度 | 证据 | 缺什么、归哪块 |
 |---|---|---|---|
-| 记录：列表、记录页、行内编辑、视图 | 产品级 | `pages/RecordList.tsx`、`RecordPage.tsx`；records 32 项 | — |
-| CRM 包 | 产品级 | crm 29 项、official 8 项 | — |
+| 记录：列表、记录页、行内编辑、视图 | 产品级 | `pages/RecordList.tsx`、`RecordPage.tsx`；records 33 项 | — |
+| CRM 包 | 产品级 | crm 17 项、official 8 项 | — |
 | 宿主：接受路径、重放、内存与文件存储 | 能用 | `capabilities/server/kernel`；十三组内核不变量；official 停机重启、备份恢复 | — |
 | PostgreSQL 存储 | 能用 | 3.1a–f；crm 与 official trunk-pg 全过 | 全量 trunk-pg 验收卡在提交长时间占住租户处理通道：一（3.1f，#12） |
 | 格式纪元冻结 | 产品级 | `kernel/store/migration.go`、`scripts/check-epoch.mjs`；K1 纪元拒绝、备份纪元拒绝 | — |
-| 构建：类型、字段、状态、动作、发布 | 能用 | `services/ontology`；builder 12 项 | — |
+| 构建：类型、字段、状态、动作、发布 | 能用 | `services/ontology`；builder 14 项 | — |
 | 条件与表达式编辑器 | 能用 | `pages/ConditionBuilder.tsx`、`ExpressionEditor.tsx`；builder “a condition picked”、“a formula written” | — |
 | 结构化对比、关系图 | 能用（对比） | `RecordComparison`；builder 发布前审阅、marketplace 升级审阅 | 关系图等客户要：三（#14） |
 | 客户扩展 | 能用 | `pages/RecordExtensions.tsx`；official “an extension project”、marketplace CRM 0.3.1 → 0.3.2 | — |
 | 市场：安装、升级、卸载、远程包库 | 能用 | `apps/delivery/marketplace.tsx`；marketplace 13 项 | — |
-| 授权：角色、ReBAC、临时授权、受限字段 | 能用 | `services/security`；rebac 3 项、crm “roles”、workspace “restricted fields”、official “an extension project” | — |
+| 授权：角色、ReBAC、临时授权、受限字段 | 能用 | `services/security`；rebac 4 项、tenant-security 3 项、crm “roles”、workspace “restricted fields” | — |
 | 工作：收件箱、任务、提及、跟进 | 能用 | `pages/InboxPage.tsx`、`services/work`；workspace “inbox”、crm “follow-up” | — |
 | 看板、日历、甘特、仪表盘 | 能用 | `BoardView`、`CalendarView`、`GanttView`、`DashboardPage`；crm、gantt | — |
 | 导入导出 | 能用 | `pages/ImportWizard.tsx`、`objects/record_import.go`；crm “import” | 界面、邀请与 128 批已合入，导入后重启复核已过（3.4b）；万行 20s 归四（#15） |

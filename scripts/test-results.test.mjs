@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { selectTests, summarizeGo, testGate } from "./test-results.mjs";
+import { classifySpeeds, extractTimings, filterSmallTests, selectTests, shardTests, summarizeGo, testGate } from "./test-results.mjs";
 
 const report = (events, expected = []) => summarizeGo(events.map(([Action, Test, Package = "pkg"]) => JSON.stringify({ Action, Test, Package })).join("\n"), expected);
 
@@ -44,4 +44,21 @@ test("identical names in different packages stay separate", () => {
   const r = report([["pass", "TestA", "a"], ["pass", "TestA", "b"], ["skip", undefined, "no-tests"]]);
   assert.equal(r.passed, 2);
   assert.equal(r.skipped, 0);
+});
+test("sharding balances test durations, filters small tier and classifies S/M/L", () => {
+  const timings = { TestSlow: 6000, TestMed1: 2500, TestMed2: 2000, TestFast1: 200, TestFast2: 100 };
+  const shards = shardTests(Object.keys(timings), timings, 2);
+  assert.equal(shards.length, 2);
+  assert.deepEqual(shards[0], ["TestSlow"]);
+  assert.deepEqual(shards[1], ["TestMed1", "TestMed2", "TestFast1", "TestFast2"]);
+  assert.deepEqual(filterSmallTests(["TestSlow", "TestFast1", "TestInvariantK1ImportBatchThousandReplay", "TestNewKernelRule"], timings), ["TestFast1", "TestNewKernelRule"]);
+  const extracted = extractTimings([
+    JSON.stringify({ Action: "pass", Test: "TestFast1/sub", Elapsed: 0.1 }),
+    JSON.stringify({ Action: "pass", Test: "TestFast1", Elapsed: 0.25 }),
+  ].join("\n"));
+  assert.deepEqual(extracted, { TestFast1: 250 });
+  const tiers = classifySpeeds(timings);
+  assert.equal(tiers.small, 2);
+  assert.equal(tiers.medium, 2);
+  assert.deepEqual(tiers.slow, [["TestSlow", 6000]]);
 });

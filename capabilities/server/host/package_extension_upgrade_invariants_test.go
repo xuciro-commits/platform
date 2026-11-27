@@ -16,31 +16,42 @@ import (
 
 func TestInvariantK9PackageUpgradeRefusesIncompatibleExtensions(t *testing.T) {
 	seat := protocol.Seat{Subjects: []string{"package-admin"}, Member: platform.Member{ID: "package-admin", Roles: map[string]string{"platform": "admin"}}}
+	source := newInvariantTenant(t, "extgate-base")
+	source.accept(t, "build.object.create", build.ObjectType, "account", invariantObject("account", "account"))
+	source.accept(t, "build.object.create", build.ObjectType, "lead", invariantObject("lead", "lead"))
+	source.accept(t, "build.app.create", protocol.AppType, "APP", map[string]any{"name": "baseapp", "title": "Base CRM"})
+	appRev := 1
+	objRevs := map[string]int{"account": 1, "lead": 1}
 	publishBase := func(version string, lead bool, added bool) platform.PackageDescriptor {
 		t.Helper()
-		source := newInvariantTenant(t, "extgate-base-"+version)
 		var drafts []build.JointDraftRef
 		var refs []platform.AssetRef
+		fields := []ontology.Field{{Name: "note", Title: "Note", Type: "text"}}
+		if added {
+			fields = append(fields, ontology.Field{Name: "channel", Title: "Channel", Type: "text"})
+		}
 		for _, name := range []string{"account", "lead"} {
 			if name == "lead" && !lead {
 				continue
 			}
-			obj := invariantObject(name, name)
-			if added {
-				obj["fields"] = []ontology.Field{{Name: "note", Title: "Note", Type: "text"}, {Name: "channel", Title: "Channel", Type: "text"}}
-			}
-			source.accept(t, "build.object.create", build.ObjectType, name, obj)
+			rec := source.accept(t, "build.object.edit", build.ObjectType, name, map[string]any{"fields": fields})
+			objRevs[name] = int(rec.GetRevision())
 			drafts = append(drafts, build.JointDraftRef{Kind: platform.AssetObject, ID: name})
 			refs = append(refs, platform.AssetRef{App: build.ID, Kind: platform.AssetObject, Name: "invariantproject." + name})
 		}
-		source.accept(t, "build.app.create", protocol.AppType, "APP", map[string]any{"name": "baseapp", "title": "Base CRM", "resources": refs})
+		rec := source.accept(t, "build.app.edit", protocol.AppType, "APP", map[string]any{"resources": refs})
+		appRev = int(rec.GetRevision())
+		_ = appRev
 		drafts = append(drafts, build.JointDraftRef{Kind: platform.AssetApp, ID: "APP"})
 		id := invariantPublishData(t, source, source.member(t), drafts, "base-"+version)
 		candidate, err := PublicationResolver().ReadCandidate(id, source.releases.Raw(id))
 		if err != nil {
 			t.Fatal(err)
 		}
-		desc := platform.PackageDescriptor{ID: "crm", Version: version, Namespace: "crm", Title: "CRM", Blueprint: &platform.PackageBlueprint{Roots: []platform.AssetRef{{App: build.ID, Kind: platform.AssetApp, Name: "baseapp"}}, Assets: candidate.Assets}}
+		kept := slices.DeleteFunc(slices.Clone(candidate.Assets), func(a platform.ReleaseAsset) bool {
+			return !lead && a.Ref.Name == "invariantproject.lead"
+		})
+		desc := platform.PackageDescriptor{ID: "crm", Version: version, Namespace: "crm", Title: "CRM", Blueprint: &platform.PackageBlueprint{Roots: []platform.AssetRef{{App: build.ID, Kind: platform.AssetApp, Name: "baseapp"}}, Assets: kept}}
 		desc, err = packages.Rebind(desc, "crm")
 		if err != nil {
 			t.Fatal(err)

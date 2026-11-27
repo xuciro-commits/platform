@@ -2,17 +2,47 @@ import { createHash, createHmac, timingSafeEqual } from "node:crypto";
 import { spawn, spawnSync } from "node:child_process";
 import { mkdtempSync, readFileSync, rmSync } from "node:fs";
 import { createServer } from "node:https";
+import { createServer as createNetServer } from "node:net";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { fileURLToPath } from "node:url";
+
+const root = fileURLToPath(new URL("..", import.meta.url));
+
+async function freePorts(count) {
+  const servers = await Promise.all(Array.from({ length: count }, () => new Promise((resolve, reject) => {
+    const srv = createNetServer();
+    srv.once("error", reject);
+    srv.listen(0, "127.0.0.1", () => resolve(srv));
+  })));
+  const ports = servers.map((srv) => srv.address().port);
+  await Promise.all(servers.map((srv) => new Promise((resolve) => srv.close(resolve))));
+  return ports;
+}
 
 const [command, ...args] = process.argv.slice(2);
+const baseEnv = { ...process.env };
+let ephemeralWorkDir = "";
+if (!baseEnv.TRUNK_PORT_OFFSET && !baseEnv.PLATFORM_TRUNK_HOST_PORT) {
+  const [hostPort, controlPort, pagePort] = await freePorts(3);
+  baseEnv.PLATFORM_TRUNK_HOST_PORT = String(hostPort);
+  baseEnv.PLATFORM_TRUNK_CONTROL_PORT = String(controlPort);
+  baseEnv.PLATFORM_TRUNK_PAGE_PORT = String(pagePort);
+  ephemeralWorkDir = `${root}.build/trunk-${hostPort}`;
+}
+const cleanEphemeral = (code) => {
+  if (code === 0 && ephemeralWorkDir) rmSync(ephemeralWorkDir, { recursive: true, force: true });
+};
 const selected = args.filter((arg) => /\.spec\.ts(?::\d+)*$/.test(arg));
 const named = (spec) => selected.some((arg) => new RegExp(`(?:^|/)${spec}\\.spec\\.ts(?::\\d+)*$`).test(arg));
-// On PostgreSQL, official.spec.ts picked together with other specs depends on the whole trunk project (playwright.config.ts), which includes connector.spec.ts.
 const runsConnector = !selected.length || named("connector") || (named("official") && selected.some((arg) => !/official\.spec\.ts/.test(arg)));
 if (!runsConnector) {
-  const child = spawn(command, args, { stdio: "inherit" });
-  child.on("exit", (code, signal) => { process.exitCode = code ?? (signal ? 1 : 0); });
+  const child = spawn(command, args, { stdio: "inherit", env: baseEnv });
+  child.on("exit", (code, signal) => {
+    const exitCode = code ?? (signal ? 1 : 0);
+    cleanEphemeral(exitCode);
+    process.exitCode = exitCode;
+  });
 } else {
   const dir = mkdtempSync(join(tmpdir(), "platform-connector-"));
   const cert = join(dir, "cert.pem");
@@ -42,11 +72,18 @@ if (!runsConnector) {
   });
   await new Promise((resolve, reject) => { server.once("error", reject); server.listen(0, "127.0.0.1", resolve); });
   const origin = "https://127.0.0.1:" + server.address().port;
-  const env = { ...process.env, PLATFORM_TRUNK_CONNECTOR_ORIGIN: origin, PLATFORM_TRUNK_CONNECTOR_CERT: cert, PLATFORM_SECRET_KIT_TRUNK_WRONG: "kit-user:kit-wrong-password", PLATFORM_SECRET_KIT_TRUNK_BASIC: "kit-user:kit-trunk-password", PLATFORM_SECRET_KIT_TRUNK_HMAC: "kit-trunk-signing-key" };
+  const env = { ...baseEnv, PLATFORM_TRUNK_CONNECTOR_ORIGIN: origin, PLATFORM_TRUNK_CONNECTOR_CERT: cert, PLATFORM_SECRET_KIT_TRUNK_WRONG: "kit-user:kit-wrong-password", PLATFORM_SECRET_KIT_TRUNK_BASIC: "kit-user:kit-trunk-password", PLATFORM_SECRET_KIT_TRUNK_HMAC: "kit-trunk-signing-key" };
   const child = spawn(command, args, { stdio: "inherit", env });
   const stop = (signal) => child.kill(signal);
   process.once("SIGINT", () => stop("SIGINT"));
   process.once("SIGTERM", () => stop("SIGTERM"));
   child.on("error", () => { process.exitCode = 1; server.closeAllConnections(); server.close(); rmSync(dir, { recursive: true, force: true }); });
-  child.on("exit", (code) => { server.closeAllConnections(); server.close(); rmSync(dir, { recursive: true, force: true }); process.exitCode = code ?? 1; });
+  child.on("exit", (code) => {
+    const exitCode = code ?? 1;
+    server.closeAllConnections();
+    server.close();
+    rmSync(dir, { recursive: true, force: true });
+    cleanEphemeral(exitCode);
+    process.exitCode = exitCode;
+  });
 }

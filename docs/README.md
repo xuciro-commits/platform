@@ -57,28 +57,37 @@
 
 ## 三档验收
 
-原则：保留测试覆盖，消除重复执行。日常按改动验收，远程检查集成，发版才跑全量；不把三档都绑到每次提交。
+原则：按规模设速度预算，按改动路由执行，跨层与跨阶段零重复。通用能力只在平台层测一次，产品包只测声明特有的流转，冻结功能不跑机械循环。
+
+### 规模与速度预算
+
+| 规模 | 单条预算 | 整批目标 | 适用对象与约束 |
+|---|---|---|---|
+| Small（秒级核心） | `<= 1s` | `< 10s` | `make test-fast`、`make test RUN=K…`：内核、表达式、授权与合成最小包不变量；禁用 250 国主数据或全量业务包夹具 |
+| Medium（定点集成） | `<= 5s`（Go）/ `< 30s`（单 spec） | `< 45s` | `make test`（LPT 6 分片并行）与 `make trunk SPEC=…`（动态空闲端口 + 按 spec 仅灌目标租户种子，多任务并行零端口互锁） |
+| Large（发版与重型专项） | `< 60s` | 按需 / 发版一次 | 千行批量回放、跨库备份恢复、`make verify`（临时动态端口 PostgreSQL 全量）、`make load-sql`；日常开发与提交严禁触发 |
+
+### 阶段分工
 
 | 档位 | 入口 | 责任与边界 |
 |---|---|---|
-| Fast（本地开发） | `make fast`、相关定点用例 | Git 提交自动核对暂存空白和 Go 格式，另查提交信息；不编译、不跑全量 |
-| CI（GitHub） | `make check`、`make test-runner`、`make check-frontend` | push main / PR 自动执行；后端编译、vet、边界、包、契约、文档、纪元、前端规范与构建 |
-| Release（本地） | `make verify` | 先 `make test-pg`，再 `make trunk-pg`，各一次全量；不用内存全量重复验收 |
+| Fast（本地开发与提交） | 定点 `RUN=` / `SPEC=`、提交自动 `make fast` | 开发只跑改到的定点用例；`pre-commit` 只查暂存空白、Go 格式与提交信息（`< 1s`），不编译、不跑测试 |
+| CI（GitHub） | `make check`、`make test-runner`、`make test-fast`、`make check-frontend` | push main / PR 自动执行静态门禁、契约零漂移、秒级核心不变量与前端构建 |
+| Release（本地发版） | `make verify` | 先 `make test-pg`，再 `make trunk-pg`，各一次全量；不用内存全量重复验收 |
 
 ### 日常怎样选
 
-- 后端行为改动：`make test RUN=K13`（换成受影响的不变量编号）；需要数据库行为时用 `make test-pg RUN=K13`。
-- 前端行为改动：`make trunk SPEC=crm`（换成相关 spec，可通过 `TRUNK_ARGS='--grep ...'` 缩小）；按需运行类型检查。
-- `make trunk-changed` 只执行明确映射的用例；影响过广返回非零并要求选择 SPEC，不自动跑全量。
-- 纯文档或规约：`node scripts/check-docs.mjs`；不启动业务宿主。修改测试工具才按需运行 `make test-runner`。
-- 已通过的相同检查不因准备提交而重跑；有新的相关改动才重验。CI 失败修原因，不降低断言或绕过检查。
-- 格式化、提交信息与热更新不是业务验收；热更新构建不应触发回归测试。
+- 后端行为改动：优先 `make test RUN=K13`（受影响编号，`< 5s`）或 `make test-fast`（`< 10s`）；涉及 SQL 方言或存储时跑 `make test-pg RUN=K13`。
+- 前端行为改动：`make trunk SPEC=crm`（可通过 `TRUNK_ARGS='--grep ...'` 缩到单条）；自动分配空闲端口并只灌该 spec 所需租户，与运行中的开发环境互不干扰。
+- `make trunk-changed` 按 `scripts/trunk-affected.mjs` 的受影响图只跑明确映射的 spec；影响过广返回非零并要求指定 `SPEC`，绝不自动跑全量。
+- 跨层去重：不为单个内部函数写单元测试，严禁伪造旧路由或内存桩的自欺测试；界面前置状态一律经 `submit` 接口秒级注入，浏览器只走要验证的交互步。
+- 纯文档或规约：`node scripts/check-docs.mjs`；修改测试调度器才运行 `make test-runner`。已通过的相同检查不因准备提交而重跑。
 
 ### 发版怎样验
 
 1. 在干净的候选提交上验收，记录 `git rev-parse HEAD`；确保该提交的 GitHub 轻量 CI 通过。
 2. 本地具备 Docker、`platform-postgres:18-vector` 镜像、前端依赖与 Chrome；缺少环境先补齐，不改成内存全量代替。
-3. 执行 `make verify`，固定全量参数，后端失败不启动浏览器。两套测试分别使用临时 PostgreSQL。
+3. 执行 `make verify`，固定全量参数，后端失败不启动浏览器。两套测试分别使用动态端口临时 PostgreSQL。
 4. 核对 `.build/check/test-results.json` 与 `.build/trunk/playwright-results.json`：失败、跳过、未执行、零用例或不稳定通过均不能算全量通过。
 5. 验收后候选提交或相关工作区字节变化，重新核对受影响的证据；不得把旧提交的报告冒充新提交的全量通过。
 6. 同一提交的 CI 与本地验收均通过才打 Tag。GitHub Release 工作流只构建、签发和发布制品，不再运行重型测试。

@@ -293,30 +293,104 @@ func TestInvariantK24PackageDemoSeedInstallAndClear(t *testing.T) {
 }
 
 func TestInvariantMultiPackageTranslationsScopeByNamespaceAndTranslateFieldGroupsAndLabels(t *testing.T) {
-	adminSeat := protocol.Seat{Subjects: []string{"admin"}, Member: platform.Member{ID: "admin", Roles: map[string]string{"platform": "admin", build.ID: ontology.BuilderRole, "crm": "salesmanager", "party": "steward", "geo": "steward"}}}
+	builder := newInvariantTenant(t, "invariant-multi-pkg-source")
+	contact := invariantObject("contact", "Contact")
+	contact["fields"] = []ontology.Field{{Name: "fullname", Title: "Full name", Type: "text"}, {Name: "jobtitle", Title: "Job title", Type: "text"}}
+	contact["access"] = []ontology.Access{{Role: "steward", Read: "all", Create: true, Edit: true}}
+	builder.accept(t, "build.object.create", build.ObjectType, "CONTACT", contact)
+	builder.accept(t, "build.app.create", protocol.AppType, "PARTYAPP", map[string]any{
+		"name":      "partyapp",
+		"title":     "Business partners",
+		"resources": []platform.AssetRef{{App: build.ID, Kind: platform.AssetObject, Name: "invariantproject.contact"}},
+		"languages": platform.Languages{"zh-CN": {"Full name": "全名", "Job title": "职位"}},
+	})
+	partyCID := invariantPublishData(t, builder, builder.member(t), []build.JointDraftRef{
+		{Kind: platform.AssetObject, ID: "CONTACT"},
+		{Kind: platform.AssetApp, ID: "PARTYAPP"},
+	}, "multi-i18n-party")
+	partyCand, err := PublicationResolver().ReadCandidate(partyCID, builder.releases.Raw(partyCID))
+	if err != nil {
+		t.Fatal(err)
+	}
+	partyDesc, err := packages.Rebind(platform.PackageDescriptor{
+		ID: "party", Version: "0.2.2", Namespace: "party", Title: "Business partners",
+		Blueprint: &platform.PackageBlueprint{Roots: []platform.AssetRef{{App: build.ID, Kind: platform.AssetApp, Name: "partyapp"}}, Assets: partyCand.Assets},
+	}, "party")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	crmBuilder := newInvariantTenant(t, "invariant-multi-pkg-crm-source")
+	lead := invariantObject("lead", "Lead")
+	lead["fields"] = []ontology.Field{{Name: "fullname", Title: "Full name", Type: "text"}, {Name: "jobtitle", Title: "Job title", Type: "text"}}
+	lead["access"] = []ontology.Access{{Role: "salesmanager", Read: "all", Create: true, Edit: true}}
+	deal := invariantObject("deal", "Deal")
+	deal["fields"] = []ontology.Field{
+		{Name: "weighted", Title: "Weighted amount", Type: "decimal", Group: "Forecast"},
+		{Name: "nextstep", Title: "Next step", Type: "text", Group: "Next step"},
+	}
+	deal["access"] = []ontology.Access{{Role: "salesmanager", Read: "all", Create: true, Edit: true}}
+	crmBuilder.accept(t, "build.object.create", build.ObjectType, "LEAD", lead)
+	crmBuilder.accept(t, "build.object.create", build.ObjectType, "DEAL", deal)
+	crmBuilder.accept(t, "build.actiontype.create", "build.actiontype", "CONVERT", map[string]any{
+		"name":   "invariantproject.lead.convert",
+		"object": "invariantproject.lead",
+		"definition": map[string]any{
+			"name":  "convert",
+			"title": "Convert to deal",
+			"roles": []string{"salesmanager"},
+			"inputs": []ontology.Input{
+				{Name: "account", Title: "Existing account", Type: "text"},
+			},
+			"transaction": map[string]any{
+				"subject": "invariantproject.lead",
+				"steps": []map[string]any{{
+					"name":    "update",
+					"kind":    "update",
+					"target":  map[string]any{"type": "invariantproject.lead", "id": "$subject"},
+					"changes": []map[string]any{{"field": "jobtitle", "expr": map[string]any{"kind": "text", "ref": "input.account"}}},
+				}},
+			},
+		},
+	})
+	crmBuilder.accept(t, "build.app.create", protocol.AppType, "CRMAPP", map[string]any{
+		"name":  "crmapp",
+		"title": "CRM",
+		"resources": []platform.AssetRef{
+			{App: build.ID, Kind: platform.AssetObject, Name: "invariantproject.lead"},
+			{App: build.ID, Kind: platform.AssetObject, Name: "invariantproject.deal"},
+			{App: build.ID, Kind: platform.AssetAction, Name: "invariantproject.lead.convert"},
+		},
+		"languages": platform.Languages{"zh-CN": {
+			"Full name":        "姓名",
+			"Job title":        "职务",
+			"Forecast":         "预测",
+			"Next step":        "下一步",
+			"Existing account": "已有客户",
+		}},
+	})
+	crmCID := invariantPublishData(t, crmBuilder, crmBuilder.member(t), []build.JointDraftRef{
+		{Kind: platform.AssetObject, ID: "LEAD"},
+		{Kind: platform.AssetObject, ID: "DEAL"},
+		{Kind: platform.AssetAction, ID: "CONVERT"},
+		{Kind: platform.AssetApp, ID: "CRMAPP"},
+	}, "multi-i18n-crm")
+	crmCand, err := PublicationResolver().ReadCandidate(crmCID, crmBuilder.releases.Raw(crmCID))
+	if err != nil {
+		t.Fatal(err)
+	}
+	crmDesc, err := packages.Rebind(platform.PackageDescriptor{
+		ID: "crm", Version: "0.3.0", Namespace: "crm", Title: "CRM",
+		Blueprint: &platform.PackageBlueprint{Roots: []platform.AssetRef{{App: build.ID, Kind: platform.AssetApp, Name: "crmapp"}}, Assets: crmCand.Assets},
+	}, "crm")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	adminSeat := protocol.Seat{Subjects: []string{"admin"}, Member: platform.Member{ID: "admin", Roles: map[string]string{"platform": "admin", build.ID: ontology.BuilderRole, "crm": "salesmanager", "party": "steward"}}}
 	live := newInvariantTenant(t, "invariant-multi-pkg-i18n", adminSeat)
 	admin, _ := live.Member("admin")
-	for _, fixture := range []string{"geo-0.1.2.json", "party-0.2.2.json", "crm-official-0.3.0.json"} {
-		raw, err := os.ReadFile("../../../scripts/frontend-fixtures/" + fixture)
-		if err != nil {
-			t.Fatal(err)
-		}
-		var offer platform.PackageDescriptor
-		if err := json.Unmarshal(raw, &offer); err != nil {
-			t.Fatal(err)
-		}
-		offer.Blueprint.Seed = nil
-		offer.Blueprint.Setup = nil
-		offer.Blueprint.Assets = slices.DeleteFunc(offer.Blueprint.Assets, func(a platform.ReleaseAsset) bool { return a.Ref.Kind == platform.AssetFlow })
-		for i, a := range offer.Blueprint.Assets {
-			if a.Ref.Kind == platform.AssetApp {
-				var app platform.Application
-				if json.Unmarshal(a.Body, &app) == nil {
-					app.Resources = slices.DeleteFunc(app.Resources, func(r platform.AssetRef) bool { return r.Kind == platform.AssetFlow })
-					offer.Blueprint.Assets[i].Body = platform.Raw(app)
-				}
-			}
-		}
+	for _, offer := range []platform.PackageDescriptor{partyDesc, crmDesc} {
 		preview, err := live.InspectPackage(t.Context(), protocol.PackageInspectRequest{Content: platform.Raw(offer)})
 		if err != nil {
 			t.Fatal(err)
@@ -331,7 +405,7 @@ func TestInvariantMultiPackageTranslationsScopeByNamespaceAndTranslateFieldGroup
 			req := live.submission(step.schema, protocol.PackageType, preview.Descriptor.ID, step.body)
 			req.Authority, req.PrincipalId = "platform", admin.ID
 			if _, refusal := live.Submit(admin, req, invariantClock); refusal != nil {
-				t.Fatalf("%s %s: %s %s", fixture, step.schema, refusal.Code, refusal.Message)
+				t.Fatalf("%s %s: %s %s", offer.ID, step.schema, refusal.Code, refusal.Message)
 			}
 		}
 	}
@@ -365,8 +439,8 @@ func TestInvariantMultiPackageTranslationsScopeByNamespaceAndTranslateFieldGroup
 		}
 		return f
 	}
-	if got := fieldOf("geo.division", "fullname").Title; got != "全称" {
-		t.Fatalf("geo.division.fullname expected 全称, got %q", got)
+	if got := fieldOf("party.contact", "fullname").Title; got != "全名" {
+		t.Fatalf("party.contact.fullname expected 全名, got %q", got)
 	}
 	if got := fieldOf("crm.lead", "fullname").Title; got != "姓名" {
 		t.Fatalf("crm.lead.fullname expected 姓名, got %q", got)
