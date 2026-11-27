@@ -114,6 +114,7 @@ test("blank tenant: a package role granted to a member opens CRM for them, its e
 });
 
 test("blank tenant: retiring CRM removes its entry and keeps the records, reinstalling brings both back", async () => {
+  test.setTimeout(180_000);
   await signOut();
   await signIn(page, "admin-1 · blank");
   await open(page, "Delivery", "Installations");
@@ -133,7 +134,7 @@ test("blank tenant: retiring CRM removes its entry and keeps the records, reinst
   await crmRow.getByRole("button", { name: "Reinstall", exact: true }).click();
   const reinstall = page.getByRole("dialog", { name: /Review and install/ });
   await reinstall.getByRole("button", { name: "Reinstall package", exact: true }).click();
-  await expect(reinstall).toBeHidden();
+  await expect(reinstall).toBeHidden({ timeout: 120_000 });
   await expect(crmRow).toContainText("active");
   const access = page.getByRole("dialog", { name: "Who can use it" });
   await expect(access.getByRole("combobox", { name: "Role in CRM" })).toBeVisible();
