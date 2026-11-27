@@ -14,6 +14,7 @@ type SessionMeta = {
   declarations?: Promise<Declaration[]>;
 };
 let cached: SessionMeta | undefined;
+const keepaliveBytes = 32_000;
 
 function declarationsOf(meta: SessionMeta) {
   const pending = request<Declaration[]>("/v1/declarations").catch((err) => {
@@ -51,6 +52,7 @@ async function submit(session: Session | null, action: Api.Action, id: string, p
   }
   const bytes = new TextEncoder().encode(JSON.stringify(payload));
   const answer = await request<Accepted>("/v1/submissions", {
+    keepalive: bytes.length < keepaliveBytes,
     headers: action.schemaVersion ? { "Platform-Schema-Version": action.schemaVersion.version } : {},
     body: {
       tenantId: identity.tenantId,

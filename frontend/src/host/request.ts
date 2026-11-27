@@ -13,7 +13,7 @@ export class HostRefusal extends Error {
   }
 }
 
-type Options = { signal?: AbortSignal; body?: unknown; headers?: Record<string, string>; cache?: RequestCache };
+type Options = { signal?: AbortSignal; body?: unknown; headers?: Record<string, string>; cache?: RequestCache; keepalive?: boolean };
 type Failure = { error?: string | { code?: string; message?: string; reason?: string; reasonCode?: string; currentRevision?: number } };
 
 export function refusal(status: number, body: Failure | null) {
@@ -51,7 +51,7 @@ async function respond(path: string, options: Options, session: Session | null) 
   const raw = options.body instanceof Blob ? options.body : undefined;
   const sending = options.body === undefined ? {} : { method: "POST", body: raw ?? JSON.stringify(options.body) };
   if (options.body !== undefined) headers["Content-Type"] = raw ? raw.type || "application/octet-stream" : "application/json";
-  const response = await fetch(path, { signal: options.signal, cache: options.cache, headers, ...sending });
+  const response = await fetch(path, { signal: options.signal, cache: options.cache, keepalive: options.keepalive, headers, ...sending });
   requireSession(session);
   if (response.ok) return response;
   if (response.status === 401) endSessionIfCurrent(session);

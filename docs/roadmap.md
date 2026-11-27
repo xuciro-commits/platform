@@ -50,10 +50,10 @@
 - K50 已守住组合预检与停用后的降级；界面还没走过。marketplace 的 trunk 加一步：装采购 → 装库存，审阅里看到要接上的契约 →
   收货后出现库存流水 → 停用库存，采购照常，界面写明“库存未接入”。
 
-### 4.5c 明细改挂另一张单据不生效
+### 4.x trunk 的 SPEC 是子串匹配
 
-- `crm-records.spec.ts:10`：在明细行自己的记录页把“商机”改选另一张，刷新后仍是原来那张；合并前的 main（8870ef60d）就已失败，与三波合并无关。
-- 先查引用字段的选择是否提交了编辑，再查改挂时新旧两个父记录的重算（[domain](domain.md)“类型”的 `inverse` 规则）；修好后这条用例原样通过。
+- `make trunk SPEC=records` 把 `records.spec.ts` 当作模式交给 Playwright，`crm-records.spec.ts` 也被选中，却跑在 records 场景的租户里，报“missing action crm.dealline.create”。
+- 改成按文件名精确选（例如 `/records\.spec\.ts$`）；验收：`SPEC=records` 只跑 records.spec.ts，`SPEC="records crm-records"` 两个都跑且各在自己的场景里通过。
 
 ### 4.4b 发版就绪（IB-PACKAGE-0002）
 
