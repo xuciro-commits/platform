@@ -49,7 +49,7 @@
 | 授权：角色、ReBAC、临时授权、受限字段 | 能用 | `services/security`；rebac 3 项、crm “roles”、workspace “restricted fields”、official “an extension project” | — |
 | 工作：收件箱、任务、提及、跟进 | 能用 | `pages/InboxPage.tsx`、`services/work`；workspace “inbox”、crm “follow-up” | — |
 | 看板、日历、甘特、仪表盘 | 能用 | `BoardView`、`CalendarView`、`GanttView`、`DashboardPage`；crm、gantt | — |
-| 导入导出 | 能用 | `pages/ImportWizard.tsx`、`objects/record_import.go`；crm “import” | 界面、邀请与 128 批已合入；重启复核归 3.4b（#12），万行 20s 归四（#15） |
+| 导入导出 | 能用 | `pages/ImportWizard.tsx`、`objects/record_import.go`；crm “import” | 界面、邀请与 128 批已合入，导入后重启复核已过（3.4b）；万行 20s 归四（#15） |
 | 租户、成员、登录、设置、词汇 | 能用 | `apps/admin`；workspace 17 项、crm “invite” | 自助注册：四（阶段 4，#15） |
 | 主数据：geo、party、uom | 能用 | marketplace “a master data”、“a business partner stores country and division”、“retains the unstructured address”；K42、K43 | — |
 | 能力：契约、绑定、连接器 | 能用 | `pages/Capabilities.tsx`；workspace “capabilities”；connector 1 项（内存与 pg）；K40、K41、K45、K46 | 双主版本、商业供应商适配：二（2.9 B1，#13） |
@@ -81,6 +81,8 @@
   验收未过，卡在提交长时间占住租户处理通道：11-26 全新 PG 上两轮全量分别 77 过、3 挂、42 未跑与 84 过、6 挂、32 未跑，两轮失败互不重合，多为等按钮、对话框或页面结果超时。
   服务端日志：单次提交最长占住 publisher 24 秒（与 :513 超时同一时段），phone 8.8 秒、crm 8.3 秒、acceptance 6.4 秒；第二轮提交超 200ms 预算 29 次共 65.6 秒，后台 work 98 次共 78 秒；无 panic、无报错。
   下一步：在"lane held"日志里带上提交的 schema 名，跑一轮全量定位最慢的几种提交，逐个修，再跑全量验收。
+  11-26 两轮全量与一次演练里挂过、别轮能过的用例：records :191；builder :67、:337；marketplace :159、:223、:513；connector :29（点击超时）；crm :187；rebac :5（审批后无提示）。
+  其中两条不像单纯超时，修完慢提交后先单跑：crm :374 收件箱"Open full page"到了 `/ontology/objects/crm.activity/…` 而不是 `/crm/…`；rebac :95 自定义角色的"Save role"一直禁用。
 
 ### 3.2 客户扩展
 
