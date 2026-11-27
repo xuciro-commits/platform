@@ -140,6 +140,13 @@ export function Shell() {
     : app.group === "installed" && item.settings ? <SettingsTables key={`${app.id}/${item.id}`} title={item.label} types={item.settings} />
     : app.group === "installed" && item.object && listPath ? <Records key={`${app.id}/${item.id}`} declared={{ title: item.label, about: item.description ?? "", type: item.object }} listPath={listPath} id={segments[3]} />
     : null;
+  if (segments[segments.length - 1] === "print") {
+    return (
+      <ErrorBoundary resetKey={path}>
+        <Suspense fallback={null}>{content}</Suspense>
+      </ErrorBoundary>
+    );
+  }
   return (
     <CommandSearch app={navApp} item={navItem ?? navApp.sections[0].items[0]} apps={available} tenant={session.tenant}>
       <AppShell

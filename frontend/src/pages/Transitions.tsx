@@ -4,6 +4,7 @@ import { HStack } from "@astryxdesign/core/Layout";
 import { MoreMenu } from "@astryxdesign/core/MoreMenu";
 import type { Api } from "../host";
 import { t } from "../i18n";
+import { navigate } from "../router";
 import { usePageCommands } from "../commandScope";
 import { isDangerAction, stepIntent, useAct } from "./act";
 import type { Described, Step, Values } from "./describe";
@@ -23,6 +24,7 @@ export type TransitionsProps = {
   contributed?: ContributedAction[];
   publishProblem?: string;
   refreshing?: boolean;
+  printHref?: string;
   onFailure: (reason: string) => void;
 };
 
@@ -35,7 +37,7 @@ function Gated({ label, verdict, busy, danger, onClick }: { label: string; verdi
   );
 }
 
-export function Transitions({ described, id, values, revision, title, instances, allowed, contributed = [], publishProblem, refreshing, onFailure }: TransitionsProps) {
+export function Transitions({ described, id, values, revision, title, instances, allowed, contributed = [], publishProblem, refreshing, printHref, onFailure }: TransitionsProps) {
   const act = useAct(described);
   const busy = act.busy || Boolean(refreshing);
   const lifecycle = described.lifecycle;
@@ -106,6 +108,7 @@ export function Transitions({ described, id, values, revision, title, instances,
       isDisabled: !entry.verdict.allowed || busy,
       onClick: () => runContributed(entry),
     })),
+    ...(printHref ? [{ id: "record.print", label: t("Print"), description: undefined, isDisabled: false, onClick: () => void navigate(printHref) }] : []),
   ];
 
   usePageCommands(busy ? [] : [

@@ -26,6 +26,7 @@ import { Collaboration, RecordActivity } from "./RecordActivity";
 import { compareObjectChanges, RecordComparison } from "./RecordComparison";
 import { type ContributedAction, ExtensionHost, extensionsOf } from "./RecordExtensions";
 import { RecordLines } from "./RecordLines";
+import { RecordPrint } from "./RecordPrint";
 import { ObjectPreview } from "./ObjectPreview";
 import { useOptions } from "./options";
 import { enterable } from "./fieldRules";
@@ -216,9 +217,26 @@ export function RecordPage({ described, id, listPath, listTitle, instances, enti
       contributed={contributedActions}
       refreshing={definitionRefreshing}
       publishProblem={definition && stateProblem(definition)}
+      printHref={`${base}/print`}
       onFailure={setRefusal}
     />
   );
+
+  if (asked === "print" && kept) {
+    return (
+      <RecordPrint
+        described={described}
+        id={id}
+        base={base}
+        values={values}
+        kept={kept}
+        refs={refs}
+        restricted={restricted}
+        entities={entities}
+        catalog={catalog}
+      />
+    );
+  }
 
   return (
     <Layout

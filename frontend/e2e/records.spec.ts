@@ -981,3 +981,38 @@ test("command palette: open a record and the inbox with the keyboard", async ({ 
 });
 
 });
+
+
+test("print: open opportunity print view, check lines and restricted fields, capture A4 print media", async ({ page }, testInfo) => {
+  await signIn(page);
+  await open(page, "Ontology", "Objects");
+  await page.getByRole("link", { name: "Opportunities" }).click();
+  await page.getByRole("link", { name: "冲压线改造" }).click();
+  const add = page.getByRole("button", { name: "Add a row" });
+  await add.focus();
+  await add.evaluate((element, text) => {
+    const dt = new DataTransfer();
+    dt.setData("text/plain", text);
+    element.dispatchEvent(new ClipboardEvent("paste", { clipboardData: dt, bubbles: true, cancelable: true }));
+  }, "Die Set A\t2\t500\nDie Set B\t3\t800\n");
+  await Promise.all([
+    page.waitForResponse((response) => response.url().includes("/v1/import/") && !response.url().includes("preview=true") && response.ok()),
+    page.keyboard.press("Meta+Enter"),
+  ]);
+  const linesTable = page.getByRole("table", { name: "Opportunity lines" });
+  await expect(linesTable.getByRole("row")).toHaveCount(4);
+  await page.getByRole("button", { name: "More actions" }).click();
+  await page.getByRole("menuitem", { name: "Print" }).click();
+  await expect(page).toHaveURL(/\/print$/);
+  await expect(page.getByRole("heading", { level: 1, name: "冲压线改造" })).toBeVisible();
+  await expect(page.getByAltText("Record QR code")).toBeVisible();
+  await expect(page.getByText("Cannot view")).toHaveCount(0);
+  const printTable = page.getByRole("table", { name: "Opportunity lines" });
+  await expect(printTable.getByRole("row")).toHaveCount(4);
+  await page.setViewportSize({ width: 794, height: 1123 });
+  await page.emulateMedia({ media: "print" });
+  await expect(page.getByRole("button", { name: "Print" })).toBeHidden();
+  const a4 = await page.screenshot({ fullPage: true });
+  expect(a4.byteLength).toBeGreaterThan(1000);
+  await testInfo.attach("opportunity-a4-print.png", { body: a4, contentType: "image/png" });
+});

@@ -163,7 +163,7 @@
 | 统计与图表 | Dashboard、Number Card | 仪表盘 |
 | 应用首页与菜单 | Workspace | 应用菜单，由产品包声明 |
 | 编号、默认值、取自引用的值 | Naming、Default、Fetch From | 类型描述 |
-| 导入导出、打印 | Data Import、Print Format | 导入导出在列表的“⋯”；打印是平台特性，在记录页的“⋯”（[roadmap](roadmap.md) 4.5b） |
+| 导入导出、打印 | Data Import、Print Format | 导入导出在列表的“⋯”；打印是平台特性，在记录页“⋯”进入打印视图（A4 排版、受限字段不留空位、明细换页重复表头、含记录二维码，支持 `view.print` 定制标题、字段与页脚） |
 | 定制 | Custom Field、Customize Form、Script | 客户项目里的扩展：追加字段、动作、页面与受控函数 |
 | 接口 | `/api/resource` | 记录读取、对象集与动作 |
 
