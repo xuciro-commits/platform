@@ -224,7 +224,7 @@ function ItemPane({ item, act, onClose, isFullWidth, canMarkUnread }: { item: In
   );
   const accessRequestId = task?.ref === "read:access-requests" && task.key?.startsWith("access:") ? task.key.slice(7) : undefined;
   const record = item.ref && !item.ref.startsWith("work.task/") && !item.ref.startsWith("read:") ? item.ref : undefined;
-  const recordHref = useRecordHref();
+  const recordHref = useRecordHref(true);
   return (
     <VStack key={item.id} height="100%" xstyle={motionStyles.tabEnter}>
       <VStack paddingBlockStart={gutter} paddingInline={isFullWidth ? 0 : gutter}>
@@ -288,7 +288,7 @@ function ItemPane({ item, act, onClose, isFullWidth, canMarkUnread }: { item: In
               </MetadataListItem>
             )}
           </MetadataList>
-          {item.record && (
+          {item.record && recordHref && (
             <HStack gap={2}>
               <Button label={t("Open full page")} variant="primary" href={recordHref(item.record.type, item.record.id)} />
             </HStack>

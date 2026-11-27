@@ -375,11 +375,30 @@ test("follow-up: an activity due today waits in To do, opens its record and leav
   await as(page, "manager-1");
   const subject = `完成曦和的安全评审 ${unique()}`;
   const id = await activity(page, { subject, due: today(), assignee: "manager-1", deal: "demo-deal-2" });
-  await page.goto("/home/inbox/todo");
-  await page.getByRole("row", { name: new RegExp(subject) }).click();
+  let applicationsHeld = false;
+  let releaseApplications!: () => void;
+  const applicationGate = new Promise<void>((resolve) => { releaseApplications = resolve; });
+  await page.route("**/v1/applications", async (route) => {
+    if (route.request().headers()["referer"]?.includes("/home/inbox/todo")) {
+      applicationsHeld = true;
+      await applicationGate;
+    }
+    await route.continue();
+  });
   const pane = page.getByRole("complementary", { name: "Item" });
-  await expect(pane.getByRole("heading", { name: subject })).toBeVisible();
-  await pane.getByRole("link", { name: "Open full page" }).click();
+  const fullPage = pane.getByRole("link", { name: "Open full page" });
+  try {
+    await page.goto("/home/inbox/todo");
+    await page.getByRole("row", { name: new RegExp(subject) }).click();
+    await expect(pane.getByRole("heading", { name: subject })).toBeVisible();
+    await expect.poll(() => applicationsHeld).toBe(true);
+    await expect(fullPage).toHaveCount(0);
+  } finally {
+    releaseApplications();
+    await page.unrouteAll({ behavior: "wait" });
+  }
+  await expect(fullPage).toHaveAttribute("href", `/crm/crm.activity/${id}`);
+  await fullPage.click();
   await expect(page).toHaveURL(new RegExp(`/crm/crm\\.activity/${id}$`));
   await page.getByRole("main").getByRole("button", { name: "Complete", exact: true }).click();
   const done = page.getByRole("dialog");

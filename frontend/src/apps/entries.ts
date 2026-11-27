@@ -19,18 +19,23 @@ export function recordHref(type: string, id: string) {
 
 const remembered = new Map<string, Api.ApplicationView[]>();
 
-export function useRecordHref() {
+type RecordHref = (type: string, id?: string) => string;
+
+export function useRecordHref(): RecordHref;
+export function useRecordHref(waitForApplications: true): RecordHref | null;
+export function useRecordHref(waitForApplications = false): RecordHref | null {
   const app = usePath().split("/")[1];
   const session = useSession();
   const key = `${session?.tenant} ${session?.token}`;
   const views = useRead<Api.ApplicationView[]>("/v1/applications");
   if (views.status === "ready") remembered.set(key, views.data);
   const loaded = views.status === "ready" ? views.data : remembered.get(key);
-  return useCallback((type: string, id?: string) => {
+  const resolve = useCallback((type: string, id?: string) => {
     const pageIn = (view?: Api.ApplicationView) => view?.menu?.flatMap((group) => group.entries).find((entry) => entry.object === type);
     const page = pageIn(loaded?.find((view) => (view.name || view.app) === app));
     const owner = page || homes.has(type) ? undefined : loaded?.find((view) => pageIn(view));
     const list = page ? `/${app}/${page.name}` : owner ? `/${owner.name || owner.app}/${pageIn(owner)?.name}` : homes.get(type) ?? `/ontology/objects/${encodeURIComponent(type)}`;
     return id === undefined ? list : `${list}/${encodeURIComponent(id)}`;
   }, [app, loaded]);
+  return waitForApplications && views.status === "loading" && !loaded ? null : resolve;
 }
