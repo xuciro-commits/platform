@@ -12,7 +12,7 @@ import (
 )
 
 func (t *Tenant) resolveCredential(name, consumer, address string) ([]byte, string, error) {
-	return controlowner.ResolveCredential(t.ID, t.IdentityOwner, t.secret, name, consumer, address)
+	return controlowner.ResolveCredential(t.ID, t.IdentityOwner, func(name string) ([]byte, bool) { return controlowner.LookupSecret(t.Secrets, name) }, name, consumer, address)
 }
 func (t *Tenant) CredentialValue(name, consumer, address string) ([]byte, bool) {
 	value, _, err := t.resolveCredential(name, consumer, address)

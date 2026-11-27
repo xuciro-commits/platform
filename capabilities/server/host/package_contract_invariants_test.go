@@ -176,7 +176,7 @@ func TestInvariantK50PackageContractClosure(t *testing.T) {
 	recovery.Files = target.files()
 	recovery.invalidateReadImage()
 	pendingRetry := effects()[0]
-	out := recovery.router().DeliverDeferredRequest(pendingRetry, invariantClock.Add(2*time.Second), recovery.Member, recovery.ReplayKnownSubmission, recovery.Submit)
+	out := recovery.deliverDeferredRequest(pendingRetry, invariantClock.Add(2*time.Second))
 	if out.Result != "delivered" {
 		t.Fatalf("independent provider acceptance: %+v", out)
 	}
@@ -402,4 +402,8 @@ func TestInvariantK50OptionalDeferredRequestAndKey(t *testing.T) {
 	if !reflect.DeepEqual(target.recordImage(t), replayed.recordImage(t)) {
 		t.Fatal("replay record image differs")
 	}
+}
+
+func (t *Tenant) settle(effect string, o platform.Outcome, now time.Time) {
+	t.settleWithUsage(effect, o, nil, now)
 }

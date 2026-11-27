@@ -30,7 +30,10 @@ func (t *Tenant) enqueue(now time.Time) {
 	for len(t.events) > 0 {
 		e := t.events[0]
 		t.events = t.events[1:]
-		automation.EventRoute{MaxHops: acceptedformat.MaxHops, Apps: t.apps, Listeners: t.Listeners, Delivered: t.delivered, Emit: t.emit,
+		automation.EventRoute{MaxHops: acceptedformat.MaxHops, Apps: t.apps, Listeners: t.Listeners, Delivered: t.delivered, Emit: func(e platform.Event, names []string) {
+			planned, _ := t.eventEffects(e, names, false)
+			t.outbound.Add(t.current(), planned...)
+		},
 			Names: func(e platform.Event) []string { return t.router().Events(e) },
 			Observe: func(e platform.Event, names []string) {
 				for _, o := range t.Observers {

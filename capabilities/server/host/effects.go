@@ -34,11 +34,6 @@ func (t *Tenant) eventEffects(e platform.Event, names []string, preparing bool) 
 	return planned, nil
 }
 
-func (t *Tenant) emit(e platform.Event, names []string) {
-	planned, _ := t.eventEffects(e, names, false)
-	t.outbound.Add(t.current(), planned...)
-}
-
 func (t *Tenant) emitFor(c platform.Caller, kind, key, entity string, data any, now time.Time) (int, *platform.Error) {
 	planned, err := t.planAppEffects(c, kind, key, entity, data, now, nil)
 	if err != nil {
@@ -75,10 +70,6 @@ func (t *Tenant) Endpoints() []actions.EndpointView {
 	})
 }
 
-func (t *Tenant) secret(name string) ([]byte, bool) {
-	return controlowner.LookupSecret(t.Secrets, name)
-}
-
 func (t *Tenant) Dispatch(now time.Time) { transform.OnLane(t.dispatches(now)) }
 
 func (t *Tenant) dispatches(now time.Time) []func() {
@@ -108,10 +99,20 @@ func (t *Tenant) dispatches(now time.Time) []func() {
 	return sends
 }
 
+// Deferred delivery resolves the current provider in a consistent read image,
+// then submits on the live tenant after that read has ended.
+func (t *Tenant) deliverDeferredRequest(x platform.Effect, now time.Time) platform.Outcome {
+	return t.router().DeliverDeferredRequest(x, now, t.Member, t.ReplayKnownSubmission, t.Submit, func(check func(actions.Router) bool) (bool, *platform.Error) {
+		return recordRead(t, context.Background(), func(scope *Tenant) (bool, *platform.Error) {
+			return check(scope.router()), nil
+		})
+	})
+}
+
 func (t *Tenant) sendWithUsage(ep actions.Endpoint, x platform.Effect, now time.Time) (platform.Outcome, *platform.AIUsage) {
 	switch ep.Kind {
 	case actions.DeferredRequestEndpoint:
-		return t.router().DeliverDeferredRequest(x, now, t.Member, t.ReplayKnownSubmission, t.Submit), nil
+		return t.deliverDeferredRequest(x, now), nil
 	case acceptedformat.ModelEndpoint:
 		return t.gatewayRuntime().Send(x, now)
 	case "email":
@@ -122,10 +123,6 @@ func (t *Tenant) sendWithUsage(ep actions.Endpoint, x platform.Effect, now time.
 		return t.dataClient().Writeback(x), nil
 	}
 	return t.transport().Webhook(ep, x, now), nil
-}
-
-func (t *Tenant) settle(effect string, o platform.Outcome, now time.Time) {
-	t.settleWithUsage(effect, o, nil, now)
 }
 
 func (t *Tenant) settleWithUsage(effect string, o platform.Outcome, usage *platform.AIUsage, now time.Time) {
