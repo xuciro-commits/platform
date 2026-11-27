@@ -45,6 +45,7 @@ type resourceKind[T interface{ Definition() D }, D interface{ Check() error }] s
 	joint           bool
 	records         func(*Build) map[string]T
 	validate        func(*Build, T) (T, error)
+	assetName       func(T) string
 	identity        func(a, b T) bool
 	stable          func(old, next T) bool
 	guarantees      func(old, next T) bool
@@ -160,15 +161,15 @@ func (k *resourceKind[T, D]) check(b *Build, f T) (T, error) {
 	if err != nil {
 		return f, err
 	}
-	family := definitionFamilyOf(f)
+	family := k.family(f)
 	list, err := k.inventory(b)
 	if err != nil {
 		return f, err
 	}
 	for _, other := range list {
-		known := definitionFamilyOf(other)
-		installed, _ := publication.Read[T](known.Published)
-		if known.ID != family.ID && (known.Name == family.Name || definitionFamilyOf(installed).Name == family.Name) {
+		known := k.family(other)
+		installed, retained := publication.Read[T](known.Published)
+		if known.ID != family.ID && (known.Name == family.Name || retained && k.family(installed).Name == family.Name) {
 			return f, fmt.Errorf("%s %s is already declared", k.title, family.Name)
 		}
 	}
@@ -184,7 +185,11 @@ func (k *resourceKind[T, D]) compatible(old, next T) bool {
 
 func (k *resourceKind[T, D]) family(record T) publication.Family {
 	family := definitionFamilyOf(record)
-	return publication.Family{ID: family.ID, Name: family.Name, State: family.State, Version: family.Version, Published: family.Published, Versions: slices.Clone(family.Versions), Archived: family.Archived}
+	name := family.Name
+	if k.assetName != nil {
+		name = k.assetName(record)
+	}
+	return publication.Family{ID: family.ID, Name: name, State: family.State, Version: family.Version, Published: family.Published, Versions: slices.Clone(family.Versions), Archived: family.Archived}
 }
 
 func (k *resourceKind[T, D]) setFamily(record *T, next publication.Family) {
@@ -203,7 +208,7 @@ func (k *resourceKind[T, D]) inventory(b *Build) ([]T, error) {
 }
 
 func (k *resourceKind[T, D]) installRecord(b *Build, c platform.Caller, f T) error {
-	family := definitionFamilyOf(f)
+	family := k.family(f)
 	if k.beforeInstall != nil {
 		k.beforeInstall(b)
 	}
@@ -232,7 +237,7 @@ func (k *resourceKind[T, D]) definition(b *Build, name string, version int) (D, 
 			ordinal := b.definitionAssetVersion(asset, k.assetKind(), k.prefix)
 			if ordinal == version && version > 0 {
 				var d D
-				valid := json.Unmarshal(asset.Body, &d) == nil && asset.ContractVersion == k.contractOf(d) && definitionFamilyOf(k.fromDeclaration(d)).Name == name && d.Check() == nil
+				valid := json.Unmarshal(asset.Body, &d) == nil && asset.ContractVersion == k.contractOf(d) && k.family(k.fromDeclaration(d)).Name == name && d.Check() == nil
 				return d, ordinal, valid
 			}
 		}
@@ -259,7 +264,7 @@ func (k *resourceKind[T, D]) fromAsset(b *Build, asset platform.ReleaseAsset) (T
 	var zero T
 	version := b.definitionAssetVersion(asset, k.assetKind(), k.prefix)
 	var d D
-	if version == 0 || json.Unmarshal(asset.Body, &d) != nil || asset.ContractVersion != k.contractOf(d) || d.Check() != nil || definitionFamilyOf(k.fromDeclaration(d)).Name != asset.Ref.Name || k.admit != nil && !k.admit(d) {
+	if version == 0 || json.Unmarshal(asset.Body, &d) != nil || asset.ContractVersion != k.contractOf(d) || d.Check() != nil || k.family(k.fromDeclaration(d)).Name != asset.Ref.Name || k.admit != nil && !k.admit(d) {
 		return zero, fmt.Errorf("invalid builder %s asset %s", k.label(), asset.Ref)
 	}
 	f := k.fromDeclaration(d)
@@ -274,7 +279,7 @@ func (k *resourceKind[T, D]) installAsset(b *Build, asset platform.ReleaseAsset)
 	if err != nil {
 		return err
 	}
-	if _, exists := k.records(b)[definitionFamilyOf(f).Name]; exists {
+	if _, exists := k.records(b)[k.family(f).Name]; exists {
 		return fmt.Errorf("%s asset %s is already installed", k.noun, asset.Ref)
 	}
 	return k.installRecord(b, platform.Caller{Replaying: true}, f)

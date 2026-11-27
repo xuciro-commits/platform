@@ -198,12 +198,13 @@ func (ds Describer) DescribeOwnedAsset(asset platform.ReleaseAsset) (platform.Re
 	}
 	for _, use := range uses {
 		protocol, _, _ := strings.Cut(use, "#")
-		name, _, _ := strings.Cut(protocol, "/")
+		name := runtimeprotocol.ContractAssetNameForID(protocol)
 		ref := platform.AssetRef{App: asset.Ref.App, Kind: platform.AssetProtocol, Name: name}
 		if owner, ok := ds.host.App(asset.Ref.App).(interface {
 			ProtocolContracts() []runtimeprotocol.ProtocolContract
 		}); ok && slices.ContainsFunc(owner.ProtocolContracts(), func(c runtimeprotocol.ProtocolContract) bool { return c.ID() == protocol }) {
 			ref.Kind = runtimeprotocol.AssetContract
+			ref.Name = runtimeprotocol.ContractAssetNameForID(protocol)
 		} else if provider, ok := ds.host.ProtocolProvider(protocol); ok {
 			ref.App = provider
 		}

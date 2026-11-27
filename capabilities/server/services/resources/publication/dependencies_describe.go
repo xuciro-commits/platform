@@ -19,11 +19,20 @@ func (resolver Resolver) describeAssetFresh(asset platform.ReleaseAsset, histori
 	if _, err := CanonicalAssetBody(asset.Body); err != nil {
 		return out, fmt.Errorf("%s: %w", asset.Ref, err)
 	}
-	var identity struct{ Name, Type, Schema string }
+	var identity struct {
+		Name, Type, Schema string
+		Major, Version     int
+	}
 	if err := json.Unmarshal(asset.Body, &identity); err != nil {
 		return out, err
 	}
 	name := identity.Name
+	if asset.Ref.Kind == runtimeprotocol.AssetContract {
+		name = runtimeprotocol.ContractAssetName(identity.Name, identity.Major)
+	}
+	if asset.Ref.Kind == platform.AssetProtocol {
+		name = runtimeprotocol.ContractAssetName(identity.Name, identity.Version)
+	}
 	if asset.Ref.Kind == platform.AssetObject {
 		name = identity.Type
 	}
@@ -367,7 +376,7 @@ func (resolver Resolver) describeAssetFresh(asset platform.ReleaseAsset, histori
 			}
 		}
 		if !historical || len(asset.Requires) != 0 {
-			name, _, _ := strings.Cut(implementation.Contract, "/")
+			name := runtimeprotocol.ContractAssetNameForID(implementation.Contract)
 			add(platform.AssetRef{App: asset.Ref.App, Kind: runtimeprotocol.AssetContract, Name: name})
 		}
 	case runtimeprotocol.AssetContract:

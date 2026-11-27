@@ -242,11 +242,13 @@ func (b *Build) trackResource(c platform.Caller, r *pb.ChangeRecord, typ, id str
 		Published string `json:"published"`
 		Kind      string `json:"kind"`
 		Variant   string `json:"variant"`
+		Major     int    `json:"major"`
 	}
 	if json.Unmarshal(raw, &draft) != nil {
 		return
 	}
-	ref, err := BranchResource(typ, qualified(namespaceOf(raw), draft.Name))
+	name := ResourceAssetName(typ, namespaceOf(raw), draft.Name, draft.Major)
+	ref, err := BranchResource(typ, name)
 	if err != nil {
 		return
 	}
@@ -347,6 +349,7 @@ func (b *Build) saveResource(c platform.Caller, s *pb.Submission, now time.Time)
 			platform.Record
 			Name      string `json:"name"`
 			Namespace string `json:"namespace"`
+			Major     *int   `json:"major"`
 		}
 		raw, refusal := c.ReadRecord(typ, id, now)
 		if refusal != nil && refusal.Code != pb.ErrorCode_ERROR_CODE_NOT_FOUND {
@@ -361,6 +364,7 @@ func (b *Build) saveResource(c platform.Caller, s *pb.Submission, now time.Time)
 		var meta struct {
 			Name      string `json:"name"`
 			Namespace string `json:"namespace"`
+			Major     *int   `json:"major"`
 		}
 		if json.Unmarshal(input.Spec, &meta) != nil {
 			return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "The resource definition is one JSON object")
@@ -394,7 +398,21 @@ func (b *Build) saveResource(c platform.Caller, s *pb.Submission, now time.Time)
 		if typ == ProductType && id != meta.Name {
 			return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "A product record ID must match its API name")
 		}
-		ref, err := BranchResource(typ, qualified(meta.Namespace, meta.Name))
+		name := qualified(meta.Namespace, meta.Name)
+		if typ == ContractType {
+			major := 0
+			if prior.Major != nil {
+				major = *prior.Major
+			}
+			if meta.Major != nil {
+				if exists && *meta.Major != major {
+					return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "A contract major version is immutable")
+				}
+				major = *meta.Major
+			}
+			name = ResourceAssetName(typ, meta.Namespace, meta.Name, major)
+		}
+		ref, err := BranchResource(typ, name)
 		if err != nil {
 			return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, err.Error())
 		}

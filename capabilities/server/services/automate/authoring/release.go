@@ -174,7 +174,7 @@ func FlowReleaseAsset(app string, saved runtimeprotocol.Process, sourceVersion s
 			}
 			actions = append(actions, platform.AssetRef{App: owner, Kind: platform.AssetAction, Name: name})
 			if step.Protocol != "" {
-				protocol, _, _ := strings.Cut(step.Protocol, "/")
+				protocol := runtimeprotocol.ContractAssetNameForID(step.Protocol)
 				dependencies = append(dependencies, platform.AssetRef{App: owner, Kind: platform.AssetProtocol, Name: protocol})
 			}
 		}

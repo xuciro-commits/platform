@@ -207,11 +207,12 @@ func (h ResourceBootstrap) Initialize() error {
 			Published string `json:"published"`
 			Kind      string `json:"kind"`
 			Variant   string `json:"variant"`
+			Major     int    `json:"major"`
 		}
 		if err := json.Unmarshal(raw, &meta); err != nil {
 			return err
 		}
-		ref, err := BranchResource(draft.Type, qualified(meta.Namespace, meta.Name))
+		ref, err := BranchResource(draft.Type, ResourceAssetName(draft.Type, meta.Namespace, meta.Name, meta.Major))
 		if err != nil {
 			return err
 		}

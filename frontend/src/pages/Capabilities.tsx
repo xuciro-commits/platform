@@ -114,11 +114,12 @@ export function CapabilitiesList() {
       definition={{
         title: "Capabilities",
         about: "Manage shared capabilities for this workspace. Choose a provider to enable its features across connected applications.",
-        rows: (items) => items,
+        rows: (items) => [...items].sort((a, b) => a.id.localeCompare(b.id, undefined, { numeric: true })),
         id: (item) => item.id,
         link: (item) => `/admin/capabilities/${encodeURIComponent(item.id)}`,
         columns: [
           { key: "title", header: "Capability", text: (item) => t(item.title || item.id) },
+          { key: "contract", header: "Contract", width: 220, text: (item) => item.id },
           {
             key: "status",
             header: "Status",
@@ -190,7 +191,7 @@ export function CapabilityPage({ id }: { id: string }) {
   const chosen = selected && protocol.providers.includes(selected) ? selected : protocol.bound || protocol.providers[0] || "";
   const singleProvider = protocol.providers.length === 1 ? protocol.providers[0] : undefined;
   const consumerNames = protocol.consumers.map(nameOf).join(", ");
-  const title = protocol.title || protocol.id;
+  const title = protocol.title ? `${t(protocol.title)} · v${protocol.id.split("/").pop()}` : protocol.id;
   const connectors = protocol.implementations ?? [];
   const setupRows = setups.status === "ready" ? (setups.data.records as ConnectorSetupRecord[]) : [];
   const pendingCalls = calls.status === "ready" ? (calls.data.records as CapabilityCallRecord[]).filter((call) => call.protocol === id && call.state === "unknown" && call.effect) : [];

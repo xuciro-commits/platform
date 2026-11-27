@@ -41,6 +41,23 @@ type ContractAction struct {
 	Payload     []platform.Field `json:"payload,omitempty"`
 }
 
+func ContractAssetName(name string, major int) string {
+	if major <= 1 {
+		return name
+	}
+	return fmt.Sprintf("%s@%d", name, major)
+}
+
+func (c ProtocolContract) AssetName() string { return ContractAssetName(c.Name, c.Major) }
+
+func ContractAssetNameForID(id string) string {
+	name, major, ok := strings.Cut(id, "/")
+	if !ok || major == "1" {
+		return name
+	}
+	return name + "@" + major
+}
+
 func (c ProtocolContract) ID() string { return fmt.Sprintf("%s/%d", c.Name, c.Major) }
 
 func (c ProtocolContract) Protocol() platform.Protocol {

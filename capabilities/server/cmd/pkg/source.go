@@ -220,6 +220,18 @@ func refName(kind string, body *object) string {
 		return "build." + text(body, "name")
 	case "action":
 		return text(body, "schema")
+	case "protocol":
+		var descriptor platform.ProtocolReleaseDescriptor
+		if json.Unmarshal([]byte(stringify(body)), &descriptor) == nil {
+			return protocol.ContractAssetName(descriptor.Name, descriptor.Version)
+		}
+		return ""
+	case "contract":
+		var contract protocol.ProtocolContract
+		if json.Unmarshal([]byte(stringify(body)), &contract) == nil {
+			return contract.AssetName()
+		}
+		return ""
 	}
 	return text(body, "name")
 }
@@ -241,6 +253,11 @@ func layout(assets []resource) (map[platform.AssetRef]string, error) {
 			directory = "assets/" + string(ref.Kind)
 		}
 		path := directory + "/" + fileName(ref.Name) + ".yaml"
+		if ref.Kind == protocol.AssetContract || ref.Kind == platform.AssetProtocol {
+			if base, major, versioned := strings.Cut(ref.Name, "@"); versioned {
+				path = directory + "/" + fileName(base) + "@" + fileName(major) + ".yaml"
+			}
+		}
 		switch ref.Kind {
 		case "object":
 			path = "objects/" + objects[ref.Name] + "/object.yaml"

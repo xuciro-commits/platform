@@ -37,11 +37,12 @@ func (b *Build) DecodeAssetInstallation(schema string, image json.RawMessage) (p
 		platform.Record
 		Name      string `json:"name"`
 		Namespace string `json:"namespace"`
+		Major     int    `json:"major"`
 	}
 	if !descriptor.acceptedPublication || json.Unmarshal(image, &record) != nil || record.ID == "" {
 		return protocol.AssetInstallation{}, fmt.Errorf("invalid release publication row")
 	}
-	ref, err := draftAssetRef(descriptor.typ, qualified(record.Namespace, record.Name))
+	ref, err := BranchResource(descriptor.typ, ResourceAssetName(descriptor.typ, record.Namespace, record.Name, record.Major))
 	if err != nil {
 		return protocol.AssetInstallation{}, err
 	}

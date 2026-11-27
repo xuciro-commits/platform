@@ -1,6 +1,7 @@
 package authoring
 
 import (
+	"platformserver/kernel/protocol"
 	"platformserver/platform"
 	branchowner "platformserver/services/resources/merge/owner"
 )
@@ -31,6 +32,13 @@ const (
 func BranchDraftType(typ string) bool {
 	_, found := resourceDescriptorOfType(typ)
 	return found
+}
+
+func ResourceAssetName(typ, namespace, name string, major int) string {
+	if typ == ContractType {
+		return protocol.ContractAssetName(name, major)
+	}
+	return qualified(namespace, name)
 }
 
 func BranchResource(typ, name string) (platform.AssetRef, error) {

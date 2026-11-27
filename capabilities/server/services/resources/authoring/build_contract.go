@@ -14,11 +14,12 @@ var contractKind = resourceKind[ontology.ContractRecord, ontology.ContractDefini
 	typ: ContractType, prefix: "contract", noun: "contract", title: "Capability contract", plural: "Capability contracts", capability: "contracts", joint: true,
 	description: "A versioned interface of a capability: its actions, reads and events. Objects implement it through protocol bindings; the tenant chooses which implementation serves it.",
 	transition:  "Publish this capability contract as its next retained version.",
-	immutable:   "A published capability contract keeps its name, major version, actions and their parameters, reads and events; a breaking change needs a new contract name",
+	immutable:   "A published capability contract keeps its name, major version, actions and their parameters, reads and events; a breaking change needs a new major version",
 	records:     func(b *Build) map[string]ontology.ContractRecord { return b.contracts },
 	validate: func(b *Build, c ontology.ContractRecord) (ontology.ContractRecord, error) {
 		return c, b.checkContract(protocol.ProtocolContract(c.Definition()), true)
 	},
+	assetName:       func(c ontology.ContractRecord) string { return protocol.ContractAssetName(c.Name, c.Major) },
 	identity:        func(a, b ontology.ContractRecord) bool { return a.Name == b.Name && a.Major == b.Major },
 	stable:          func(a, b ontology.ContractRecord) bool { return a.KeepsShape(b) },
 	guarantees:      func(a, b ontology.ContractRecord) bool { return a.KeepsShape(b) },

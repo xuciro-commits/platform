@@ -162,7 +162,7 @@ func (o *Owner) bindConfirmation(spec *platform.Confirmation, subject string) (c
 			if err != nil {
 				return out, err
 			}
-			name, _, _ := strings.Cut(party.Protocol, "/")
+			name := runtimeprotocol.ContractAssetNameForID(party.Protocol)
 			binding.Protocol = &platform.AssetRef{App: p.Provider, Kind: platform.AssetProtocol, Name: name}
 			binding.Action = &platform.AssetRef{App: p.Provider, Kind: platform.AssetAction, Name: p.Action}
 			if p.CompensateAction != "" {

@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 
+	runtimeprotocol "platformserver/kernel/protocol"
 	"platformserver/platform"
 	pageowner "platformserver/services/apps/pages"
 	"platformserver/services/resources/publication"
@@ -156,7 +157,7 @@ func ObjectDefinitions(app string, info platform.RecordTypeInfo, actions []platf
 		for _, read := range protocol.Reads {
 			protocol.ReadBindings[read] = object
 		}
-		definitions = append(definitions, platform.Definition{Ref: platform.AssetRef{App: app, Kind: platform.AssetProtocol, Name: protocol.Name}, Source: "tenant", Version: "1", ContractVersion: protocol.Version, Protocol: &protocol})
+		definitions = append(definitions, platform.Definition{Ref: platform.AssetRef{App: app, Kind: platform.AssetProtocol, Name: runtimeprotocol.ContractAssetName(protocol.Name, protocol.Version)}, Source: "tenant", Version: "1", ContractVersion: protocol.Version, Protocol: &protocol})
 	}
 	return definitions
 }

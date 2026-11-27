@@ -191,7 +191,7 @@ func (h CodeDefinitions) Register() error {
 			if err != nil {
 				return err
 			}
-			if err := add(platform.Definition{Ref: platform.AssetRef{App: manifest.ID, Kind: platform.AssetProtocol, Name: protocol.Name}, Source: "code", Version: manifest.Version, ContractVersion: protocol.Version, Protocol: &protocol}); err != nil {
+			if err := add(platform.Definition{Ref: platform.AssetRef{App: manifest.ID, Kind: platform.AssetProtocol, Name: runtimeprotocol.ContractAssetName(protocol.Name, protocol.Version)}, Source: "code", Version: manifest.Version, ContractVersion: protocol.Version, Protocol: &protocol}); err != nil {
 				return err
 			}
 		}

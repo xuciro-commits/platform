@@ -148,10 +148,11 @@ func (w Workspace) RID(typ, id string, spec map[string]json.RawMessage) string {
 	if json.Unmarshal(spec["name"], &named) == nil && named != "" {
 		name = named
 	}
-	if namespace := ""; json.Unmarshal(spec["namespace"], &namespace) == nil && namespace != "" {
-		name = namespace + "." + name
-	}
-	ref, err := build.BranchResource(typ, name)
+	var namespace string
+	var major int
+	_ = json.Unmarshal(spec["namespace"], &namespace)
+	_ = json.Unmarshal(spec["major"], &major)
+	ref, err := build.BranchResource(typ, build.ResourceAssetName(typ, namespace, name, major))
 	if err != nil {
 		return ""
 	}

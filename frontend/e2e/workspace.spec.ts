@@ -466,6 +466,7 @@ test("capabilities: binding a capability contract makes dependent entries appear
   const suffix = Date.now().toString(36);
   const contractName = `trunkcall.${suffix}`;
   const contractId = `${contractName}/1`;
+  const secondContract = contractName + "/2";
   const providerObj = `phone${suffix}`;
   const callerObj = `caller${suffix}`;
   const callerType = `sales.${callerObj}`;
@@ -499,6 +500,19 @@ test("capabilities: binding a capability contract makes dependent entries appear
     actions: [{ name: "dial", title: "Dial", payload: dialPayload }],
   });
   await submit(page, "build.contract.publish", "build.contract", `CONTRACT-${suffix}`, {});
+
+  await submit(page, "build.object.create", "build.object", "PHONE2-" + suffix, {
+    project: "sales", name: "phone2" + suffix, title: "Trunk Phone V2", plural: "Trunk Phones V2", display: "number",
+    fields: [{ name: "number", title: "Number", type: "text", required: true }],
+    protocols: [{ name: contractName, version: 2, actions: { dial: "edit" } }],
+    access: [{ role: "user", read: "all", create: true, edit: true }],
+  });
+  await submit(page, "build.object.publish", "build.object", "PHONE2-" + suffix, {});
+  await submit(page, "build.contract.create", "build.contract", "CONTRACT2-" + suffix, {
+    project: "sales", name: contractName, major: 2, title: "Trunk Call " + suffix,
+    actions: [{ name: "dial", title: "Dial", payload: dialPayload }],
+  });
+  await submit(page, "build.contract.publish", "build.contract", "CONTRACT2-" + suffix, {});
 
   await submit(page, "build.object.create", "build.object", `CALLER-${suffix}`, {
     project: "sales",
@@ -542,7 +556,9 @@ test("capabilities: binding a capability contract makes dependent entries appear
 
   const main = page.getByRole("main");
   await open(page, "Admin", "Capabilities");
-  const row = main.getByRole("row").filter({ hasText: `Trunk Call ${suffix}` });
+  const row = main.getByRole("row").filter({ hasText: contractId });
+  const row2 = main.getByRole("row").filter({ hasText: secondContract });
+  await expect(row2).toContainText("Not enabled");
   await expect(row).toContainText("Not enabled");
 
   await page.goto(`/ontology/objects/${encodeURIComponent(callerType)}/CALL-1`);
@@ -550,12 +566,16 @@ test("capabilities: binding a capability contract makes dependent entries appear
   await expect(page.getByRole("button", { name: "Place call", exact: true })).toHaveCount(0);
 
   await open(page, "Admin", "Capabilities");
-  await main.getByRole("link", { name: `Trunk Call ${suffix}`, exact: true }).click();
-  await expect(page.getByRole("heading", { level: 1, name: `Trunk Call ${suffix}`, exact: true })).toBeVisible();
+  await row.getByRole("link", { name: `Trunk Call ${suffix}`, exact: true }).click();
+  await expect(page.getByRole("heading", { level: 1, name: `Trunk Call ${suffix} · v1`, exact: true })).toBeVisible();
   await expect(main.getByText("This capability is not enabled yet", { exact: true })).toBeVisible();
   await main.getByRole("button", { name: "Enable Build", exact: true }).click();
   await expect(main.getByText(/Currently provided by Build/)).toBeVisible();
 
+  await page.goto("/admin/capabilities/" + encodeURIComponent(secondContract));
+  await expect(page.getByRole("heading", { level: 1, name: "Trunk Call " + suffix + " · v2", exact: true })).toBeVisible();
+  await main.getByRole("button", { name: "Enable Build", exact: true }).click();
+  await expect(main.getByText(/Currently provided by Build/)).toBeVisible();
   await page.goto(`/ontology/objects/${encodeURIComponent(callerType)}/CALL-1`);
   await expect(page.getByRole("button", { name: "Place call", exact: true })).toBeVisible();
 
@@ -565,6 +585,8 @@ test("capabilities: binding a capability contract makes dependent entries appear
   await expect(confirm).toBeVisible();
   await confirm.getByRole("button", { name: "Disable", exact: true }).click();
   await expect(main.getByText("This capability is not enabled yet", { exact: true })).toBeVisible();
+  await page.goto("/admin/capabilities/" + encodeURIComponent(secondContract));
+  await expect(main.getByText(/Currently provided by Build/)).toBeVisible();
 
   await page.goto(`/ontology/objects/${encodeURIComponent(callerType)}/CALL-1`);
   await expect(page.getByRole("heading", { level: 1, name: `Lead ${suffix}` })).toBeVisible();
