@@ -83,11 +83,19 @@ func ParseImport(info platform.RecordTypeInfo, data []byte, currency string, ref
 func fromCSV(f platform.FieldInfo, value, currency string, refer func(platform.FieldInfo, string) (string, bool)) (any, error) {
 	switch f.Type {
 	case "choice":
-		for i, title := range f.ChoiceTitles {
-			if i < len(f.Choices) && !slices.Contains(f.Choices, value) && strings.EqualFold(title, value) {
-				return f.Choices[i], nil
+		if slices.Contains(f.Choices, value) {
+			return value, nil
+		}
+		var matches []string
+		for i, key := range f.Choices {
+			if strings.EqualFold(key, value) || (i < len(f.ChoiceTitles) && strings.EqualFold(f.ChoiceTitles[i], value)) {
+				matches = append(matches, key)
 			}
 		}
+		if len(matches) == 1 {
+			return matches[0], nil
+		}
+		return nil, fmt.Errorf("unknown or ambiguous choice for %s", f.Name)
 	case "reference":
 		id, ok := refer(f, value)
 		if !ok {

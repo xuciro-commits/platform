@@ -16,6 +16,7 @@ export type PlanField = {
   source: "own" | "base";
   ref?: string;
   required?: boolean;
+  choices?: { key: string; labels: string[] }[];
 };
 
 export type PlanLine = {
@@ -195,6 +196,22 @@ function writableFields(described: Described) {
   });
 }
 
+function choiceOptions(field: Api.FieldInfo): PlanField["choices"] {
+  if (field.type !== "choice") return undefined;
+  return field.choices?.map((key, index) => {
+    const title = field.choiceTitles?.[index] ?? key;
+    return { key, labels: [title, t(title)] };
+  });
+}
+
+export function importChoice(raw: string, options?: PlanField["choices"]): string {
+  if (!options?.length || !raw.trim()) return raw;
+  const value = raw.trim();
+  if (options.some((option) => option.key === value)) return value;
+  const matches = options.filter((option) => [option.key, ...option.labels].some((label) => plainKey(label) === plainKey(value)));
+  return matches.length === 1 ? matches[0].key : raw;
+}
+
 function prefixBaseResult(result: Api.ImportRow): Api.ImportRow {
   const outcome = result.outcome.startsWith(unreadable)
     ? `${unreadable}base.${result.outcome.slice(unreadable.length)}`
@@ -230,6 +247,7 @@ export function buildObjectPlan(described: Described, byType: Map<string, Descri
         source: "base",
         ref: baseDisplay.ref,
         required: baseDisplay.required,
+        choices: choiceOptions(baseDisplay),
       });
     }
     for (const field of writableFields(described)) {
@@ -242,6 +260,7 @@ export function buildObjectPlan(described: Described, byType: Map<string, Descri
         source: "own",
         ref: field.ref,
         required: field.required,
+        choices: choiceOptions(field),
       });
     }
     for (const field of baseWritable) {
@@ -256,6 +275,7 @@ export function buildObjectPlan(described: Described, byType: Map<string, Descri
         source: "base",
         ref: field.ref,
         required: field.required,
+        choices: choiceOptions(field),
       });
     }
   } else {
@@ -268,6 +288,7 @@ export function buildObjectPlan(described: Described, byType: Map<string, Descri
         source: "own",
         ref: field.ref,
         required: field.required,
+        choices: choiceOptions(field),
       });
     }
   }
@@ -288,7 +309,7 @@ export function buildObjectPlan(described: Described, byType: Map<string, Descri
         if (preview && spec?.ref && !spec.required && raw.trim() && pendingRefs.get(spec.ref)?.has(plainKey(raw))) {
           return "";
         }
-        return raw;
+        return importChoice(raw, spec?.choices);
       };
       if (!base) {
         const rows = lines.map((line) => Object.fromEntries(used.map(({ name, index }) => [name, cellValue(line, byKey.get(name), index)])));
@@ -334,7 +355,7 @@ export function buildObjectPlan(described: Described, byType: Map<string, Descri
       }
       const needBase = lines.filter((line) => !line.baseId);
       if (needBase.length > 0) {
-        const baseRows = needBase.map((line) => Object.fromEntries(baseUsed.map(({ spec, index }) => [spec.field, line.cells[index] ?? ""])));
+        const baseRows = needBase.map((line) => Object.fromEntries(baseUsed.map(({ spec, index }) => [spec.field, importChoice(line.cells[index] ?? "", spec.choices)])));
         const baseAnswered = await postImportCsv(base.type, baseRows, false);
         needBase.forEach((line, idx) => {
           const res = baseAnswered[idx];
@@ -346,7 +367,7 @@ export function buildObjectPlan(described: Described, byType: Map<string, Descri
       if (readyExt.length > 0) {
         const extRows = readyExt.map((line) => ({
           base: line.baseId ?? baseIds.get(line.row) ?? "",
-          ...Object.fromEntries(ownUsed.map(({ spec, index }) => [spec.field, line.cells[index] ?? ""])),
+          ...Object.fromEntries(ownUsed.map(({ spec, index }) => [spec.field, importChoice(line.cells[index] ?? "", spec.choices)])),
         }));
         const extAnswered = await postImportCsv(described.type, extRows, false);
         readyExt.forEach((line, idx) => { if (extAnswered[idx]) results.set(line.row, extAnswered[idx]); });
