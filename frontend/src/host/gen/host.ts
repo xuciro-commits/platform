@@ -211,6 +211,8 @@ export type Action = {
   optionalUses?: string[];
   unconnected?: string[];
   needsApproval?: boolean;
+  ask?: boolean;
+  askReason?: string;
   new?: boolean;
   idPrefix?: string;
   automation?: boolean;
@@ -727,6 +729,11 @@ export type ApprovalStep = {
   due?: string;
   delegates?: Record<string, string>;
   decidedBy?: Record<string, string>;
+};
+
+export type AskAction = {
+  schema: string;
+  reason?: string;
 };
 
 export type AssetBinding = {
@@ -2103,6 +2110,7 @@ export type EntityInfo = {
   color?: string;
   fields: FieldInfo[];
   standard: string[];
+  ask?: AskAction[];
   implements?: string[];
   extends?: string;
   lifecycle?: LifecycleInfo;
@@ -3046,6 +3054,7 @@ export type MediaSetVersion = {
 };
 
 export type Member = {
+  aiCaller?: unknown;
   markings?: string[];
   declassifications?: string[];
   id: string;
@@ -3066,6 +3075,7 @@ export type MemberOption = {
 };
 
 export type MemberView = {
+  aiCaller?: unknown;
   markings?: string[];
   declassifications?: string[];
   id: string;
@@ -5850,6 +5860,8 @@ export type TransitionInfo = {
   title: string;
   from: string[];
   to: string[];
+  ask?: boolean;
+  askReason?: string;
 };
 
 export type TxnCall = {

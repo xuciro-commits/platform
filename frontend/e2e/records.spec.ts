@@ -1,5 +1,6 @@
 import { type Page, expect, test } from "@playwright/test";
-import { signIn, open, property, metadata, edit, expectRevision } from "./support";
+import type { Api } from "../src/host";
+import { signIn, open, property, metadata, edit, expectRevision, submit } from "./support";
 
 test.describe.serial("opportunities and records", () => {
 test("records: open a list, open a record, change a field in place", async ({ page }) => {
@@ -817,6 +818,97 @@ test("inbox: work assigned on a record is finished from the inbox", async ({ pag
   await pane.getByRole("button", { name: "Done", exact: true }).click();
   await page.getByRole("link", { name: /Closed/ }).click();
   await expect(page.getByRole("row", { name: /Call the plant manager/ })).toBeVisible();
+
+  const suffix = Date.now().toString(36);
+  const askObj = `asknotice${suffix}`;
+  const askType = `sales.${askObj}`;
+  await submit(page, "build.object.create", "build.object", `ASK-${suffix}`, {
+    project: "sales",
+    name: askObj,
+    title: "Customer notice",
+    plural: "Customer notices",
+    display: "title",
+    fields: [
+      { name: "title", title: "Title", type: "text", required: true, search: true },
+      { name: "sentmessage", title: "Sent message", type: "text" },
+    ],
+    states: [{ name: "open", title: "Open", tone: "info" }],
+    access: [{ role: "user", read: "all", create: true, edit: true, archive: true }],
+    ask: { archive: "Removes this notice from active lists." },
+    actionTypes: [{ ref: { app: "build", kind: "action", name: `${askType}.send` } }],
+  });
+  await submit(page, "build.actiontype.create", "build.actiontype", `ASK-SEND-${suffix}`, {
+    project: "sales",
+    name: `${askType}.send`,
+    object: askType,
+    definition: {
+      name: "send",
+      title: "Send customer notice",
+      from: ["open"],
+      ask: "Sends an outbound notice to the customer.",
+      inputs: [{ name: "message", title: "Message", type: "text", required: true }],
+      transaction: {
+        subject: askType,
+        steps: [{
+          name: "write",
+          kind: "update",
+          target: { type: askType, id: "$subject" },
+          changes: [{ field: "sentmessage", expr: { kind: "text", ref: "input.message" } }],
+        }],
+      },
+    },
+  });
+  await submit(page, "build.actiontype.publish", "build.actiontype", `ASK-SEND-${suffix}`, {});
+  await submit(page, "build.object.publish", "build.object", `ASK-${suffix}`, {});
+  await submit(page, `${askType}.create`, askType, "N-1", { title: "Order #88" });
+
+  const session = await page.evaluate(() => JSON.parse(sessionStorage.getItem("platform:session")!) as { token: string; tenant: string; principalId?: string });
+  const meResp = await page.request.get("/v1/me", { headers: { authorization: `Bearer ${session.token}`, "platform-tenant": session.tenant } });
+  const me = await meResp.json() as { principalId: string };
+  const actionsResp = await page.request.get("/v1/actions", { headers: { authorization: `Bearer ${session.token}`, "platform-tenant": session.tenant } });
+  const allActions = await actionsResp.json() as Api.Action[];
+  const sendAction = allActions.find((entry) => entry.schema === `${askType}.send`);
+  const aiHeaders: Record<string, string> = {
+    authorization: `Bearer ${session.token}`,
+    "platform-tenant": session.tenant,
+    "Platform-AI-Caller": JSON.stringify({ kind: "mcp", name: "claude-code", tool: `${askType}.send` }),
+  };
+  if (sendAction?.schemaVersion?.version) aiHeaders["Platform-Schema-Version"] = sendAction.schemaVersion.version;
+  const aiRes = await page.request.post("/v1/submissions", {
+    headers: aiHeaders,
+    data: {
+      tenantId: session.tenant,
+      principalId: me.principalId,
+      authority: "build",
+      idempotencyKey: `ask-e2e-${suffix}`,
+      target: { type: askType, id: "N-1" },
+      schema: { name: `${askType}.send`, version: 1 },
+      payload: Buffer.from(JSON.stringify({ message: "Confirm delivery window" })).toString("base64"),
+    },
+  });
+  expect(aiRes.ok()).toBeTruthy();
+
+  const beforeRec = await (await page.request.get(`/v1/records/${encodeURIComponent(askType)}/N-1`, {
+    headers: { authorization: `Bearer ${session.token}`, "platform-tenant": session.tenant },
+  })).json() as Api.RecordView;
+  expect(beforeRec.values?.sentmessage ?? "").toBe("");
+
+  await page.goto("/home/inbox");
+  const askRow = page.getByRole("row", { name: /Send customer notice/ });
+  await expect(askRow).toBeVisible();
+  await askRow.click();
+  await expect(pane.getByText("Question", { exact: true })).toBeVisible();
+  await expect(pane.getByText("Sends an outbound notice to the customer.", { exact: true })).toBeVisible();
+  await expect(pane.getByText("Confirm delivery window", { exact: true })).toBeVisible();
+  await pane.getByRole("button", { name: "Approve", exact: true }).click();
+
+  await page.getByRole("link", { name: /Closed/ }).click();
+  await expect(page.getByRole("row", { name: /Send customer notice/ })).toBeVisible();
+
+  const afterRec = await (await page.request.get(`/v1/records/${encodeURIComponent(askType)}/N-1`, {
+    headers: { authorization: `Bearer ${session.token}`, "platform-tenant": session.tenant },
+  })).json() as Api.RecordView;
+  expect(afterRec.values?.sentmessage).toBe("Confirm delivery window");
 });
 
 

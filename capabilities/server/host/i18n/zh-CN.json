@@ -1838,7 +1838,7 @@
   "query parent input needs a readable reference or record source": "查询的父级输入需要可读的引用或记录来源",
   "Query settings": "查询设置",
   "Query version": "查询版本",
-  "Question": "问题",
+  "Question": "提问",
   "Queue a failed event delivery again, or run a scheduled job now.": "重新排队一次失败的事件投递，或立即运行一个定时任务。",
   "queued": "排队中",
   "Rack (default 0)": "机架号（默认 0）",
@@ -3003,5 +3003,14 @@
   "ymd": "年月日",
   "ymd, dmy or mdy": "ymd（年月日）、dmy（日月年）或 mdy（月日年）",
   "You are invited to {0}": "您受邀加入 {0}",
-  "You take over from {0}": "您接替 {0}"
+  "You take over from {0}": "您接替 {0}",
+  "Ask before acting": "先问再执行",
+  "Hold an AI submission as a question in the requester's inbox until answered.": "将 AI 的提交暂存为发起人收件箱中的提问，待回答后再处理。",
+  "Answer a question from an agent; approving an ask-first action runs it once with the original caller and parameters.": "回答智能体的提问；批准先问动作后，将以原调用者和原参数执行一次。",
+  "The question needs its original authorised member": "提问须由原获授权成员发起",
+  "A person must answer an agent question in the inbox": "智能体提问须由成员在收件箱中回答",
+  "Invalid Platform-AI-Caller header": "Platform-AI-Caller 请求头格式无效",
+  "Answered": "已回答",
+  "Expired": "已过期",
+  "Chosen option": "所选选项"
 }

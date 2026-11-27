@@ -131,7 +131,7 @@ func CompatibleObjectSchema(previous, next Object) bool {
 		object.ObjectView, object.View = nil, nil
 		object.State, object.Installed, object.Published = "", "", ""
 		object.ExtensionSource, object.SchemaVersions, object.RetainedFlowClosures = nil, nil, nil
-		object.ActionTypes, object.Actions = nil, nil
+		object.ActionTypes, object.Actions, object.Ask = nil, nil, nil
 		object.Fields = nil
 		object.States = slices.Clone(object.States)
 		for index := range object.States {
@@ -422,6 +422,7 @@ func ValidateObjectInstallation(c platform.Caller, record Object, env ObjectInst
 	if previous.Name != "" {
 		prior, next := previous, record
 		prior.View, next.View = nil, nil
+		prior.Ask, next.Ask = nil, nil
 		oldBody, err := DefinitionBody(prior, previous.Type())
 		if err != nil {
 			return err

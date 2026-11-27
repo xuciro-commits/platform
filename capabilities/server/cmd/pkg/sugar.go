@@ -785,7 +785,7 @@ func sortResources(list []resource) {
 }
 
 var (
-	worded      = map[string]bool{"title": true, "plural": true, "description": true, "help": true, "oneOf": true, "message": true, "body": true, "exit": true, "label": true}
+	worded      = map[string]bool{"title": true, "plural": true, "description": true, "help": true, "oneOf": true, "message": true, "body": true, "exit": true, "label": true, "ask": true}
 	systemRoles = map[string]bool{"": true, "*": true, "builder": true, "admin": true, "auditor": true}
 )
 
@@ -799,8 +799,12 @@ func wording(value any, key, within string, into map[string]bool) {
 				}
 			}
 		}
+		nextWithin := within
+		if key == "ask" {
+			nextWithin = "ask"
+		}
 		for _, k := range v.order() {
-			wording(v.values[k], k, within, into)
+			wording(v.values[k], k, nextWithin, into)
 		}
 	case []any:
 		for _, item := range v {
@@ -809,7 +813,7 @@ func wording(value any, key, within string, into map[string]bool) {
 	case string:
 		trimmed := strings.TrimSpace(v)
 		switch {
-		case (worded[key] || key == "group" && within == "fields") && trimmed != "":
+		case (worded[key] || within == "ask" || key == "group" && within == "fields") && trimmed != "":
 			into[v] = true
 		case (within == "roles" || within == "read" || within == "write" || key == "role" && (within == "access" || within == "levels")) && !systemRoles[trimmed]:
 			into[trimmed] = true

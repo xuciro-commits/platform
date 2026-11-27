@@ -103,5 +103,15 @@
   "picked up": "已拿起",
   "position": "位置",
   "records imported": "条记录已导入",
-  "selected": "项已选"
+  "selected": "项已选",
+  "Question": "提问",
+  "Question could not be loaded": "无法加载提问",
+  "Recommended": "推荐",
+  "Parameters": "参数",
+  "Answered": "已回答",
+  "Refused when run": "执行被拒",
+  "Question approved.": "已批准提问。",
+  "Question rejected.": "已拒绝提问。",
+  "Question answered.": "已回答提问。",
+  "Caller": "调用者"
 }

@@ -35,6 +35,12 @@ func (rt *routes) handle(route transport.Route, f func(w http.ResponseWriter, r 
 			w.WriteHeader(http.StatusUnauthorized)
 			return
 		}
+		if next, refusal := transport.WithAICallerHeader(m, r.Header.Get("Platform-AI-Caller")); refusal != nil {
+			Reply(w, nil, refusal)
+			return
+		} else {
+			m = next
+		}
 		correlation := transport.NewRequestCorrelation(r)
 		r = transport.WithRequestCorrelation(r, correlation)
 		tracked := &transport.StatusWriter{ResponseWriter: w}

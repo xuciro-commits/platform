@@ -24,6 +24,28 @@ func CheckProcess(o Object, app, objectType, builderRole, userRole, functionCall
 	if err := CheckReservedActionNames(o); err != nil {
 		return err
 	}
+	if len(o.Ask) > 0 {
+		std, _, _ := CompileAccess(o, builderRole, userRole)
+		if o.Ledger {
+			std.Edit, std.Archive, std.Restore = false, false, false
+		}
+		verbs := make([]string, 0, len(o.Ask))
+		for verb := range o.Ask {
+			verbs = append(verbs, verb)
+		}
+		slices.Sort(verbs)
+		for _, verb := range verbs {
+			spec := o.Ask[verb]
+			if err := spec.Check(fmt.Sprintf("object %s standard action %q", o.Type(), verb)); err != nil {
+				return err
+			}
+			hasAccess := func(roles []string) bool { return len(o.Access) == 0 || len(roles) > 1 }
+			enabled := (verb == "create" && std.Create && hasAccess(std.CreateRoles)) || (verb == "edit" && std.Edit && hasAccess(std.EditRoles)) || (verb == "archive" && std.Archive && hasAccess(std.ArchiveRoles)) || (verb == "reverse" && o.Ledger && std.Create && hasAccess(std.CreateRoles))
+			if !enabled {
+				return fmt.Errorf("object %s ask names standard action %q, which is not enabled on this object", o.Type(), verb)
+			}
+		}
+	}
 	states := map[string]bool{}
 	for _, s := range o.States {
 		switch {
@@ -49,6 +71,9 @@ func CheckProcess(o Object, app, objectType, builderRole, userRole, functionCall
 			return err
 		}
 		where := fmt.Sprintf("the action %q", a.Name)
+		if err := a.Ask.Check(where); err != nil {
+			return err
+		}
 		switch {
 		case !publication.ValidName(a.Name):
 			return fmt.Errorf("the action name %q is not lower-case letters and digits", a.Name)

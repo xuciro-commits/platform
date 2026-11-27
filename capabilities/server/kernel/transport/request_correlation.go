@@ -7,6 +7,9 @@ import (
 	"encoding/hex"
 	"go.opentelemetry.io/otel/trace"
 	"net/http"
+	pb "platformkernel/gen/platform/kernel/v1alpha1"
+	"platformserver/kernel/protocol"
+	"platformserver/platform"
 	"strings"
 	"sync/atomic"
 	"time"
@@ -112,4 +115,25 @@ func (w *StatusWriter) StatusCode() int {
 		return http.StatusOK
 	}
 	return w.status
+}
+
+func WithAICallerHeader(m platform.Member, raw string) (platform.Member, *platform.Error) {
+	trimmed := strings.TrimSpace(raw)
+	if trimmed == "" {
+		return m, nil
+	}
+	var caller protocol.AICaller
+	if strings.HasPrefix(trimmed, "{") {
+		if err := platform.DecodeJSON([]byte(trimmed), &caller, "AI caller"); err != nil || strings.TrimSpace(caller.Kind) == "" {
+			return m, platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "Invalid Platform-AI-Caller header")
+		}
+	} else {
+		kind, name, ok := strings.Cut(trimmed, ":")
+		if !ok || strings.TrimSpace(kind) == "" || strings.TrimSpace(name) == "" {
+			return m, platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "Invalid Platform-AI-Caller header")
+		}
+		caller = protocol.AICaller{Kind: strings.TrimSpace(kind), Name: strings.TrimSpace(name)}
+	}
+	m.AskOK = false
+	return protocol.WithAICaller(m, &caller), nil
 }

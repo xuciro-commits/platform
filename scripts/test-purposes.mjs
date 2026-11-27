@@ -164,6 +164,9 @@ DescribeCacheKeepsRefusals|描述缓存保留拒绝结果
 DescribeWithAndWithoutCacheAgree|描述缓存与无缓存结果一致
 PrepareProjectByOwnerDoesNotDeadlock|资源所有者准备项目不发生死锁
 PrepareProjectRefusesNonManager|非管理者不能准备项目
+K50OptionalDeferredRequestAndKey|可选延迟契约请求与行级幂等键
+K52AskFirstHoldsAIActionsUntilInboxApproval|先问动作由 AI 调用时转入收件箱提问并经批准执行一次
+AskObjectActions|包检查校验对象与动作的 ask 先问声明
 `.trim().split("\n").map(line => line.split("|")));
 
 const subcases = { postgres: "PostgreSQL 持久化", file: "文件持久化", memory: "内存模式", accepted: "接受结果", refused: "拒绝结果" };

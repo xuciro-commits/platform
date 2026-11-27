@@ -2,6 +2,7 @@ package ontology
 
 import (
 	"encoding/json"
+	"fmt"
 	"platformserver/kernel/protocol"
 	"slices"
 	"strings"
@@ -39,6 +40,7 @@ type Object struct {
 	States               []State                      `json:"states,omitempty" rail:"true" title:"States"`
 	ActionTypes          []platform.AssetBinding      `json:"actionTypes,omitempty" rail:"true" type:"json" title:"Action types"`
 	Actions              []Action                     `json:"actions,omitempty" field:"aside" title:"Actions"`
+	Ask                  map[string]Ask               `json:"ask,omitempty" field:"aside" type:"json" title:"Ask first"`
 	Records              []json.RawMessage            `json:"records,omitempty" type:"json" field:"aside" title:"Reference records" help:"Rows shipped with the type, such as the stages of a pipeline; a publish or an install adds the ones this workspace lacks"`
 	Access               []Access                     `json:"access,omitempty" rail:"true" title:"Access"`
 	Scope                *ObjectScope                 `json:"scope,omitempty" type:"json" field:"aside" title:"Scope fields"`
@@ -111,8 +113,62 @@ type State struct {
 	Description string `json:"description,omitempty" help:"What a record in this state means"`
 }
 
+type Ask struct {
+	Enabled bool
+	Reason  string
+	Invalid string
+}
+
+func (a Ask) IsZero() bool { return !a.Enabled && a.Invalid == "" }
+
+func (a *Ask) UnmarshalJSON(raw []byte) error {
+	trimmed := strings.TrimSpace(string(raw))
+	if trimmed == "" || trimmed == "null" || trimmed == "false" {
+		*a = Ask{}
+		return nil
+	}
+	if trimmed == "true" {
+		*a = Ask{Enabled: true}
+		return nil
+	}
+	var reason string
+	if err := json.Unmarshal(raw, &reason); err == nil {
+		clean := strings.TrimSpace(reason)
+		if clean == "" {
+			*a = Ask{Reason: reason, Invalid: "ask reason cannot be blank"}
+			return nil
+		}
+		if len([]rune(clean)) > 500 {
+			*a = Ask{Reason: clean, Invalid: "ask reason exceeds 500 characters"}
+			return nil
+		}
+		*a = Ask{Enabled: true, Reason: clean}
+		return nil
+	}
+	*a = Ask{Invalid: "ask must be true or a non-empty reason"}
+	return nil
+}
+
+func (a Ask) MarshalJSON() ([]byte, error) {
+	if a.Invalid != "" {
+		return json.Marshal(a.Reason)
+	}
+	if a.Reason != "" {
+		return json.Marshal(a.Reason)
+	}
+	return json.Marshal(a.Enabled)
+}
+
+func (a Ask) Check(where string) error {
+	if a.Invalid != "" {
+		return fmt.Errorf("%s: %s", where, a.Invalid)
+	}
+	return nil
+}
+
 type Action struct {
 	ConfirmationOnly bool                       `json:"confirmationOnly,omitempty" title:"Confirmation receipt" help:"Require original confirmation receipt"`
+	Ask              Ask                        `json:"ask,omitzero" title:"Ask first" help:"Hold AI calls in the requester's inbox until approved"`
 	Adoption         *platform.ProposalAdoption `json:"adoption,omitempty" type:"json" field:"aside"`
 	Name             string                     `json:"name" field:"required" title:"API name" help:"Lower-case letters and digits" example:"return"`
 	Title            string                     `json:"title" field:"required" title:"Name" help:"What people call it" example:"Hand it back"`

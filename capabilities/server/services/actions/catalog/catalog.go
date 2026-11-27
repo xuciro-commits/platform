@@ -81,6 +81,10 @@ func EntityActions(e platform.RecordType) []platform.Action {
 	if capability == "" {
 		capability = e.Type
 	}
+	askOf := func(verb string) (bool, string) {
+		reason, ok := e.Standard.Ask[verb]
+		return ok, reason
+	}
 	if e.Standard.Create {
 		if e.CreateTxn != nil {
 			for _, step := range e.CreateTxn.Steps {
@@ -95,23 +99,27 @@ func EntityActions(e platform.RecordType) []platform.Action {
 				}
 			}
 		}
+		ask, askReason := askOf("create")
 		out = append(out, platform.Action{Schema: e.Type + ".create", Target: e.Type, New: true, Capability: capability, Title: "Create " + strings.ToLower(info.Title),
-			Description: "Create " + article(info.Title) + ".", Payload: fields, Roles: roles(e.Standard, "create")})
+			Description: "Create " + article(info.Title) + ".", Payload: fields, Roles: roles(e.Standard, "create"), Ask: ask, AskReason: askReason})
 	}
 	if e.Ledger != nil && e.Standard.Create {
-		out = append(out, platform.Action{Schema: e.Type + ".reverse", Target: e.Type, Capability: capability, Title: "Reverse " + strings.ToLower(info.Title), Description: "Post an opposite fact without editing the original.", Payload: []platform.Field{{Name: "on", Type: "date", Description: "Business date"}}, Roles: roles(e.Standard, "create")})
+		ask, askReason := askOf("reverse")
+		out = append(out, platform.Action{Schema: e.Type + ".reverse", Target: e.Type, Capability: capability, Title: "Reverse " + strings.ToLower(info.Title), Description: "Post an opposite fact without editing the original.", Payload: []platform.Field{{Name: "on", Type: "date", Description: "Business date"}}, Roles: roles(e.Standard, "create"), Ask: ask, AskReason: askReason})
 	}
 	if e.Standard.Edit {
+		ask, askReason := askOf("edit")
 		out = append(out, platform.Action{RecordEdit: true, Schema: e.Type + ".edit", Target: e.Type, Capability: capability, Title: "Edit " + strings.ToLower(info.Title),
-			Description: "Change fields of " + article(info.Title) + "; fields left out keep their value.", Payload: editable, Roles: roles(e.Standard, "edit")})
+			Description: "Change fields of " + article(info.Title) + "; fields left out keep their value.", Payload: editable, Roles: roles(e.Standard, "edit"), Ask: ask, AskReason: askReason})
 	}
 	if e.Standard.Archive {
 		reverse := ""
 		if e.Standard.Restore {
 			reverse = e.Type + ".restore"
 		}
+		ask, askReason := askOf("archive")
 		out = append(out, platform.Action{Schema: e.Type + ".archive", Reverse: reverse, Target: e.Type, Capability: capability, Title: "Archive " + strings.ToLower(info.Title),
-			Description: "Archive " + article(info.Title) + ": it leaves lists but stays referenced and in history.", Payload: []platform.Field{}, Roles: roles(e.Standard, "archive")})
+			Description: "Archive " + article(info.Title) + ": it leaves lists but stays referenced and in history.", Payload: []platform.Field{}, Roles: roles(e.Standard, "archive"), Ask: ask, AskReason: askReason})
 	}
 	if e.Standard.Restore {
 		out = append(out, platform.Action{Schema: e.Type + ".restore", Reverse: e.Type + ".archive", Target: e.Type, Capability: capability, Title: "Restore " + strings.ToLower(info.Title),
@@ -151,7 +159,7 @@ func EntityActions(e platform.RecordType) []platform.Action {
 				}
 			}
 			out = append(out, platform.Action{Schema: e.Type + "." + t.Name, Reverse: reverses[i], Target: e.Type, Capability: c, Title: title,
-				Description: description, Payload: payload, Roles: t.Roles, Adoption: t.Adoption, Approval: t.Approval, DeferRequired: t.DeferRequired, ConfirmationOnly: t.ConfirmationOnly, Open: t.Open})
+				Description: description, Payload: payload, Roles: t.Roles, Adoption: t.Adoption, Approval: t.Approval, Ask: t.Ask, AskReason: t.AskReason, DeferRequired: t.DeferRequired, ConfirmationOnly: t.ConfirmationOnly, Open: t.Open})
 			if t.Approval != nil && t.Approval.Pending != "" {
 				for _, m := range [][2]string{{platform.ApprovalHeld, "Hold for approval"}, {platform.ApprovalRejected, "Mark rejected"}, {platform.ApprovalReturned, "Return from approval"}} {
 					suffix, title := m[0], m[1]

@@ -164,6 +164,8 @@ type Action struct {
 	Unconnected      []string          `json:"unconnected,omitempty"`
 	Approval         *Approval         `json:"-"`
 	NeedsApproval    bool              `json:"needsApproval,omitempty"`
+	Ask              bool              `json:"ask,omitempty"`
+	AskReason        string            `json:"askReason,omitempty"`
 	New              bool              `json:"new,omitempty"`
 	IDPrefix         string            `json:"idPrefix,omitempty"`
 	Automation       bool              `json:"automation,omitempty"`
@@ -178,12 +180,9 @@ type Approval struct {
 }
 
 const (
-	ApprovalHeld     = ".held"
-	ApprovalRejected = ".rejected"
-	ApprovalReturned = ".returned"
+	ApprovalHeld, ApprovalRejected, ApprovalReturned = ".held", ".rejected", ".returned"
+	ManagerRole                                      = "manager"
 )
-
-const ManagerRole = "manager"
 
 type ApprovalLevel struct {
 	Title           string

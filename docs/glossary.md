@@ -134,6 +134,7 @@
 | Delegation | 委派 | 资源：什么发生时交给哪个智能体、以谁的名义、能调哪些动作 | architecture |
 | Receipt | 回执 | 智能体一轮的全部写入、提问与复查，一次接受生效 | architecture |
 | Ask-first | 先问 | 动作声明 `ask`：智能体调用时变成收件箱里的提问，成员批准后才执行 | architecture |
+| Question | 提问 | 收件箱里带选项、原参数与推荐的事项（`work.question`）；回答只算第一次 | 通知 |
 | Hops | 跳数 | 写入引起新事件的层数；超过 8 记下不派发 | architecture |
 | Worker | 接单程序 | 只往外连、领任务、交回执的进程；替命令行智能体干活 | architecture |
 | Contribution slot | 贡献位 | 界面上允许别的包放入口的位置：记录页动作菜单、“管理 → 主数据” | frontend |

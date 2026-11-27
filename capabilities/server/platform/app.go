@@ -13,7 +13,8 @@ import (
 
 type Member struct {
 	authorization     AuthorizationEngine
-	AIContext         bool              `json:"-"`
+	AIContext, AskOK  bool              `json:"-"`
+	AICaller          json.RawMessage   `json:"aiCaller,omitempty"`
 	Markings          []string          `json:"markings,omitempty"`
 	Declassifications []string          `json:"declassifications,omitempty"`
 	ID                string            `json:"id"`
@@ -90,6 +91,7 @@ func (m Member) WithAuthorization(engine AuthorizationEngine) Member {
 }
 
 func (m Member) Active() bool { return m.Status != MemberSuspended && m.Status != MemberLeft }
+func (m Member) IsAI() bool   { return m.Agent || len(m.AICaller) > 0 }
 
 func (m Member) InScope(permission string) bool {
 	return m.Scopes == nil || slices.ContainsFunc(m.Scopes, func(p string) bool {
@@ -97,11 +99,7 @@ func (m Member) InScope(permission string) bool {
 	})
 }
 
-const (
-	MemberInvited   = "invited"
-	MemberSuspended = "suspended"
-	MemberLeft      = "left"
-)
+const MemberInvited, MemberSuspended, MemberLeft = "invited", "suspended", "left"
 
 func (m Member) Location() *time.Location {
 	if loc, err := time.LoadLocation(m.Timezone); err == nil {
@@ -222,10 +220,7 @@ func NewCaller(rt Runtime, m Member, app string, replaying, automation bool) Cal
 	return Caller{Member: m, App: app, Replaying: replaying, Automation: automation, rt: rt}
 }
 
-func RouteCaller(c Caller, app string) Caller {
-	c.App = app
-	return c
-}
+func RouteCaller(c Caller, app string) Caller { c.App = app; return c }
 
 func ActingCaller(parent Caller, m Member, app string, automation bool) Caller {
 	return NewCaller(parent.rt, m, app, parent.Replaying, automation)
@@ -260,6 +255,9 @@ func ProbeDecision(c Caller, decide func(Caller) *Error) *Error {
 }
 
 func Decide(c Caller, app Service, s *pb.Submission, at time.Time) (*pb.ChangeRecord, *Error) {
+	if action, ok := app.Manifest().Actions.Action(s.GetSchema().GetName()); ok && action.Ask && !c.Automation && c.IsAI() && !c.AskOK {
+		return nil, Refuse(pb.ErrorCode_ERROR_CODE_POLICY_DENIED, "AI callers must obtain inbox approval before running this action")
+	}
 	if c.Simulating() {
 		if action, ok := app.Manifest().Actions.Action(s.GetSchema().GetName()); ok && action.Adoption != nil {
 			return nil, Refuse(pb.ErrorCode_ERROR_CODE_POLICY_DENIED, "Proposal adoption does not execute in isolated trials")

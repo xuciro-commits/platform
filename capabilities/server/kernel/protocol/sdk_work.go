@@ -30,14 +30,86 @@ const (
 	WorkApp                   = "work"
 	WorkTaskType              = "work.task"
 	WorkApprovalType          = "work.approval"
+	WorkQuestionType          = "work.question"
 	WorkViewType              = "work.view"
 	MonitoringViewType        = "monitoring.view"
 	WorkApprovalRequestSchema = "work.approval.request"
+	WorkQuestionRequestSchema = "work.question.request"
 )
 
 type ApprovalOwner interface {
 	platform.Service
 	RequestApproval(platform.Caller, *pb.Submission, time.Time) (*pb.ChangeRecord, *platform.Error)
+	RequestQuestion(platform.Caller, *pb.Submission, time.Time) (*pb.ChangeRecord, *platform.Error)
+}
+
+type AICaller struct {
+	Kind    string    `json:"kind"`
+	Name    string    `json:"name,omitempty"`
+	Version string    `json:"version,omitempty"`
+	Tool    string    `json:"tool,omitempty"`
+	Model   string    `json:"model,omitempty"`
+	Event   string    `json:"event,omitempty"`
+	Run     string    `json:"run,omitempty"`
+	Input   int       `json:"input,omitempty"`
+	Output  int       `json:"output,omitempty"`
+	Cached  int       `json:"cached,omitempty"`
+	Cost    float64   `json:"cost,omitempty"`
+	Due     time.Time `json:"due,omitzero"`
+}
+
+func WithAICaller(m platform.Member, ai *AICaller) platform.Member {
+	if ai == nil {
+		m.AICaller = nil
+		return m
+	}
+	m.AIContext = true
+	m.AICaller = platform.Raw(ai)
+	return m
+}
+
+func ReadAICaller(m platform.Member) *AICaller {
+	if len(m.AICaller) == 0 {
+		return nil
+	}
+	var out AICaller
+	if json.Unmarshal(m.AICaller, &out) != nil || out.Kind == "" {
+		return nil
+	}
+	return &out
+}
+
+func NeedsAsk(a platform.Action, m platform.Member, automation bool) bool {
+	return a.Ask && !automation && m.IsAI() && !m.AskOK
+}
+
+type AgentQuestion struct {
+	platform.Record
+	Action       string    `json:"action,omitempty" field:"readonly,search" source:"record"`
+	Title        string    `json:"title" field:"readonly,search" source:"record"`
+	Reason       string    `json:"reason,omitempty" field:"readonly" type:"longtext" source:"record"`
+	App          string    `json:"app" field:"readonly" source:"record"`
+	Target       string    `json:"target,omitempty" field:"readonly,search" source:"record"`
+	Payload      string    `json:"payload,omitempty" field:"readonly" type:"longtext"`
+	Requester    string    `json:"requester" field:"readonly" source:"record"`
+	Candidates   []string  `json:"candidates" field:"readonly"`
+	Scopes       []string  `json:"scopes,omitempty" field:"readonly"`
+	AgentCaller  bool      `json:"agentCaller,omitempty" field:"readonly"`
+	Caller       *AICaller `json:"caller,omitempty" type:"json" field:"readonly"`
+	Submission   string    `json:"submission,omitempty" field:"readonly" type:"longtext"`
+	Options      []string  `json:"options" field:"readonly"`
+	OptionTitles []string  `json:"optionTitles,omitempty" field:"readonly"`
+	Recommend    int       `json:"recommend" field:"readonly"`
+	Due          time.Time `json:"due,omitzero" field:"readonly"`
+	Key          string    `json:"key,omitempty" field:"readonly" source:"record"`
+	About        string    `json:"about,omitempty" field:"readonly" type:"longtext" source:"record"`
+	Delegation   string    `json:"delegation,omitempty" field:"readonly" source:"record"`
+	State        string    `json:"state" field:"readonly" choices:"open,approved,rejected,answered,expired,refused"`
+	Answer       string    `json:"answer,omitempty" field:"readonly" source:"user-input"`
+	AnsweredBy   string    `json:"answeredBy,omitempty" field:"readonly" source:"record"`
+	AnsweredAt   time.Time `json:"answeredAt,omitzero" field:"readonly"`
+	Outcome      string    `json:"outcome,omitempty" field:"readonly" source:"user-input"`
+	Release      string    `json:"release,omitempty" field:"readonly" source:"record"`
 }
 
 type ApprovalRequest struct {

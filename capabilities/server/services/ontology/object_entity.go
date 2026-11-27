@@ -25,6 +25,14 @@ func CompileObjectEntity(o Object, env ObjectRuntimeEnvironment) platform.Record
 	if o.Ledger {
 		std.Edit, std.Archive, std.Restore = false, false, false
 	}
+	if len(o.Ask) > 0 {
+		std.Ask = map[string]string{}
+		for verb, spec := range o.Ask {
+			if spec.Enabled {
+				std.Ask[verb] = spec.Reason
+			}
+		}
+	}
 	entity.Standard, entity.Scope = std, scope
 	entity.Lifecycle = compileLifecycle(o, roles, env)
 	entity.TransactionDestination = TransactionDestination
@@ -123,7 +131,7 @@ func compileLifecycle(o Object, roles []string, env ObjectRuntimeEnvironment) *p
 		if life.Field != "" {
 			stateCriteria = &platform.FieldCondition{Field: life.Field, In: slices.Clone(action.From)}
 		}
-		life.Actions = append(life.Actions, platform.ActionType{ConfirmationOnly: action.ConfirmationOnly, Adoption: action.Adoption, Open: action.Open,
+		life.Actions = append(life.Actions, platform.ActionType{ConfirmationOnly: action.ConfirmationOnly, Ask: action.Ask.Enabled, AskReason: action.Ask.Reason, Adoption: action.Adoption, Open: action.Open,
 			Criteria: platform.ActionCriteria{State: stateCriteria, Business: criteria},
 			Name:     action.Name, Title: action.Title, Description: description, Roles: takers, Capability: o.Name, Parameters: payload, Approval: approval, DeferRequired: true,
 			Rules: []platform.ActionRule{{Transaction: &platform.TransactionRule{Spec: action.Transaction, Run: func(c platform.Caller, r *pb.ChangeRecord, now time.Time) *platform.Error {

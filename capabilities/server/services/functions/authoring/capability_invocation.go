@@ -240,7 +240,8 @@ func ActionAnswer(answer protocol.CapabilityResult, record *pb.ChangeRecord) pro
 	}
 	answer.Result, _ = protojson.Marshal(record)
 	answer.State = "completed"
-	if record.GetSubmission().GetTarget().GetType() == "work.approval" && record.GetSubmission().GetSchema().GetName() == "work.approval.request" {
+	if record.GetSubmission().GetTarget().GetType() == "work.approval" && record.GetSubmission().GetSchema().GetName() == "work.approval.request" ||
+		record.GetSubmission().GetTarget().GetType() == "work.question" && record.GetSubmission().GetSchema().GetName() == "work.question.request" {
 		answer.State = "pending"
 	}
 	return answer

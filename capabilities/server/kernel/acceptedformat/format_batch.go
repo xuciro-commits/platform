@@ -274,8 +274,10 @@ func BatchSubmission(result Batch, receipt *pb.ChangeRecord) (*pb.Submission, er
 			return s, nil
 		}
 	}
-	if answer.GetAuthority() != "work" ||
-		answer.GetSchema().GetName() != "work.approval.request" {
+	targetType, keyPrefix := "work.approval", "approval:"
+	if answer.GetAuthority() == "work" && answer.GetSchema().GetName() == "work.question.request" {
+		targetType, keyPrefix = "work.question", "question:"
+	} else if answer.GetAuthority() != "work" || answer.GetSchema().GetName() != "work.approval.request" {
 		return nil, fmt.Errorf("record batch answer differs without an approval request")
 	}
 	var payload struct {
@@ -285,9 +287,9 @@ func BatchSubmission(result Batch, receipt *pb.ChangeRecord) (*pb.Submission, er
 	held := new(pb.Submission)
 	if json.Unmarshal(answer.GetPayload(), &payload) != nil || protojson.Unmarshal(payload.Submission, held) != nil ||
 		!proto.Equal(held, s) || payload.Requester != s.GetPrincipalId() || answer.GetPrincipalId() != "app:work" ||
-		answer.GetTarget().GetType() != "work.approval" ||
+		answer.GetTarget().GetType() != targetType ||
 		answer.GetTarget().GetId() != s.GetAuthority()+"."+s.GetIdempotencyKey() ||
-		answer.GetIdempotencyKey() != "approval:"+answer.GetTarget().GetId() {
+		answer.GetIdempotencyKey() != keyPrefix+answer.GetTarget().GetId() {
 		return nil, fmt.Errorf("record batch approval does not hold its original submission")
 	}
 	return s, nil

@@ -135,19 +135,22 @@ type State struct {
 	Description string `json:"description,omitempty"`
 }
 
+type AskAction struct {
+	Schema string `json:"schema"`
+	Reason string `json:"reason,omitempty"`
+}
+
 type ActionType struct {
-	ConfirmationOnly         bool
-	Open                     string
-	Adoption                 *ProposalAdoption `json:"-"`
-	Criteria                 ActionCriteria    `json:"-"`
-	Name, Title, Description string
-	Roles                    []string
-	Parameters               []Field
-	DeferRequired            bool `json:"-"`
-	Capability               string
-	Approval                 *Approval
-	Rules                    []ActionRule                                                    `json:"-"`
-	Effects                  []func(c Caller, r *pb.ChangeRecord, record any, now time.Time) `json:"-"`
+	ConfirmationOnly, DeferRequired, Ask bool
+	Open, Name, Title, Description       string
+	AskReason, Capability                string
+	Adoption                             *ProposalAdoption `json:"-"`
+	Criteria                             ActionCriteria    `json:"-"`
+	Roles                                []string
+	Parameters                           []Field
+	Approval                             *Approval
+	Rules                                []ActionRule                                                    `json:"-"`
+	Effects                              []func(c Caller, r *pb.ChangeRecord, record any, now time.Time) `json:"-"`
 }
 
 type ActionCriteria struct {
@@ -181,19 +184,22 @@ type LifecycleInfo struct {
 }
 
 type TransitionInfo struct {
-	ToInput string   `json:"toInput,omitempty"`
-	Name    string   `json:"name"`
-	Schema  string   `json:"schema"`
-	Title   string   `json:"title"`
-	From    []string `json:"from"`
-	To      []string `json:"to"`
+	ToInput   string   `json:"toInput,omitempty"`
+	Name      string   `json:"name"`
+	Schema    string   `json:"schema"`
+	Title     string   `json:"title"`
+	From      []string `json:"from"`
+	To        []string `json:"to"`
+	Ask       bool     `json:"ask,omitempty"`
+	AskReason string   `json:"askReason,omitempty"`
 }
 
 type Standard struct {
-	Create, Edit, Archive, Restore       bool
-	Roles                                []string
-	Capability                           string
-	CreateRoles, EditRoles, ArchiveRoles []string
+	Create, Edit, Archive, Restore bool
+	Roles, CreateRoles, EditRoles  []string
+	ArchiveRoles                   []string
+	Capability                     string
+	Ask                            map[string]string
 }
 
 type Scope struct {
@@ -365,6 +371,7 @@ type RecordTypeInfo struct {
 	Color           string              `json:"color,omitempty"`
 	Fields          []FieldInfo         `json:"fields"`
 	Standard        []string            `json:"standard"`
+	Ask             []AskAction         `json:"ask,omitempty"`
 	Implements      []string            `json:"implements,omitempty"`
 	Extends         string              `json:"extends,omitempty"`
 	ExtensionSource *ExtensionSource    `json:"-"`

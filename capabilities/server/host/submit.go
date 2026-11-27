@@ -214,8 +214,8 @@ func decideAcceptedAs(a platform.Service, draft *stagedDecision, m platform.Memb
 			refusal = platform.RefuseOutsideAcceptedBoundary()
 		}
 	}()
-	if declared, _ := a.Manifest().Actions.Action(s.GetSchema().GetName()); declared.Approval != nil &&
-		draft.tenant.App(draft.tenant.owner["action:"+protocol.WorkApprovalRequestSchema]) != nil {
+	if declared, _ := a.Manifest().Actions.Action(s.GetSchema().GetName()); ((declared.Approval != nil && !automation) || protocol.NeedsAsk(declared, m, automation)) &&
+		draft.tenant.App(protocol.WorkApp) != nil {
 		record, refusal = draft.approvals().Submit(a, m, s, now)
 	} else {
 		caller := platform.NewCaller(draft, m, a.Manifest().ID, false, automation)

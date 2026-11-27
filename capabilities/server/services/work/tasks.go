@@ -66,7 +66,7 @@ func (w *Work) createTask(c platform.Caller, s *pb.Submission, now time.Time) (f
 
 func (w *Work) cancelTask(c platform.Caller, record any, _ json.RawMessage, _ time.Time) *platform.Error {
 	task := record.(*WorkTask)
-	if strings.HasPrefix(task.Ref, ApprovalType+"/") {
+	if strings.HasPrefix(task.Ref, ApprovalType+"/") || strings.HasPrefix(task.Ref, QuestionType+"/") {
 		return platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "Approval work items close with their approval request")
 	}
 	if task.Created.By != c.ID && task.Assignee != c.ID {

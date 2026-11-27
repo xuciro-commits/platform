@@ -4,6 +4,7 @@ import (
 	"time"
 
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
+	"platformserver/kernel/protocol"
 	"platformserver/platform"
 )
 
@@ -25,7 +26,7 @@ func SubmitTo(c platform.Caller, owner platform.Service, missing *platform.Error
 	if owner == nil {
 		return nil, missing
 	}
-	if declared, ok := owner.Manifest().Actions.Action(s.GetSchema().GetName()); ok && declared.Approval != nil && !c.Automation {
+	if declared, ok := owner.Manifest().Actions.Action(s.GetSchema().GetName()); ok && ((declared.Approval != nil && !c.Automation) || protocol.NeedsAsk(declared, c.Member, c.Automation)) {
 		return c.RequestApproval(owner.Manifest().ID, s, at)
 	}
 	return platform.Decide(c, owner, s, at)

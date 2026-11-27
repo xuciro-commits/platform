@@ -165,7 +165,7 @@ func Describe(app string, e Entity, typeOf func(reflect.Type) string) (EntityInf
 				if title == "" {
 					title = strings.ToUpper(t.Name[:1]) + t.Name[1:]
 				}
-				info.Lifecycle.Transitions = append(info.Lifecycle.Transitions, TransitionInfo{Name: t.Name, Schema: e.Type + "." + t.Name, Title: title, From: from, To: to, ToInput: inputName})
+				info.Lifecycle.Transitions = append(info.Lifecycle.Transitions, TransitionInfo{Name: t.Name, Schema: e.Type + "." + t.Name, Title: title, From: from, To: to, ToInput: inputName, Ask: t.Ask, AskReason: t.AskReason})
 			}
 		}
 	}
@@ -175,6 +175,19 @@ func Describe(app string, e Entity, typeOf func(reflect.Type) string) (EntityInf
 	for _, x := range [][2]any{{e.Standard.Create, ".create"}, {e.Standard.Edit, ".edit"}, {e.Standard.Archive, ".archive"}, {e.Standard.Restore, ".restore"}} {
 		if x[0].(bool) {
 			info.Standard = append(info.Standard, e.Type+x[1].(string))
+		}
+	}
+	for _, s := range info.Standard {
+		verb := strings.TrimPrefix(s, e.Type+".")
+		if reason, ok := e.Standard.Ask[verb]; ok {
+			info.Ask = append(info.Ask, platform.AskAction{Schema: s, Reason: reason})
+		}
+	}
+	if e.Lifecycle != nil {
+		for _, t := range e.Lifecycle.Actions {
+			if t.Ask {
+				info.Ask = append(info.Ask, platform.AskAction{Schema: e.Type + "." + t.Name, Reason: t.AskReason})
+			}
 		}
 	}
 	if err := describeDerived(&info, e); err != nil {

@@ -30,7 +30,8 @@ import { usePath } from "../router";
 import { useIsDark } from "../shell/appearance";
 import { type InboxItem, type InboxTab, inTab, inboxTabs, useInbox } from "./inbox";
 import { motionEases, motionStyles, motionTimings, prefersReducedMotion } from "./motion";
-import { ReferenceLink } from "./ReferenceField";
+import { InboxQuestionSection } from "./InboxQuestionCard";
+import { RelatedRecord } from "./InboxRelatedRecord";
 import { useRecordHref } from "../recordRoutes";
 import { AccessRequestDecisionCard } from "./rebac/AccessRequestDecisionCard";
 import { todayISO, useMemberDirectoryMap, useUnitChoices } from "./rebac/shared";
@@ -135,7 +136,7 @@ function useActions() {
 
 function ReceivedCell({ item, reveal, act, isOverlaid }: { item: InboxItem; reveal: UseContainerRevealReturn; act: Act; isOverlaid: boolean }) {
   const label = item.kind === "task" ? t("Done") : t("Mark as read");
-  const can = item.kind === "task" ? item.open && !item.task?.answers?.length : item.kind === "notification" && item.unread;
+  const can = item.kind === "task" ? item.open && !item.task?.answers?.length && !item.task?.ref?.startsWith("work.question/") : item.kind === "notification" && item.unread;
   return (
     <HStack gap={1} vAlign="center" hAlign="end" height={28}>
       {can && (
@@ -161,18 +162,7 @@ function ReceivedCell({ item, reveal, act, isOverlaid }: { item: InboxItem; reve
   );
 }
 
-const kindOf = (item: InboxItem) => t(item.record?.kind ?? (item.kind === "task" ? "Task" : "Notification"));
-
-function RelatedRecord({ reference }: { reference: string }) {
-  const [type, id] = reference.split("/");
-  const types = useRead<Api.EntityInfo[]>("/v1/entities");
-  const record = useRead<Api.RecordView>(`/v1/records/${encodeURIComponent(type)}/${encodeURIComponent(id)}`);
-  const entity = types.status === "ready" ? types.data.find((candidate) => candidate.type === type) : undefined;
-  const values = record.status === "ready" ? record.data.values : undefined;
-  const name = entity?.display && values?.[entity.display] != null ? String(values[entity.display]) : id;
-  if (record.status !== "ready") return <Text type="body">{id}</Text>;
-  return <ReferenceLink type={type} id={id} name={name} />;
-}
+const kindOf = (item: InboxItem) => t(item.record?.kind ?? (item.task?.ref?.startsWith("work.question/") ? "Question" : item.kind === "task" ? "Task" : "Notification"));
 
 function InboxAccessRequestSection({ requestId }: { requestId: string }) {
   const requests = useRead<Api.AccessRequest[]>("/v1/access-requests");
@@ -221,7 +211,8 @@ function ItemPane({ item, act, onClose, isFullWidth, canMarkUnread }: { item: In
     </HStack>
   );
   const accessRequestId = task?.ref === "read:access-requests" && task.key?.startsWith("access:") ? task.key.slice(7) : undefined;
-  const record = item.ref && !item.ref.startsWith("work.task/") && !item.ref.startsWith("read:") ? item.ref : undefined;
+  const questionId = task?.ref?.startsWith("work.question/") ? task.ref.slice("work.question/".length) : undefined;
+  const record = item.ref && !item.ref.startsWith("work.task/") && !item.ref.startsWith("work.question/") && !item.ref.startsWith("read:") ? item.ref : undefined;
   const recordHref = useRecordHref(true);
   return (
     <VStack key={item.id} height="100%" xstyle={motionStyles.tabEnter}>
@@ -292,7 +283,8 @@ function ItemPane({ item, act, onClose, isFullWidth, canMarkUnread }: { item: In
             </HStack>
           )}
           {accessRequestId && <InboxAccessRequestSection requestId={accessRequestId} />}
-          {task?.state === "open" && !accessRequestId && (
+          {questionId && <InboxQuestionSection questionId={questionId} />}
+          {task?.state === "open" && !accessRequestId && !questionId && (
             <HStack gap={2} wrap="wrap">
               {task.answers?.length ? (
                 task.answers.map((answer, index) => (

@@ -53,23 +53,19 @@ func (r *flowExecutionRuntime) ProbeDecision(c platform.Caller, decide func(plat
 }
 
 func (r *flowExecutionRuntime) RequestApproval(c platform.Caller, app string, s *pb.Submission, at time.Time) (*pb.ChangeRecord, *platform.Error) {
-	owner := r.view.App(app)
-	if owner == nil || c.Automation || c.Tenant != r.tenant.ID || s.GetAuthority() != app || s.GetPrincipalId() != c.ID {
-		return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_POLICY_DENIED, "The approval needs its original authorised member")
-	}
-	if r.ProbeOnly {
-		return r.Decide(c, owner, s, at)
-	}
-	if refusal := r.ProbeDecision(c, func(probe platform.Caller) *platform.Error {
-		_, refusal := platform.Decide(probe, owner, s, at)
-		return refusal
-	}); refusal != nil {
-		return nil, refusal
-	}
-	work := r.stateApp(r.tenant.App(protocol.WorkApp)).(protocol.ApprovalOwner)
-	context := hostView{t: r.tenant, app: work, decision: r.stagedDecision}
-	bindings := context.ownerBindings()
-	bindings.Work = flowExecution{hostView: context, rt: r}
-	r.tenant.services.BindOwner(work, bindings)
-	return work.RequestApproval(c, s, at)
+	return runtimekernel.ApprovalRequests{
+		Tenant: r.tenant.ID, Runtime: r, App: func(id string) platform.Service {
+			if id == protocol.WorkApp {
+				return r.stateApp(r.tenant.App(protocol.WorkApp))
+			}
+			return r.view.App(id)
+		},
+		Decide: r.Decide, Probe: r.ProbeDecision,
+		Bind: func(work protocol.ApprovalOwner) {
+			ctx := hostView{t: r.tenant, app: work, decision: r.stagedDecision}
+			bindings := ctx.ownerBindings()
+			bindings.Work = flowExecution{hostView: ctx, rt: r}
+			r.tenant.services.BindOwner(work, bindings)
+		},
+	}.Request(r.ProbeOnly, c, app, s, at)
 }

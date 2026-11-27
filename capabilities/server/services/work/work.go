@@ -98,6 +98,8 @@ func New(tenant string, authorities platform.Authorities) *Work {
 	}
 	actions = append(actions, platform.Action{Schema: SchemaRequest, Target: ApprovalType, Capability: "approvals", Title: "Request approval",
 		Description: "Hold a submission until its approvers agree (made by the host when an action needs approval).", Payload: []platform.Field{}, Roles: []string{Admin}},
+		platform.Action{Schema: SchemaQuestionRequest, Target: QuestionType, Capability: "approvals", Title: "Ask before acting",
+			Description: "Hold an AI submission as a question in the requester's inbox until answered.", Payload: []platform.Field{}, Roles: []string{Admin}},
 		platform.Action{Schema: SchemaViewSave, Target: ViewType, Capability: "views", Title: "Save view", Description: "Save a view of a list under a name, or change your own.",
 			Payload: []platform.Field{{Name: "title", Type: "string", Required: true, Description: "Its name"}, {Name: "entity", Type: "string", Required: true, Description: "The entity type listed"},
 				{Name: "state", Type: "string", Description: "The list's state: search, grouping, pivot or chart"}}, Roles: []string{platform.AnyMember}},
@@ -114,7 +116,7 @@ func New(tenant string, authorities platform.Authorities) *Work {
 	actions = append(actions, viewActions()...)
 	actions = append(actions, w.policyActions()...)
 	w.authorities = authorities
-	w.authority = authorities(tenant, ID, platform.NewCatalog(actions...), ApprovalType, TaskType, ViewType, ViewPreferenceType, DelegationType, PolicyType)
+	w.authority = authorities(tenant, ID, platform.NewCatalog(actions...), ApprovalType, QuestionType, TaskType, ViewType, ViewPreferenceType, DelegationType, PolicyType)
 	return w
 }
 
@@ -175,6 +177,7 @@ func (w *Work) entities() []platform.RecordType {
 							w.closed(c, record.(*WorkTask).ID)
 						}}},
 				}}},
+		w.questionEntity(),
 		policyEntity(),
 		savedViewEntity(),
 		{Type: ViewPreferenceType, Title: "Saved view preference", Model: runtimeprotocol.SavedViewPreference{},
@@ -220,6 +223,11 @@ func (w *Work) Submit(c platform.Caller, s *pb.Submission, now time.Time) (*pb.C
 			return w.viewPreference(c, s, now)
 		case SchemaPolicySave, SchemaPolicyRemove:
 			return w.policy(c, s)
+		case SchemaQuestionRequest:
+			if w.host == nil {
+				return nil, &platform.Error{Code: pb.ErrorCode_ERROR_CODE_UNKNOWN_SCHEMA}
+			}
+			return w.questionRequest(c, s, now)
 		}
 		if w.host == nil || s.GetSchema().GetName() != SchemaRequest {
 			return nil, &platform.Error{Code: pb.ErrorCode_ERROR_CODE_UNKNOWN_SCHEMA}
@@ -474,7 +482,7 @@ func (w *Work) completer(c platform.Caller, record any, payload json.RawMessage,
 		return &platform.Error{Code: pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT}
 	}
 	t.Answer = p.Answer
-	if strings.HasPrefix(t.Ref, ApprovalType+"/") {
+	if strings.HasPrefix(t.Ref, ApprovalType+"/") || strings.HasPrefix(t.Ref, QuestionType+"/") {
 		return &platform.Error{Code: pb.ErrorCode_ERROR_CODE_CONFLICT}
 	}
 	if !slices.Contains(t.Candidates, c.ID) || t.Assignee != "" && t.Assignee != c.ID {
@@ -550,6 +558,7 @@ func (w *Work) Run(c platform.Caller, name string, now time.Time) *platform.Erro
 	if name == "refusals" {
 		return w.runRefusalEscalations(c, now)
 	}
+	w.expireQuestions(c, now)
 	open, _ := json.Marshal([]any{[]any{"state", "=", "open"}})
 	tasks, _, _ := platform.Find[WorkTask](c, platform.Query{Domain: open})
 	for _, t := range tasks {
