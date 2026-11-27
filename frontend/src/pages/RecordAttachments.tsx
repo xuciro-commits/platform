@@ -8,7 +8,7 @@ import { Link } from "@astryxdesign/core/Link";
 import { List, ListItem } from "@astryxdesign/core/List";
 import { Text } from "@astryxdesign/core/Text";
 import { useState } from "react";
-import { useRecordHref } from "../apps/entries";
+import { useRecordHref } from "../recordRoutes";
 import { type Api, type Read, request, requestBlob, reread, useRead } from "../host";
 import { t } from "../i18n";
 import { reasonOf, send } from "./act";

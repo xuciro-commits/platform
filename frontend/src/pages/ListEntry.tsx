@@ -7,6 +7,7 @@ import { lazy, type ReactNode, Suspense, useMemo, useRef, useState } from "react
 import { type Api, request, useRead } from "../host";
 import { t } from "../i18n";
 import { useSearch } from "../router";
+import { type RecordHome, useRecordHome } from "../recordRoutes";
 import { reasonOf, send, useAct } from "./act";
 import { ActionDialog } from "./ActionDialog";
 import type { Values } from "./describe";
@@ -20,8 +21,9 @@ import { newView, readView } from "./view";
 export type RowAction = { schema: string; id?: string; fixed?: Values; initial?: Values; label?: string; revision?: number };
 type Change<Row> = { schema: string; parameter: string; id: (row: Row) => string; fixed?: (row: Row) => Values; value: (row: Row) => unknown };
 type EntryColumn<Row> = ListColumn<Row> & { change?: Change<Row> };
-export type ListDefinition<Answer, Row> = Omit<ListShape<Answer, Row>, "columns" | "page" | "remote" | "detail"> & {
+export type ListDefinition<Answer, Row> = Omit<ListShape<Answer, Row>, "columns" | "page" | "remote" | "detail" | "link"> & {
   read: string;
+  link?: (row: Row, recordHref: RecordHome) => string;
   columns: EntryColumn<Row>[] | { (answer: Answer): EntryColumn<Row>[] };
   more?: (answer: Answer) => string | undefined;
   actions?: { create?: string; row?: (row: Row) => RowAction[] };
@@ -44,6 +46,8 @@ function nameOf(payload: Values) {
 export function listPage<Answer, Row>(definition: ListDefinition<Answer, Row>) {
   return function ListEntry() {
     const toast = useToast();
+    const recordHref = useRecordHome();
+    const link = definition.link;
     const currentSearch = useSearch();
     const term = definition.query ? readView(new URLSearchParams(currentSearch).get("view"), newView([])).search.trim() : "";
     const path = term ? `${definition.read}${definition.read.includes("?") ? "&" : "?"}${definition.query}=${encodeURIComponent(term)}` : definition.read;
@@ -163,6 +167,7 @@ export function listPage<Answer, Row>(definition: ListDefinition<Answer, Row>) {
           definition={{
             ...definition,
             columns,
+            link: link ? (row) => link(row, recordHref) : undefined,
             rows: () => rows,
             detail,
             carryView: true,

@@ -7,7 +7,7 @@ import { Heading, Text } from "@astryxdesign/core/Text";
 import { Token } from "@astryxdesign/core/Token";
 import { BuildingOffice2Icon, CubeIcon } from "@heroicons/react/24/outline";
 import { useState } from "react";
-import { useRecordHref } from "../apps/entries";
+import { useRecordHref } from "../recordRoutes";
 import { type Api, useRead } from "../host";
 import { t } from "../i18n";
 import { elementHref, elementType } from "../pages/enterprise";

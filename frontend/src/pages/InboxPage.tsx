@@ -32,7 +32,7 @@ import { reasonOf, send } from "./act";
 import { type InboxItem, type InboxTab, inTab, inboxTabs, useInbox } from "./inbox";
 import { motionEases, motionStyles, motionTimings, prefersReducedMotion } from "./motion";
 import { ReferenceLink } from "./ReferenceField";
-import { useRecordHref } from "../apps/entries";
+import { useRecordHref } from "../recordRoutes";
 import { AccessRequestDecisionCard } from "./rebac/AccessRequestDecisionCard";
 import { todayISO, useMemberDirectoryMap, useUnitChoices } from "./rebac/shared";
 

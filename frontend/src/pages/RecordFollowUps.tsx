@@ -5,7 +5,7 @@ import { Link } from "@astryxdesign/core/Link";
 import { Text } from "@astryxdesign/core/Text";
 import { PlusIcon, RectangleGroupIcon } from "@heroicons/react/24/outline";
 import { type ReactNode, useMemo, useState } from "react";
-import { useRecordHref } from "../apps/entries";
+import { useRecordHref } from "../recordRoutes";
 import { type Api, useRead, useReads } from "../host";
 import { t } from "../i18n";
 import { ActionDialog } from "./ActionDialog";

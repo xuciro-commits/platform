@@ -1,6 +1,5 @@
 import type { Api } from "../../host";
 import { t } from "../../i18n";
-import { recordHref } from "../entries";
 import { listPage } from "../../pages/ListEntry";
 import type { Dot } from "../../pages/Transitions";
 
@@ -16,7 +15,7 @@ export default listPage<Api.MonitoringRunPage, Api.MonitoringRun>({
   rows: (answer) => answer.runs,
   more: (answer) => (answer.offset + answer.runs.length < answer.total ? `/v1/monitoring/runs?limit=${page}&offset=${answer.offset + answer.runs.length}` : undefined),
   id: (run) => run.id,
-  link: (run) => {
+  link: (run, recordHref) => {
     const [type, ...id] = (run.recordRef ?? "").split("/");
     return id.length ? recordHref(type, id.join("/")) : "";
   },

@@ -14,7 +14,7 @@ import { type ReactNode, useCallback, useEffect, useMemo, useState } from "react
 import { type Api, useRead } from "../host";
 import { t } from "../i18n";
 import { originOf, usePath, useSearch } from "../router";
-import { useCommandSearch } from "../shell/CommandSearch";
+import { useCommandSearch } from "../commandScope";
 import { PageTitle, useGutter } from "./frame";
 import { DefinitionRows, stateProblem } from "./DefinitionRows";
 import { describe, type Described, headerStatus, statusField, type Values, withRestrictedFields } from "./describe";

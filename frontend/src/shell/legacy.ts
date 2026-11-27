@@ -1,4 +1,4 @@
-import { recordHref } from "../apps/entries";
+import type { RecordHome } from "../recordRoutes";
 
 const views = new Map(Object.entries({
   "/home/overview": ["home", "overview", "discover", "catalog-home"],
@@ -65,7 +65,7 @@ const tabs = new Map([
 
 type LegacyTarget = { path: string } | { rid: string; tab: string } | "unmatched" | null;
 
-export function legacyTarget(hash: string): LegacyTarget {
+export function legacyTarget(hash: string, recordHref: RecordHome): LegacyTarget {
   if (!hash.startsWith("#/")) return null;
   const query = hash.indexOf("?");
   const path = hash.slice(2, query === -1 ? undefined : query);

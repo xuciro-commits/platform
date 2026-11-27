@@ -12,7 +12,7 @@ import { TextInput } from "@astryxdesign/core/TextInput";
 import { Token } from "@astryxdesign/core/Token";
 import { useToast } from "@astryxdesign/core/Toast";
 import { useState } from "react";
-import { useRecordHref } from "../apps/entries";
+import { useRecordHref } from "../recordRoutes";
 import { type Api, type Read, reread, useRead } from "../host";
 import { t } from "../i18n";
 import { reasonOf, send } from "./act";

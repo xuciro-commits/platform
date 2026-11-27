@@ -40,6 +40,7 @@ export default recordList({
 ```
 
 - 文件路径就是地址 `/<应用>/<入口>`，由 `src/apps/entries.ts` 自动收集，不在别处登记。
+- 入口注册表只供应用装配与外壳读取；页面通过 recordRoutes 解析记录地址，通过 commandScope 注册命令，不反向装载入口。
 - 列、可分组的字段、新建与编辑的表单都取自类型描述。入口里不写界面代码。
 - 归项目所有的类型写 `project: true`，新建时多一个必填的项目选择。
 - 记录若指向另一处的一组记录（如对象类型指向它安装出的类型），写 `instances: { field, path }`，记录页多一个“打开记录”。
@@ -53,6 +54,8 @@ export default recordList({
 |---|---|
 | `src/main.tsx` | 挂载：样式、主题、链接适配、外壳 |
 | `src/router.tsx` | 地址即状态：读取路径、跳转、Astryx 链接的适配 |
+| `src/recordRoutes.tsx` | 记录地址解析：装配注入内置入口映射，运行时按已安装应用选择地址 |
+| `src/commandScope.ts` | 页面命令及最近记录的交互契约；外壳实现命令面板 |
 | `src/apps.ts` | 应用清单：每个应用的图标、分节菜单与入口 |
 | `src/pages/icons.ts` | 可选图标：Heroicons 的一组，按短横线名字取；名为 `icon` 的文字字段用它挑，已安装应用与入口按类型的 `icon` 显示 |
 | `src/apps/<应用>/<入口>.ts` | 入口声明 |

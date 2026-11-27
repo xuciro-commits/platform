@@ -1,6 +1,5 @@
 import type { Api } from "../../host";
 import { t } from "../../i18n";
-import { recordHref } from "../entries";
 import { listPage } from "../../pages/ListEntry";
 
 type Node = Api.LineageNode & { upstream: number; downstream: number };
@@ -15,7 +14,7 @@ export default listPage<Api.Lineage, Node>({
     downstream: answer.edges.filter((edge) => edge.from === node.id).length,
   })),
   id: (node) => node.id,
-  link: (node) => (node.record && node.canOpen ? recordHref(`build.${node.kind}`, node.record) : ""),
+  link: (node, recordHref) => (node.record && node.canOpen ? recordHref(`build.${node.kind}`, node.record) : ""),
   columns: [
     { key: "title", header: "Name", text: (node) => node.title || node.name },
     { key: "kind", header: "Kind", width: 120, text: (node) => t(node.kind), value: (node) => node.kind },

@@ -18,7 +18,7 @@ import { t } from "../i18n";
 import { useInbox } from "../pages/inbox";
 import { navigate } from "../router";
 import { motionStyles } from "../pages/motion";
-import { useCommandSearch } from "./CommandSearch";
+import { useCommandSearch } from "../commandScope";
 import { MemberMenu } from "./MemberMenu";
 
 const styles = stylex.create({

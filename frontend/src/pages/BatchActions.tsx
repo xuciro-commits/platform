@@ -7,7 +7,7 @@ import { Text } from "@astryxdesign/core/Text";
 import { useRef, useState } from "react";
 import type { Api } from "../host";
 import { t } from "../i18n";
-import { usePageCommands } from "../shell/CommandSearch";
+import { usePageCommands } from "../commandScope";
 import { ActionDialog } from "./ActionDialog";
 import { type BatchRow, isDangerAction, sendBatch } from "./act";
 import type { Described, Values } from "./describe";

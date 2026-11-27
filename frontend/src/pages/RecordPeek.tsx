@@ -7,7 +7,7 @@ import { Skeleton } from "@astryxdesign/core/Skeleton";
 import { Text } from "@astryxdesign/core/Text";
 import { CodeValue, StatusValue, TemporalValue } from "../semantic";
 import { createContext, Fragment, type ReactNode, useContext, useEffect, useMemo, useRef, useState } from "react";
-import { useRecordHref } from "../apps/entries";
+import { useRecordHref } from "../recordRoutes";
 import { type Api, useRead } from "../host";
 import { t } from "../i18n";
 import { describe, headerStatus, statusField, withRestrictedFields } from "./describe";

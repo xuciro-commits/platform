@@ -101,6 +101,12 @@ for (const path of walk(src)) {
   for (const match of content.matchAll(/\b(?:from\s*|import\s*\(?\s*)["'](\.[^"']+)["']/g)) {
     const target = relative(src, resolve(dirname(path), match[1]));
     const line = content.slice(0, match.index).split("\n").length;
+    if (/^apps\/entries(?:\.ts)?$/.test(target) && !["main.tsx", "shell/Shell.tsx", "shell/CommandSearch.tsx"].includes(file)) {
+      report(file, line, "the entry registry belongs to application assembly; use recordRoutes for record links.");
+    }
+    if (/^shell\/CommandSearch(?:\.tsx)?$/.test(target) && file !== "shell/Shell.tsx") {
+      report(file, line, "use commandScope for page commands instead of importing the command palette.");
+    }
     if (file === "i18n.ts" && !/^i18n\/[^/]+\.json$/.test(target)) {
       report(file, line, "i18n is a leaf: import only its translation dictionaries and external libraries.");
     }

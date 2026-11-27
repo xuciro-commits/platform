@@ -2,7 +2,7 @@ import { AlertDialog } from "@astryxdesign/core/AlertDialog";
 import { Button } from "@astryxdesign/core/Button";
 import { useToast } from "@astryxdesign/core/Toast";
 import { useRef, useState } from "react";
-import { useRecordHref } from "../apps/entries";
+import { useRecordHref } from "../recordRoutes";
 import { type Api, request, submit } from "../host";
 import { t } from "../i18n";
 import { ActionDialog } from "./ActionDialog";

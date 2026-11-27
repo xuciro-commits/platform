@@ -4,36 +4,17 @@ import { Kbd } from "@astryxdesign/core/Kbd";
 import { HStack } from "@astryxdesign/core/Layout";
 import { Text } from "@astryxdesign/core/Text";
 import type { SearchSource } from "@astryxdesign/core/Typeahead";
-import { createContext, type ReactNode, useCallback, useContext, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { type ReactNode, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { type App, type NavItem, pathOf } from "../apps";
-import { entries, useRecordHref } from "../apps/entries";
+import { entries } from "../apps/entries";
+import { type Command, type Destination, type Recent, SearchScope } from "../commandScope";
+import { useRecordHref } from "../recordRoutes";
 import { type Api, request, useRead } from "../host";
 import { t } from "../i18n";
 import { navigate, usePath } from "../router";
 
-export type Command = { id: string; label: string; run: () => void };
-type Destination = { href: string; label: string };
-type RecordDestination = Destination & { type: string; id: string };
-type Recent = Destination | RecordDestination;
 type Result = Command & { auxiliaryData: { group: string } };
 type SearchResults = { query: string; items: Result[] };
-
-const SearchScope = createContext<{
-  openSearch: () => void;
-  remember: (destination: Recent) => void;
-  register: (getCommands: () => Command[]) => () => void;
-} | null>(null);
-
-export function useCommandSearch() {
-  return useContext(SearchScope);
-}
-
-export function usePageCommands(commands: Command[]) {
-  const scope = useCommandSearch();
-  const current = useRef(commands);
-  current.current = commands;
-  useLayoutEffect(() => scope?.register(() => current.current), [scope]);
-}
 
 function destination(item: Destination, group: string): Result {
   return { id: item.href, label: item.label, auxiliaryData: { group }, run: () => void navigate(item.href) };

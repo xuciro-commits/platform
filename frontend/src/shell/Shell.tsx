@@ -9,7 +9,8 @@ import { MobileNav } from "@astryxdesign/core/MobileNav";
 import { useToast } from "@astryxdesign/core/Toast";
 import { lazy, Suspense, useEffect, useMemo, useState } from "react";
 import { type App, apps, locate, type NavItem, type NavSection, pathOf, settingsItemId } from "../apps";
-import { entries, recordHref } from "../apps/entries";
+import { entries } from "../apps/entries";
+import { useRecordHome } from "../recordRoutes";
 import { type Api, useRead, useSession } from "../host";
 import { Records } from "../pages/RecordList";
 import { setCurrency, setDateFormat, setLanguage, setNumberFormat, setTimeZone, t } from "../i18n";
@@ -58,7 +59,8 @@ export function Shell() {
   const session = useSession();
   const path = usePath();
   const hash = useHash();
-  const legacy = useMemo(() => legacyTarget(hash), [hash]);
+  const recordHref = useRecordHome();
+  const legacy = useMemo(() => legacyTarget(hash, recordHref), [hash, recordHref]);
   const toast = useToast();
   const segments = path.split("/");
   const projected = useRead<Api.ApplicationView[]>(session ? "/v1/applications" : null);
@@ -93,7 +95,7 @@ export function Shell() {
     }
     void navigate(destination ?? "/home/overview", null, true);
     if (!destination) toast({ body: t("This legacy link has no corresponding page in the new frontend.") });
-  }, [signedIn, legacy, hash, resource, resourcePath, toast]);
+  }, [signedIn, legacy, hash, resource, resourcePath, toast, recordHref]);
   const available = useMemo(() => {
     if (me.status !== "ready") return apps;
     const admin = me.data.apps.some((entry) => entry.id === "platform");

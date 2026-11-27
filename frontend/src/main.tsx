@@ -8,6 +8,8 @@ import { ArrowUpIcon } from "@heroicons/react/24/outline";
 import * as stylex from "@stylexjs/stylex";
 import { StrictMode, useEffect } from "react";
 import { createRoot } from "react-dom/client";
+import { recordHomes } from "./apps/entries";
+import { RecordRoutesProvider } from "./recordRoutes";
 import { defaultThemeSlug, themes } from "./astryx-themes";
 import { useLiveChanges, useSession } from "./host";
 import { useLocale } from "./i18n";
@@ -38,9 +40,11 @@ function Root() {
       <Theme theme={theme} mode={useAppearance()}>
         <LayerProvider>
           <LinkProvider component={RouterLink}>
-            <PeekProvider key={`${locale} ${tenant}`}>
-              <Shell />
-            </PeekProvider>
+            <RecordRoutesProvider homes={recordHomes}>
+              <PeekProvider key={`${locale} ${tenant}`}>
+                <Shell />
+              </PeekProvider>
+            </RecordRoutesProvider>
           </LinkProvider>
         </LayerProvider>
       </Theme>
