@@ -400,5 +400,54 @@
         "roles": {}
       }
     ]
+  },
+  {
+    "id": "sim",
+    "settings": {
+      "language": "en",
+      "timezone": "UTC",
+      "currency": "USD"
+    },
+    "seats": [
+      {
+        "id": "admin-1",
+        "subjects": [
+          "admin"
+        ],
+        "roles": {
+          "platform": "admin"
+        }
+      },
+      {
+        "id": "manager-1",
+        "subjects": [
+          "manager"
+        ],
+        "roles": {
+          "crm": "salesmanager",
+          "party": "user"
+        }
+      },
+      {
+        "id": "rep-1",
+        "subjects": [
+          "rep"
+        ],
+        "roles": {
+          "crm": "salesrep",
+          "party": "user"
+        }
+      },
+      {
+        "id": "rep-2",
+        "subjects": [
+          "rep2"
+        ],
+        "roles": {
+          "crm": "salesrep",
+          "party": "user"
+        }
+      }
+    ]
   }
 ]

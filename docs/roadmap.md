@@ -11,7 +11,7 @@
   共用的登录与取值在 `e2e/support.ts`。`make trunk-changed` 按 `scripts/trunk-affected.mjs` 的映射只跑改动影响到的文件，
   碰到宿主、契约、`host/`、`shell/`、公共 `pages/`、夹具或 `support.ts` 就跑全部；`make trunk SPEC=crm` 只跑一个文件。“夹具”指 `scripts/frontend-seed.json`。
 - 改到哪个 spec 文件就顺手整理它：只读写自己的租户、互不依赖的用例去掉 `serial`、前置状态经接口造好，界面只走要验的那一步。
-- 每一行做完，负责人按 [design](design.md)“负责人怎样看”的六步看一遍。
+- 每一行做完，由 AI 评审按 [design](design.md)“负责人怎样看”的六步看一遍，留截图与结论。
 - 这里写到的文件、读取与动作都已对过宿主（夹具宿主 18511）；照写的做，对不上先停下问，不自己改设计。
 
 ## 接手怎样用模板
@@ -27,7 +27,8 @@
 6. **一个表现服务所有入口。** 新表现做成 `src/pages/` 里的一个声明函数（像 `recordList`、`listPage`），入口只写一句声明。
 
 - 业务对照只读 `idea/from-frappe-crm/matrix.md`；`idea/**/captures/` 与 `idea/**/evidence/` 只为核对某个具体细节时定向看一张。
-- 顺序（负责人 11-25 定）：阶段 2 门槛已过（official 与 marketplace 主干全过），当前推进阶段 3；未完工作按下面四块（对应 GitHub Issues `#12`–`#15`）分块收口，扩张的事等第一个客户。原始设计稿在负责人的 Agent Files（`artifacts/platform/extensibility-design.md`）。
+- 顺序（负责人 11-25 定）：阶段 2 门槛已过（official 与 marketplace 主干全过），当前推进阶段 3；未完工作按下面四块（对应 GitHub Issues `#12`–`#15`）分块收口。
+  11-26 负责人定：研发阶段取消人工门禁，客户、陌生人与第三方都由 AI 模拟（[plan](plan.md)“规划的规则”）；下文“等客户”一律读作“等模拟客户的剧本用到”。原始设计稿在负责人的 Agent Files（`artifacts/platform/extensibility-design.md`）。
 
 ## 功能矩阵（11-26）
 
@@ -62,7 +63,7 @@
 
 ## 一、首客收口与上线实证（[#12](https://github.com/xuciro-commits/platform/issues/12)）
 
-阶段 3 的客户由负责人定，定下之前用 official 租户演练；做完本块走完阶段 3 十分钟门槛演示。
+阶段 3 的客户是 AI 模拟的虚构公司（租户 `sim`，人设与剧本在 `idea/sim-customer/`）；做完本块由 AI 走完阶段 3 十分钟门槛演示。
 
 ### 3.1 投产底座
 
@@ -103,7 +104,7 @@
 - 3.4a 已做（29df42cf1）冻结格式纪元：`FormatEpoch` 之后的任何格式变化只经版本化迁移；`make check` 核对改纪元必须同时带迁移与用例。
 - 3.4b 导入与邀请：界面多表导入与按客户账号邀请授权（ac9bca6a7）、128 行原子批量接受与故障注入及万行并发压测（f5508961c）已合入。
   复核 `make load-sql` 导入模式含停机重启无隔离（3.1e 已由 c38925022 修复，11-26 导入 1000 行后重启两次未隔离，记录 2000、位置 2013），核对无丢失、无重复、序号连续及 K1 四种重放一致；最终容量门槛见第四块（[plan](plan.md) 阶段 4）。
-- 3.4c 用满两周：每天遇到的问题加在本行末尾，一项一修；用满后负责人走一次门槛演示。
+- 3.4c 模拟客户跑满 14 个业务日：模拟客户的 AI 按 `idea/sim-customer/` 的剧本每天经浏览器用 `sim` 租户，问题加在本行末尾，一项一修；跑满后由 AI 走一次门槛演示。
   11-26 演练：全新 PG 上 official 门槛路径 8 条全过（5.5 分钟，含安装、转化、按角色看数、赢单、升级、扩展、停机重启、备份恢复）；导入（crm :411）、邀请（:533）通过。
   挡路一项已修：official 与别的用例同选时会带上整个 trunk，连接器 HTTPS 夹具却没起，connector.spec.ts:29 拿不到地址。
 
