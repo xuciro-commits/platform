@@ -40,3 +40,11 @@ func TestEffectiveLibrariesIncludesOfficialAndDedupes(t *testing.T) {
 		t.Fatalf("unexpected effective libraries: %+v", libs)
 	}
 }
+
+func TestOfficialCatalogAppearanceFallback(t *testing.T) {
+	lib := OfficialLibrary()
+	candidates, err := resolveLibraryCandidates(lib.URL, true)
+	if err != nil || len(candidates) != 3 || !strings.HasSuffix(candidates[0], "/catalog-appearance.json") || !strings.HasSuffix(candidates[1], "/catalog.json") || lib.ResolvedURL != candidates[0] {
+		t.Fatalf("official catalog candidates: %v, %v, %s", candidates, err, lib.ResolvedURL)
+	}
+}

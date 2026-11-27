@@ -38,7 +38,7 @@ func OfficialLibraryURL() string {
 func OfficialLibrary() runtimeprotocol.PackageLibrary {
 	raw := OfficialLibraryURL()
 	resolved := ""
-	if candidates, err := ResolveCatalogCandidates(raw); err == nil && len(candidates) > 0 {
+	if candidates, err := resolveLibraryCandidates(raw, true); err == nil && len(candidates) > 0 {
 		resolved = candidates[0]
 	}
 	return runtimeprotocol.PackageLibrary{ID: OfficialLibraryID, URL: raw, ResolvedURL: resolved, Title: OfficialLibraryTitle, Builtin: true}
@@ -115,6 +115,15 @@ func forgeRawURL(forge gitForge, owner, repo, branch, relPath string) string {
 	u := url.URL{Scheme: "https", Host: forge.rawHost}
 	u.Path = "/" + owner + "/" + repo + "/" + forge.rawPrefix + branch + "/" + strings.TrimLeft(relPath, "/")
 	return u.String()
+}
+
+func resolveLibraryCandidates(raw string, official bool) ([]string, error) {
+	candidates, err := ResolveCatalogCandidates(raw)
+	if err != nil || !official || len(candidates) == 0 {
+		return candidates, err
+	}
+	// Keep the old catalog URL valid for released hosts with strict decoders.
+	return append([]string{strings.TrimSuffix(candidates[0], "catalog.json") + "catalog-appearance.json"}, candidates...), nil
 }
 
 func ResolveCatalogCandidates(raw string) ([]string, error) {
@@ -315,7 +324,7 @@ func ReadLibraries(ctx context.Context, tenant string, libs []runtimeprotocol.Pa
 }
 
 func FetchLibraryCatalog(ctx context.Context, tenant string, lib runtimeprotocol.PackageLibrary, send func(*http.Request, bool) (*http.Response, error), files platform.FileStore) runtimeprotocol.PackageLibraryView {
-	candidates, err := ResolveCatalogCandidates(lib.URL)
+	candidates, err := resolveLibraryCandidates(lib.URL, lib.Builtin && lib.ID == OfficialLibraryID)
 	var fetchedTitle, resolvedURL string
 	var entries []runtimeprotocol.PackageCatalogEntry
 	if err == nil {
