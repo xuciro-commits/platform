@@ -93,6 +93,12 @@ func (x *Translator) InstallApplications(definitions []platform.Definition) {
 	x.applications, x.conflicts, x.dictionaries = applications, conflicts, nil
 }
 
+func (x *Translator) CopyApplications(from *Translator) {
+	from.mu.Lock()
+	defer from.mu.Unlock()
+	x.applications, x.conflicts = from.applications, from.conflicts
+}
+
 func scopeOf(app, name string) string {
 	app, _, _ = strings.Cut(app, "/")
 	if namespace, _, ok := strings.Cut(name, "."); ok && namespace != "" && namespace != app {

@@ -54,8 +54,8 @@ func (t *Tenant) Replay(entries []Entry) error {
 			_, err := t.applyAcceptedWork(body)
 			return err
 		},
-		Batch:      t.applyAcceptedBatch,
-		Record:     t.applyAcceptedResult,
+		Batch:      t.batchApply(),
+		Record:     t.recordApply(),
 		Invalidate: t.invalidateReadImage,
 		Pin: func(versions map[string]int) {
 			if t.Processes != nil {

@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"platformserver/kernel/protocol"
 	records "platformserver/kernel/records"
+	persistence "platformserver/kernel/store"
 	"platformserver/platform"
 	trialowner "platformserver/services/devops/trials"
 	controlowner "platformserver/services/security/control"
@@ -33,7 +34,9 @@ func candidateTestTenantWithEnvironment(candidate protocol.ReleaseCandidate, mem
 		return nil, err
 	}
 	sandbox.releases.SelectPreview(candidate.ID)
-	sandbox.AcceptResult = func(e Entry, _, _ string) ([]byte, error) { return e.Body, nil }
+	sandbox.AcceptResult = func(_ context.Context, e Entry, _, _ string) (*persistence.AcceptedWrite, error) {
+		return &persistence.AcceptedWrite{Body: e.Body}, nil
+	}
 	err = environment.InstallCandidate(candidate, b, trialowner.CandidateSandbox{
 		PutModule: func(digest string, raw []byte) error {
 			return sandbox.artifacts().Put(context.Background(), digest, raw)

@@ -43,7 +43,9 @@ test("blank tenant: an administrator installs CRM from the marketplace after rev
   await addToLibrary(wizard);
   await expect(wizard.getByText(/salesrep/).first()).toBeVisible();
   await wizard.getByRole("button", { name: "Continue", exact: true }).click();
-  await wizard.getByRole("button", { name: "Install package", exact: true }).click();
+  const installBtn = wizard.getByRole("button", { name: "Install package", exact: true });
+  await expect(installBtn).toBeEnabled({ timeout: 30_000 });
+  await installBtn.click();
   await expect(wizard).toBeHidden({ timeout: 120_000 });
   await expect(page).toHaveURL(/\/delivery\/installations$/, { timeout: 30_000 });
   await expect(page.getByRole("listitem").filter({ hasText: /^CRM/ })).toContainText("active");
@@ -122,18 +124,24 @@ test("blank tenant: retiring CRM removes its entry and keeps the records, reinst
   await crmRow.getByRole("button", { name: "Manage installation", exact: true }).click();
   const manage = page.getByRole("dialog", { name: /Manage installation/ });
   await expect(manage.getByRole("button", { name: "Retire package", exact: true })).toBeDisabled();
-  await manage.getByRole("button", { name: "Mark for uninstall", exact: true }).click();
-  await expect(manage).toBeHidden();
+  const markUninstall = manage.getByRole("button", { name: "Mark for uninstall", exact: true });
+  await expect(markUninstall).toBeEnabled({ timeout: 30_000 });
+  await markUninstall.click();
+  await expect(manage).toBeHidden({ timeout: 30_000 });
   await expect(crmRow).toContainText("draining");
   await crmRow.getByRole("button", { name: "Manage installation", exact: true }).click();
-  await manage.getByRole("button", { name: "Retire package", exact: true }).click();
-  await expect(manage).toBeHidden();
+  const retireBtn = manage.getByRole("button", { name: "Retire package", exact: true });
+  await expect(retireBtn).toBeEnabled({ timeout: 30_000 });
+  await retireBtn.click();
+  await expect(manage).toBeHidden({ timeout: 30_000 });
   await expect(crmRow).toContainText("retired");
   await expect(page.getByRole("link", { name: "CRM", exact: true })).toHaveCount(0);
 
   await crmRow.getByRole("button", { name: "Reinstall", exact: true }).click();
   const reinstall = page.getByRole("dialog", { name: /Review and install/ });
-  await reinstall.getByRole("button", { name: "Reinstall package", exact: true }).click();
+  const reinstallBtn = reinstall.getByRole("button", { name: "Reinstall package", exact: true });
+  await expect(reinstallBtn).toBeEnabled({ timeout: 30_000 });
+  await reinstallBtn.click();
   await expect(reinstall).toBeHidden({ timeout: 120_000 });
   await expect(crmRow).toContainText("active");
   // All CRM roles already have holders; reinstall preserves those grants.

@@ -38,11 +38,21 @@ export function ProjectCreator({ onClose, onDone }: CreatorProps) {
   const createAction = catalog.status === "ready" ? catalog.data.find((action) => action.schema === "build.app.create") : undefined;
   const appOptions = useMemo(() => {
     const views = installed.status === "ready" ? installed.data : [];
-    return views.map((view) => ({
-      key: view.name || view.app,
-      app: view.app || "build",
-      label: t(view.title || view.name || view.app),
-    }));
+    const counts = new Map<string, number>();
+    for (const view of views) {
+      const base = t(view.title || view.name || view.app);
+      counts.set(base, (counts.get(base) ?? 0) + 1);
+    }
+    return views.map((view) => {
+      const key = view.name || view.app;
+      const base = t(view.title || view.name || view.app);
+      const disambiguate = (counts.get(base) ?? 0) > 1 && key.toLowerCase() !== (view.title || "").toLowerCase();
+      return {
+        key,
+        app: view.app || "build",
+        label: disambiguate ? `${base} · ${key}` : base,
+      };
+    });
   }, [installed]);
   const chosenTarget = appOptions.find((option) => option.key === targetApp) ?? appOptions[0];
 

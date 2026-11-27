@@ -31,10 +31,10 @@ func (t *Tenant) decideAutomated(holder, app string, decide func(*Tenant) (*pb.C
 	})
 }
 
-func (t *Tenant) prepareContinuousDeadLetterReplay(m platform.Member, sub *pb.Submission, now time.Time, opts submitOptions) (*pb.ChangeRecord, *platform.Error, bool) {
+func (t *Tenant) prepareContinuousDeadLetterReplay(ctx context.Context, m platform.Member, sub *pb.Submission, now time.Time, opts submitOptions) (*pb.ChangeRecord, *platform.Error, bool) {
 	releasePreparation := t.beginFlowArtifactPreparation()
 	defer releasePreparation()
-	first, err := decideOnImage(t, context.Background(), "flow:replay-preflight", func(t *Tenant) (automation.ReplayPreflightResult, *platform.Error) {
+	first, err := decideOnImage(t, ctx, "flow:replay-preflight", func(t *Tenant) (automation.ReplayPreflightResult, *platform.Error) {
 		owner := t.Processes
 		if owner == nil {
 			return automation.ReplayPreflightResult{Sub: sub}, nil
@@ -72,7 +72,7 @@ func (t *Tenant) prepareContinuousDeadLetterReplay(m platform.Member, sub *pb.Su
 			},
 		}.Load(sub.GetTarget().GetId())
 	}
-	initial, err := recordRead(t, context.Background(), load)
+	initial, err := recordRead(t, ctx, load)
 	if err != nil {
 		return nil, err, true
 	}
@@ -86,7 +86,7 @@ func (t *Tenant) prepareContinuousDeadLetterReplay(m platform.Member, sub *pb.Su
 	}
 	store := t.frames()
 	var preparedContext automation.ReplayContext
-	prepared, err := recordRead(t, context.Background(), func(t *Tenant) (automation.FlowPreparedBatch, *platform.Error) {
+	prepared, err := recordRead(t, ctx, func(t *Tenant) (automation.FlowPreparedBatch, *platform.Error) {
 		var refusal *platform.Error
 		preparedContext, refusal = load(t)
 		if refusal != nil {
@@ -115,7 +115,7 @@ func (t *Tenant) prepareContinuousDeadLetterReplay(m platform.Member, sub *pb.Su
 		}
 		keep.Input = preparedInput.ArtifactPointer()
 	}
-	record, err := decideOnImage(t, context.Background(), "flow:replay", func(t *Tenant) (*pb.ChangeRecord, *platform.Error) {
+	record, err := decideOnImage(t, ctx, "flow:replay", func(t *Tenant) (*pb.ChangeRecord, *platform.Error) {
 		f, latest, current, refusal := t.continuousSnapshotLocked(preparedContext.Member, preparedContext.Instance.ID, now)
 		if refusal != nil {
 			return nil, refusal

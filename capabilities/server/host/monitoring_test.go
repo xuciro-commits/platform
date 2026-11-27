@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	persistence "platformserver/kernel/store"
 	appsauthoring "platformserver/services/apps/authoring"
 	automationauthoring "platformserver/services/automate/authoring"
 	dataowner "platformserver/services/data"
@@ -138,9 +139,9 @@ func newMonitoringTenant(tb testing.TB) *invariantTenant {
 		tb.Fatal(err)
 	}
 	live := &invariantTenant{Tenant: tenant}
-	tenant.AcceptResult = func(entry Entry, _, _ string) ([]byte, error) {
+	tenant.AcceptResult = func(_ context.Context, entry Entry, _, _ string) (*persistence.AcceptedWrite, error) {
 		live.entries = append(live.entries, entry)
-		return entry.Body, nil
+		return &persistence.AcceptedWrite{Body: entry.Body}, nil
 	}
 	seedInvariantProject(tb, live)
 	return live

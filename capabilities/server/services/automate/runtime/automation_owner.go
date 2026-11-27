@@ -236,6 +236,41 @@ func (f *Flows) HasUnboundRunningDependency(typ string) (bool, error) {
 	return f.hasRunningDependency(typ, true)
 }
 
+func (f *Flows) UnboundRunningClosures(typ string) (map[string][]string, error) {
+	if f == nil || f.host == nil {
+		return nil, nil
+	}
+	c := f.host.Automation(platform.Caller{Replaying: true}, ID)
+	var out map[string][]string
+	scan := scanBindings{}
+	err := f.eachRunning(c, func(row FlowInstance) error {
+		if row.Release != "" || row.Dependencies == "" {
+			return nil
+		}
+		d := f.def(row.Flow, row.Version)
+		if d == nil {
+			return nil
+		}
+		depends := typ == "" || strings.HasPrefix(row.Subject, typ+"/")
+		if !depends {
+			binding, err := f.binding(scan, row)
+			if err != nil {
+				return nil
+			}
+			depends = slices.ContainsFunc(binding.Assets, func(ref platform.AssetRef) bool {
+				return ref.Kind == platform.AssetObject && ref.Name == typ
+			})
+		}
+		if !depends {
+			return nil
+		}
+		ref := platform.AssetRef{App: d.app, Kind: platform.AssetFlow, Name: row.Flow}
+		out = runtimeprotocol.MergeFlowClosures(out, map[string][]string{runtimeprotocol.FlowClosureKey(ref, row.Version): {row.Dependencies}})
+		return nil
+	})
+	return out, err
+}
+
 func (f *Flows) hasRunningDependency(typ string, unboundOnly bool) (bool, error) {
 	c := f.host.Automation(platform.Caller{Replaying: true}, ID)
 	found := false

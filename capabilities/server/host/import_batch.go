@@ -49,8 +49,8 @@ func (t *Tenant) retainImportChanges(retain bool) {
 }
 
 func (t *Tenant) finishImportResult(m platform.Member, item persistence.AcceptedAppend, raw []byte, settlement kernel.Settlement) (*pb.ChangeRecord, *platform.Error) {
-	return t.FinishCommitted(t.App(item.Entry.App), m, item.Hash, raw, kernel.CommittedResult{
-		Settlement: settlement, App: t.App, ApplyBatch: t.applyAcceptedBatch, ApplyRecord: t.applyAcceptedResult, Publish: t.publishAccepted,
+	return t.FinishCommitted(t.readContext(), t.App(item.Entry.App), m, item.Hash, raw, kernel.CommittedResult{
+		Settlement: settlement, App: t.App, Batch: t.batchApply(), Record: t.recordApply(), Publish: t.publishAccepted,
 	})
 }
 

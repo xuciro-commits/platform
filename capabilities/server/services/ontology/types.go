@@ -11,41 +11,42 @@ import (
 
 type Object struct {
 	platform.Record
-	Name              string                       `json:"name" field:"required,search" title:"API name" help:"Its name in the platform, lower-case letters and digits" example:"visit"`
-	Namespace         string                       `json:"namespace,omitempty" title:"Application" help:"The project whose application owns this type; set from the project when the type is created"`
-	Title             string                       `json:"title" field:"required,search" title:"Name" help:"What people call it" example:"Visit"`
-	Plural            string                       `json:"plural,omitempty" title:"Plural" help:"What people call several" example:"Visits"`
-	Icon              string                       `json:"icon,omitempty" title:"Icon" help:"An icon name, lower-case with hyphens" example:"calendar"`
-	Color             string                       `json:"color,omitempty" title:"Color" choices:"neutral,info,success,warning,danger,purple,pink,teal,orange"`
-	Display           string                       `json:"display,omitempty" title:"Title field" help:"The text field that names one record; empty: the first searchable field" example:"name"`
-	Naming            string                       `json:"naming,omitempty" title:"Naming pattern" help:"Automatic record number pattern, e.g. CRM-LEAD-{year}-{n:5}" example:"CRM-LEAD-{year}-{n:5}"`
-	ObjectView        *platform.ObjectView         `json:"objectView,omitempty" type:"json" title:"Object view"`
-	View              json.RawMessage              `json:"view,omitempty" type:"json" title:"Default view"`
-	Description       string                       `json:"description,omitempty" type:"longtext" help:"What one record of it is, for people and agents"`
-	Fields            []Field                      `json:"fields" title:"Fields"`
-	DataSources       []platform.DataSourceBinding `json:"datasources,omitempty" type:"json" field:"aside" title:"Data sources"`
-	Protocols         []protocol.ProtocolBinding   `json:"protocols,omitempty" type:"json" field:"aside" title:"Protocol bindings"`
-	Reads             *platform.RuleReadSpec       `json:"reads,omitempty" type:"json" field:"aside"`
-	Constraints       []platform.Constraint        `json:"constraints,omitempty" type:"json" field:"aside" title:"Business constraints"`
-	Sets              []platform.RecordSet         `json:"sets,omitempty" type:"json" field:"aside" title:"Record sets" help:"Declared record sets"`
-	DispatchCommands  []platform.DispatchCommand   `json:"dispatchCommands,omitempty" type:"json" field:"aside" title:"Device commands"`
-	CreateTransaction *platform.BusinessTxn        `json:"createTransaction,omitempty" type:"json" field:"aside" title:"Creation transaction"`
-	Versioning        *platform.Versioning         `json:"versioning,omitempty" type:"json" field:"aside" title:"Business versioning"`
-	VersionPins       []platform.VersionPinBinding `json:"versionPins,omitempty" type:"json" field:"aside" title:"Version pins" help:"Pinned business versions"`
-	EnterpriseUse     *platform.Expr               `json:"enterpriseUse,omitempty" type:"json" field:"aside" title:"Enterprise use" help:"Current enterprise use"`
-	States            []State                      `json:"states,omitempty" rail:"true" title:"States"`
-	ActionTypes       []platform.AssetBinding      `json:"actionTypes,omitempty" rail:"true" type:"json" title:"Action types"`
-	Actions           []Action                     `json:"actions,omitempty" field:"aside" title:"Actions"`
-	Records           []json.RawMessage            `json:"records,omitempty" type:"json" field:"aside" title:"Reference records" help:"Rows shipped with the type, such as the stages of a pipeline; a publish or an install adds the ones this workspace lacks"`
-	Access            []Access                     `json:"access,omitempty" rail:"true" title:"Access"`
-	Scope             *ObjectScope                 `json:"scope,omitempty" type:"json" field:"aside" title:"Scope fields"`
-	Implements        []string                     `json:"implements,omitempty" field:"aside" title:"Implements" help:"Interfaces whose fields this object has, e.g. core.coded"`
-	Extends           string                       `json:"extends,omitempty" field:"aside" title:"Extends" help:"The installed object type this object adds fields to, e.g. core.person; records pair one to one through the base field"`
-	ExtensionSource   *platform.ExtensionSource    `json:"extensionSource,omitempty" field:"readonly,aside" type:"json" title:"Extension source" help:"The original base package version and field shape captured at publication"`
-	SchemaVersions    []platform.SchemaVersion     `json:"schemaVersions,omitempty" field:"readonly,aside" type:"json" title:"Schema versions" help:"Retained content versions and compatible schema families captured at publication"`
-	State             string                       `json:"state" field:"readonly" choices:"draft,published"`
-	Installed         string                       `json:"installed,omitempty" field:"readonly" title:"Installed as" help:"The type records of it are stored under"`
-	Published         string                       `json:"published,omitempty" field:"readonly,internal" type:"longtext" title:"Installed" help:"What is installed"`
+	Name                 string                       `json:"name" field:"required,search" title:"API name" help:"Its name in the platform, lower-case letters and digits" example:"visit"`
+	Namespace            string                       `json:"namespace,omitempty" title:"Application" help:"The project whose application owns this type; set from the project when the type is created"`
+	Title                string                       `json:"title" field:"required,search" title:"Name" help:"What people call it" example:"Visit"`
+	Plural               string                       `json:"plural,omitempty" title:"Plural" help:"What people call several" example:"Visits"`
+	Icon                 string                       `json:"icon,omitempty" title:"Icon" help:"An icon name, lower-case with hyphens" example:"calendar"`
+	Color                string                       `json:"color,omitempty" title:"Color" choices:"neutral,info,success,warning,danger,purple,pink,teal,orange"`
+	Display              string                       `json:"display,omitempty" title:"Title field" help:"The text field that names one record; empty: the first searchable field" example:"name"`
+	Naming               string                       `json:"naming,omitempty" title:"Naming pattern" help:"Automatic record number pattern, e.g. CRM-LEAD-{year}-{n:5}" example:"CRM-LEAD-{year}-{n:5}"`
+	ObjectView           *platform.ObjectView         `json:"objectView,omitempty" type:"json" title:"Object view"`
+	View                 json.RawMessage              `json:"view,omitempty" type:"json" title:"Default view"`
+	Description          string                       `json:"description,omitempty" type:"longtext" help:"What one record of it is, for people and agents"`
+	Fields               []Field                      `json:"fields" title:"Fields"`
+	DataSources          []platform.DataSourceBinding `json:"datasources,omitempty" type:"json" field:"aside" title:"Data sources"`
+	Protocols            []protocol.ProtocolBinding   `json:"protocols,omitempty" type:"json" field:"aside" title:"Protocol bindings"`
+	Reads                *platform.RuleReadSpec       `json:"reads,omitempty" type:"json" field:"aside"`
+	Constraints          []platform.Constraint        `json:"constraints,omitempty" type:"json" field:"aside" title:"Business constraints"`
+	Sets                 []platform.RecordSet         `json:"sets,omitempty" type:"json" field:"aside" title:"Record sets" help:"Declared record sets"`
+	DispatchCommands     []platform.DispatchCommand   `json:"dispatchCommands,omitempty" type:"json" field:"aside" title:"Device commands"`
+	CreateTransaction    *platform.BusinessTxn        `json:"createTransaction,omitempty" type:"json" field:"aside" title:"Creation transaction"`
+	Versioning           *platform.Versioning         `json:"versioning,omitempty" type:"json" field:"aside" title:"Business versioning"`
+	VersionPins          []platform.VersionPinBinding `json:"versionPins,omitempty" type:"json" field:"aside" title:"Version pins" help:"Pinned business versions"`
+	EnterpriseUse        *platform.Expr               `json:"enterpriseUse,omitempty" type:"json" field:"aside" title:"Enterprise use" help:"Current enterprise use"`
+	States               []State                      `json:"states,omitempty" rail:"true" title:"States"`
+	ActionTypes          []platform.AssetBinding      `json:"actionTypes,omitempty" rail:"true" type:"json" title:"Action types"`
+	Actions              []Action                     `json:"actions,omitempty" field:"aside" title:"Actions"`
+	Records              []json.RawMessage            `json:"records,omitempty" type:"json" field:"aside" title:"Reference records" help:"Rows shipped with the type, such as the stages of a pipeline; a publish or an install adds the ones this workspace lacks"`
+	Access               []Access                     `json:"access,omitempty" rail:"true" title:"Access"`
+	Scope                *ObjectScope                 `json:"scope,omitempty" type:"json" field:"aside" title:"Scope fields"`
+	Implements           []string                     `json:"implements,omitempty" field:"aside" title:"Implements" help:"Interfaces whose fields this object has, e.g. core.coded"`
+	Extends              string                       `json:"extends,omitempty" field:"aside" title:"Extends" help:"The installed object type this object adds fields to, e.g. core.person; records pair one to one through the base field"`
+	ExtensionSource      *platform.ExtensionSource    `json:"extensionSource,omitempty" field:"readonly,aside" type:"json" title:"Extension source" help:"The original base package version and field shape captured at publication"`
+	SchemaVersions       []platform.SchemaVersion     `json:"schemaVersions,omitempty" field:"readonly,aside" type:"json" title:"Schema versions" help:"Retained content versions and compatible schema families captured at publication"`
+	RetainedFlowClosures map[string][]string          `json:"retainedFlowClosures,omitempty" field:"readonly,internal" type:"json"`
+	State                string                       `json:"state" field:"readonly" choices:"draft,published"`
+	Installed            string                       `json:"installed,omitempty" field:"readonly" title:"Installed as" help:"The type records of it are stored under"`
+	Published            string                       `json:"published,omitempty" field:"readonly,internal" type:"longtext" title:"Installed" help:"What is installed"`
 }
 
 type Field struct {

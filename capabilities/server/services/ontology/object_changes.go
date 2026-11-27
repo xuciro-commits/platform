@@ -81,7 +81,7 @@ func DraftChanges(record any) ([]ObjectChange, error) {
 }
 
 func editableObject(value Object) (map[string]editableValue, error) {
-	value.ExtensionSource, value.SchemaVersions = nil, nil
+	value.ExtensionSource, value.SchemaVersions, value.RetainedFlowClosures = nil, nil, nil
 	if len(value.ActionTypes) != 0 {
 		value.ActionTypes = slices.Clone(value.ActionTypes)
 		for i := range value.ActionTypes {

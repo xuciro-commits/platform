@@ -105,7 +105,7 @@ func (t *Tenant) trialSandbox() trialowner.Sandbox {
 			return ""
 		},
 		Submit: func(actor platform.Member, s *pb.Submission, now time.Time) (*platform.Error, []platform.FieldIssue) {
-			_, refusal, issues := t.submitDiagnosed(actor, s, now)
+			_, refusal, issues := t.submit(context.Background(), actor, s, now, submitOptions{})
 			return refusal, issues
 		},
 		Compute: func(actor platform.Member, fixture platform.ComputeFixture, now time.Time) (bool, error) {

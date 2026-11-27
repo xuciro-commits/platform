@@ -12,17 +12,17 @@ import (
 )
 
 type FlowBindingContext struct {
-	Resolver       releasepub.Resolver
-	App            func(string) platform.Service
-	Asset          func(string, string, int) (platform.ReleaseAsset, error)
-	Assets         func() ([]platform.ReleaseAsset, error)
-	Active         func() string
-	Candidate      func(string) (protocol.ReleaseCandidate, error)
-	RetainManaged  func(platform.AssetRef, protocol.ReleaseCandidate) (bool, error)
-	Applications   func(platform.AssetRef, string, string) ([]platform.AssetBinding, error)
-	CloseCandidate func([]platform.AssetRef, []platform.ReleaseAsset, []platform.AssetRef) (protocol.ReleaseCandidate, error)
-	SameRetained   func(protocol.ReleaseCandidate, protocol.ReleaseCandidate) bool
-	CodeMatches    func(platform.ReleaseAsset, platform.ReleaseAsset) (bool, error)
+	Resolver        releasepub.Resolver
+	App             func(string) platform.Service
+	Asset           func(string, string, int) (platform.ReleaseAsset, error)
+	Assets          func() ([]platform.ReleaseAsset, error)
+	Active          func() string
+	Candidate       func(string) (protocol.ReleaseCandidate, error)
+	Applications    func(platform.AssetRef, string, string) ([]platform.AssetBinding, error)
+	CloseCandidate  func([]platform.AssetRef, []platform.ReleaseAsset, []platform.AssetRef) (protocol.ReleaseCandidate, error)
+	SameRetained    func(protocol.ReleaseCandidate, protocol.ReleaseCandidate) bool
+	RetainedClosure func(platform.AssetRef, int, string) bool
+	CodeMatches     func(platform.ReleaseAsset, platform.ReleaseAsset) (bool, error)
 }
 
 func (h FlowBindingContext) BindFlow(app, name string, version int, prior protocol.FlowBinding) (protocol.FlowBinding, error) {
@@ -54,18 +54,7 @@ func (h FlowBindingContext) BindFlow(app, name string, version int, prior protoc
 		return protocol.FlowBinding{}, nil
 	}
 	binding := protocol.FlowBinding{Dependencies: closure.ID}
-	release := h.Active()
-	if !prior.Existing && prior.Dependencies == "" && h.RetainManaged != nil {
-		retained, err := h.RetainManaged(root, closure)
-		if err != nil {
-			return binding, err
-		}
-		if retained {
-			binding.Release = closure.ID
-			release = ""
-		}
-	}
-	bindings, bindErr := h.Applications(root, release, closure.ID)
+	bindings, bindErr := h.Applications(root, h.Active(), closure.ID)
 	if bindErr != nil {
 		return binding, bindErr
 	}
@@ -75,14 +64,15 @@ func (h FlowBindingContext) BindFlow(app, name string, version int, prior protoc
 	}
 	if prior.Dependencies != "" {
 		if prior.Dependencies != closure.ID {
+			if prior.Existing && h.RetainedClosure != nil && h.RetainedClosure(root, version, prior.Dependencies) {
+				binding.Dependencies = prior.Dependencies
+				return binding, nil
+			}
 			return binding, fmt.Errorf("flow %s version %d dependency release changed", root, version)
 		}
 		return binding, nil
 	}
-	if binding.Release != "" {
-		return binding, nil
-	}
-	binding.Release = release
+	binding.Release = h.Active()
 	if binding.Release == "" {
 		return binding, nil
 	}

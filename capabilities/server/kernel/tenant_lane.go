@@ -2,6 +2,7 @@ package kernel
 
 import (
 	"context"
+	"go.opentelemetry.io/otel/trace"
 	"runtime"
 	"strings"
 	"sync"
@@ -39,13 +40,22 @@ func (l *Lane) BindReadScope(enter func(context.Context), leave func()) {
 
 func (l *Lane) Observe(observer LaneObserver) { l.observe.Store(&observer) }
 
-func (l *Lane) Lock() { _ = l.acquire(context.Background(), callerName(2)) }
+func (l *Lane) Lock() { _ = l.Hold(context.Background(), callerName(2)) }
 
 func (l *Lane) Hold(ctx context.Context, holder string) error {
 	if holder == "" {
 		holder = callerName(2)
 	}
-	return l.acquire(ctx, holder)
+	return l.acquire(ctx, ctx, holder)
+}
+
+func (l *Lane) HoldForCommit(ctx context.Context, holder string) error {
+	trace.SpanFromContext(ctx).AddEvent("lane.wait")
+	scope := ctx
+	if ctx.Done() != nil {
+		scope = context.WithoutCancel(ctx)
+	}
+	return l.acquire(ctx, scope, holder)
 }
 
 func (l *Lane) State() LaneState {
@@ -56,7 +66,7 @@ func (l *Lane) State() LaneState {
 	return state
 }
 
-func (l *Lane) acquire(ctx context.Context, holder string) error {
+func (l *Lane) acquire(ctx, scope context.Context, holder string) error {
 	if err := ctx.Err(); err != nil {
 		return err
 	}
@@ -77,7 +87,7 @@ func (l *Lane) acquire(ctx context.Context, holder string) error {
 	now := time.Now()
 	l.hold.Store(&laneHold{holder: holder, since: now, waited: now.Sub(started)})
 	if l.enter != nil {
-		l.enter(ctx)
+		l.enter(scope)
 	}
 	return nil
 }

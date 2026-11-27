@@ -1,12 +1,13 @@
 package host
 
 import (
+	"context"
 	"encoding/json"
-	"strings"
 	"testing"
 	"time"
 
 	"platformserver/kernel/protocol"
+	"platformserver/kernel/records"
 	"platformserver/platform"
 	"platformserver/services/actions"
 	automationauthoring "platformserver/services/automate/authoring"
@@ -131,118 +132,169 @@ func TestInvariantK9DateWaitUntilAndArchivedSubjectCancelFlow(t *testing.T) {
 	}
 }
 
-func TestInvariantK9ManagedFlowStartingReleaseSurvivesPackageUpgrade(t *testing.T) {
-	apps := func(id string) []platform.Service {
+func TestInvariantK9UnboundFlowSurvivesCompatibleUpgradeAndRestart(t *testing.T) {
+	flowApps := func(id string) []platform.Service {
 		return []platform.Service{work.New(id, actions.NewAuthority), automation.New(id, actions.NewAuthority, PublicationResolver())}
 	}
-	descriptor := func(version, title string, extra bool) platform.PackageDescriptor {
-		id := "flow-source-" + version
-		source := newInvariantTenantWithApps(t, id, apps(id))
-		object := invariantObject("deal", "Deal")
-		fields := []ontology.Field{{Name: "note", Type: "text", Title: "Note"}, {Name: "due", Type: "date", Title: "Due"}, {Name: "owner", Type: "member", Title: "Owner"}}
+	publishPkg := func(version string, extra bool) platform.PackageDescriptor {
+		t.Helper()
+		src := newInvariantTenantWithApps(t, "flow-pkg-src-"+version, flowApps("flow-pkg-src-"+version))
+		fields := []ontology.Field{{Name: "note", Title: "Note", Type: "text"}}
 		if extra {
-			fields = append(fields, ontology.Field{Name: "extra", Type: "text", Title: "Extra"})
+			fields = append(fields, ontology.Field{Name: "externalref", Title: "External ref", Type: "text"})
 		}
-		object["fields"] = fields
-		object["states"] = []ontology.State{{Name: "open", Title: "Open"}, {Name: "won", Title: "Won"}}
-		source.accept(t, "build.object.create", build.ObjectType, "DEAL", object)
-		source.accept(t, "build.object.publish", build.ObjectType, "DEAL", map[string]any{})
-		source.accept(t, "build.process.create", protocol.ProcessType, "REMINDER", map[string]any{
-			"name": "reminder", "title": "Reminder", "kind": "flow", "object": "invariantproject.deal", "when": "open",
+		obj := invariantObject("lead", "Lead")
+		obj["fields"] = fields
+		obj["states"] = []ontology.State{{Name: "open", Title: "Open"}}
+		src.accept(t, "build.object.create", build.ObjectType, "OBJ1", obj)
+		src.accept(t, build.SchemaPublish, build.ObjectType, "OBJ1", map[string]any{})
+		src.accept(t, "build.process.create", protocol.ProcessType, "PROC1", map[string]any{
+			"name": "leadsla", "title": "Lead SLA", "object": "invariantproject.lead", "when": "open",
 			"steps": []protocol.ProcessStep{
-				{Name: "due", Kind: "wait", WaitUntil: &platform.Binding{Source: "subject", Path: []string{"due"}}, Next: "tell"},
-				{Name: "tell", Kind: "notify", Notify: &protocol.NotificationEffect{Title: title, Body: "Follow up", Field: "owner"}, Next: "done"},
-				{Name: "done", Kind: "end"},
+				{Name: "ask", Title: "Review", Kind: "ask", Ask: build.User, Answers: []string{"ok"}, Next: "mark"},
+				{Name: "mark", Kind: "action", Act: "edit", Inputs: map[string]platform.Binding{"note": {Source: "literal", Value: platform.Raw("Reviewed")}}},
 			},
 		})
-		source.accept(t, protocol.SchemaProcess, protocol.ProcessType, "REMINDER", map[string]any{})
-		ref := platform.AssetRef{App: build.ID, Kind: platform.AssetFlow, Name: "build.reminder"}
-		root := platform.AssetRef{App: build.ID, Kind: platform.AssetApp, Name: "reminderapp"}
-		source.accept(t, "build.app.create", protocol.AppType, "APP", map[string]any{
-			"name": root.Name, "title": "Reminder app", "resources": []platform.AssetRef{{App: build.ID, Kind: platform.AssetObject, Name: "invariantproject.deal"}, ref},
+		src.accept(t, protocol.SchemaProcess, protocol.ProcessType, "PROC1", map[string]any{})
+		src.accept(t, "build.app.create", protocol.AppType, "APP1", map[string]any{
+			"name": "crmapp", "title": "CRM",
+			"resources": []platform.AssetRef{{App: build.ID, Kind: platform.AssetObject, Name: "invariantproject.lead"}, {App: build.ID, Kind: platform.AssetFlow, Name: "build.leadsla"}},
 		})
-		candidate := invariantPublishData(t, source, source.member(t), []build.JointDraftRef{
-			{Kind: platform.AssetObject, ID: "DEAL"}, {Kind: platform.AssetFlow, ID: "REMINDER"}, {Kind: platform.AssetApp, ID: "APP"},
-		}, "flow-"+version)
-		saved, err := source.releases.Candidate(candidate)
+		candidateID := invariantPublishData(t, src, src.member(t), []build.JointDraftRef{
+			{Kind: platform.AssetObject, ID: "OBJ1"}, {Kind: platform.AssetFlow, ID: "PROC1"}, {Kind: platform.AssetApp, ID: "APP1"},
+		}, "flow-pkg-"+version)
+		candidate, err := PublicationResolver().ReadCandidate(candidateID, src.releases.Raw(candidateID))
 		if err != nil {
 			t.Fatal(err)
 		}
-		return platform.PackageDescriptor{ID: "reminderpkg", Version: version, Namespace: "reminderpkg", Title: "Reminder package",
-			Blueprint: &platform.PackageBlueprint{Roots: []platform.AssetRef{root}, Assets: saved.Assets}}
-	}
-	const id = "managed-flow-upgrade"
-	seat := protocol.Seat{Subjects: []string{"admin"}, Member: platform.Member{ID: "admin", Roles: map[string]string{"platform": "admin"}}}
-	live := newInvariantTenantWithApps(t, id, apps(id), seat)
-	admin, _ := live.Member("admin")
-	install := func(desc platform.PackageDescriptor, action string) {
-		t.Helper()
-		preview, err := live.InspectPackage(t.Context(), protocol.PackageInspectRequest{Content: platform.Raw(desc)})
+		desc, err := packages.Rebind(platform.PackageDescriptor{
+			ID: "crm", Version: version, Namespace: "crm", Title: "CRM",
+			Blueprint: &platform.PackageBlueprint{Roots: []platform.AssetRef{{App: build.ID, Kind: platform.AssetApp, Name: "crmapp"}}, Assets: candidate.Assets},
+		}, "crm")
 		if err != nil {
 			t.Fatal(err)
 		}
-		for _, step := range []struct {
-			schema  string
-			payload map[string]any
-		}{
-			{packages.SchemaPackageImport, map[string]any{"id": desc.ID, "digest": preview.Digest}},
-			{action, map[string]any{"id": desc.ID, "version": desc.Version, "namespace": "reminderpkg"}},
-		} {
-			req := live.submission(step.schema, protocol.PackageType, desc.ID, step.payload)
-			req.Authority, req.PrincipalId = "platform", admin.ID
-			if _, refused := live.Submit(admin, req, invariantClock); refused != nil {
-				t.Fatalf("%s %s: %v", step.schema, desc.Version, refused)
-			}
-		}
+		return desc
 	}
-	install(descriptor("1.0.0", "Original reminder", false), packages.SchemaPackageInstall)
-	due := invariantClock.AddDate(0, 0, 2).Format(time.DateOnly)
-	live.accept(t, "reminderpkg.deal.create", "reminderpkg.deal", "D1", map[string]any{"note": "Original", "due": due, "owner": "builder"})
-	live.Work(invariantClock)
-	flow := func(tenant *invariantTenant, key string) protocol.FlowInstance {
+
+	v1, v2 := publishPkg("0.3.1", false), publishPkg("0.3.2", true)
+	seat := protocol.Seat{Subjects: []string{"package-admin"}, Member: platform.Member{ID: "package-admin", Roles: map[string]string{"platform": "admin", "crm": "user", build.ID: build.User}}}
+	target := newInvariantTenantWithApps(t, "flow-pkg-target", flowApps("flow-pkg-target"), seat)
+	admin, _ := target.Member("package-admin")
+	submitPkg := func(schema string, payload any) {
 		t.Helper()
-		x, ok := platform.Get[protocol.FlowInstance](tenant.automation(automation.ID, false), "build.reminder:"+key)
-		if !ok {
-			t.Fatalf("missing flow %s", key)
+		sub := target.submission(schema, protocol.PackageType, "crm", payload)
+		sub.Authority, sub.PrincipalId = "platform", admin.ID
+		if _, refusal := target.Submit(admin, sub, invariantClock); refusal != nil {
+			t.Fatalf("%s: %#v", schema, refusal)
 		}
-		return x
 	}
-	first := flow(live, "D1")
-	if first.State != "waiting" || first.Release == "" || first.Release != first.Dependencies || live.releases.Active() != "" {
-		t.Fatalf("managed flow must pin a starting closure without activating a tenant release: %+v", first)
+	for _, desc := range []platform.PackageDescriptor{v1, v2} {
+		offer, err := target.InspectPackage(context.Background(), protocol.PackageInspectRequest{Content: platform.Raw(desc)})
+		if err != nil {
+			t.Fatal(err)
+		}
+		submitPkg(packages.SchemaPackageImport, map[string]any{"id": desc.ID, "digest": offer.Digest})
 	}
-	if err := live.Processes.Check(); err != nil {
+	submitPkg(packages.SchemaPackageInstall, map[string]any{"id": "crm", "version": "0.3.1", "namespace": "crm"})
+
+	createLead := target.submission("crm.lead.create", "crm.lead", "L1", map[string]any{"note": "Open lead"})
+	createLead.Authority, createLead.PrincipalId = build.ID, admin.ID
+	if _, refusal := target.Submit(admin, createLead, invariantClock); refusal != nil {
+		t.Fatalf("create lead: %#v", refusal)
+	}
+	target.Work(invariantClock.Add(2 * time.Second))
+	if err := target.Processes.Check(); err != nil {
+		t.Fatalf("before upgrade: %v", err)
+	}
+
+	submitPkg(packages.SchemaPackageUpgrade, map[string]any{"id": "crm", "version": "0.3.2"})
+	if err := target.Processes.Check(); err != nil {
+		t.Fatalf("after upgrade: %v", err)
+	}
+
+	raw, _, err := target.Snapshot(func() int64 { return int64(len(target.entries)) })
+	if err != nil {
 		t.Fatal(err)
 	}
-	install(descriptor("1.1.0", "New reminder", true), packages.SchemaPackageUpgrade)
-	if err := live.Processes.Check(); err != nil {
-		t.Fatalf("upgrade broke the old instance: %v", err)
+	snapRestored := newInvariantTenantReplayWithApps(t, target.ID, flowApps(target.ID), seat)
+	if err := snapRestored.Restore(raw); err != nil {
+		t.Fatalf("snapshot restore: %v", err)
 	}
-	live.accept(t, "reminderpkg.deal.create", "reminderpkg.deal", "D2", map[string]any{"note": "New", "due": due, "owner": "builder"})
-	live.Work(invariantClock)
-	next := flow(live, "D2")
-	if next.Release == "" || next.Release == first.Release || next.State != "waiting" {
-		t.Fatalf("new instance must bind the new closure: %+v", next)
+	if err := snapRestored.Processes.Check(); err != nil {
+		t.Fatalf("snapshot process check: %v", err)
 	}
-	restored := newInvariantTenantReplayWithApps(t, id, apps(id), seat)
-	restored.Files = live.files()
-	if err := restored.recoverEntries(live.entries); err != nil {
+
+	replayed := newInvariantTenantReplayWithApps(t, target.ID, flowApps(target.ID), seat)
+	if err := replayed.Replay(target.entries); err != nil {
+		t.Fatalf("replay: %v", err)
+	}
+	if err := replayed.Processes.Check(); err != nil {
+		t.Fatalf("replay process check: %v", err)
+	}
+	// Completing the waiting task after package upgrade must step and finish the unbound flow.
+	replayedRow := replayed.Projection.Type(protocol.FlowInstanceType).Rows().Get("build.leadsla:L1")
+	if replayedRow == nil {
+		t.Fatal("missing replayed flow instance")
+	}
+	taskID := replayedRow.Value.Interface().(protocol.FlowInstance).Tokens[0].Task
+	replayedAdmin, _ := replayed.Member("package-admin")
+	completeSub := replayed.submission("work.task.complete", "work.task", taskID, map[string]any{"answer": "ok"})
+	completeSub.Authority, completeSub.PrincipalId = "work", replayedAdmin.ID
+	if _, refusal := replayed.Submit(replayedAdmin, completeSub, invariantClock.Add(4*time.Second)); refusal != nil {
+		t.Fatalf("complete waiting task after upgrade: %#v", refusal)
+	}
+	replayed.Work(invariantClock.Add(6 * time.Second))
+	finished := replayed.Projection.Type(protocol.FlowInstanceType).Rows().Get("build.leadsla:L1").Value.Interface().(protocol.FlowInstance)
+	if finished.State != "done" {
+		t.Fatalf("expected unbound flow to finish after upgrade, got state=%q", finished.State)
+	}
+
+	// Forged dependency digest on the unbound running instance must still be rejected.
+	row := snapRestored.Projection.Type(protocol.FlowInstanceType).Rows().Get("build.leadsla:L1")
+	if row == nil {
+		t.Fatal("missing waiting flow instance")
+	}
+	forged := row.Value.Interface().(protocol.FlowInstance)
+	forged.Dependencies = "sha256-v1:0000000000000000000000000000000000000000000000000000000000000000"
+	forgedBytes, _ := json.Marshal(forged)
+	if _, err := snapRestored.restoreRecords(map[string][]records.StoredState{protocol.FlowInstanceType: {{Value: forgedBytes}}}); err != nil {
 		t.Fatal(err)
 	}
-	if err := restored.Processes.Check(); err != nil {
-		t.Fatalf("replay cannot recover pinned flows: %v", err)
+	if err := snapRestored.Processes.Check(); err == nil {
+		t.Fatal("forged dependency digest on unbound instance was accepted")
 	}
-	if recovered := flow(restored, "D1"); recovered.Release != first.Release || recovered.Dependencies != first.Dependencies {
-		t.Fatalf("recovery changed the original binding: %+v", recovered)
+
+	// Builder compatible object expansion across multiple publishes + restart.
+	dev := newInvariantTenantWithApps(t, "flow-dev-target", flowApps("flow-dev-target"))
+	obj := invariantObject("visit", "Visit")
+	obj["fields"] = []ontology.Field{{Name: "guest", Title: "Guest", Type: "text"}}
+	obj["states"] = []ontology.State{{Name: "open", Title: "Open"}}
+	dev.accept(t, "build.object.create", build.ObjectType, "O1", obj)
+	dev.accept(t, build.SchemaPublish, build.ObjectType, "O1", map[string]any{})
+	dev.accept(t, "build.process.create", protocol.ProcessType, "P1", map[string]any{
+		"name": "visitcheck", "title": "Visit check", "object": "invariantproject.visit", "when": "open",
+		"steps": []protocol.ProcessStep{{Name: "ask", Title: "Check", Kind: "ask", Ask: build.User, Answers: []string{"yes"}}},
+	})
+	dev.accept(t, protocol.SchemaProcess, protocol.ProcessType, "P1", map[string]any{})
+	dev.accept(t, "invariantproject.visit.create", "invariantproject.visit", "V1", map[string]any{"guest": "Ada"})
+	dev.Work(invariantClock.Add(2 * time.Second))
+	dev.accept(t, "build.object.edit", build.ObjectType, "O1", map[string]any{
+		"fields": []ontology.Field{{Name: "guest", Title: "Guest", Type: "text"}, {Name: "room", Title: "Room", Type: "text"}},
+	})
+	dev.accept(t, build.SchemaPublish, build.ObjectType, "O1", map[string]any{})
+	dev.accept(t, "build.object.edit", build.ObjectType, "O1", map[string]any{
+		"fields": []ontology.Field{{Name: "guest", Title: "Guest", Type: "text"}, {Name: "room", Title: "Room", Type: "text"}, {Name: "floor", Title: "Floor", Type: "integer"}},
+	})
+	dev.accept(t, build.SchemaPublish, build.ObjectType, "O1", map[string]any{})
+	if err := dev.Processes.Check(); err != nil {
+		t.Fatalf("dev after two compatible publishes: %v", err)
 	}
-	restored.Work(invariantClock.AddDate(0, 0, 3))
-	if old, newer := flow(restored, "D1"), flow(restored, "D2"); old.State != "done" || newer.State != "done" {
-		t.Fatalf("retained and current flows must both complete: %s / %s", old.State, newer.State)
+	devReplayed := newInvariantTenantReplayWithApps(t, dev.ID, flowApps(dev.ID))
+	if err := devReplayed.Replay(dev.entries); err != nil {
+		t.Fatalf("dev replay: %v", err)
 	}
-	notes := platform.Raw(restored.Notices.ForMember("builder"))
-	for _, title := range []string{"Original reminder", "New reminder"} {
-		if !strings.Contains(string(notes), title) {
-			t.Fatalf("missing notification from starting flow version %s: %s", title, notes)
-		}
+	if err := devReplayed.Processes.Check(); err != nil {
+		t.Fatalf("dev replay check: %v", err)
 	}
 }

@@ -41,7 +41,7 @@
 | 记录：列表、记录页、行内编辑、视图 | 产品级 | `pages/RecordList.tsx`、`RecordPage.tsx`；records 33 项 | — |
 | CRM 包 | 产品级 | crm 17 项、official 8 项 | — |
 | 宿主：接受路径、重放、内存与文件存储 | 能用 | `capabilities/server/kernel`；十三组内核不变量；official 停机重启、备份恢复 | — |
-| PostgreSQL 存储 | 能用 | 3.1a–f；crm 与 official 历史 PG 验收全过 | 全量 PG Trunk 验收卡在提交长时间占住租户处理通道：一（3.1f，#12） |
+| PostgreSQL 存储 | 能用 | 3.1a–f；提交热路径优化已合入（d26004e9d），official 与 blank 重装已过 | 空载补跑合并后干净提交全量 make verify 与万行压测：一（3.1f，#12） |
 | 格式纪元冻结 | 产品级 | `kernel/store/migration.go`、`scripts/check-epoch.mjs`；K1 纪元拒绝、备份纪元拒绝 | — |
 | 构建：类型、字段、状态、动作、发布 | 能用 | `services/ontology`；builder 14 项 | — |
 | 条件与表达式编辑器 | 能用 | `pages/ConditionBuilder.tsx`、`ExpressionEditor.tsx`；builder “a condition picked”、“a formula written” | — |
@@ -80,11 +80,9 @@
   改为一次扫描内同一流程版本与起始发布只绑一次，全新 PG 上 :513 单跑 2.5 分钟通过。
   Flows.Listen 启动每个流程仍各建一次登记表，留作性能项。
   rebac.spec.ts:5 每次都挂已查清：它和市场用例共用 blank 租户，市场用例给 user-1 授了 CRM 角色；已改用独立 rebac 租户（69045ec88）。
-  验收未过，卡在提交长时间占住租户处理通道：11-26 全新 PG 上两轮全量分别 77 过、3 挂、42 未跑与 84 过、6 挂、32 未跑，两轮失败互不重合，多为等按钮、对话框或页面结果超时。
-  服务端日志：单次提交最长占住 publisher 24 秒（与 :513 超时同一时段），phone 8.8 秒、crm 8.3 秒、acceptance 6.4 秒；第二轮提交超 200ms 预算 29 次共 65.6 秒，后台 work 98 次共 78 秒；无 panic、无报错。
-  下一步：在"lane held"日志里带上提交的 schema 名，跑一轮全量定位最慢的几种提交，逐个修，再跑全量验收。
-  11-26 两轮全量与一次演练里挂过、别轮能过的用例：records :191；builder :67、:337；marketplace :159、:223、:513；connector :29（点击超时）；crm :187；rebac :5（审批后无提示）。
-  其中两条不像单纯超时，修完慢提交后先单跑：crm :374 收件箱"Open full page"到了 `/ontology/objects/crm.activity/…` 而不是 `/crm/…`；rebac :95 自定义角色的"Save role"一直禁用。
+  提交热路径与恢复闭环已合入（d26004e9d）：复用已解码记录、消掉 PG 审计多余事务往返与双构 Delta、慢锁日志带上 schema 名；BenchmarkBuildSubmit-12 中位耗时 2.67ms → 2.11ms，普通提交已不再触发 200ms 慢锁。
+  同期补齐未绑定流程升级/重启闭包保留（K9、official 8/8 含停机重启与空库恢复）、已退役包重装保留 DemoRecords 并守住 K24 种子冲突，以及同名扩展目标应用消歧；crm :374 与 rebac :95 已在前置全量中通过。
+  待收口：空载补跑干净提交的全量 make verify（后端不变量、HTTP 安全与 PG Trunk）与 make load-sql 万行导入基线。
 
 ### 3.2 客户扩展
 
@@ -111,10 +109,13 @@
   模拟客户第 1 天（11-26）：租户切换里没有 sim——夹具宿主是改租户表之前起的，重启后已有（运维，不改代码）；
   租户切换的“新建工作区”跳到 `/host/tenants`，那里只有列表，没有创建入口——已修：列表页加“新建工作区”对话框（标识、名称、模板、首位管理员），经 `POST /v1/host/tenants` 创建；workspace “a host administrator creates a workspace”。
   第 3、6 天挡路已修：扩展项目页无附属对象入口且暴露不可填 JSON 的“保存资源”，创建动作不能按宿主记录阶段设前置条件——过滤必填不可填参数的原始动作，项目页列出归属对象并提供“扩展对象”，`ActionTypeDialog` 支持按自身或 `base.<field>` 生成 `Guard`；builder “extension project”。
-  第 1、2、11 天已修：`Delivery` 默认落 `Marketplace`、`Admin` 默认落 `Members`；`sim` 包库预导入 `CRM 0.3.1` 与 `0.3.2`；
+  第 1、2、11 天已修：`Delivery` 默认落 `Marketplace`、`Admin` 默认落 `Members`；`sim` 包库预导入外部固定版本 `CRM 0.3.0` 与升级版 `0.3.5`（e4dbd68a8）；
   `ListPage` 日历与甘特空月保留顶栏“新建”，`RecordList` 经 `/v1/actions/{schema}/check` 判定新建权限（workspace、crm）。
-  第 1 天导入已修：导入引用与选项支持按应用及工作区译文唯一匹配记录标识与键值，并在接受路径与向导中区分非法选项（“请从列表中选择”）与不可读引用（crm）。
-  第 5 天评论提及已修：`RecordActivity` 评论框输入 `@` 按成员姓名或标识弹出工作区成员候选列表，支持键盘与点击插入 `@<memberId>`（records “comment mention”）。
+  第 1 天导入已修：导入引用与选项支持按应用及工作区译文唯一匹配记录标识与键值，并在接受路径与向导中区分非法选项（“请从列表中选择”）与不可读引用（9d4011481，crm）。
+  第 5 天评论提及已修：`RecordActivity` 评论框输入 `@` 按成员姓名或标识弹出工作区成员候选列表，支持键盘与点击插入 `@<memberId>`（f24c3a93b，records “comment mention”）。
+  第 3、5、9 天与补测已修（92ede0629、c786b1839）：明细行集合带回引用显示名；流程 `waitUntil` 支持 `date`（`YYYY-MM-DD`）且 `.archive`（含清理演示数据）自动取消主体在途流程（K9）；
+  收件箱为受限或空标题事项提供“受限事项”/引用回退标题；非 `.edit` 跨对象动作提交后全局失效读缓存。
+  待完成：用最新 `main` 受控重启 `sim` 宿主，补跑 Day 03/06/11/13/14 客户验收并完成阶段 3 门槛演示。
 
 ## 二、能力底座与受管服务（[#13](https://github.com/xuciro-commits/platform/issues/13)）
 

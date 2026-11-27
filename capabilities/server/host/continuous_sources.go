@@ -100,13 +100,11 @@ func (t *Tenant) checkStreamSourceLocked(m platform.Member, plan automation.Flow
 }
 
 func (t *Tenant) continuousSources(now time.Time) []func() {
-	if t.businessStopped() || !t.OwnerActive(protocol.FlowApp) || !t.streamMu.TryLock() {
+	seq, _ := t.Changes()
+	if t.businessStopped() || !t.OwnerActive(protocol.FlowApp) || !t.flowArtifacts.TryPull(seq, now) {
 		return nil
 	}
-	return []func(){func() {
-		defer t.streamMu.Unlock()
-		t.pullContinuousSources(now)
-	}}
+	return []func(){func() { defer t.flowArtifacts.EndPull(); t.pullContinuousSources(now) }}
 }
 
 func (t *Tenant) pullContinuousSources(now time.Time) {

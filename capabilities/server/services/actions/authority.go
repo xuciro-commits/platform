@@ -23,7 +23,6 @@ type authority struct {
 	retainAccepted bool
 	changes        *protocol.ChangeLog
 	authorities    *protocol.Authorities
-	schemaRefs     []*pb.SchemaRef
 	schemas        *protocol.SchemaRegistry
 	catalog        *platform.Catalog
 }
@@ -37,7 +36,7 @@ func NewAuthority(tenant, id string, catalog *platform.Catalog, classes ...strin
 	}
 	registry := protocol.NewSchemaRegistry(schemas)
 	l := &authority{tenant: tenant, authority: id, changes: protocol.NewChangeLog(registry), schemas: registry,
-		schemaRefs: slices.Clone(schemas), authorities: protocol.NewAuthorities(), catalog: catalog}
+		authorities: protocol.NewAuthorities(), catalog: catalog}
 	for _, class := range classes {
 		d := &pb.AuthorityDeclaration{TenantId: tenant, DataClass: class, Kind: pb.AuthorityKind_AUTHORITY_KIND_TENANT_SERVER, AuthorityId: id, Epoch: 1}
 		l.authorities.Declare(d)
@@ -64,7 +63,9 @@ func (l *authority) Extend(classes []string, actions []platform.Action) error {
 	if err := l.schemas.Learn(schemas...); err != nil {
 		return err
 	}
-	l.schemaRefs = append(l.schemaRefs, schemas...)
+	if len(classes) != 0 {
+		l.authorities = l.authorities.Clone()
+	}
 	l.catalog.Add(actions...)
 	for _, class := range classes {
 		if slices.ContainsFunc(l.declarations, func(d *pb.AuthorityDeclaration) bool { return d.GetDataClass() == class }) {
@@ -118,17 +119,10 @@ func (l *authority) ForkAcceptedChanges() platform.ChangeLog {
 func (l *authority) ForkRead() (platform.Authority, error) {
 	l.mu.Lock()
 	defer l.mu.Unlock()
-	registry := protocol.NewSchemaRegistry(l.schemaRefs)
-	fork := &authority{tenant: l.tenant, authority: l.authority, declarations: slices.Clone(l.declarations),
-		schemaRefs: slices.Clone(l.schemaRefs), schemas: registry,
-		changes: l.changes.ForkWithSchemas(registry), archive: l.archive, retainAccepted: l.retainAccepted,
-		authorities: protocol.NewAuthorities(), catalog: l.catalog.CloneActions()}
-	for _, declaration := range fork.declarations {
-		if err := fork.authorities.Declare(declaration); err != nil {
-			return nil, err
-		}
-	}
-	return fork, nil
+	registry := *l.schemas
+	return &authority{tenant: l.tenant, authority: l.authority, declarations: slices.Clip(l.declarations), schemas: &registry,
+		changes: l.changes.ForkWithSchemas(&registry), archive: l.archive, retainAccepted: l.retainAccepted,
+		authorities: l.authorities, catalog: l.catalog.CloneActions()}, nil
 }
 
 func (l *authority) RecordsFor(tenant string) []*pb.ChangeRecord {

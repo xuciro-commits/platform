@@ -213,7 +213,7 @@ func (j *File) Position(tenant string) int64 {
 	return j.next[tenant] - 1
 }
 
-func (j *File) AppendAccepted(_ context.Context, tenant string, e Entry, key, hash string) ([]byte, error) {
+func (j *File) AppendAccepted(_ context.Context, tenant string, e Entry, key, hash string) (*AcceptedWrite, error) {
 	identity, err := j.identify(e.Body)
 	if err != nil || e.Kind != "accepted-result" || identity.Tenant != tenant || identity.App != e.App || identity.Key != key {
 		return nil, fmt.Errorf("journal: accepted input identity differs: %v", err)
@@ -228,7 +228,7 @@ func (j *File) AppendAccepted(_ context.Context, tenant string, e Entry, key, ha
 		if prior.hash != hash {
 			return nil, ErrAcceptedConflict
 		}
-		return bytes.Clone(prior.body), nil
+		return &AcceptedWrite{Body: bytes.Clone(prior.body)}, nil
 	}
 	if j.writeFault != nil {
 		return nil, j.writeFault
@@ -265,7 +265,7 @@ func (j *File) AppendAccepted(_ context.Context, tenant string, e Entry, key, ha
 	j.next[tenant] = seq + 1
 	j.mu.Unlock()
 	j.results[index] = fileResult{hash, stored.Entry.Body}
-	return bytes.Clone(stored.Entry.Body), nil
+	return &AcceptedWrite{Body: bytes.Clone(stored.Entry.Body)}, nil
 }
 
 func (j *File) SaveSnapshot(_ context.Context, tenant string, seq int64, code string, state []byte) error {

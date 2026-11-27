@@ -31,9 +31,6 @@ func (t *Tenant) begin(name string, parent trace.SpanContext, attrs ...attribute
 }
 
 func (t *Tenant) current() trace.SpanContext {
-	if t.readScope == nil {
-		return trace.SpanContext{}
-	}
 	return trace.SpanContextFromContext(t.readContext())
 }
 

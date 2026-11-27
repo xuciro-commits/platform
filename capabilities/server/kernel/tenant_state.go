@@ -250,9 +250,9 @@ func (c *Committed) Input(key string) json.RawMessage {
 func (c *Committed) Refusal(key string) (acceptedformat.Refusal, bool) {
 	return storedValue(c, "refusal", key, c.refusals)
 }
-func (c *Committed) RefusedIssues(app string, s *pb.Submission, binding *platform.SchemaVersion) ([]platform.FieldIssue, bool) {
-	prior, ok := c.Refusal(app + "/" + s.GetIdempotencyKey())
-	if !ok {
+func (p Prior) RefusedIssues(s *pb.Submission, binding *platform.SchemaVersion) ([]platform.FieldIssue, bool) {
+	prior := p.Refusal
+	if prior == nil {
 		return nil, false
 	}
 	hash, _ := acceptedformat.SubmissionHash(s, binding)

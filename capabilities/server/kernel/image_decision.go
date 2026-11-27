@@ -22,12 +22,16 @@ type ImageDecision[T, C any] struct {
 }
 
 func (r ImageDecision[T, C]) Run(ctx context.Context) (value T, refusal *platform.Error) {
+	var zero T
 	conflict := func() *platform.Error { return &platform.Error{Code: pb.ErrorCode_ERROR_CODE_CONFLICT} }
 	direct := func() (T, *platform.Error) {
 		r.Count("fallback")
 		value, decision, refusal, err := r.Direct()
 		if err != nil {
 			return value, refusal
+		}
+		if ctx.Err() != nil {
+			return zero, conflict()
 		}
 		return r.Finish(decision, value, refusal)
 	}
@@ -37,7 +41,7 @@ func (r ImageDecision[T, C]) Run(ctx context.Context) (value T, refusal *platfor
 	}
 	for attempt := 0; attempt < attempts; attempt++ {
 		if ctx.Err() != nil || r.Stopped() {
-			return value, conflict()
+			return zero, conflict()
 		}
 		read, matches := r.Load()
 		if read == nil {
@@ -51,11 +55,11 @@ func (r ImageDecision[T, C]) Run(ctx context.Context) (value T, refusal *platfor
 			break
 		}
 		if err := r.Hold(); err != nil {
-			return value, conflict()
+			return zero, conflict()
 		}
-		if r.Unavailable() {
+		if ctx.Err() != nil || r.Unavailable() {
 			r.Unlock()
-			return value, conflict()
+			return zero, conflict()
 		}
 		if matches(decision) {
 			func() {
@@ -74,11 +78,11 @@ func (r ImageDecision[T, C]) Run(ctx context.Context) (value T, refusal *platfor
 		}
 	}
 	if err := r.Hold(); err != nil {
-		return value, conflict()
+		return zero, conflict()
 	}
 	defer r.Unlock()
-	if r.Unavailable() {
-		return value, conflict()
+	if ctx.Err() != nil || r.Unavailable() {
+		return zero, conflict()
 	}
 	return direct()
 }

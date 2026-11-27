@@ -1,6 +1,7 @@
 package host
 
 import (
+	"context"
 	releaseowner "platformserver/services/devops/releases"
 	"time"
 
@@ -26,16 +27,16 @@ func (h hostView) IsBoundConnector(protocol, implementation string) bool {
 }
 
 func (t *Tenant) Invoke(m platform.Member, protocol, action, id string, payload []byte, key string, now time.Time) (*pb.EntityRef, *pb.ChangeRecord, *platform.Error) {
-	target, record, err, _ := t.invokeDiagnosed(m, protocol, action, id, payload, key, now)
+	target, record, err, _ := t.invokeDiagnosed(context.Background(), m, protocol, action, id, payload, key, now)
 	return target, record, err
 }
 
-func (t *Tenant) invokeDiagnosed(m platform.Member, protocol, action, id string, payload []byte, key string, now time.Time) (*pb.EntityRef, *pb.ChangeRecord, *platform.Error, []platform.FieldIssue) {
+func (t *Tenant) invokeDiagnosed(ctx context.Context, m platform.Member, protocol, action, id string, payload []byte, key string, now time.Time) (*pb.EntityRef, *pb.ChangeRecord, *platform.Error, []platform.FieldIssue) {
 	sub, ok := t.router().Submission(m.ID, protocol, action, id, payload, key)
 	if !ok {
 		return nil, nil, t.router().Unavailable(protocol), nil
 	}
-	record, err, issues := t.submitDiagnosed(m, sub, now)
+	record, err, issues := t.submit(ctx, m, sub, now, submitOptions{})
 	return sub.GetTarget(), record, err, issues
 }
 

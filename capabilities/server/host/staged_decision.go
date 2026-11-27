@@ -287,12 +287,12 @@ func (t *Tenant) captureControl() (map[string]json.RawMessage, error) {
 func (t *Tenant) newControlFork() *Tenant {
 	view := &Tenant{services: t.services, disabledOwners: t.disabledOwners, ID: t.ID, Store: t.Log(), ownerSet: t.ownerSet, ownerRoles: t.ownerRoles, definitions: t.definitions, Projection: t.Projection, releases: t.releases,
 		bindings: t.bindings.Clone(), ConnectorRoster: runtimekernel.NewConnectorRoster(t.ID), work: automation.NewWorkBoard(), Works: t.forkWorkState()}
-	t.work.CopyJobs(&view.work)
 	return view
 }
 
 func (t *Tenant) forkControl(images map[string]json.RawMessage) (*Tenant, error) {
 	view := t.newControlFork()
+	t.work.CopyJobs(&view.work)
 	_, marks := t.ConnectorRoster.State()
 	view.ConnectorRoster.RestoreMarks(marks)
 	view.i18n = transport.NewTranslator(func() []platform.Service { return view.apps }, nil, view.words.Clone, PlatformLanguages)

@@ -40,6 +40,7 @@ type BuildHost interface {
 	Operation(app, name string, version int) (platform.Operation, int, bool)
 	RuleQuery(app, name string, version int) (platform.NamedQuery, int, bool)
 	BuildProcesses() platform.ProcessDefinitions
+	UnboundFlowClosures(string) (map[string][]string, error)
 	BuildProcessConsumptions() []platform.Consumption
 	Record(ref string) (any, bool)
 	ResolvePropertyType(binding platform.AssetBinding) (platform.PropertyType, bool)

@@ -113,15 +113,19 @@ func ConsoleActions(ownerActions []platform.Action) *platform.Catalog {
 	return platform.NewCatalog(actions...)
 }
 
-func NewConsole(tenant string, authorities platform.Authorities, newOwners func(string) Owners, seats ...runtimeprotocol.Seat) *Console {
+func newBlankConsole(tenant string, authorities platform.Authorities, newOwners func(string) Owners) (*Console, Owners) {
 	owners := newOwners(tenant)
-	d := &Console{tenant: tenant, newOwners: newOwners, members: map[string]*platform.Member{}, subjects: map[string]string{}, profiles: map[string]*runtimeprotocol.Profile{},
+	return &Console{tenant: tenant, newOwners: newOwners, members: map[string]*platform.Member{}, subjects: map[string]string{}, profiles: map[string]*runtimeprotocol.Profile{},
 		ConsolePolicies: owners.Policies,
 		tokens:          map[string]*Token{}, minted: map[string]bool{}, accessRequests: map[string]*AccessRequest{}, lastSeen: map[string]time.Time{}, sessions: sessionTable{seen: map[string]map[string]*runtimeprotocol.Session{}, revoked: map[string]bool{}},
 		ConsolePackages: owners.Packages,
 		Credentials:     NewCredentials(tenant),
-		authorities:     authorities,
-		authority:       authorities(tenant, PlatformApp, ConsoleActions(owners.Actions), MemberType, ProfileType, platform.MarkingType, runtimeprotocol.RoleType, runtimeprotocol.PolicyType, runtimeprotocol.TeamType, TokenType, runtimeprotocol.ProjectType, AccessRequestType, runtimeprotocol.PackageType, CredentialType, ConnectorType, SettingType, WorkType, NotificationType, ProtocolType, EndpointType, EffectType, OperationType, TranslationType)}
+		authorities:     authorities}, owners
+}
+
+func NewConsole(tenant string, authorities platform.Authorities, newOwners func(string) Owners, seats ...runtimeprotocol.Seat) *Console {
+	d, owners := newBlankConsole(tenant, authorities, newOwners)
+	d.authority = authorities(tenant, PlatformApp, ConsoleActions(owners.Actions), MemberType, ProfileType, platform.MarkingType, runtimeprotocol.RoleType, runtimeprotocol.PolicyType, runtimeprotocol.TeamType, TokenType, runtimeprotocol.ProjectType, AccessRequestType, runtimeprotocol.PackageType, CredentialType, ConnectorType, SettingType, WorkType, NotificationType, ProtocolType, EndpointType, EffectType, OperationType, TranslationType)
 	for _, s := range seats {
 		m := s.Member
 		m.Tenant, m.Roles = tenant, maps.Clone(m.Roles)
@@ -152,6 +156,7 @@ func (d *Console) Identities() []runtimeprotocol.LoginIdentity {
 type consoleState struct {
 	PackageSources   map[string]runtimeprotocol.PackageSource     `json:"packageSources,omitempty"`
 	PackageLibraries map[string]runtimeprotocol.PackageLibrary    `json:"packageLibraries,omitempty"`
+	FlowClosures     map[string][]string                          `json:"flowClosures,omitempty"`
 	Credentials      map[string]runtimeprotocol.CredentialState   `json:"credentials,omitempty"`
 	Members          map[string]*platform.Member                  `json:"members"`
 	Subjects         map[string]string                            `json:"subjects"`
@@ -168,7 +173,23 @@ type consoleState struct {
 
 func (d *Console) state() consoleState {
 	policies, packages := d.ConsolePolicies.SnapshotState(), d.ConsolePackages.SnapshotState()
-	return consoleState{Credentials: d.Credentials.SnapshotState(), Members: d.members, Subjects: d.subjects, Profiles: d.profiles, Projects: policies.Projects, Packages: packages.Packages, PackageSources: packages.Sources, PackageLibraries: packages.Libraries, Markings: policies.Markings, Roles: policies.Roles, Policies: policies.Policies, Teams: policies.Teams, Tokens: d.tokens, AccessRequests: d.accessRequests}
+	return consoleState{Credentials: d.Credentials.SnapshotState(), Members: d.members, Subjects: d.subjects, Profiles: d.profiles, Projects: policies.Projects, Packages: packages.Packages, PackageSources: packages.Sources, PackageLibraries: packages.Libraries, FlowClosures: packages.FlowClosures, Markings: policies.Markings, Roles: policies.Roles, Policies: policies.Policies, Teams: policies.Teams, Tokens: d.tokens, AccessRequests: d.accessRequests}
+}
+
+func (d *Console) HasRetainedFlowClosure(ref platform.AssetRef, version int, dependencies string) bool {
+	return d.ConsolePackages.HasRetainedFlowClosure(ref, version, dependencies)
+}
+
+func RetainedFlowClosure(private map[string]platform.Service, current platform.Service, checkObj func() bool, ref platform.AssetRef, version int, dependencies string) bool {
+	if private != nil {
+		if c, _ := private[PlatformApp].(*Console); c != nil {
+			return c.HasRetainedFlowClosure(ref, version, dependencies) || checkObj()
+		}
+	}
+	if c, _ := current.(*Console); c != nil && c.HasRetainedFlowClosure(ref, version, dependencies) {
+		return true
+	}
+	return checkObj()
 }
 
 func (d *Console) SnapshotFormat() string { return "platform.console.v1" }
@@ -198,7 +219,7 @@ func (d *Console) Restore(raw json.RawMessage) error {
 }
 
 func (d *Console) restoreAccess(s consoleState) {
-	d.ConsolePackages.Restore(runtimeprotocol.PackageState{Packages: s.Packages, Sources: s.PackageSources, Libraries: s.PackageLibraries})
+	d.ConsolePackages.Restore(runtimeprotocol.PackageState{Packages: s.Packages, Sources: s.PackageSources, Libraries: s.PackageLibraries, FlowClosures: s.FlowClosures})
 	d.Credentials.Restore(s.Credentials)
 	d.ConsolePolicies.Restore(platform.AuthorizationState{Markings: s.Markings, Projects: s.Projects, Roles: s.Roles, Policies: s.Policies, Teams: s.Teams})
 	d.tokens = s.Tokens
@@ -276,14 +297,14 @@ func (d *Console) Fork(authority platform.Authority) (platform.Service, error) {
 	defer d.mu.Unlock()
 
 	state := d.state()
-	fork := NewConsole(d.tenant, d.authorities, d.newOwners)
+	fork, _ := newBlankConsole(d.tenant, d.authorities, d.newOwners)
 	fork.authority, fork.host = authority, d.host
 	fork.ConsolePackages.Attach(d.host)
 	fork.ConsolePackages.BindPackageIndex(d.ConsolePackages.BoundIndex())
 	fork.members, fork.subjects = state.Members, state.Subjects
 	fork.ConsolePolicies.Restore(platform.AuthorizationState{Markings: state.Markings, Projects: state.Projects, Roles: state.Roles, Policies: state.Policies, Teams: state.Teams})
 	fork.ConsolePolicies.Attach(d.host)
-	fork.ConsolePackages.Restore(runtimeprotocol.PackageState{Packages: state.Packages, Sources: state.PackageSources, Libraries: state.PackageLibraries})
+	fork.ConsolePackages.Restore(runtimeprotocol.PackageState{Packages: state.Packages, Sources: state.PackageSources, Libraries: state.PackageLibraries, FlowClosures: state.FlowClosures})
 	if state.Credentials != nil {
 		fork.Credentials.Restore(state.Credentials)
 	}
@@ -361,6 +382,9 @@ func (d *Console) ValidateAcceptedState(raw json.RawMessage) error {
 func (d *Console) validateAcceptedState(state consoleState) error {
 	if state.Members == nil || state.Subjects == nil {
 		return fmt.Errorf("accepted directory is incomplete")
+	}
+	if err := runtimeprotocol.ValidateFlowClosures(state.FlowClosures); err != nil {
+		return err
 	}
 	for digest, source := range state.PackageSources {
 		if digest != source.Digest || !platform.ValidDigest(digest) || source.ID == "" || source.Version == "" || source.Origin == "" {

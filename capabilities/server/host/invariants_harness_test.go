@@ -2,6 +2,7 @@ package host
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"fmt"
 	"net/http"
@@ -85,9 +86,9 @@ func newInvariantTenantSetup(tb testing.TB, id string, apps []platform.Service, 
 		tb.Fatal(err)
 	}
 	live := &invariantTenant{Tenant: tenant}
-	tenant.AcceptResult = func(e Entry, _, _ string) ([]byte, error) {
+	tenant.AcceptResult = func(_ context.Context, e Entry, _, _ string) (*persistence.AcceptedWrite, error) {
 		live.entries = append(live.entries, e)
-		return e.Body, nil
+		return &persistence.AcceptedWrite{Body: e.Body}, nil
 	}
 	tenant.AcceptResults = func(batch []persistence.AcceptedAppend) ([][]byte, error) {
 		raw := make([][]byte, len(batch))

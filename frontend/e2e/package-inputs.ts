@@ -28,7 +28,9 @@ export async function packageWizard(page: Page, name: string, file = false) {
 }
 
 export async function addToLibrary(wizard: Locator) {
-  await wizard.getByRole("button", { name: /^(Add to library|Install dependencies and continue)$/ }).click();
+  const addBtn = wizard.getByRole("button", { name: /^(Add to library|Install dependencies and continue)$/ });
+  await expect(addBtn).toBeEnabled({ timeout: 30_000 });
+  await addBtn.click();
   await expect(wizard.getByRole("button", { name: "Continue", exact: true })).toBeEnabled({ timeout: 120_000 });
 }
 
@@ -36,6 +38,8 @@ export async function installInput(page: Page, name: string, action = "Install p
   const wizard = await packageWizard(page, name, file);
   await addToLibrary(wizard);
   await wizard.getByRole("button", { name: "Continue", exact: true }).click();
-  await wizard.getByRole("button", { name: action, exact: true }).click();
+  const actionBtn = wizard.getByRole("button", { name: action, exact: true });
+  await expect(actionBtn).toBeEnabled({ timeout: 30_000 });
+  await actionBtn.click();
   await expect(wizard).toBeHidden({ timeout: 120_000 });
 }

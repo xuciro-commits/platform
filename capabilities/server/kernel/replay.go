@@ -27,8 +27,8 @@ type ReplayHooks struct {
 	Rules         map[string]ReplayRule
 	HostControl   func() HostControlOwner
 	Work          func(body []byte) error
-	Batch         func(l platform.Authority, body []byte) (bool, error)
-	Record        func(l platform.Authority, body []byte) (bool, error)
+	Batch         BatchApply
+	Record        RecordApply
 	Invalidate    func()
 	Pin           func(versions map[string]int)
 	App           func(id string) platform.Service
@@ -130,7 +130,7 @@ func (s *Sequence) replayResult(i int, e persistence.Entry, m platform.Member, a
 		if _, refused := s.Committed.Refusal(e.App + "/" + sub.GetIdempotencyKey()); refused {
 			return fmt.Errorf("entry %d: record batch reused a refused key", i+1)
 		}
-		applied, applyErr := h.Batch(a.Authority(), e.Body)
+		applied, applyErr := s.applyDecodedBatch(a.Authority(), e.Body, saved, receipt, h.Batch)
 		if applyErr != nil || !applied {
 			return fmt.Errorf("entry %d: record batch: %v (applied=%t)", i+1, applyErr, applied)
 		}
@@ -149,7 +149,7 @@ func (s *Sequence) replayResult(i int, e persistence.Entry, m platform.Member, a
 	if _, refused := s.Committed.Refusal(e.App + "/" + receipt.GetSubmission().GetIdempotencyKey()); refused {
 		return fmt.Errorf("entry %d: accepted result reused a refused key", i+1)
 	}
-	applied, applyErr := h.Record(a.Authority(), e.Body)
+	applied, applyErr := s.ApplyRecordResult(a.Authority(), saved, receipt, h.Record)
 	if applyErr != nil || !applied {
 		return fmt.Errorf("entry %d: accepted result: %v (applied=%t)", i+1, applyErr, applied)
 	}

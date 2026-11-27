@@ -39,7 +39,7 @@ func (t *Tenant) InvokeCapability(ctx context.Context, m platform.Member, q prot
 		}
 		s := &pb.Submission{TenantId: t.ID, PrincipalId: m.ID, Authority: q.Ref.App, IdempotencyKey: q.Key,
 			Target: &pb.EntityRef{Type: selected.Target, Id: q.Target}, Schema: &pb.SchemaRef{Name: q.Ref.Name, Version: 1}, Payload: payload, ExpectedRevision: q.ExpectedRevision}
-		record, err, issues := t.submitDiagnosed(m, s, now)
+		record, err, issues := t.submit(ctx, m, s, now, submitOptions{})
 		answer.Issues = issues
 		if err != nil {
 			return answer, err
@@ -56,7 +56,7 @@ func (t *Tenant) InvokeCapability(ctx context.Context, m platform.Member, q prot
 		}
 		s := &pb.Submission{TenantId: t.ID, PrincipalId: m.ID, Authority: build.ID, IdempotencyKey: q.Key,
 			Target: &pb.EntityRef{Type: protocol.FunctionCallType, Id: q.Key}, Schema: &pb.SchemaRef{Name: protocol.SchemaFunctionCall, Version: 1}, Payload: payload}
-		_, err := t.Submit(m, s, now)
+		_, err, _ := t.submit(ctx, m, s, now, submitOptions{})
 		answer.State, answer.Call = "pending", q.Key
 		return answer, err
 	default:

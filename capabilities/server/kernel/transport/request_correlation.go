@@ -5,6 +5,7 @@ import (
 	"crypto/rand"
 	"encoding/binary"
 	"encoding/hex"
+	"go.opentelemetry.io/otel/trace"
 	"net/http"
 	"strings"
 	"sync/atomic"
@@ -54,7 +55,9 @@ type requestCorrelationKey struct{}
 
 func NewRequestCorrelation(r *http.Request) RequestCorrelation {
 	correlation := RequestCorrelation{RequestID: RandomHex(16)}
-	if traceID, _ := Traceparent(r.Header.Get("Traceparent")); traceID != "" {
+	if sc := trace.SpanContextFromContext(r.Context()); sc.IsValid() && !sc.IsRemote() {
+		correlation.TraceID, correlation.SpanID = sc.TraceID().String(), sc.SpanID().String()
+	} else if traceID, _ := Traceparent(r.Header.Get("Traceparent")); traceID != "" {
 		correlation.TraceID, correlation.SpanID = traceID, RandomHex(8)
 	} else {
 		correlation.TraceID, correlation.SpanID = RandomHex(16), RandomHex(8)

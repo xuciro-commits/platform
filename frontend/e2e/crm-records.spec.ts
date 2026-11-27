@@ -33,14 +33,19 @@ test("crm: a note and activity link to actual CRM leads and deals", async ({ pag
   await signIn(page);
   const note = await submit(page, "crm.note.create", "crm.note", "acceptance-note", { title: "Linked note", deal: "demo-deal-1" }, 0);
   await page.goto(`/ontology/objects/crm.note/${note.record.submission.target.id}`);
-  await expect(property(page, "Deal")).toContainText("Northwind Regional CRM Expansion");
+  await expect(page.getByRole("link", { name: "Northwind Regional CRM Expansion", exact: true })).toBeVisible();
   const activity = await submit(page, "crm.activity.create", "crm.activity", "acceptance-activity", { subject: "Linked follow-up", lead: "demo-lead-1" }, 0);
   await page.goto(`/ontology/objects/crm.activity/${activity.record.submission.target.id}`);
-  await expect(property(page, "Lead")).toContainText("Zhao Ming");
-  await edit(page, "Deal");
-  await choose(page, page, "Deal", "Northwind Regional CRM Expansion");
+  await expect(page.getByRole("link", { name: "Zhao Ming", exact: true })).toBeVisible();
+  await page.getByRole("radio", { name: "Deal", exact: true }).click();
+  await page.getByRole("combobox", { name: "Deal", exact: true }).fill("Northwind Regional CRM Expansion");
+  await Promise.all([
+    page.waitForResponse((response) => response.url().endsWith("/v1/submissions") && response.ok()),
+    page.getByRole("option", { name: "Northwind Regional CRM Expansion", exact: true }).click(),
+  ]);
   await page.reload();
-  await expect(property(page, "Deal")).toContainText("Northwind Regional CRM Expansion");
+  await expect(page.getByRole("link", { name: "Northwind Regional CRM Expansion", exact: true })).toBeVisible();
+  await expect(page.getByRole("link", { name: "Zhao Ming", exact: true })).toHaveCount(0);
 });
 
 test("crm: date filters stay available while reference choices load", async ({ page }) => {

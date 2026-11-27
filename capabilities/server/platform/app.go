@@ -427,7 +427,7 @@ type AppCatalog interface {
 
 type ConsoleHost interface {
 	PackageLifecycleImpact(Caller, string, []ReleaseAsset) (PackageLifecycleImpact, error)
-	PrepareManagedPackage(Caller, PackageDescriptor, []ReleaseAsset, bool, bool, bool) (func(*pb.ChangeRecord), *Error)
+	PrepareManagedPackage(Caller, PackageDescriptor, []ReleaseAsset, bool, bool, bool) (func(*pb.ChangeRecord), map[string][]string, *Error)
 	AppCatalog
 	CodeReleaseAssets() ([]ReleaseAsset, error)
 	ConsoleSetting(name string) string

@@ -96,7 +96,7 @@ func CodeDigest(parts ...string) string {
 	return hex.EncodeToString(h.Sum(nil))
 }
 
-type WorkLoop[T any] struct {
+type WorkLoop[T comparable] struct {
 	Tenants func() []T
 	Now     func() time.Time
 	Wake    Wake
@@ -111,19 +111,50 @@ type WorkLoop[T any] struct {
 func (w WorkLoop[T]) Start() func(context.Context) error {
 	ctx, cancel := context.WithCancel(context.Background())
 	var background sync.WaitGroup
-	turn := 0
+	sem := make(chan struct{}, 6)
+	var running sync.Map
 	Pulse(ctx, &background, time.Second, w.Wake, func() bool {
-		tenants, now := w.Tenants(), w.Now()
-		var more bool
-		turn, more = Rotate(tenants, 900*time.Millisecond, turn, func(t T) bool { return w.Round(t, now) })
+		tenants := w.Tenants()
+		for _, t := range tenants {
+			if _, busy := running.LoadOrStore(t, struct{}{}); busy {
+				continue
+			}
+			background.Add(1)
+			go func(t T) {
+				defer background.Done()
+				more := false
+				defer func() {
+					running.Delete(t)
+					if more && w.Wake != nil {
+						w.Wake.Signal()
+					}
+				}()
+				select {
+				case sem <- struct{}{}:
+				case <-ctx.Done():
+					return
+				}
+				defer func() { <-sem }()
+				started := time.Now()
+				for steps := 0; steps < 8 && ctx.Err() == nil; steps++ {
+					if !w.Round(t, w.Now()) {
+						more = false
+						break
+					}
+					more = true
+					if time.Since(started) >= 800*time.Millisecond {
+						break
+					}
+				}
+			}(t)
+		}
 		var outside []func()
 		for _, t := range tenants {
 			outside = append(outside, w.Outside(t)...)
 		}
-		background.Add(1)
-		go func() { defer background.Done(); w.OnLane(outside) }()
-		if more && w.Wake != nil {
-			w.Wake.Signal()
+		if len(outside) > 0 {
+			background.Add(1)
+			go func() { defer background.Done(); w.OnLane(outside) }()
 		}
 		return true
 	})

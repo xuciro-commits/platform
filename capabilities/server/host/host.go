@@ -49,7 +49,6 @@ type Tenant struct {
 	i18n         transport.Translator
 	views        transport.ViewCache
 	readViews    *transport.ViewCache
-	streamMu     sync.Mutex
 	lineageCache lineage.Cache[lineage.Host]
 	markings     lineage.MarkingCache[lineage.MarkingKey]
 	ownerSet

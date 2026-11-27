@@ -30,13 +30,14 @@ type BatchApply struct {
 }
 
 type PreparedBatch struct {
-	Result  acceptedformat.Batch
-	Records *records.Store
-	ledgers map[string]platform.Authority
-	changes map[string]*pb.ChangeRecord
-	key     string
-	raw     []byte
-	install func() error
+	Result     acceptedformat.Batch
+	Records    *records.Store
+	ledgers    map[string]platform.Authority
+	changes    map[string]*pb.ChangeRecord
+	key        string
+	saveAnswer bool
+	raw        []byte
+	install    func() error
 }
 
 func (s *Sequence) PrepareBatch(l platform.Authority, raw []byte, h BatchApply) (*PreparedBatch, error) {
@@ -44,6 +45,10 @@ func (s *Sequence) PrepareBatch(l platform.Authority, raw []byte, h BatchApply) 
 	if err != nil {
 		return nil, err
 	}
+	return s.prepareDecodedBatch(l, raw, result, receipt, h)
+}
+
+func (s *Sequence) prepareDecodedBatch(l platform.Authority, raw []byte, result acceptedformat.Batch, receipt *pb.ChangeRecord, h BatchApply) (*PreparedBatch, error) {
 	owner := h.App(result.App)
 	if result.Tenant != s.ID || owner == nil || owner.Authority() != l {
 		return nil, fmt.Errorf("record batch belongs to another tenant or ledger")
@@ -158,7 +163,7 @@ func (s *Sequence) PrepareBatch(l platform.Authority, raw []byte, h BatchApply) 
 			return nil, fmt.Errorf("record batch ledger validation: %v (new=%t)", err, changed)
 		}
 	}
-	return &PreparedBatch{Result: result, Records: draft, ledgers: ledgers, changes: changes, key: key, raw: raw, install: install}, nil
+	return &PreparedBatch{saveAnswer: result.HasSavedAnswer(sub), Result: result, Records: draft, ledgers: ledgers, changes: changes, key: key, raw: raw, install: install}, nil
 }
 
 func (s *Sequence) PromoteBatch(prepared *PreparedBatch, h BatchApply) (bool, error) {
@@ -203,10 +208,7 @@ func (s *Sequence) PromoteBatch(prepared *PreparedBatch, h BatchApply) (bool, er
 		_, request, _ := strings.Cut(key, "/")
 		s.Committed.SaveSchemaVersion(result.App, request, result.SchemaVersion)
 	}
-	answer := new(pb.ChangeRecord)
-	_ = protojson.Unmarshal(result.Receipt, answer)
-	input, _ := acceptedformat.BatchSubmission(result, answer)
-	if result.HasSavedAnswer(input) {
+	if prepared.saveAnswer {
 		s.Committed.SaveAnswer(key, prepared.raw)
 	}
 	return true, nil

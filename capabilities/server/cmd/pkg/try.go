@@ -9,6 +9,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	persistence "platformserver/kernel/store"
 	"regexp"
 	"slices"
 	"strconv"
@@ -158,7 +159,9 @@ func newTrial(script tryScript, at time.Time, out io.Writer) (*trial, error) {
 	if err != nil {
 		return nil, err
 	}
-	tenant.AcceptResult = func(e host.Entry, _, _ string) ([]byte, error) { return e.Body, nil }
+	tenant.AcceptResult = func(_ context.Context, e host.Entry, _, _ string) (*persistence.AcceptedWrite, error) {
+		return &persistence.AcceptedWrite{Body: e.Body}, nil
+	}
 	member, ok := tenant.Member(tryMember)
 	if !ok {
 		return nil, errors.New("the trial member is not seated")

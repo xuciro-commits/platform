@@ -72,7 +72,7 @@ func (b *Build) consumedProtocols() []platform.Consumption {
 		}
 	}
 	if b.authority != nil {
-		for _, action := range b.authority.Catalog().All() {
+		for action := range b.authority.Catalog().Actions() {
 			for _, used := range action.Uses {
 				protocol, _, _ := strings.Cut(used, "#")
 				if !slices.ContainsFunc(out, func(c platform.Consumption) bool { return c.Protocol == protocol }) {

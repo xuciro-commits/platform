@@ -3,6 +3,7 @@ package kernel
 import (
 	"context"
 	"errors"
+	"go.opentelemetry.io/otel/trace"
 	"platformserver/kernel/protocol"
 	"time"
 
@@ -61,8 +62,12 @@ func (s *Sequence) AttachJournal(ctx context.Context, journal persistence.Journa
 	s.Store = journal
 	s.AuditLog.Backfill()
 	id := s.ID
-	s.AcceptResult = func(e persistence.Entry, key, hash string) ([]byte, error) {
-		return journal.AppendAccepted(ctx, id, e, key, hash)
+	s.AcceptResult = func(request context.Context, e persistence.Entry, key, hash string) (*persistence.AcceptedWrite, error) {
+		commit := ctx
+		if span := trace.SpanFromContext(request); span.IsRecording() {
+			commit = trace.ContextWithSpan(ctx, span)
+		}
+		return journal.AppendAccepted(commit, id, e, key, hash)
 	}
 	s.AcceptResults = func(entries []persistence.AcceptedAppend) ([][]byte, error) {
 		return journal.AppendAcceptedBatch(ctx, id, entries)

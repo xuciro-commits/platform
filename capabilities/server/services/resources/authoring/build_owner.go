@@ -324,18 +324,36 @@ func (b *Build) Listen(c platform.Caller, e platform.Event, names []string, now 
 		principal = installer
 	}
 	member, _ := b.host.Member(principal)
-	if reference {
-		lang := cmp.Or(member.Language, b.host.Caller(c, member, "platform").Setting("language"))
-		if refusal := ontology.FillReference(c, lang, model, submit); refusal != nil {
-			return refusal
-		}
-	}
 	pkgID := e.Record.GetSubmission().GetTarget().GetId()
 	if continues {
 		pkgID = continuing
 	}
 	if people {
 		pkgID = seeded
+	}
+	refPkg, refInstall, refSeed := ontology.ReferenceSeed(e)
+	if refSeed {
+		pkgID = refPkg
+	}
+	install := slices.Contains(names, "platform.package.install") || people || refInstall
+	switchPkg := refSeed && !refInstall || slices.ContainsFunc(names, func(name string) bool {
+		return slices.Contains([]string{"platform.package.upgrade", "platform.package.downgrade", "platform.package.rollback"}, name)
+	})
+	if reference {
+		lang := cmp.Or(member.Language, b.host.Caller(c, member, "platform").Setting("language"))
+		tag := ""
+		if install && pkgID != "" {
+			tag = "?install=" + pkgID
+		} else if switchPkg && pkgID != "" {
+			tag = "?seed=" + pkgID
+		}
+		more, refusal := ontology.FillReference(c, lang, tag, model, submit)
+		if refusal != nil {
+			return refusal
+		}
+		if more {
+			return nil
+		}
 	}
 	seedCaller := c
 	if member.ID != "" {
@@ -351,10 +369,7 @@ func (b *Build) Listen(c platform.Caller, e platform.Event, names []string, now 
 		_, refusal := b.Submit(seedCaller, s, now)
 		return refusal
 	}
-	install := slices.Contains(names, "platform.package.install") || people
-	if install || continues || slices.ContainsFunc(names, func(name string) bool {
-		return slices.Contains([]string{"platform.package.upgrade", "platform.package.downgrade", "platform.package.rollback"}, name)
-	}) {
+	if install || continues || switchPkg {
 		if seeds, ok := b.host.PackageSeed(pkgID); ok {
 			if refusal := ontology.FillSeed(seedCaller, pkgID, seeds, install, now, model, seedSubmit); refusal != nil {
 				return refusal

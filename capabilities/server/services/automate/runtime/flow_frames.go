@@ -94,7 +94,24 @@ const maxReferenceBytes = 256 << 20
 type FrameCollector struct {
 	gate            sync.RWMutex
 	recoveredBefore time.Time
+	pullMu          sync.Mutex
+	pulledAt        time.Time
+	pulledSeq       int64
 }
+
+func (c *FrameCollector) TryPull(seq int64, now time.Time) bool {
+	if !c.pullMu.TryLock() {
+		return false
+	}
+	if seq == c.pulledSeq && !c.pulledAt.IsZero() && now.Sub(c.pulledAt) < time.Second {
+		c.pullMu.Unlock()
+		return false
+	}
+	c.pulledSeq, c.pulledAt = seq, now
+	return true
+}
+
+func (c *FrameCollector) EndPull() { c.pullMu.Unlock() }
 
 func (c *FrameCollector) Preparing() func() {
 	c.gate.RLock()
