@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { readdirSync, readFileSync } from "node:fs";
 import { test } from "node:test";
-import { layers, seedPlan, securityAPIPlan } from "./trunk-seeds.mjs";
+import { layers, seedPlan, securityAPIPlan, countOption, specSelectors } from "./trunk-seeds.mjs";
 
 test("every Trunk spec belongs to exactly one of four scenarios", () => {
   const files = readdirSync(new URL("../frontend/e2e/", import.meta.url))
@@ -73,4 +73,18 @@ test("generic builder and CRM business cases avoid unrelated package installatio
   assert.deepEqual(seedPlan(["crm.spec.ts"]).tenants, ["crm"]);
   assert.equal(seedPlan(["crm-records.spec.ts"]).acceptanceCrm, true);
   assert.equal(seedPlan(["package-extension.spec.ts"]).acceptanceCrm, true);
+});
+
+test("concurrency options reject invalid or fractional values", () => {
+  for (const value of ["", "0", "-1", "NaN", "1.5", "7"]) {
+    assert.throws(() => countOption("SHARDS", 4, 6, { SHARDS: value }), /must be an integer/);
+  }
+  assert.equal(countOption("SHARDS", 4, 6, {}), 4);
+  assert.equal(countOption("SHARDS", 4, 6, { SHARDS: "1" }), 1);
+});
+
+test("per-spec dispatch preserves exact line selectors", () => {
+  const args = ["pnpm", "exec", "playwright", "test", "-c", "e2e", "records.spec.ts:42", "e2e/records.spec.ts:52:3", "crm.spec.ts", "--workers=1"];
+  assert.deepEqual(specSelectors(args, "records"), ["pnpm", "exec", "playwright", "test", "-c", "e2e", "--workers=1", "records.spec.ts:42", "e2e/records.spec.ts:52:3"]);
+  assert.equal(specSelectors(args, "crm").at(-1), "crm.spec.ts");
 });

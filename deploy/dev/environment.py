@@ -19,7 +19,9 @@ NATIVE_COMPOSE = [*COMPOSE, '-f', 'deploy/dev/compose.native.yaml']
 API_PORT = 18495
 COMPUTE = ROOT / '.build/dev/compute'
 
-def run(command):
+def run(command, label=None):
+    if label and os.environ.get('PLATFORM_TIMING_FILE'):
+        command = ['node', str(ROOT / 'scripts/timing.mjs'), 'run', label, *command]
     subprocess.run(command, cwd=ROOT, check=True)
 
 def apply_identity():
@@ -265,12 +267,16 @@ def local():
         raise RuntimeError('缺少 Air，请先运行 make setup（只需一次）。')
     stop()
     write_state({'mode': 'native', 'status': 'starting'})
-    run(COMPOSE + ['stop', 'platform-server', 'wasm-worker', 'code-builder'])
-    run(['make', 'infra', 'build-compute'])
+    run(COMPOSE + ['stop', 'platform-server', 'wasm-worker', 'code-builder'], '停止旧容器宿主')
+    run(NATIVE_COMPOSE + ['up', '-d', '--wait', 'postgres', 'rauthy', 'rustfs'], '启动基础中间件并等待就绪')
+    run(['make', 'build-compute'], '编译计算工作进程')
     LOGS.mkdir(parents=True, exist_ok=True)
     with (LOGS / 'environment.log').open('w') as log:
         supervisor = subprocess.Popen([sys.executable, str(Path(__file__).resolve()), 'serve'], cwd=ROOT,
-                                      stdout=log, stderr=subprocess.STDOUT, start_new_session=True)
+                                      stdout=log, stderr=subprocess.STDOUT, start_new_session=True,
+                                      env={key: value for key, value in os.environ.items() if not key.startswith('PLATFORM_TIMING_')})
+    print('等待本地宿主、计算进程及 Vite 就绪（最多 360 秒）', flush=True)
+    deadline = time.monotonic() + 360
     try:
         while True:
             if supervisor.poll() is not None:
@@ -281,6 +287,8 @@ def local():
                 print('本地热更新已就绪：Platform ' + config['PLATFORM_PUBLIC_URL'])
                 print('Go 自动编译重启，前端 HMR；日志：.build/dev/；切回容器：make docker')
                 return
+            if time.monotonic() >= deadline:
+                raise RuntimeError('本地启动等待超过 360 秒，请检查 .build/dev/platform-*.log。')
             time.sleep(0.5)
     except BaseException:
         stop()
@@ -290,7 +298,7 @@ def prepare_docker():
     configuration()
     stop()
     write_state({'mode': 'docker', 'status': 'starting'})
-    run(COMPOSE + ['up', '-d', '--wait', '--force-recreate', 'postgres', 'rauthy', 'rustfs', 'wasm-worker', 'code-builder'])
+    run(COMPOSE + ['up', '-d', '--wait', '--force-recreate', 'postgres', 'rauthy', 'rustfs', 'wasm-worker', 'code-builder'], '容器基础设施就绪')
 
 def docker():
     configuration()

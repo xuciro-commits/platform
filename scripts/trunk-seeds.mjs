@@ -40,3 +40,16 @@ export function seedPlan(args, interactive = false) {
   const seed = [...new Set(entries.flatMap(entry => entry.seed ?? entry.tenants))].sort();
   return { specs, tenants, seed, acceptanceCrm: entries.some(entry => entry.acceptanceCrm), cache: seed.length > 0 };
 }
+
+export function countOption(name, fallback, max, env = process.env) {
+  const raw = env[name] ?? String(fallback);
+  const value = Number(raw);
+  if (!Number.isSafeInteger(value) || value < 1 || value > max) throw Error(name + " must be an integer from 1 to " + max);
+  return value;
+}
+
+export function specSelectors(args, spec) {
+  const name = arg => arg.match(/(?:^|\/)([a-z0-9-]+)\.spec\.ts(?::\d+)*$/)?.[1];
+  const selectors = args.filter(arg => name(arg) === spec);
+  return [...args.filter(arg => !name(arg)), ...(selectors.length ? selectors : [spec + ".spec.ts"])];
+}

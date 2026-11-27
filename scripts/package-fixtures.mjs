@@ -1,9 +1,10 @@
 import { createHash } from "node:crypto";
 import { execFileSync, spawn } from "node:child_process";
-import { cpSync, existsSync, mkdirSync, mkdtempSync, readFileSync, renameSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, renameSync, rmSync, writeFileSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import { tmpdir } from "node:os";
 import { fileURLToPath } from "node:url";
+import { measure, note } from "./timing.mjs";
 
 const platform = fileURLToPath(new URL("../", import.meta.url));
 const lockRaw = readFileSync(new URL("./package-fixtures.lock.json", import.meta.url), "utf8");
@@ -36,7 +37,7 @@ function verifyReady(root, selected = Object.keys(lock.packages)) {
     const spec = lock.packages[name];
     const entry = inputs.packages[name];
     const file = join(root, name + ".json");
-    if (!spec || !entry || !existsSync(file)) return false;
+    if (!spec || !entry || entry.id !== spec.id || entry.version !== spec.version || entry.url !== spec.url || entry.source !== spec.source || !existsSync(file)) return false;
     const digest = sha(readFileSync(file));
     if (digest !== entry.sha256 || (spec.sha256 && spec.sha256 !== digest)) return false;
   }
@@ -85,18 +86,18 @@ function checkout(root) {
 
 function prepare(root, selected = Object.keys(lock.packages)) {
   const needSource = selected.some((name) => !lock.packages[name]?.url);
-  const source = needSource ? checkout(root) : "";
+  const source = needSource ? measure("拉取锁定包源码", () => checkout(root)) : "";
   const pkg = join(root, "pkg");
-  if (needSource) command(process.env.GO || "go", ["build", "-o", pkg, "./cmd/pkg"], join(platform, "capabilities/server"));
+  if (needSource) measure("编译包工具", () => command(process.env.GO || "go", ["build", "-o", pkg, "./cmd/pkg"], join(platform, "capabilities/server")));
   const inputs = existsSync(join(root, "inputs.json")) ? JSON.parse(readFileSync(join(root, "inputs.json"), "utf8")).packages ?? {} : {};
   for (const name of selected) {
     const entry = lock.packages[name];
     if (!entry) throw Error("Unknown package input " + name);
     const file = join(root, name + ".json");
     if (entry.url) {
-      command("curl", ["--fail", "--silent", "--show-error", "--location", "--max-time", "60", "--output", file, entry.url]);
+      measure("下载包 " + name, () => command("curl", ["--fail", "--silent", "--show-error", "--location", "--max-time", "60", "--output", file, entry.url]));
     } else {
-      command(pkg, ["build", "-o", file, join(source, "packages", entry.source)]);
+      measure("构建包 " + name, () => command(pkg, ["build", "-o", file, join(source, "packages", entry.source)]));
     }
     const raw = readFileSync(file), checksum = sha(raw), descriptor = JSON.parse(raw);
     if (descriptor.id !== entry.id || descriptor.version !== entry.version || (entry.sha256 && entry.sha256 !== checksum)) throw Error("Package identity or digest mismatch: " + name);
@@ -107,24 +108,51 @@ function prepare(root, selected = Object.keys(lock.packages)) {
 }
 
 function ensureCached(selected = Object.keys(lock.packages)) {
+  return measure("外部包输入准备", () => ensureCachedInputs(selected));
+}
+
+function ensureCachedInputs(selected) {
+  for (const name of selected) if (!Object.hasOwn(lock.packages, name)) throw Error("Unknown package input " + name);
   if (process.env.PLATFORM_TEST_PACKAGES_DIR && verifyReady(process.env.PLATFORM_TEST_PACKAGES_DIR, selected)) {
+    note("包输入缓存命中（指定目录）");
     return process.env.PLATFORM_TEST_PACKAGES_DIR;
   }
-  if (verifyReady(defaultCache, selected)) return defaultCache;
+  if (verifyReady(defaultCache, selected)) { note("包输入缓存命中"); return defaultCache; }
   mkdirSync(dirname(defaultCache), { recursive: true });
-  const staging = mkdtempSync(join(tmpdir(), "platform-package-inputs-"));
+  const cacheLock = defaultCache + ".lock";
+  measure("等待包缓存写锁", () => {
+    const deadline = performance.now() + 180_000;
+    while (true) {
+      try { mkdirSync(cacheLock); return; } catch (err) {
+        if (err.code !== "EEXIST" || performance.now() >= deadline) throw Error("Package cache busy: " + cacheLock, { cause: err });
+      }
+      Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 250);
+    }
+  });
+  let staging;
   try {
-    if (existsSync(defaultCache)) cpSync(defaultCache, staging, { recursive: true });
-    const missing = selected.filter((name) => !verifyReady(staging, [name]));
-    if (missing.length) prepare(staging, missing);
-    const swap = defaultCache + ".tmp-" + process.pid;
-    rmSync(swap, { recursive: true, force: true });
-    cpSync(staging, swap, { recursive: true });
-    rmSync(defaultCache, { recursive: true, force: true });
-    renameSync(swap, defaultCache);
+    if (verifyReady(defaultCache, selected)) { note("包输入缓存命中（等待后）"); return defaultCache; }
+    staging = mkdtempSync(join(dirname(defaultCache), ".prepare-"));
+    const missing = selected.filter((name) => !verifyReady(defaultCache, [name]));
+    note("包输入缓存未命中：" + missing.join(", "));
+    prepare(staging, missing);
+    if (!existsSync(defaultCache)) {
+      renameSync(staging, defaultCache);
+    } else {
+      const fresh = JSON.parse(readFileSync(join(staging, "inputs.json"), "utf8"));
+      const previous = existsSync(join(defaultCache, "inputs.json")) ? (() => {
+        try { return JSON.parse(readFileSync(join(defaultCache, "inputs.json"), "utf8")); } catch { return {}; }
+      })() : {};
+      for (const name of missing) renameSync(join(staging, name + ".json"), join(defaultCache, name + ".json"));
+      if (existsSync(join(staging, "source")) && !existsSync(join(defaultCache, "source"))) renameSync(join(staging, "source"), join(defaultCache, "source"));
+      fresh.packages = { ...(previous.revision === lock.revision ? previous.packages : {}), ...fresh.packages };
+      writeFileSync(join(staging, "inputs.json"), JSON.stringify(fresh));
+      renameSync(join(staging, "inputs.json"), join(defaultCache, "inputs.json"));
+    }
     return defaultCache;
   } finally {
-    rmSync(staging, { recursive: true, force: true });
+    if (staging) rmSync(staging, { recursive: true, force: true });
+    rmSync(cacheLock, { recursive: true, force: true });
   }
 }
 
@@ -135,20 +163,18 @@ if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.ur
     console.log(ensureCached(args.length > 1 ? args.slice(1) : undefined));
   } else if (args[0] === "--check") {
     const root = ensureCached();
-    let source = join(root, "source", "packages");
-    let pkg = join(root, "pkg");
-    let tempDir = "";
+    const tempDir = mkdtempSync(join(tmpdir(), "platform-package-check-"));
     try {
-      if (!existsSync(source) || !existsSync(pkg)) {
-        tempDir = mkdtempSync(join(tmpdir(), "platform-package-check-"));
-        source = join(checkout(tempDir), "packages");
-        pkg = join(tempDir, "pkg");
-        command(process.env.GO || "go", ["build", "-o", pkg, "./cmd/pkg"], join(platform, "capabilities/server"));
+      let source = join(root, "source");
+      if (!existsSync(source) || command("git", ["rev-parse", "HEAD"], source) !== lock.revision) {
+        source = measure("拉取验收包源码", () => checkout(tempDir));
       }
-      const fixtures = ["application.production-provider", "connectortrial-contract", "connectortrial"].map((name) => join(source, name));
-      console.log(command(pkg, ["check", "-install=" + (args[1] === "--install"), ...fixtures]));
+      const pkg = join(tempDir, "pkg");
+      measure("编译当前候选包工具", () => command(process.env.GO || "go", ["build", "-o", pkg, "./cmd/pkg"], join(platform, "capabilities/server")));
+      const fixtures = ["application.production-provider", "connectortrial-contract", "connectortrial"].map((name) => join(source, "packages", name));
+      console.log(measure("验收包契约校验", () => command(pkg, ["check", "-install=" + (args[1] === "--install"), ...fixtures])));
     } finally {
-      if (tempDir) rmSync(tempDir, { recursive: true, force: true });
+      rmSync(tempDir, { recursive: true, force: true });
     }
   } else if (args[0] === "--") {
     if (!args[1]) throw Error("Missing test command");

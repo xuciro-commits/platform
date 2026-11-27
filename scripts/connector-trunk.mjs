@@ -4,6 +4,7 @@ import { mkdtempSync, readFileSync, rmSync } from "node:fs";
 import { createServer } from "node:https";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { begin } from "./timing.mjs";
 
 const [command, ...args] = process.argv.slice(2);
 const baseEnv = { ...process.env };
@@ -21,11 +22,12 @@ if (!runsConnector) {
     process.exitCode = exitCode;
   });
 } else {
+  const fixtureReady = begin("HTTPS 连接器夹具启动");
   const dir = mkdtempSync(join(tmpdir(), "platform-connector-"));
   const cert = join(dir, "cert.pem");
   const key = join(dir, "key.pem");
   const generated = spawnSync("openssl", ["req", "-x509", "-nodes", "-newkey", "rsa:2048", "-keyout", key, "-out", cert, "-days", "1", "-subj", "/CN=127.0.0.1", "-addext", "subjectAltName=IP:127.0.0.1"], { stdio: "ignore" });
-  if (generated.status !== 0) { rmSync(dir, { recursive: true, force: true }); throw new Error("Cannot generate HTTPS fixture certificate"); }
+  if (generated.status !== 0) { fixtureReady(false); rmSync(dir, { recursive: true, force: true }); throw new Error("Cannot generate HTTPS fixture certificate"); }
   const counts = new Map();
   const server = createServer({ key: readFileSync(key), cert: readFileSync(cert) }, async (req, res) => {
     const reply = (status, body) => { res.writeHead(status, { "content-type": "application/json" }); res.end(JSON.stringify(body)); };
@@ -48,6 +50,7 @@ if (!runsConnector) {
     return reply(200, { receipt: "received-" + input.to });
   });
   await new Promise((resolve, reject) => { server.once("error", reject); server.listen(0, "127.0.0.1", resolve); });
+  fixtureReady();
   const origin = "https://127.0.0.1:" + server.address().port;
   const env = { ...baseEnv, PLATFORM_TRUNK_CONNECTOR_ORIGIN: origin, PLATFORM_TRUNK_CONNECTOR_CERT: cert, PLATFORM_SECRET_KIT_TRUNK_WRONG: "kit-user:kit-wrong-password", PLATFORM_SECRET_KIT_TRUNK_BASIC: "kit-user:kit-trunk-password", PLATFORM_SECRET_KIT_TRUNK_HMAC: "kit-trunk-signing-key" };
   const child = spawn(command, args, { stdio: "inherit", env });

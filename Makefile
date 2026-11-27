@@ -10,10 +10,11 @@ INFRA := postgres rauthy rustfs
 LITE_HOST ?= 127.0.0.1
 GOPROXY ?= https://goproxy.cn,direct
 STEP := bash scripts/make-step.sh
+TIMED := node "$(CURDIR)/scripts/timing.mjs" run
 PACKAGE_INPUTS := node "$(CURDIR)/scripts/package-fixtures.mjs" --
 export GOPROXY
 
-.PHONY: help hooks bootstrap setup local docker infra infra-down build-compute dev dev-light host lite build bundle contract local-update packages fast check check-frontend verify verify-sql load-sql frontend-host frontend-dev trunk trunk-special trunk-changed trunk-cache-clean test test-fast test-runner test-pg test-security-pg test-voice
+.PHONY: _check _check-frontend _test-pg _verify help hooks bootstrap setup local docker infra infra-down build-compute dev dev-light host lite build bundle contract local-update packages fast check check-frontend verify verify-sql load-sql frontend-host frontend-dev trunk trunk-special trunk-changed trunk-cache-clean test test-fast test-runner test-pg test-security-pg test-voice
 
 help:
 	@bash -c '\
@@ -64,11 +65,11 @@ setup:
 	cd frontend && $(PNPM) install --frozen-lockfile
 	$(GO) install github.com/air-verse/air@$(AIR_VERSION)
 
-local: bootstrap
-	AIR="$(AIR)" python3 deploy/dev/environment.py local
+local:
+	@AIR="$(AIR)" $(TIMED) local python3 deploy/dev/environment.py local
 
-docker: bootstrap
-	python3 deploy/dev/environment.py docker
+docker:
+	@$(TIMED) docker python3 deploy/dev/environment.py docker
 
 infra: bootstrap
 	$(NATIVE_COMPOSE) up -d --wait $(INFRA)
@@ -96,13 +97,13 @@ host:
 	.build/host/platform-server $(ARGS)
 
 frontend-host:
-	GO="$(GO)" $(PACKAGE_INPUTS) node scripts/trunk-postgres.mjs --host
+	@GO="$(GO)" $(TIMED) frontend-host $(PACKAGE_INPUTS) node scripts/trunk-postgres.mjs --host
 
 frontend-dev:
 	$(PNPM) --dir frontend dev
 
-lite: bootstrap
-	GO="$(GO)" PNPM="$(PNPM)" LITE_HOST="$(LITE_HOST)" deploy/local/lite.sh
+lite:
+	@GO="$(GO)" PNPM="$(PNPM)" LITE_HOST="$(LITE_HOST)" $(TIMED) lite deploy/local/lite.sh
 
 build:
 	cd frontend && $(PNPM) build
@@ -123,18 +124,21 @@ bundle:
 	ls -lh "$$out"
 
 contract:
-	cd capabilities/server && $(GO) run ./cmd/page-contract
-	cd capabilities/server && $(GO) run ./cmd/api-types
+	cd capabilities/server && $(TIMED) "生成页面安全契约" $(GO) run ./cmd/page-contract
+	cd capabilities/server && $(TIMED) "生成宿主 API 类型" $(GO) run ./cmd/api-types
 
 packages:
-	node scripts/package-fixtures.mjs --check --install
+	@$(TIMED) packages node scripts/package-fixtures.mjs --check --install
 
 fast:
 	@bash .githooks/pre-commit
 
 check:
+	@$(TIMED) check $(MAKE) --no-print-directory _check
+
+_check:
 	@printf '\n\033[1mEIDOS · 后端与仓库全检\033[0m\n'
-	@$(STEP) "[1/7]" "Go 编译、vet 与代码格式" 'cd capabilities/server && $(GO) build ./... && $(GO) vet ./... && test -z "$$(gofmt -l .)" && cd ../voice && $(GO) build ./... && $(GO) vet ./... && test -z "$$(gofmt -l .)"'
+	@$(STEP) "[1/7]" "Go 编译、vet 与代码格式" 'cd capabilities/server && $(TIMED) "Server Go 编译" $(GO) build ./... && $(TIMED) "Server go vet" $(GO) vet ./... && test -z "$$(gofmt -l .)" && cd ../voice && $(TIMED) "Voice Go 编译" $(GO) build ./... && $(TIMED) "Voice go vet" $(GO) vet ./... && test -z "$$(gofmt -l .)"'
 	@$(STEP) "[2/7]" "模块边界与代码形状棘轮" 'node scripts/check-boundaries.mjs'
 	@$(STEP) "[3/7]" "远程包输入及验收包校验" 'node scripts/package-fixtures.mjs --check'
 	@$(STEP) "[4/7]" "宿主契约零漂移校验" 'mkdir -p .build/contract && cp frontend/src/host/gen/host.ts .build/contract/host.ts && cp frontend/src/host/gen/enterprise-sdk.ts .build/contract/enterprise-sdk.ts && cp capabilities/server/services/apps/pages/page_compat.json .build/contract/page_compat.json && $(MAKE) -s contract && cmp .build/contract/host.ts frontend/src/host/gen/host.ts && cmp .build/contract/enterprise-sdk.ts frontend/src/host/gen/enterprise-sdk.ts && cmp .build/contract/page_compat.json capabilities/server/services/apps/pages/page_compat.json'
@@ -144,26 +148,32 @@ check:
 	@printf '\033[32m✓ 全部 7 项检查通过\033[0m\n\n'
 
 check-frontend:
+	@$(TIMED) check-frontend $(MAKE) --no-print-directory _check-frontend
+
+_check-frontend:
 	@printf '\n\033[1mEIDOS · 新前端检查与构建\033[0m\n'
 	@$(STEP) "[1/2]" "前端规范、翻译与行数门禁" 'node scripts/check-frontend.mjs'
 	@$(STEP) "[2/2]" "TypeScript 类型检查与 Vite 构建" 'cd frontend && $(PNPM) build'
 	@printf '\033[32m✓ 新前端检查全部通过\033[0m\n\n'
 
 trunk:
-	TRUNK_SPECIAL= GO="$(GO)" $(PACKAGE_INPUTS) node scripts/trunk-postgres.mjs --browser $(if $(LAYER),--layer "$(LAYER)") $(PNPM) exec playwright test -c e2e $(foreach spec,$(SPEC),$(spec).spec.ts) $(if $(HEADED),--headed) $(TRUNK_ARGS)
+	@TRUNK_SPECIAL= GO="$(GO)" $(TIMED) trunk $(if $(filter --list,$(TRUNK_ARGS)),,$(PACKAGE_INPUTS)) node scripts/trunk-postgres.mjs --browser $(if $(LAYER),--layer "$(LAYER)") $(PNPM) exec playwright test -c e2e $(foreach spec,$(SPEC),$(spec).spec.ts) $(if $(HEADED),--headed) $(TRUNK_ARGS)
 
 trunk-special:
-	TRUNK_SPECIAL=performance GO="$(GO)" $(PACKAGE_INPUTS) node scripts/trunk-postgres.mjs --browser $(PNPM) exec playwright test -c e2e records.spec.ts $(if $(HEADED),--headed) $(TRUNK_ARGS)
+	@TRUNK_SPECIAL=performance GO="$(GO)" $(TIMED) trunk-special $(if $(filter --list,$(TRUNK_ARGS)),,$(PACKAGE_INPUTS)) node scripts/trunk-postgres.mjs --browser $(PNPM) exec playwright test -c e2e records.spec.ts $(if $(HEADED),--headed) $(TRUNK_ARGS)
 
 test-pg:
-	GO="$(GO)" $(PACKAGE_INPUTS) node scripts/trunk-postgres.mjs --backend '$(RUN)'
+	@$(TIMED) test-pg $(MAKE) --no-print-directory _test-pg
+
+_test-pg:
+	@GO="$(GO)" $(TIMED) "PG 后端验收" $(PACKAGE_INPUTS) node scripts/trunk-postgres.mjs --backend '$(RUN)'
 	$(if $(RUN),:,$(MAKE) test-security-pg)
 
 test-security-pg:
-	GO="$(GO)" node scripts/trunk-postgres.mjs --security
+	@GO="$(GO)" $(TIMED) test-security-pg node scripts/trunk-postgres.mjs --security
 
 trunk-cache-clean:
-	node scripts/trunk-postgres.mjs --clean
+	@$(TIMED) trunk-cache-clean node scripts/trunk-postgres.mjs --clean
 
 trunk-changed:
 	@set -e; specs="$$(node scripts/trunk-affected.mjs $(BASE))"; \
@@ -172,18 +182,21 @@ trunk-changed:
 	else echo "只跑：$$specs"; $(MAKE) trunk SPEC="$$(printf '%s' "$$specs" | sed 's/\.spec\.ts//g')"; fi
 
 test-runner:
-	node --test scripts/test-results.test.mjs scripts/trunk-seeds.test.mjs
+	@$(TIMED) test-runner node --test scripts/test-results.test.mjs scripts/trunk-seeds.test.mjs
 
 test-fast:
-	GO="$(GO)" $(PACKAGE_INPUTS) node scripts/check-invariants.mjs '$(RUN)' --tier=small
+	@GO="$(GO)" $(TIMED) test-fast $(PACKAGE_INPUTS) node scripts/check-invariants.mjs '$(RUN)' --tier=small
 
 test:
-	GO="$(GO)" $(PACKAGE_INPUTS) node scripts/check-invariants.mjs '$(RUN)'
+	@GO="$(GO)" $(TIMED) test $(PACKAGE_INPUTS) node scripts/check-invariants.mjs '$(RUN)'
 
 test-voice:
-	cd capabilities/voice && $(GO) test -race -count=1 ./...
+	@$(TIMED) test-voice bash -c 'cd capabilities/voice && $(GO) test -race -count=1 ./...'
 
 verify:
+	@$(TIMED) verify $(MAKE) --no-print-directory _verify
+
+_verify:
 	mkdir -p .build/trunk
 	rm -f .build/trunk/playwright-results.json
 	$(MAKE) test-pg RUN=

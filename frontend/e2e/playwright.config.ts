@@ -9,7 +9,7 @@ const controlPort = Number(process.env.PLATFORM_TRUNK_CONTROL_PORT ?? (19521 + o
 const pagePort = Number(process.env.PLATFORM_TRUNK_PAGE_PORT ?? (8497 + offset));
 const work = process.env.PLATFORM_TRUNK_WORK ?? `${root}.build/trunk`;
 const listOnly = process.argv.includes("--list");
-if (!listOnly && (!process.env.TRUNK_DATABASE || !process.env.TRUNK_RESTORE_DATABASE || !process.env.PLATFORM_TRUNK_WORK)) throw Error("Use make trunk (PostgreSQL required)");
+if (!listOnly && (!process.env.TRUNK_DATABASE || !process.env.PLATFORM_TRUNK_WORK)) throw Error("Use make trunk (PostgreSQL required)");
 const host = `http://127.0.0.1:${hostPort}`;
 const page = `http://localhost:${pagePort}`;
 
@@ -22,6 +22,7 @@ if (process.env.TEST_WORKER_INDEX === undefined && !listOnly) {
 import { once } from "node:events";
 import { closeSync, existsSync, openSync, readFileSync, statSync } from "node:fs";
 import { createServer } from "node:http";
+import { measure } from ${JSON.stringify(`${root}scripts/timing.mjs`)};
 
 const bin = ${JSON.stringify(process.env.PLATFORM_TRUNK_BIN ?? `${work}/platform-server`)};
 const cwd = ${JSON.stringify(`${root}capabilities/server`)};
@@ -35,7 +36,11 @@ let stopping = false;
 let restarting = false;
 let queue = Promise.resolve();
 
-async function startHost(snapshotEvery) {
+function startHost(snapshotEvery) {
+  return measure("测试宿主启动与健康检查", () => startHostProcess(snapshotEvery));
+}
+
+async function startHostProcess(snapshotEvery) {
   const from = existsSync(logFile) ? statSync(logFile).size : 0;
   const args = [
     "-addr", "127.0.0.1:${hostPort}",
@@ -61,7 +66,7 @@ async function startHost(snapshotEvery) {
     if (proc.exitCode !== null || proc.signalCode !== null) {
       throw new Error(readFileSync(logFile, "utf8").slice(from));
     }
-    const ok = await fetch("${host}/healthz").then(async (r) => { if (!r.ok) return false; const h = await r.json(); if (h.quarantined) throw Error("Quarantined tenants: " + h.quarantined); return true; }, () => false);
+    const ok = await fetch("${host}/healthz", { signal: AbortSignal.timeout(2000) }).then(async (r) => { if (!r.ok) return false; const h = await r.json(); if (h.quarantined) throw Error("Quarantined tenants: " + h.quarantined); return true; }, () => false);
     if (ok) return readFileSync(logFile, "utf8").slice(from);
     await new Promise((r) => setTimeout(r, 100));
   }
@@ -163,6 +168,7 @@ export default defineConfig({
       cwd: `${root}capabilities/server`,
       url: `${host}/healthz`,
       timeout: 360_000,
+      stderr: "pipe",
       reuseExistingServer: false,
       env: {
         GOPROXY: "https://goproxy.cn,direct",
@@ -175,6 +181,7 @@ export default defineConfig({
       cwd: `${root}frontend`,
       url: page,
       timeout: 360_000,
+      stderr: "pipe",
       reuseExistingServer: false,
       env: {
         PLATFORM_HOST: host,

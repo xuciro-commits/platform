@@ -5,12 +5,12 @@ import { createServer } from "node:net";
 import { availableParallelism } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
-import { layers, seedPlan, securityAPIPlan } from "./trunk-seeds.mjs";
+import { measure, note } from "./timing.mjs";
+import { layers, seedPlan, securityAPIPlan, countOption, specSelectors } from "./trunk-seeds.mjs";
 
 const root = fileURLToPath(new URL("../", import.meta.url));
 const build = join(root, ".build");
 const cache = join(build, "trunk-baselines");
-const sharedBin = join(build, "trunk", "platform-server");
 const hash = (...values) => {
   const h = createHash("sha256");
   for (const value of values) { h.update(value); h.update("\0"); }
@@ -104,7 +104,7 @@ async function pool() {
 }
 
 const sql = (pg, query, db = "postgres") => docker("exec", pg.name, "psql", "-X", "-v", "ON_ERROR_STOP=1", "-U", "postgres", "-d", db, "-Atc", query);
-const createDB = (pg, db, template) => docker("exec", pg.name, "createdb", "-U", "postgres", ...(template ? ["-T", template] : []), db);
+const createDB = (pg, db, template) => measure(template ? "克隆基准数据库" : "创建独立数据库", () => docker("exec", pg.name, "createdb", "-U", "postgres", ...(template ? ["-T", template] : []), db));
 const dropDB = (pg, db) => docker("exec", pg.name, "dropdb", "-U", "postgres", "--if-exists", "--force", db);
 const existsDB = (pg, db) => sql(pg, "select count(*) from pg_database where datname='" + db + "'") === "1";
 
@@ -120,8 +120,8 @@ function hostArgs(work, pg, db, port) {
     "-tenants", join(work, "tenants.json"), "-host-admins", "admin,root", "-allow-loopback-packages"];
 }
 async function ready(proc, port) {
-  const deadline = Date.now() + 60_000;
-  while (!stopped && Date.now() < deadline) {
+  const deadline = performance.now() + 60_000;
+  while (!stopped && performance.now() < deadline) {
     if (proc.child.exitCode !== null || proc.child.signalCode !== null) throw Error("Seed host exited before readiness");
     const health = await fetch("http://127.0.0.1:" + port + "/healthz", { signal: AbortSignal.timeout(2000) }).then(r => r.ok ? r.json() : undefined, () => undefined);
     if (health?.status === "ok") {
@@ -135,25 +135,47 @@ async function ready(proc, port) {
 async function seed(work, bin, pg, db, port, plan) {
   tenantFile(work, plan);
   mkdirSync(join(work, "files"), { recursive: true, mode: 0o700 });
+  if (!plan.seed.length) return;
   const proc = start(bin, hostArgs(work, pg, db, port), { ...process.env, PLATFORM_PACKAGES_DIR: "" }, join(root, "capabilities/server"));
   try {
-    await ready(proc, port);
-    await checked(process.execPath, [join(root, "scripts/frontend-seed.mjs")], { ...process.env,
+    await measure("种子宿主启动", () => ready(proc, port));
+    await measure("安装包与初始化种子", () => checked(process.execPath, [join(root, "scripts/frontend-seed.mjs")], { ...process.env,
       PLATFORM_HOST: "http://127.0.0.1:" + port,
       PLATFORM_SEED_TENANTS: plan.seed.length ? plan.seed.join(",") : "none",
-      PLATFORM_ACCEPTANCE_CRM: plan.acceptanceCrm ? "1" : "0" });
+      PLATFORM_ACCEPTANCE_CRM: plan.acceptanceCrm ? "1" : "0" }));
     await ready(proc, port);
-  } finally { await stop(proc); }
+  } finally { await measure("停止种子宿主", () => stop(proc)); }
 }
 async function withCacheLock(fn) {
   mkdirSync(cache, { recursive: true, mode: 0o700 });
   const lock = join(cache, "lock");
-  const deadline = Date.now() + 360_000;
+  const deadline = performance.now() + 360_000;
   while (true) {
     if (stopped) throw Error("Interrupted");
-    try { mkdirSync(lock); break; } catch (err) { if (err.code !== "EEXIST" || Date.now() >= deadline) throw Error("Trunk cache busy; check active runs before removing " + lock); }
+    try { mkdirSync(lock); break; } catch (err) {
+      if (err.code !== "EEXIST" || performance.now() >= deadline) throw Error("Trunk cache busy; check active runs before removing " + lock);
+    }
     await sleep(250);
   }
+  try { return await fn(); } finally { rmSync(lock, { recursive: true, force: true }); }
+}
+async function withBaselineLock(key, fn) {
+  const lock = join(cache, "lock-" + key);
+  await measure("等待场景基准锁 " + key.slice(0, 8), async () => {
+    const deadline = performance.now() + 360_000;
+    while (true) {
+      if (stopped) throw Error("Interrupted");
+      const acquired = await withCacheLock(() => {
+        try { mkdirSync(lock); return true; } catch (err) {
+          if (err.code !== "EEXIST") throw err;
+          return false;
+        }
+      });
+      if (acquired) return;
+      if (performance.now() >= deadline) throw Error("Trunk baseline busy; check active runs before removing " + lock);
+      await sleep(250);
+    }
+  });
   try { return await fn(); } finally { rmSync(lock, { recursive: true, force: true }); }
 }
 function treeDigest(dir) {
@@ -161,12 +183,12 @@ function treeDigest(dir) {
     .map(e => join(e.parentPath, e.name)).sort();
   return hash(...entries.flatMap(file => [file.slice(dir.length), readFileSync(file)]));
 }
-async function buildServerBinary() {
+function buildServerBinary() {
   mkdirSync(join(build, "trunk"), { recursive: true });
-  await withCacheLock(async () => {
-    run(process.env.GO || "go", ["build", "-trimpath", "-o", sharedBin, "./cmd/platform-server"], join(root, "capabilities/server"));
-  });
-  return sharedBin;
+  const bin = join(build, "trunk", "platform-server-" + nonce);
+  process.once("exit", () => rmSync(bin, { force: true }));
+  measure("编译本次宿主（各 spec 共用）", () => run(process.env.GO || "go", ["build", "-trimpath", "-o", bin, "./cmd/platform-server"], join(root, "capabilities/server")));
+  return bin;
 }
 async function cloneBaseline(pg, work, bin, db, port, plan) {
   const inputs = readFileSync(join(process.env.PLATFORM_TEST_PACKAGES_DIR, "inputs.json"));
@@ -183,7 +205,7 @@ async function cloneBaseline(pg, work, bin, db, port, plan) {
   const key = hash(...keyParts).slice(0, 28);
   const base = "trunk_base_" + owner + "_" + key;
   const dir = join(cache, key);
-  await withCacheLock(async () => {
+  await withBaselineLock(key, async () => {
     const marker = join(dir, "ready.json");
     let valid = false;
     if (existsSync(marker) && existsSync(join(dir, "files")) && existsSync(join(dir, "tenants.json")) && existsDB(pg, base)) {
@@ -192,43 +214,54 @@ async function cloneBaseline(pg, work, bin, db, port, plan) {
         sql(pg, "select datallowconn from pg_database where datname='" + base + "'") === "f";
     }
     if (!valid) {
+      note("基准缓存未命中 " + key);
       if (existsDB(pg, base)) dropDB(pg, base);
       rmSync(dir, { recursive: true, force: true });
       mkdirSync(dir, { recursive: true, mode: 0o700 });
       createDB(pg, base);
       try {
-        await seed(dir, bin, pg, base, port, plan);
+        await measure("构建初始基准", () => seed(dir, bin, pg, base, port, plan));
         sql(pg, "alter database " + base + " with allow_connections false");
         writeFileSync(marker, JSON.stringify({ pg: pg.id, files: treeDigest(join(dir, "files")) }), { mode: 0o600 });
         console.log("trunk: created baseline " + key);
       } catch (err) { dropDB(pg, base); rmSync(dir, { recursive: true, force: true }); throw err; }
-    } else console.log("trunk: reused baseline " + key);
+    } else note("基准缓存命中 " + key);
     createDB(pg, db, base);
-    cpSync(join(dir, "files"), join(work, "files"), { recursive: true });
-    cpSync(join(dir, "tenants.json"), join(work, "tenants.json"));
+    measure("克隆文件与租户配置", () => {
+      cpSync(join(dir, "files"), join(work, "files"), { recursive: true });
+      cpSync(join(dir, "tenants.json"), join(work, "tenants.json"));
+    });
   });
 }
 
 async function runBrowserSpec(pg, bin, baseArgs, spec, jsonOut) {
   const runNonce = randomBytes(6).toString("hex");
   const db = "trunk_run_" + runNonce;
-  const restore = "trunk_restore_" + runNonce;
+  const restore = spec === "official" ? "trunk_restore_" + runNonce : "";
   const work = mkdtempSync(join(build, "trunk-run-"));
   const plan = seedPlan([spec + ".spec.ts"], false);
-  const started = Date.now();
+  const started = performance.now();
   let success = false;
   try {
-    const [seedPort, hostPort, controlPort, pagePort] = await freePorts(4);
-    if (plan.cache && process.env.TRUNK_FRESH !== "1") await cloneBaseline(pg, work, bin, db, seedPort, plan);
-    else { createDB(pg, db); await seed(work, bin, pg, db, seedPort, plan); }
-    createDB(pg, restore);
-    const specArgs = [...baseArgs.filter(arg => !/\.spec\.ts(?::\d+)*$/.test(arg)), spec + ".spec.ts"];
+    const [seedPort, hostPort, controlPort, pagePort] = await measure(spec + " · 分配隔离端口", () => freePorts(4));
+    await measure(spec + " · 数据库与文件准备", async () => {
+      if (plan.cache && process.env.TRUNK_FRESH !== "1") await cloneBaseline(pg, work, bin, db, seedPort, plan);
+      else { createDB(pg, db); await seed(work, bin, pg, db, seedPort, plan); }
+    });
+    if (restore) createDB(pg, restore);
+    const specArgs = specSelectors(baseArgs, spec);
+    const reporter = join(root, "frontend/e2e/timing-reporter.ts");
+    const reporterIndex = specArgs.findIndex(arg => arg === "--reporter" || arg.startsWith("--reporter="));
+    if (reporterIndex < 0) specArgs.push("--reporter=list," + reporter);
+    else if (specArgs[reporterIndex] === "--reporter") specArgs[reporterIndex + 1] += "," + reporter;
+    else specArgs[reporterIndex] += "," + reporter;
     const env = {
       ...process.env,
       PLATFORM_PACKAGES_DIR: "",
       PLATFORM_TRUNK_BIN: bin,
+      PLATFORM_TIMING_SCOPE: spec,
       TRUNK_DATABASE: pg.url(db),
-      TRUNK_RESTORE_DATABASE: pg.url(restore),
+      TRUNK_RESTORE_DATABASE: restore ? pg.url(restore) : "",
       PLATFORM_TRUNK_HOST_PORT: String(hostPort),
       PLATFORM_TRUNK_CONTROL_PORT: String(controlPort),
       PLATFORM_TRUNK_PAGE_PORT: String(pagePort),
@@ -238,37 +271,46 @@ async function runBrowserSpec(pg, bin, baseArgs, spec, jsonOut) {
       TRUNK_SPLIT_OFFICIAL: "0",
       ...(jsonOut ? { PLAYWRIGHT_JSON_OUTPUT_FILE: jsonOut } : {}),
     };
-    await checked(process.execPath, [join(root, "scripts/connector-trunk.mjs"), ...specArgs], env, join(root, "frontend"));
+    await measure(spec + " · 浏览器启动与测试", () => checked(process.execPath, [join(root, "scripts/connector-trunk.mjs"), ...specArgs], env, join(root, "frontend")));
     const count = Number(sql(pg, "select count(*) from journal", db));
     if (!(count > 0)) throw Error("Trunk PostgreSQL journal is empty for " + spec);
-    console.log(`[trunk] ✓ ${spec} (${((Date.now() - started) / 1000).toFixed(1)}s, ${count} journal)`);
+    console.log(`[trunk] ✓ ${spec} (${((performance.now() - started) / 1000).toFixed(3)}s, ${count} journal)`);
     success = !stopped;
   } finally {
-    if (existsDB(pg, restore)) dropDB(pg, restore);
-    if (existsDB(pg, db)) dropDB(pg, db);
+    measure(spec + " · 清理隔离数据库", () => {
+      if (restore && existsDB(pg, restore)) dropDB(pg, restore);
+      if (existsDB(pg, db)) dropDB(pg, db);
+    });
     if (success) rmSync(work, { recursive: true, force: true });
     else console.error("trunk evidence retained at " + work);
   }
 }
 
 function mergePlaywrightJSON(files, target) {
-  const merged = { config: null, suites: [], errors: [], stats: { startTime: new Date().toISOString(), duration: 0, expected: 0, skipped: 0, unexpected: 0, flaky: 0 } };
+  const merged = { config: null, suites: [], errors: [], stats: { startTime: "", duration: 0, expected: 0, skipped: 0, unexpected: 0, flaky: 0 } };
+  let first = Infinity, last = -Infinity;
   for (const file of files) {
-    if (!existsSync(file)) continue;
+    if (!existsSync(file)) throw Error("Missing Playwright report: " + file);
     const part = JSON.parse(readFileSync(file, "utf8"));
+    if (!part.stats || !Array.isArray(part.suites)) throw Error("Invalid Playwright report: " + file);
     if (!merged.config && part.config) merged.config = part.config;
-    if (Array.isArray(part.suites)) merged.suites.push(...part.suites);
+    merged.suites.push(...part.suites);
     if (Array.isArray(part.errors)) merged.errors.push(...part.errors);
-    if (part.stats) {
-      merged.stats.duration += part.stats.duration ?? 0;
-      merged.stats.expected += part.stats.expected ?? 0;
-      merged.stats.skipped += part.stats.skipped ?? 0;
-      merged.stats.unexpected += part.stats.unexpected ?? 0;
-      merged.stats.flaky += part.stats.flaky ?? 0;
+    const started = Date.parse(part.stats.startTime);
+    if (!Number.isFinite(started) || !Number.isFinite(part.stats.duration) || part.stats.duration < 0) throw Error("Invalid Playwright report timing: " + file);
+    first = Math.min(first, started);
+    last = Math.max(last, started + part.stats.duration);
+    for (const key of ["expected", "skipped", "unexpected", "flaky"]) {
+      const count = part.stats[key];
+      if (!Number.isSafeInteger(count) || count < 0) throw Error("Invalid Playwright report count: " + file);
+      merged.stats[key] += count;
     }
-    rmSync(file, { force: true });
   }
+  if (!files.length) throw Error("No Playwright reports to merge");
+  merged.stats.startTime = new Date(first).toISOString();
+  merged.stats.duration = last - first;
   writeFileSync(target, JSON.stringify(merged, null, 2));
+  for (const file of files) rmSync(file, { force: true });
 }
 
 const args = process.argv.slice(2);
@@ -281,24 +323,27 @@ if (mode === "--browser" && args[0] === "--layer") {
   args.push(...layers[layer].map(name => name + ".spec.ts"));
 }
 if (mode === "--browser" && args.includes("--list")) {
-  await checked(args[0], args.slice(1), process.env, join(root, "frontend"));
+  await measure("收集浏览器用例（不启动宿主）", () => checked(args[0], args.slice(1), process.env, join(root, "frontend")));
   process.exit(0);
 }
 if (!["--browser", "--host", "--backend", "--security", "--clean"].includes(mode)) throw Error("Specify --browser, --host, --backend, --security or --clean");
-const pg = await pool();
+const plan = mode === "--browser" ? seedPlan(args, false) : null;
+const jobs = plan ? Math.min(countOption("TRUNK_JOBS", Math.min(plan.specs.length, 3), Object.values(layers).flat().length), plan.specs.length) : 0;
+const pattern = args[0] ?? "";
+const shardCount = mode === "--backend" ? countOption("PLATFORM_PG_SHARDS", pattern ? 1 : Math.min(availableParallelism(), 4), 6) : 0;
+const pg = await measure("检查 PostgreSQL 测试池", pool);
 if (mode === "--clean") {
   await withCacheLock(async () => {
+    const active = readdirSync(cache).filter(name => /^lock-[a-f0-9]{28}$/.test(name));
+    if (active.length) throw Error("Trunk baselines are in use; confirm no active runs before cleanup: " + active.join(", "));
     const names = sql(pg, "select datname from pg_database where datname like 'trunk_base_" + owner + "_%'").split("\n");
     for (const name of names) if (new RegExp("^trunk_base_" + owner + "_[a-f0-9]{28}$").test(name)) dropDB(pg, name);
     for (const name of readdirSync(cache)) if (/^[a-f0-9]{28}$/.test(name)) rmSync(join(cache, name), { recursive: true, force: true });
   });
 } else if (mode === "--backend") {
-  const pattern = args[0] ?? "";
-  const requestedShards = Number(process.env.PLATFORM_PG_SHARDS ?? (pattern ? 1 : Math.min(availableParallelism(), 4)));
-  const shardCount = Math.max(1, Math.min(requestedShards, 6));
   const dbs = Array.from({ length: shardCount }, (_, idx) => `trunk_bench_${nonce}_s${idx}`);
-  for (const db of dbs) createDB(pg, db);
   try {
+    for (const db of dbs) createDB(pg, db);
     const urls = dbs.map(db => pg.url(db));
     await checked(process.execPath, [join(root, "scripts/check-invariants.mjs"), pattern, "--require-no-skip"], {
       ...process.env,
@@ -310,66 +355,36 @@ if (mode === "--clean") {
   }
 } else if (mode === "--browser") {
   mkdirSync(build, { recursive: true });
-  const bin = await buildServerBinary();
-  const plan = seedPlan(args, false);
-  const requestedJobs = Number(process.env.TRUNK_JOBS ?? (plan.specs.length > 1 ? Math.min(plan.specs.length, 3) : 1));
-  const jobs = Math.max(1, Math.min(requestedJobs, plan.specs.length));
-  if (jobs > 1) {
-    const jsonTarget = process.env.PLAYWRIGHT_JSON_OUTPUT_FILE || "";
-    const partFiles = [];
-    const queue = [...plan.specs];
-    const failures = [];
-    console.log(`[trunk] running ${plan.specs.length} specs across ${jobs} isolated PG workers`);
-    await Promise.all(Array.from({ length: jobs }, async () => {
-      while (queue.length > 0 && !stopped) {
-        const spec = queue.shift();
-        const partOut = jsonTarget ? join(build, "trunk", `part-${spec}-${nonce}.json`) : "";
-        if (partOut) partFiles.push(partOut);
-        try {
-          await runBrowserSpec(pg, bin, args, spec, partOut);
-        } catch (err) {
-          failures.push(`${spec}: ${err.message}`);
-        }
-      }
-    }));
-    if (jsonTarget) mergePlaywrightJSON(partFiles, jsonTarget);
-    if (failures.length > 0) throw Error("Trunk failures:\n" + failures.join("\n"));
-  } else {
-    const spec = plan.specs[0];
-    if (plan.specs.length === 1) {
-      await runBrowserSpec(pg, bin, args, spec, process.env.PLAYWRIGHT_JSON_OUTPUT_FILE || "");
-    } else {
-      const db = "trunk_run_" + nonce, restore = "trunk_restore_" + nonce;
-      const work = mkdtempSync(join(build, "trunk-run-"));
-      let success = false;
+  const bin = buildServerBinary();
+  const jsonTarget = process.env.PLAYWRIGHT_JSON_OUTPUT_FILE || "";
+  const partFiles = [];
+  const queue = [...plan.specs];
+  const failures = [];
+  if (jsonTarget) rmSync(jsonTarget, { force: true });
+  note("调度 " + plan.specs.length + " 个 spec / " + jobs + " 路独立宿主");
+  await Promise.all(Array.from({ length: jobs }, async () => {
+    while (queue.length > 0 && !stopped) {
+      const spec = queue.shift();
+      const partOut = jsonTarget ? join(build, "trunk", `part-${spec}-${nonce}.json`) : "";
+      if (partOut) partFiles.push(partOut);
       try {
-        const [seedPort, hostPort, controlPort, pagePort] = await freePorts(4);
-        if (plan.cache && process.env.TRUNK_FRESH !== "1") await cloneBaseline(pg, work, bin, db, seedPort, plan);
-        else { createDB(pg, db); await seed(work, bin, pg, db, seedPort, plan); }
-        createDB(pg, restore);
-        const env = { ...process.env, PLATFORM_PACKAGES_DIR: "", PLATFORM_TRUNK_BIN: bin, TRUNK_DATABASE: pg.url(db), TRUNK_RESTORE_DATABASE: pg.url(restore),
-          PLATFORM_TRUNK_HOST_PORT: String(hostPort), PLATFORM_TRUNK_CONTROL_PORT: String(controlPort), PLATFORM_TRUNK_PAGE_PORT: String(pagePort),
-          PLATFORM_TRUNK_WORK: work, PLATFORM_TRUNK_SPECS: JSON.stringify(plan.specs), PLATFORM_TRUNK_FILES: pathToFileURL(join(work, "files")).href,
-          TRUNK_SPLIT_OFFICIAL: plan.specs.includes("official") && plan.specs.length > 1 ? "1" : "0" };
-        await checked(process.execPath, [join(root, "scripts/connector-trunk.mjs"), ...args], env, join(root, "frontend"));
-        const count = Number(sql(pg, "select count(*) from journal", db));
-        if (!(count > 0)) throw Error("Trunk PostgreSQL journal is empty");
-        console.log("trunk: " + count + " journal entries in PostgreSQL");
-        success = !stopped;
-      } finally {
-        interrupt("SIGTERM");
-        if (existsDB(pg, restore)) dropDB(pg, restore);
-        if (existsDB(pg, db)) dropDB(pg, db);
-        if (success) rmSync(work, { recursive: true, force: true });
-        else console.error("trunk evidence retained at " + work);
+        await runBrowserSpec(pg, bin, args, spec, partOut);
+        if (partOut && !existsSync(partOut)) throw Error("Missing Playwright report");
+      } catch (err) {
+        failures.push(`${spec}: ${err.message}`);
       }
     }
+  }));
+  if (jsonTarget && partFiles.length === plan.specs.length && partFiles.every(existsSync)) {
+    measure("合并浏览器验收报告", () => mergePlaywrightJSON(partFiles, jsonTarget));
   }
+  if (stopped || queue.length || failures.length) throw Error("Trunk failures:\n" + failures.join("\n"));
+  if (jsonTarget && !existsSync(jsonTarget)) throw Error("Incomplete Playwright reports");
 } else {
   const db = "trunk_run_" + nonce;
   mkdirSync(build, { recursive: true });
+  const bin = buildServerBinary();
   const work = mkdtempSync(join(build, "trunk-run-"));
-  const bin = await buildServerBinary();
   let success = false;
   try {
     const [seedPort, hostPort] = await freePorts(2);
@@ -379,8 +394,8 @@ if (mode === "--clean") {
     if (mode === "--security") {
       const proc = start(bin, hostArgs(work, pg, db, hostPort), { ...process.env, PLATFORM_PACKAGES_DIR: "" }, join(root, "capabilities/server"));
       try {
-        await ready(proc, hostPort);
-        await checked(process.execPath, ["--test", join(root, "scripts/pg-security.test.mjs")], { ...process.env, PLATFORM_SECURITY_TEST_HOST: "http://127.0.0.1:" + hostPort });
+        await measure("安全验收宿主启动", () => ready(proc, hostPort));
+        await measure("HTTP 租户隔离验收", () => checked(process.execPath, ["--test", join(root, "scripts/pg-security.test.mjs")], { ...process.env, PLATFORM_SECURITY_TEST_HOST: "http://127.0.0.1:" + hostPort }));
         const count = Number(sql(pg, "select count(*) from journal", db));
         if (!(count > 0)) throw Error("Security PostgreSQL journal is empty");
         console.log("security: " + count + " journal entries in PostgreSQL");
@@ -389,8 +404,13 @@ if (mode === "--clean") {
       const port = 18511;
       console.log("frontend-host: PostgreSQL at http://127.0.0.1:" + port);
       const proc = start(bin, hostArgs(work, pg, db, port), { ...process.env, PLATFORM_PACKAGES_DIR: "" }, join(root, "capabilities/server"));
-      await proc.done;
-      if (!stopped && proc.child.exitCode !== 0) throw Error("Frontend host failed");
+      try {
+        await measure("开发夹具宿主启动", () => ready(proc, port));
+        await proc.done;
+        if (!stopped && proc.child.exitCode !== 0) throw Error("Frontend host failed");
+      } finally {
+        if (proc.child.exitCode === null && proc.child.signalCode === null) await stop(proc);
+      }
     }
     success = !stopped || mode === "--host";
   } finally {

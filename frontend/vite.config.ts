@@ -1,6 +1,7 @@
 import stylex from "@stylexjs/unplugin";
 import react from "@vitejs/plugin-react";
 import { defineConfig, loadEnv, normalizePath, type Plugin } from "vite";
+import { begin } from "../scripts/timing.mjs";
 
 function acyclicSource(): Plugin {
   let sourceRoot = "";
@@ -39,8 +40,16 @@ function acyclicSource(): Plugin {
 
 export default defineConfig(({ mode }) => {
   const host = loadEnv(mode, ".", "PLATFORM_").PLATFORM_HOST ?? "http://127.0.0.1:18495";
+  const started = mode === "trunk" ? begin("Vite 前端启动") : undefined;
+  const startup: Plugin = {
+    name: "platform-trunk-startup",
+    apply: "serve",
+    configureServer(server) {
+      server.httpServer?.once("listening", () => started?.());
+    },
+  };
   return {
-    plugins: [stylex.vite(), react(), acyclicSource()],
+    plugins: [stylex.vite(), react(), acyclicSource(), ...(started ? [startup] : [])],
     clearScreen: false,
     cacheDir: `node_modules/.vite/${mode}`,
     server: {

@@ -1,5 +1,10 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
+import { spawnSync } from "node:child_process";
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { fileURLToPath } from "node:url";
 import { classifySpeeds, extractTimings, filterSmallTests, selectTests, shardTests, summarizeGo, testGate } from "./test-results.mjs";
 
 const report = (events, expected = []) => summarizeGo(events.map(([Action, Test, Package = "pkg"]) => JSON.stringify({ Action, Test, Package })).join("\n"), expected);
@@ -61,4 +66,26 @@ test("sharding balances test durations, filters small tier and classifies S/M/L"
   assert.equal(tiers.small, 2);
   assert.equal(tiers.medium, 2);
   assert.deepEqual(tiers.slow, [["TestSlow", 6000]]);
+});
+
+test("timed command records actual elapsed time and preserves failure exit code", () => {
+  const dir = mkdtempSync(join(tmpdir(), "platform-timing-test-"));
+  const file = join(dir, "phases.jsonl");
+  try {
+    writeFileSync(file, "");
+    const env = { ...process.env, PLATFORM_TIMING_FILE: file, PLATFORM_TIMING_START: String(Date.now()), PLATFORM_TIMING_SCOPE: "" };
+    const script = fileURLToPath(new URL("./timing.mjs", import.meta.url));
+    const result = spawnSync(process.execPath, [script, "run", "diagnostic", process.execPath, "-e",
+      "setTimeout(() => { console.error('expected failure'); process.exit(7); }, 120)"], { env, encoding: "utf8", timeout: 10_000 });
+    assert.equal(result.status, 7);
+    assert.match(result.stderr, /expected failure/);
+    assert.match(result.stderr, /→ diagnostic/);
+    assert.match(result.stderr, /✗ diagnostic/);
+    const [phase] = readFileSync(file, "utf8").trim().split("\n").map(line => JSON.parse(line));
+    assert.equal(phase.name, "diagnostic");
+    assert.equal(phase.ok, false);
+    assert.ok(phase.ms >= 100, "timer lost actual wait: " + phase.ms);
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
 });
