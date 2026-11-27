@@ -396,3 +396,50 @@ func TestInvariantMultiPackageTranslationsScopeByNamespaceAndTranslateFieldGroup
 		t.Fatalf("crm.lead.convert account label expected 已有客户, got %+v", actions[convIdx].Payload)
 	}
 }
+
+func TestInvariantK24PackageReferenceReadiness(t *testing.T) {
+	live := newInvariantTenant(t, "invariant-k24-readiness",
+		protocol.Seat{Subjects: []string{"admin"}, Member: platform.Member{ID: "admin", Roles: map[string]string{"platform": "admin", build.ID: ontology.BuilderRole}}},
+		protocol.Seat{Subjects: []string{"other"}, Member: platform.Member{ID: "other", Roles: map[string]string{build.ID: ontology.UserRole}}},
+	)
+	raw, err := os.ReadFile("../../../scripts/frontend-fixtures/party-0.1.0.json")
+	if err != nil {
+		t.Fatal(err)
+	}
+	var offer platform.PackageDescriptor
+	if err := json.Unmarshal(raw, &offer); err != nil {
+		t.Fatal(err)
+	}
+	preview, err := live.InspectPackage(t.Context(), protocol.PackageInspectRequest{Content: platform.Raw(offer)})
+	if err != nil {
+		t.Fatal(err)
+	}
+	descriptor := preview.Descriptor
+	admin, _ := live.Member("admin")
+	submit := func(schema string, body any) {
+		t.Helper()
+		request := live.submission(schema, protocol.PackageType, descriptor.ID, body)
+		request.Authority, request.PrincipalId = "platform", admin.ID
+		if _, refusal := live.Submit(admin, request, invariantClock); refusal != nil {
+			t.Fatalf("%s: %+v", schema, refusal)
+		}
+	}
+	submit(packages.SchemaPackageImport, map[string]any{"id": descriptor.ID, "digest": preview.Digest})
+	submit(packages.SchemaPackageInstall, map[string]any{"id": descriptor.ID, "version": descriptor.Version, "namespace": "readyparty"})
+	_, handler := observationHost(live.Tenant)
+	path := "/v1/packages/" + descriptor.ID + "/readiness?version=" + descriptor.Version
+	readiness := func(want packages.PackageReadiness) {
+		t.Helper()
+		res := observationRequest(t, handler, live.ID, observationToken(live.ID, "admin"), path, nil)
+		var actual packages.PackageReadiness
+		if res.Code != http.StatusOK || json.Unmarshal(res.Body.Bytes(), &actual) != nil || actual != want {
+			t.Fatalf("readiness: %d %s; want %+v", res.Code, res.Body, want)
+		}
+	}
+	readiness(packages.PackageReadiness{Pending: 20})
+	if res := observationRequest(t, handler, live.ID, observationToken(live.ID, "other"), path, nil); res.Code != http.StatusForbidden {
+		t.Fatalf("non-admin package readiness: %d %s", res.Code, res.Body)
+	}
+	live.Work(invariantClock)
+	readiness(packages.PackageReadiness{Ready: true})
+}

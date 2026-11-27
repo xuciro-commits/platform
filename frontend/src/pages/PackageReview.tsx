@@ -9,6 +9,7 @@ import * as stylex from "@stylexjs/stylex";
 import { useEffect, useState } from "react";
 import { type Api, reread, useRead } from "../host";
 import { t } from "../i18n";
+import { waitPackageReferences } from "../host/packageReadiness";
 import { reasonOf, send } from "./act";
 import { sourceMeta } from "./PackageCard";
 import { PackageReviewContent } from "./PackageReviewContent";
@@ -57,6 +58,8 @@ export function PackageReview({
   const catalog = useRead<Api.Action[]>("/v1/actions");
   const [failure, setFailure] = useState("");
   const [busy, setBusy] = useState(false);
+  const [accepted, setAccepted] = useState("");
+  const waiting = accepted === `${id}@${version}`;
   const installed = view.installed;
   const retired = installed?.state === "retired";
   const named = mode === "install" && !installed && !!view.space;
@@ -106,11 +109,15 @@ export function PackageReview({
           : t("Install package");
 
   const run = async (action: Api.Action | undefined, payload: Record<string, unknown>) => {
-    if (!action) return;
+    if (!action && !waiting) return;
     setBusy(true);
     setFailure("");
     try {
-      await send(action, id, payload);
+      if (!waiting && action) {
+        await send(action, id, payload);
+        if (mode === "install") setAccepted(`${id}@${version}`);
+      }
+      if (mode === "install") await waitPackageReferences(id, version);
       reread();
       done(mode === "install" ? [id] : undefined);
     } catch (problem) {
@@ -148,6 +155,7 @@ export function PackageReview({
                   />
                 )}
                 {failure && <Banner status="error" title={t("Not done")} description={failure} />}
+                {busy && waiting && <Banner status="info" title={t("Preparing reference records…")} />}
                 {loading && <Text type="supporting" color="secondary">{t("Loading…")}</Text>}
                 {problems.length > 0 && <Banner status="error" title={t("This version cannot be used as it stands")} description={problems.join(" · ")} />}
                 {setupNotices.length > 0 && (
@@ -168,9 +176,9 @@ export function PackageReview({
                 <Button label={t("Cancel")} variant="secondary" onClick={close} />
                 {mode === "install" && (
                   <Button
-                    label={primaryLabel}
+                    label={waiting ? t("Check readiness") : primaryLabel}
                     variant="primary"
-                    isDisabled={busy || loading || !installAction || (!retired && installed?.version === version) || problems.length > 0 || (named && !namespace)}
+                    isDisabled={busy || (!waiting && (loading || !installAction || (!retired && installed?.version === version) || problems.length > 0 || (named && !namespace)))}
                     onClick={() => run(installAction, named ? { id, version, namespace } : { id, version })}
                   />
                 )}

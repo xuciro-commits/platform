@@ -11,6 +11,7 @@ import * as stylex from "@stylexjs/stylex";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { type Api, request, reread, useRead } from "../host";
 import { t } from "../i18n";
+import { waitPackageReferences } from "../host/packageReadiness";
 import { reasonOf, send } from "./act";
 import { FormWizard, type WizardStep } from "./FormWizard";
 import { type DependencyResolution, type ResolvedDependency, resolvePackageDependencies } from "./packageDependencies";
@@ -59,6 +60,8 @@ export function PackageImportWizard({
   const [error, setError] = useState("");
   const autoInspected = useRef(false);
   const installedDeps = useRef<string[]>([]);
+  const [acceptedVersion, setAcceptedVersion] = useState("");
+  const acceptedDeps = useRef(new Set<string>());
 
   const packages = useRead<Api.PackageView[]>("/v1/packages");
   const libraries = useRead<Api.PackageLibraryView[]>("/v1/packages/libraries");
@@ -213,16 +216,20 @@ export function PackageImportWizard({
             .replace("{current}", String(i + 1))
             .replace("{total}", String(dependencies.steps.length))
             .replace("{pkg}", label));
-          if (dep.source === "remote") {
-            if (!dep.digest) throw new Error(t("The reviewed package is unavailable; inspect it again"));
-            await send(importAction, dep.id, { id: dep.id, digest: dep.digest });
+          if (!acceptedDeps.current.has(`${dep.id}@${dep.version}`)) {
+            if (dep.source === "remote") {
+              if (!dep.digest) throw new Error(t("The reviewed package is unavailable; inspect it again"));
+              await send(importAction, dep.id, { id: dep.id, digest: dep.digest });
+            }
+            const depAction = dep.action === "upgrade" ? upgradeAction : installAction;
+            if (!depAction) throw new Error(t("Install package"));
+            const payload = dep.action === "upgrade"
+              ? { id: dep.id, version: dep.version }
+              : { id: dep.id, version: dep.version, namespace: dep.namespace };
+            await send(depAction, dep.id, payload);
+            acceptedDeps.current.add(`${dep.id}@${dep.version}`);
           }
-          const depAction = dep.action === "upgrade" ? upgradeAction : installAction;
-          if (!depAction) throw new Error(t("Install package"));
-          const payload = dep.action === "upgrade"
-            ? { id: dep.id, version: dep.version }
-            : { id: dep.id, version: dep.version, namespace: dep.namespace };
-          await send(depAction, dep.id, payload);
+          await waitPackageReferences(dep.id, dep.version);
           if (!installedDeps.current.includes(dep.id)) installedDeps.current.push(dep.id);
         }
         reread();
@@ -252,17 +259,24 @@ export function PackageImportWizard({
   const installImported = async () => {
     if (!preview) return;
     const action = importedView?.update ? upgradeAction : installAction;
-    if (!action) return;
+    if (!action && acceptedVersion !== `${id}@${version}`) return;
     setBusy(true);
     setError("");
     try {
       const named = !importedView?.installed && Boolean(namespace.trim());
-      await send(action, preview.descriptor.id, named ? { id, version, namespace: namespace.trim() } : { id, version });
+      if (acceptedVersion !== `${id}@${version}` && action) {
+        await send(action, preview.descriptor.id, named ? { id, version, namespace: namespace.trim() } : { id, version });
+        setAcceptedVersion(`${id}@${version}`);
+      }
+      setProgress(t("Preparing reference records…"));
+      await waitPackageReferences(id, version);
       reread();
       onDone([...installedDeps.current, preview.descriptor.id]);
     } catch (problem) {
       setError(reasonOf(problem));
       setBusy(false);
+    } finally {
+      setProgress("");
     }
   };
 
@@ -277,13 +291,13 @@ export function PackageImportWizard({
     step === 0 ? (sourceMode === "file" ? Boolean(file) : Boolean(url.trim()))
     : step === 1 ? Boolean(preview && importAction && !hasBlockingPrecheck && (!hasAutoDeps || canInstallDeps))
     : step === 2 ? Boolean(importedView && review.status === "ready" && preparation.status !== "loading" && reviewProblems.length === 0 && (importedView.installed || namespace.trim()))
-    : Boolean(preview && (importedView?.update ? upgradeAction : installAction));
+    : Boolean(preview && (acceptedVersion === `${id}@${version}` || (importedView?.update ? upgradeAction : installAction)));
 
   const primaryLabel =
     step === 0 ? t("Inspect package")
     : step === 1 ? (hasAutoDeps ? t("Install dependencies and continue") : t("Add to library"))
     : step === 2 ? t("Continue")
-    : importedView?.update ? t("Upgrade package") : t("Install package");
+    : acceptedVersion === `${id}@${version}` ? t("Check readiness") : importedView?.update ? t("Upgrade package") : t("Install package");
 
   return (
     <FormWizard
@@ -415,6 +429,7 @@ export function PackageImportWizard({
 
       {step === 3 && preview && (
         <VStack gap={4}>
+          {progress && <Banner status="info" title={progress} />}
           <MetadataList columns="single" label={{ position: "start", width: 140 }}>
             <MetadataListItem label={t("Title")}>
               <Text type="body" weight="medium">{t(preview.descriptor.title || preview.descriptor.id)}</Text>

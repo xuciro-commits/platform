@@ -3931,6 +3931,11 @@ export type PackagePreview = {
   precheck: Precheck;
 };
 
+export type PackageReadiness = {
+  ready: boolean;
+  pending: number;
+};
+
 export type PackageRemoval = {
   id: string;
   ok: boolean;

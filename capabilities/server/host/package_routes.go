@@ -24,6 +24,12 @@ func (h *Host) routesPackages(rt *routes) {
 		return value, err
 	}))
 	h.routesPackageReview(rt)
+	rt.recordRead(transport.Route{Pattern: "GET /v1/packages/{id}/readiness", Summary: "Check whether the installed version's shipped reference rows are present", Answer: packages.PackageReadiness{}}, transport.Answering(func(r *http.Request, m platform.Member, t *Tenant) (packages.PackageReadiness, *platform.Error) {
+		if refusal := authorizationRefusal(t.authorizeNative(t.caller(m, t.App("platform"), false), "GET /v1/packages/{id}/readiness", "read", []string{"admin"}, true)); refusal != nil {
+			return packages.PackageReadiness{}, refusal
+		}
+		return packages.ReferenceReadiness(t.PackageOwner, r.PathValue("id"), r.URL.Query().Get("version"), t.Projection)
+	}))
 	rt.authorized(transport.Route{Pattern: "POST /v1/packages/inspect", Summary: "Inspect an online or local platform package without installing or executing it", Body: protocol.PackageInspectRequest{}, Answer: protocol.PackagePreview{}}, controlowner.PlatformApp, []string{controlowner.Admin}, func(w http.ResponseWriter, r *http.Request, m platform.Member, t *Tenant) {
 		var req protocol.PackageInspectRequest
 		if err := transport.DecodeBodyLimit(r, &req, packages.MaxPackageImportBytes/3*4+4096); err != nil {

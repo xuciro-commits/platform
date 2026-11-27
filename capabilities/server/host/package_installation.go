@@ -120,15 +120,11 @@ func (h *Host) routesPackageOwnership(rt *routes) {
 			PackageViews() []runtimeprotocol.PackageView
 		})
 		plan, err := packages.OwnershipFor(catalog.PackageViews(), r.PathValue("id"), r.URL.Query().Get("version"), t.Projection, t.builders[build.ID])
-		if err != nil {
-			WriteJSON(w, http.StatusConflict, map[string]string{"error": err.Error()})
-			return
-		}
-		if plan == nil {
+		if err == nil && plan == nil {
 			WriteJSON(w, http.StatusNotFound, map[string]string{"error": "The exact product version is unavailable"})
 			return
 		}
-		WriteJSON(w, http.StatusOK, plan)
+		transport.AnswerOr(w, http.StatusConflict, plan, err)
 	})
 }
 
@@ -156,10 +152,6 @@ func (h *Host) routesPackageReview(rt *routes) {
 				return catalog.LifecycleImpact(c, id, after)
 			},
 		}.Of(views, chosen, r.URL.Query().Get("mode") == "uninstall")
-		if err != nil {
-			WriteJSON(w, http.StatusConflict, map[string]string{"error": err.Error()})
-			return
-		}
-		WriteJSON(w, http.StatusOK, answer)
+		transport.AnswerOr(w, http.StatusConflict, answer, err)
 	})
 }
