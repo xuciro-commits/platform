@@ -12,10 +12,9 @@ import { colorVars, radiusVars, spacingVars } from "@astryxdesign/core/theme/tok
 import { ChatBubbleLeftIcon, ChevronDownIcon, ChevronRightIcon, DocumentTextIcon, PencilSquareIcon } from "@heroicons/react/24/outline";
 import * as stylex from "@stylexjs/stylex";
 import { type KeyboardEvent, useRef, useState } from "react";
-import { type Api, type Read, useRead } from "../host";
+import { type Api, type Read, useRead, reasonOf, send } from "../host";
 import { t, useLocale } from "../i18n";
 import { ActionDialog } from "./ActionDialog";
-import { reasonOf, send } from "./act";
 import { type Described, statusField } from "./describe";
 import { PersonAvatar, PersonLabel, TemporalValue } from "../semantic";
 import { type FollowUp, FollowUpBody, useFollowUps } from "./RecordFollowUps";

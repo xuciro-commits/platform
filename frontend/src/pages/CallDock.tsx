@@ -2,9 +2,8 @@ import { Banner } from "@astryxdesign/core/Banner";
 import { Button } from "@astryxdesign/core/Button";
 import { HStack, VStack } from "@astryxdesign/core/Layout";
 import { useEffect, useMemo, useRef, useState } from "react";
-import { type Api, useRead, useReads } from "../host";
+import { type Api, useRead, useReads, reasonOf, send } from "../host";
 import { t } from "../i18n";
-import { reasonOf, send } from "./act";
 import { plain } from "./values";
 
 type CallMapping = {

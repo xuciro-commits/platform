@@ -1,7 +1,6 @@
 import { useToast } from "@astryxdesign/core/Toast";
 import { useEffect } from "react";
-import { type Api, rememberAccount, useRead } from "../host";
-import { reasonOf, send } from "../pages/act";
+import { type Api, rememberAccount, useRead, reasonOf, send } from "../host";
 
 export type ProfileValues = Partial<Record<keyof Api.Account, unknown>>;
 

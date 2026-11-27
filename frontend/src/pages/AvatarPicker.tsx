@@ -11,7 +11,7 @@ import { colorVars, radiusVars } from "@astryxdesign/core/theme/tokens.stylex";
 import * as stylex from "@stylexjs/stylex";
 import { useMemo, useState } from "react";
 import { t } from "../i18n";
-import { reasonOf } from "./act";
+import { reasonOf } from "../host";
 import {
   type AvatarPackId,
   normalizeAvatarRef,

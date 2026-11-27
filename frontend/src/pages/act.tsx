@@ -3,58 +3,20 @@ import { Button } from "@astryxdesign/core/Button";
 import { useToast } from "@astryxdesign/core/Toast";
 import { useRef, useState } from "react";
 import { useRecordHref } from "../recordRoutes";
-import { type Api, request, submit } from "../host";
+import { type Api, request, reasonOf, send } from "../host";
 import { t } from "../i18n";
 import { ActionDialog } from "./ActionDialog";
 import type { Described, Step, Values } from "./describe";
-import { enterable } from "./ParameterInput";
+import { enterable } from "./fieldRules";
 import { PublishDialog } from "./PublishDialog";
 import { navigate } from "../router";
 import { plain } from "./values";
 
-const attempts = 3;
 const dangerPattern = /(?:delete|remove|void|cancel|lost|retire|discard|reject|revoke|terminate|unbind|clear|purge|destroy)/i;
 
 export function isDangerAction(action: Api.Action, stateTone?: string) {
   if (stateTone === "danger") return true;
   return !action.reverse && dangerPattern.test(`${action.schema} ${action.title}`);
-}
-
-export function reasonOf(problem: unknown) {
-  return (problem instanceof Error && problem.message) || t("The platform did not accept this change.");
-}
-
-export async function send(action: Api.Action, id: string, payload: Values, revision?: number) {
-  const key = crypto.randomUUID();
-  for (let attempt = 1; ; attempt += 1) {
-    try {
-      return await submit(action, id, payload, revision, key);
-    } catch (problem) {
-      if (!(problem instanceof TypeError) || attempt === attempts) throw problem;
-    }
-  }
-}
-
-export type BatchRow = { id: string; name: string; revision: number; reason?: string };
-
-export async function sendBatch(action: Api.Action, rows: BatchRow[], payload: Values, retry: boolean) {
-  const results: BatchRow[] = [];
-  for (const row of rows) {
-    try {
-      let revision = row.revision;
-      if (retry) {
-        const current = await request<Api.RecordView>(`/v1/records/${action.target}/${encodeURIComponent(row.id)}`);
-        const choice = current.actions?.find((candidate) => candidate.schema === action.schema);
-        if (!choice?.allowed) throw new Error(choice?.reason || t("This action is no longer available."));
-        revision = (current.record as { revision: number }).revision;
-      }
-      await send(action, row.id, payload, revision);
-      results.push({ ...row, reason: undefined });
-    } catch (problem) {
-      results.push({ ...row, reason: reasonOf(problem) });
-    }
-  }
-  return results;
 }
 
 type Performed = Promise<{ id?: string; revision: number }>;

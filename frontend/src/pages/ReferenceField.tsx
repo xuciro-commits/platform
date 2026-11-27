@@ -13,7 +13,7 @@ import { ReferenceValue, type SemanticSize } from "../semantic";
 import { ActionDialog } from "./ActionDialog";
 import { ElementInput } from "./ElementField";
 import { elementType, stereotypesOf } from "./enterprise";
-import { enterable, type InputStatus } from "./ParameterInput";
+import { enterable, type InputStatus } from "./fieldRules";
 import { plain, shown } from "./values";
 
 type Reference = { id: string; label: string };

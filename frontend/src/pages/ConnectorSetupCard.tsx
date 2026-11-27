@@ -10,9 +10,8 @@ import { Token } from "@astryxdesign/core/Token";
 import { colorVars, radiusVars } from "@astryxdesign/core/theme/tokens.stylex";
 import * as stylex from "@stylexjs/stylex";
 import { useEffect, useState } from "react";
-import { type Api, reread } from "../host";
+import { type Api, reread, reasonOf, send } from "../host";
 import { t } from "../i18n";
-import { reasonOf, send } from "./act";
 import { InlineCredentialDialog } from "./InlineCredentialDialog";
 
 export type ConformanceCase = { name: string; ok: boolean; detail?: string };

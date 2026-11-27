@@ -12,9 +12,8 @@ import { Table, TableBody, TableCell, TableHeader, TableHeaderCell, TableRow } f
 import { Text } from "@astryxdesign/core/Text";
 import { TextInput } from "@astryxdesign/core/TextInput";
 import { useMemo, useState } from "react";
-import { type Api, request, reread, useRead } from "../host";
+import { type Api, request, reread, useRead, reasonOf } from "../host";
 import { t } from "../i18n";
-import { reasonOf } from "./act";
 import { type Described, describe } from "./describe";
 import {
   type ObjectPlan,

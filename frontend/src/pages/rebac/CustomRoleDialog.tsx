@@ -9,9 +9,8 @@ import { Text } from "@astryxdesign/core/Text";
 import { TextInput } from "@astryxdesign/core/TextInput";
 import { useToast } from "@astryxdesign/core/Toast";
 import { useMemo, useState } from "react";
-import { type Api, reread } from "../../host";
+import { type Api, reread, reasonOf, send } from "../../host";
 import { t } from "../../i18n";
-import { reasonOf, send } from "../act";
 
 function slugRoleId(input: string): string {
   return input.toLowerCase().replace(/[^a-z0-9-]+/g, "-").replace(/^-+|-+$/g, "").slice(0, 48);

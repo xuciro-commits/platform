@@ -8,10 +8,9 @@ import { Selector } from "@astryxdesign/core/Selector";
 import { Text } from "@astryxdesign/core/Text";
 import { useToast } from "@astryxdesign/core/Toast";
 import { useMemo, useState } from "react";
-import { type Api, reread, useRead } from "../host";
+import { type Api, reread, useRead, reasonOf, send } from "../host";
 import { t } from "../i18n";
 import { navigate } from "../router";
-import { reasonOf, send } from "./act";
 import { roleTitle } from "./rebac/shared";
 
 type Unheld = { app: string; title: string; roles: string[]; hasHolders: boolean };

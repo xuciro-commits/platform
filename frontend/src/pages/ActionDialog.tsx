@@ -6,11 +6,11 @@ import { HStack, Layout, LayoutContent, LayoutFooter, StackItem, VStack } from "
 import { Selector } from "@astryxdesign/core/Selector";
 import { Text } from "@astryxdesign/core/Text";
 import { type KeyboardEvent, useEffect, useRef, useState } from "react";
-import { type Api, useRead } from "../host";
+import { type Api, useRead, reasonOf, send } from "../host";
 import { t } from "../i18n";
-import { reasonOf, send } from "./act";
 import { motionStyles } from "./motion";
-import { ParameterInput, enterable, missingValue } from "./ParameterInput";
+import { ParameterInput } from "./ParameterInput";
+import { enterable, missingValue } from "./fieldRules";
 import { OneOfInput } from "./ReferenceField";
 import { grouped } from "./describe";
 

@@ -11,15 +11,15 @@ import { Table, TableBody, TableCell, TableHeader, TableHeaderCell, TableRow } f
 import { Heading, Text } from "@astryxdesign/core/Text";
 import { Typeahead } from "@astryxdesign/core/Typeahead";
 import { useRef, useState } from "react";
-import { type Api, reread, useRead } from "../host";
+import { type Api, reread, useRead, reasonOf, send } from "../host";
 import { t } from "../i18n";
-import { reasonOf, send } from "./act";
 import { AccessDialog, ActionTypeDialog, type ActionTypeRow, TransitionDialog } from "./DefinitionActions";
 import type { Described, Values } from "./describe";
 import { useListFlip } from "./motion";
 import { ConditionBuilder, conditionSources } from "./ConditionBuilder";
 import { ExpressionEditor, useFieldExpressions } from "./ExpressionEditor";
-import { ParameterInput, enterable } from "./ParameterInput";
+import { ParameterInput } from "./ParameterInput";
+import { enterable } from "./fieldRules";
 import { present, shown } from "./values";
 
 type DefinitionRow = Values & { name?: string; title?: string; role?: string; from?: string[]; transaction?: Api.BusinessTxn };

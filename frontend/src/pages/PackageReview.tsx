@@ -7,10 +7,9 @@ import { Text } from "@astryxdesign/core/Text";
 import { TextInput } from "@astryxdesign/core/TextInput";
 import * as stylex from "@stylexjs/stylex";
 import { useEffect, useState } from "react";
-import { type Api, reread, useRead } from "../host";
+import { type Api, reread, useRead, reasonOf, send } from "../host";
 import { t } from "../i18n";
 import { waitPackageReferences } from "../host/packageReadiness";
-import { reasonOf, send } from "./act";
 import { sourceMeta } from "./PackageCard";
 import { PackageReviewContent } from "./PackageReviewContent";
 

@@ -13,7 +13,7 @@ import { t } from "../i18n";
 import { ActionDialog } from "./ActionDialog";
 import { useAct } from "./act";
 import { type Described, type Values } from "./describe";
-import { enterable } from "./ParameterInput";
+import { enterable } from "./fieldRules";
 import { PropertyField } from "./PropertyField";
 import { EditorConflict, useEditor } from "./RecordFields";
 import { SemanticValue } from "../semantic";

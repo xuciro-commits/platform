@@ -13,9 +13,8 @@ import { Token } from "@astryxdesign/core/Token";
 import { ArrowPathIcon, CheckBadgeIcon, TrashIcon, XMarkIcon } from "@heroicons/react/24/outline";
 import * as stylex from "@stylexjs/stylex";
 import { useState } from "react";
-import { type Api, request, reread, useRead } from "../host";
+import { type Api, request, reread, useRead, reasonOf, send } from "../host";
 import { t } from "../i18n";
-import { reasonOf, send } from "./act";
 
 const styles = stylex.create({
   shell: {

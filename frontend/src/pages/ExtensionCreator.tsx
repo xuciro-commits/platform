@@ -10,11 +10,10 @@ import { Skeleton } from "@astryxdesign/core/Skeleton";
 import { Heading, Text } from "@astryxdesign/core/Text";
 import { TextInput } from "@astryxdesign/core/TextInput";
 import { type KeyboardEvent, useEffect, useMemo, useRef, useState } from "react";
-import { type Api, useRead } from "../host";
+import { type Api, useRead, reasonOf, send } from "../host";
 import { t } from "../i18n";
 import { navigate } from "../router";
 import { StatusValue } from "../semantic";
-import { reasonOf, send } from "./act";
 import { motionStyles } from "./motion";
 
 type CreatorProps = { onClose: () => void; onDone: (id: string) => void };

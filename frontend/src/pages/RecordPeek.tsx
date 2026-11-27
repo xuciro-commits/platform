@@ -6,29 +6,22 @@ import { HStack, Layout, LayoutContent, LayoutFooter, LayoutPanel, VStack } from
 import { Skeleton } from "@astryxdesign/core/Skeleton";
 import { Text } from "@astryxdesign/core/Text";
 import { CodeValue, StatusValue, TemporalValue } from "../semantic";
-import { createContext, Fragment, type ReactNode, useContext, useEffect, useMemo, useRef, useState } from "react";
+import { Fragment, type ReactNode, useEffect, useMemo, useRef, useState } from "react";
 import { useRecordHref } from "../recordRoutes";
+import { PeekContext, type PeekContextValue, type PeekTarget } from "../peekScope";
 import { type Api, useRead } from "../host";
 import { t } from "../i18n";
 import { describe, headerStatus, statusField, withRestrictedFields } from "./describe";
 import { useOptions } from "./options";
 import { motionStyles, motionTimings, usePresence } from "./motion";
-import { enterable } from "./ParameterInput";
+import { enterable } from "./fieldRules";
 import { PropertyField } from "./PropertyField";
 import { FieldGroup, useEditor } from "./RecordFields";
 import { dots, Transitions } from "./Transitions";
 import { plain } from "./values";
 
-export type PeekTarget = { type: string; id: string; name?: string };
 export type PeekSurfaceMode = "drawer" | "panel";
 type PeekEntry = PeekTarget & { key: number; open: boolean };
-type PeekContextValue = { open: (target: PeekTarget) => void; close: () => void };
-
-const PeekContext = createContext<PeekContextValue | null>(null);
-
-export function usePeek() {
-  return useContext(PeekContext);
-}
 
 export function PeekProvider({ children }: { children: ReactNode }) {
   const [entries, setEntries] = useState<PeekEntry[]>([]);

@@ -4,9 +4,9 @@ import { Dialog, DialogHeader } from "@astryxdesign/core/Dialog";
 import { HStack, Layout, LayoutContent, LayoutFooter, VStack } from "@astryxdesign/core/Layout";
 import { Text } from "@astryxdesign/core/Text";
 import { useEffect, useMemo, useState } from "react";
-import { type Api, request, useRead } from "../host";
+import { type Api, request, useRead, reasonOf } from "../host";
 import { t } from "../i18n";
-import { reasonOf, type Intent } from "./act";
+import type { Intent } from "./act";
 import type { Values } from "./describe";
 import { compareDraftObject, RecordComparison } from "./RecordComparison";
 

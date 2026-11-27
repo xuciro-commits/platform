@@ -4,18 +4,18 @@ import { HStack, VStack } from "@astryxdesign/core/Layout";
 import { MoreMenu } from "@astryxdesign/core/MoreMenu";
 import { useToast } from "@astryxdesign/core/Toast";
 import { lazy, type ReactNode, Suspense, useMemo, useRef, useState } from "react";
-import { type Api, request, useRead } from "../host";
+import { type Api, request, useRead, reasonOf, send } from "../host";
 import { t } from "../i18n";
 import { useSearch } from "../router";
 import { type RecordHome, useRecordHome } from "../recordRoutes";
-import { reasonOf, send, useAct } from "./act";
+import { useAct } from "./act";
 import { ActionDialog } from "./ActionDialog";
 import type { Values } from "./describe";
 import type { ImportTarget } from "./ImportWizard";
 
 const ImportWizard = lazy(() => import("./ImportWizard").then((module) => ({ default: module.ImportWizard })));
 import { type ListColumn, type ListShape, ListView } from "./ListPage";
-import { enterable } from "./ParameterInput";
+import { enterable } from "./fieldRules";
 import { newView, readView } from "./view";
 
 export type RowAction = { schema: string; id?: string; fixed?: Values; initial?: Values; label?: string; revision?: number };

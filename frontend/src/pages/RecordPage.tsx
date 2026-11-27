@@ -28,7 +28,7 @@ import { type ContributedAction, ExtensionHost, extensionsOf } from "./RecordExt
 import { RecordLines } from "./RecordLines";
 import { ObjectPreview } from "./ObjectPreview";
 import { useOptions } from "./options";
-import { enterable } from "./ParameterInput";
+import { enterable } from "./fieldRules";
 import { CodeValue, PersonLabel, StatusValue, TemporalValue } from "../semantic";
 import { motionStyles } from "./motion";
 import { PropertyField } from "./PropertyField";

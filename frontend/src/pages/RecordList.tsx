@@ -3,13 +3,13 @@ import { Button } from "@astryxdesign/core/Button";
 import { HStack, VStack } from "@astryxdesign/core/Layout";
 import { MoreMenu } from "@astryxdesign/core/MoreMenu";
 import { type ComponentType, type ReactNode, lazy, Suspense, useCallback, useEffect, useMemo, useState } from "react";
-import { type Api, type Read, requestBlob, useRead } from "../host";
+import { type Api, type Read, requestBlob, useRead, reasonOf, send } from "../host";
 import { t } from "../i18n";
 import { navigate, usePath, useSearch } from "../router";
 import { ActionDialog } from "./ActionDialog";
-import { type Intent, reasonOf, send, stepIntent, useAct } from "./act";
+import { type Intent, stepIntent, useAct } from "./act";
 import { type ListShape, ListView, type Move } from "./ListPage";
-import { enterable } from "./ParameterInput";
+import { enterable } from "./fieldRules";
 
 const ImportWizard = lazy(() => import("./ImportWizard").then((module) => ({ default: module.ImportWizard })));
 import { type Described, describe, numeric, type Step } from "./describe";

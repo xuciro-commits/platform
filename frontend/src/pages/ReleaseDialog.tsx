@@ -8,9 +8,8 @@ import { Text } from "@astryxdesign/core/Text";
 import { TextInput } from "@astryxdesign/core/TextInput";
 import { Token } from "@astryxdesign/core/Token";
 import { useEffect, useMemo, useState } from "react";
-import { type Api, request, useRead } from "../host";
+import { type Api, request, useRead, reasonOf, send } from "../host";
 import { t } from "../i18n";
-import { reasonOf, send } from "./act";
 
 type Root = { app: string; kind: string; name: string };
 type Product = { id: string; name: string; title: string; project: string; roots: Root[] };

@@ -10,9 +10,8 @@ import { Text } from "@astryxdesign/core/Text";
 import { TextArea } from "@astryxdesign/core/TextArea";
 import { useToast } from "@astryxdesign/core/Toast";
 import { useEffect, useMemo, useState } from "react";
-import { type Api, reread, useRead } from "../../host";
+import { type Api, reread, useRead, reasonOf, send } from "../../host";
 import { t } from "../../i18n";
-import { reasonOf, send } from "../act";
 import { type DurationPreset, addDaysISO, asIsoDate, roleTitle, todayISO, untilFromPreset, useUnitChoices } from "./shared";
 
 export type RequestAccessDialogProps = {

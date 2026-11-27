@@ -107,6 +107,15 @@ for (const path of walk(src)) {
     if (/^shell\/CommandSearch(?:\.tsx)?$/.test(target) && file !== "shell/Shell.tsx") {
       report(file, line, "use commandScope for page commands instead of importing the command palette.");
     }
+    if (file.startsWith("host/") && /^(?:apps(?:\/|\.ts$)|pages\/|semantic\/|shell\/)/.test(target)) {
+      report(file, line, "host contracts and transport cannot depend on presentation or application assembly.");
+    }
+    if (file === "pages/fieldRules.ts" && target !== "host") {
+      report(file, line, "field rules depend only on the host contract, not on input components.");
+    }
+    if (file.startsWith("semantic/") && /^pages\/(?:act|ParameterInput|RecordPeek)(?:\.tsx)?$/.test(target)) {
+      report(file, line, "semantic values use host actions and peekScope, not action or record editing screens.");
+    }
     if (file === "i18n.ts" && !/^i18n\/[^/]+\.json$/.test(target)) {
       report(file, line, "i18n is a leaf: import only its translation dictionaries and external libraries.");
     }

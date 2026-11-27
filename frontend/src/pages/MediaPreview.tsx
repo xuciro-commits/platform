@@ -7,9 +7,8 @@ import { Spinner } from "@astryxdesign/core/Spinner";
 import { radiusVars } from "@astryxdesign/core/theme/tokens.stylex";
 import * as stylex from "@stylexjs/stylex";
 import { type ReactNode, useEffect, useRef, useState } from "react";
-import { requestBlob } from "../host";
+import { requestBlob, reasonOf } from "../host";
 import { t } from "../i18n";
-import { reasonOf } from "./act";
 
 export type Media = { path: string; name: string; contentType?: string };
 type Kind = "image" | "pdf" | "text";

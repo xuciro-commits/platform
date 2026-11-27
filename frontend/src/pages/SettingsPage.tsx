@@ -13,9 +13,8 @@ import { useToast } from "@astryxdesign/core/Toast";
 import { Toolbar } from "@astryxdesign/core/Toolbar";
 import { ArrowLeftIcon, ChevronRightIcon, Cog6ToothIcon, HashtagIcon, ListBulletIcon, PencilSquareIcon, PowerIcon } from "@heroicons/react/24/outline";
 import { useState } from "react";
-import { type Api, reread, useRead } from "../host";
+import { type Api, reread, useRead, reasonOf, send } from "../host";
 import { t } from "../i18n";
-import { reasonOf, send } from "./act";
 import { PageTitle, useGutter } from "./frame";
 import { controlWidth, type IconComponent, row, SettingsCard, SettingsRow, TextSetting } from "./SettingsRows";
 

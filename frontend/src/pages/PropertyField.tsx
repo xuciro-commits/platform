@@ -11,13 +11,13 @@ import { focusOutlineStyles, interactionOverlayStyles } from "@astryxdesign/core
 import { ArrowTurnDownRightIcon, CalculatorIcon, CheckIcon, LockClosedIcon } from "@heroicons/react/24/outline";
 import * as stylex from "@stylexjs/stylex";
 import { type FocusEvent, type KeyboardEvent, useEffect, useId, useRef, useState } from "react";
-import type { Api } from "../host";
+import { type Api, reasonOf } from "../host";
 import { t } from "../i18n";
 import { SemanticValue } from "../semantic";
-import { reasonOf } from "./act";
 import { iconField } from "./icons";
 import { motionStyles } from "./motion";
-import { type InputStatus, ParameterInput } from "./ParameterInput";
+import { ParameterInput } from "./ParameterInput";
+import type { InputStatus } from "./fieldRules";
 import type { Dot } from "./Transitions";
 
 const layers = "[role=listbox], [role=dialog], [role=menu], [role=grid], [role=tooltip]";

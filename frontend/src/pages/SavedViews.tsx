@@ -19,10 +19,9 @@ import { BookmarkIcon, BookmarkSquareIcon, PencilIcon, XMarkIcon } from "@heroic
 import { BookmarkIcon as BookmarkSolidIcon } from "@heroicons/react/24/solid";
 import * as stylex from "@stylexjs/stylex";
 import { type ReactNode, useState } from "react";
-import { type Api, reread, useRead } from "../host";
+import { type Api, reread, useRead, reasonOf, send } from "../host";
 import { t } from "../i18n";
 import { navigate, usePath, useSearch } from "../router";
-import { reasonOf, send } from "./act";
 import { chipChrome } from "./ListFilters";
 import { readView, sameView, type ViewState } from "./view";
 

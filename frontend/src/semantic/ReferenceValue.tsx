@@ -12,7 +12,7 @@ import { type Api, useRead } from "../host";
 import { t } from "../i18n";
 import { elementHref, elementType } from "../pages/enterprise";
 import { iconOf } from "../pages/icons";
-import { usePeek } from "../pages/RecordPeek";
+import { usePeek } from "../peekScope";
 import { formatMoneyValue, formatQuantityValue, formatTenantNumber, isPercentField, unwrapPlain } from "./format";
 import { PersonValue } from "./PersonValue";
 import { StatusValue } from "./StatusAndTags";

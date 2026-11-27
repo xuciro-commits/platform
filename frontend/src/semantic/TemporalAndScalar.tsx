@@ -18,9 +18,8 @@ import {
   PhotoIcon,
 } from "@heroicons/react/24/outline";
 import { useState } from "react";
-import { type Api, useRead } from "../host";
+import { type Api, useRead, reasonOf, send } from "../host";
 import { currentTimeZone, dateText, dayText, t, useFormatConfig } from "../i18n";
-import { reasonOf, send } from "../pages/act";
 import { kindOf, MediaPreview } from "../pages/MediaPreview";
 import { motionStyles } from "../pages/motion";
 import { extractUrlDisplay, normalizeExternalUrl } from "./format";
