@@ -84,6 +84,7 @@
 - 纯文档或规约：`node scripts/check-docs.mjs`；修改测试调度器才运行 `make test-runner`。已通过的相同检查不因准备提交而重跑。
 
 检查和测试命令统一输出本地毫秒时间戳、命令累计耗时、阶段开始与结束耗时，结束时按耗时排序并写入 `.build/timing/*.json`。
+Go 测试须在 `scripts/test-purposes.mjs` 登记简短中文用途；每项及子项实时显示开始、结果、耗时，跳过显示原始条件，部分通过不算全过，Small 排除另列原因。每次执行的原始事件、错误与结果独立留在 `.build/check/runs/`，最新报告仍在 `.build/check/test-results.json`。
 嵌套与并发阶段可能重叠，实际总耗时以顶层命令为准；Trunk 单并发与多并发均按 spec 隔离，`--list` 不准备包或数据库。
 验收包检查用当前候选编译的工具，不以缓存的旧工具代替；正常数据准备仍复用锁定制品。
 

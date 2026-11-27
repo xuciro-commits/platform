@@ -1,6 +1,9 @@
 import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
-import { test } from "node:test";
+import { test as nodeTest } from "node:test";
+import { measure } from "./timing.mjs";
+
+const test = (purpose, run) => nodeTest(purpose, () => measure(purpose, run));
 
 const host = process.env.PLATFORM_SECURITY_TEST_HOST;
 if (!/^http:\/\/127\.0\.0\.1:\d+$/.test(host ?? "")) throw Error("Use make test-security-pg");
@@ -61,7 +64,7 @@ async function attach(actor, type, record, file, bytes) {
 }
 const denied = (response, allowed = [403, 404]) => assert.ok(allowed.includes(response.status), "unexpected status " + response.status);
 
-test("tenant isolation: direct reads and forged submissions cannot cross workspaces", async () => {
+test("租户隔离：直接读取及伪造提交不能跨工作区", async () => {
   const a = seat("audit-a"), b = seat("audit-b"), outsider = seat("library", "user");
   const id = key(), title = "Audit isolation " + id;
   await submit(a, "build.app.create", "build.app", id, { name: id, title });
@@ -89,7 +92,7 @@ test("tenant isolation: direct reads and forged submissions cannot cross workspa
   assert.deepEqual((await json(a, record)).record, before.record);
 });
 
-test("tenant isolation: identical business and attachment IDs remain separate in reads, writes and CSV exports", async () => {
+test("租户隔离：相同业务与附件 ID 的读取、写入和 CSV 导出互不串扰", async () => {
   const a = seat("audit-a"), b = seat("audit-b");
   const project = key(), id = "SAME-ID", file = "same-file", privateFile = "private-file";
   const type = await createProject(a, project);

@@ -1,11 +1,14 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { spawnSync } from "node:child_process";
+import { execFileSync, spawnSync } from "node:child_process";
 import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { classifySpeeds, extractTimings, filterSmallTests, selectTests, shardTests, summarizeGo, testGate } from "./test-results.mjs";
+
+import { testPurpose } from "./test-purposes.mjs";
+import { createTestProgress } from "./test-progress.mjs";
 
 const report = (events, expected = []) => summarizeGo(events.map(([Action, Test, Package = "pkg"]) => JSON.stringify({ Action, Test, Package })).join("\n"), expected);
 
@@ -88,4 +91,36 @@ test("timed command records actual elapsed time and preserves failure exit code"
   } finally {
     rmSync(dir, { recursive: true, force: true });
   }
+});
+
+test("all Go tests carry a concise human-readable purpose", () => {
+  const files = execFileSync("git", ["ls-files", "capabilities/server/*_test.go"], { encoding: "utf8" }).trim().split("\n");
+  for (const file of files) {
+    const source = readFileSync(new URL("../" + file, import.meta.url), "utf8");
+    for (const [, name] of source.matchAll(/^func (Test\w+)\(/gm)) assert.match(testPurpose(name), /\p{Script=Han}/u, name);
+  }
+  assert.throws(() => testPurpose("TestMissingPurpose"), /缺少用途说明/);
+});
+
+test("test progress shows the original failing assertion and skip reason, not a trailing successful event", () => {
+  const lines = [];
+  const progress = createTestProgress("shard 1", line => lines.push(line));
+  const send = (Action, Test, Output, Elapsed) => progress.accept({ Action, Test, Output, Elapsed, Package: "platformserver/host" });
+  const name = "TestInvariantK1ReplayIsByteIdentical";
+  send("run", name);
+  send("run", name + "/postgres");
+  send("output", name + "/postgres", "    invariants_test.go:88: requires an isolated PostgreSQL database\n");
+  send("skip", name + "/postgres", undefined, 0);
+  send("pass", name, undefined, 0.2);
+  send("run", "TestInvariantK2SameKeyReturnsSameAnswer");
+  send("output", "TestInvariantK2SameKeyReturnsSameAnswer", "    invariants_test.go:220: duplicate key changed the result\n");
+  send("fail", "TestInvariantK2SameKeyReturnsSameAnswer", undefined, 0.1);
+  send("run", "TestInvariantK3StaleRevisionIsRefusedAndSealed");
+  send("pass", "TestInvariantK3StaleRevisionIsRefusedAndSealed", undefined, 0.1);
+  assert.match(lines.join("\n"), /→ .*重放后的接受映像字节一致/);
+  assert.match(lines.join("\n"), /需要独立 PostgreSQL 数据库/);
+  assert.match(lines.join("\n"), /部分通过/);
+  assert.match(lines.join("\n"), /invariants_test.go:220: duplicate key changed the result/);
+  assert.equal(progress.details().find(row => row.name === name).status, "partial");
+  assert.equal(progress.details().filter(row => row.status === "fail").length, 1);
 });
