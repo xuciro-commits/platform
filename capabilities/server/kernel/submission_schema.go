@@ -114,3 +114,15 @@ func (s *Sequence) SchemaBinding(app platform.Service, sub *pb.Submission, conte
 	}
 	return binding, platform.Refuse(pb.ErrorCode_ERROR_CODE_UNKNOWN_SCHEMA, "The schema version is unknown or belongs to another family; refresh definitions")
 }
+
+func (s *Sequence) ReplayKnownSubmission(app platform.Service, sub *pb.Submission) (*pb.ChangeRecord, *platform.Error, bool) {
+	if app == nil {
+		return nil, nil, false
+	}
+	prior := s.PriorOf(app, sub.GetIdempotencyKey())
+	if !prior.Known() {
+		return nil, nil, false
+	}
+	record, _, refusal, done := s.ReplayPrior(app, prior.CurrentSchema(app, sub), nil, prior)
+	return record, refusal, done
+}
