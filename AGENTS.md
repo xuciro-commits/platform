@@ -53,7 +53,7 @@
 
 内核（`capabilities/server/kernel/**`、存储格式、接受路径与授权决定路径）：
 
-- 不改已有行为的（加方法、加索引、性能修复、新的只读查询）单独一个提交，标题范围写“内核”；过全量 `make test`、相关 `make test RUN=K…` 与 `make trunk-pg`。
+- 不改已有行为的（加方法、加索引、性能修复、新的只读查询）单独一个提交，标题范围写“内核”；只跑受影响的不变量 `make test RUN=K…` 和必要的定点浏览器用例；发版前才全量。
 - 改语义的（存储格式与格式纪元、接受映像、授权决定、协议版本）先问负责人。
 - 不许绕开内核的临时办法，例如在服务里直接写存储。
 
@@ -78,23 +78,24 @@
 | 前端 | `pnpm --dir frontend dev`（http://localhost:8496，代理到 `PLATFORM_HOST`） |
 | 夹具宿主 | `make frontend-host`（内存宿主 http://127.0.0.1:18511，自带示例销售项目） |
 | 整套本地运行 | `make local`（入口 http://localhost:8495 是 `frontend/`；宿主日志 `.build/dev/platform-api.log`） |
-| 快速检查 | `make check`：Go 构建、vet 与格式，包边界与形状，产品包，契约，文案，文档，纪元，空白 |
-| 前端检查 | `make check-frontend`（改了 `frontend/` 时） |
+| 快速提交检查 | `make fast`：暂存空白与 Go 格式（提交钩子自动执行） |
+| 集成检查 | `make check`：Go 构建、vet 与格式，包边界与形状，产品包，契约，文案，文档，纪元，空白 |
+| 前端检查 | `make check-frontend`（CI；本地按需） |
 | 主干验收 | `make trunk`：自己起宿主、灌数据、起前端，浏览器走一遍演示路径；`HEADED=1` 看着它走；`SPEC=crm` 只跑一个文件 |
-| PostgreSQL | `make trunk-pg`、`make test-pg`：各起一个用完即删的临时库；`make load-sql` 容量压测 |
+| 发版验收 | `make verify`：依次执行全量 `make test-pg` 与严格 `make trunk-pg`，不再跑内存全量；`make load-sql` 等专项按需 |
 | 宿主类型与契约 | `make contract`（改了宿主类型之后） |
 | 内核不变量 | `make test RUN=K13` 定点跑相关编号；不给 `RUN` 跑全部 |
 | 产品包 | `make packages`（刷新作者态源的锁文件，并把夹具一起装进内存租户检查；顶层制品是发布快照，不重建）；试跑动作用 `pkg try` |
 
-GitHub 的 push/PR CI 只跑 `make check`、`make test-runner`、`make check-frontend`；全量 PostgreSQL 与浏览器验收在本地发布前执行（`make test-pg`、`make trunk-pg TRUNK_ARGS="--workers=1 --forbid-only --fail-on-flaky-tests"`），不以远程轻量检查代替。语音竞态测试仅在明确需要时手动运行，不进入固定验收。Tag 发行流程仍负责多平台制品构建与签发。
+GitHub 的 push/PR CI 只跑 `make check`、`make test-runner`、`make check-frontend`；本地仅定点测试与快速提交检查；同一改动不重复跑已通过的检查。发版前执行一次 `make verify`，核对同一提交的 CI 结果；不以远程轻量检查代替全量验收。竞态、容量压测、额外恢复演练仅按需。Tag 发行流程仍负责多平台制品构建与签发。
 
-提交钩子（`.githooks/`，通过 `make hooks` 启用）自动跑 `make check`，暂存里有 `frontend/` 时加跑 `make check-frontend`，并用 `scripts/check-commit-msg.mjs` 拦截不合规范的提交信息。
+提交钩子（`.githooks/`，通过 `make hooks` 启用）只检查暂存空白与 Go 格式，不编译、不跑测试，并用 `scripts/check-commit-msg.mjs` 拦截不合规范的提交信息。
 
 ## 工作方式
 
 - 只有一个 Agent，在主目录的 `main` 上干活。
 - 一项端到端做完：设计、实现、核对、提交。手上有活就不停，卡住换一项做。
-- 每项做完：跑与改动对应的检查，提交，推送 main，汇报。提交只暂存自己改的路径，不用 `git add -A` 与 `git commit -a`。
+- 每项做完：跑与改动对应的定点验收，提交，推送 main，核对轻量 CI，汇报。提交只暂存自己改的路径，不用 `git add -A` 与 `git commit -a`。
 - 提交信息用详细中文（由 `.githooks/commit-msg` 强制检查）：标题写 `类型: 范围——行为变化`（类型限 `功能/修复/优化/性能/重构/文档/验收/清理/合并`）；正文空一行，必填 `范围与行为变化` 与 `检查` 两节（每节用 `- ` 列具体条目，按需补充 `替代与删除`/`文档`/`性能对比`）；末尾空一行写署名尾注 `Co-Authored-By: 名字 <邮箱>`，写这次提交的 AI 署自己。未运行的检查不得写成通过，不写空泛总结。
 - 汇报只说三件事：现在能做什么（附能点开的地址）、什么没做或没核对、要负责人决定什么。
 

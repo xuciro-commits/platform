@@ -12,7 +12,7 @@ GOPROXY ?= https://goproxy.cn,direct
 STEP := bash scripts/make-step.sh
 export GOPROXY
 
-.PHONY: help hooks bootstrap setup local docker infra infra-down build-compute dev dev-light host lite build bundle contract local-update packages check check-frontend verify verify-sql load-sql frontend-host frontend-dev trunk trunk-pg trunk-changed test test-runner test-pg test-voice
+.PHONY: help hooks bootstrap setup local docker infra infra-down build-compute dev dev-light host lite build bundle contract local-update packages fast check check-frontend verify verify-sql load-sql frontend-host frontend-dev trunk trunk-pg trunk-changed test test-runner test-pg test-voice
 
 help:
 	@bash -c '\
@@ -27,12 +27,13 @@ help:
 	printf "  %s%-18s%s %s\n" "$$C" "lite" "$$R" "无 Docker 单机持久化运行"; \
 	printf "  %s%-18s%s %s\n" "$$C" "infra-down" "$$R" "停止本地 Docker 容器并保留数据"; \
 	printf "\n%s检查与验收%s\n" "$$B" "$$R"; \
+	printf "  %s%-18s%s %s\n" "$$C" "fast" "$$R" "只核对暂存变更的空白与 Go 格式"; \
 	printf "  %s%-18s%s %s\n" "$$C" "check" "$$R" "后端与仓库全检（Go 编译/边界/产品包/契约/文档）"; \
 	printf "  %s%-18s%s %s\n" "$$C" "check-frontend" "$$R" "新前端静态门禁、类型检查与生产构建"; \
 	printf "  %s%-18s%s %s  %s%s%s\n" "$$C" "trunk" "$$R" "新前端浏览器主干验收" "$$D" "SPEC=crm 只跑一个文件，HEADED=1 可看过程" "$$R"; \
-	printf "  %s%-18s%s %s  %s%s%s\n" "$$C" "trunk-changed" "$$R" "只跑改动影响到的主干用例文件" "$$D" "BASE=origin/main 连同已提交的改动" "$$R"; \
+	printf "  %s%-18s%s %s  %s%s%s\n" "$$C" "trunk-changed" "$$R" "只跑已明确映射的主干用例文件" "$$D" "BASE=origin/main 连同已提交的改动" "$$R"; \
 	printf "  %s%-18s%s %s  %s%s%s\n" "$$C" "test" "$$R" "服务端测试（含非宿主包）" "$$D" "RUN=K13 只跑指定编号" "$$R"; \
-	printf "  %s%-18s%s %s\n" "$$C" "verify" "$$R" "check + check-frontend + test + trunk 全量验收"; \
+	printf "  %s%-18s%s %s\n" "$$C" "verify" "$$R" "发版前：一次 PostgreSQL 服务端全量 + 一次 PostgreSQL 浏览器全量"; \
 	printf "  %s%-18s%s %s\n" "$$C" "verify-sql" "$$R" "临时 PostgreSQL 写入与重启恢复验收"; \
 	printf "\n%s构建与发行%s\n" "$$B" "$$R"; \
 	printf "  %s%-18s%s %s\n" "$$C" "build" "$$R" "编译新前端与宿主二进制"; \
@@ -130,6 +131,9 @@ packages:
 	cd capabilities/server && $(GO) run ./cmd/pkg lock -packages ../../deploy/test-packages
 	cd capabilities/server && $(GO) run ./cmd/pkg check -packages ../../deploy/test-packages
 
+fast:
+	@bash .githooks/pre-commit
+
 check:
 	@printf '\n\033[1mEIDOS · 后端与仓库全检\033[0m\n'
 	@$(STEP) "[1/7]" "Go 编译、vet 与代码格式" 'cd capabilities/server && $(GO) build ./... && $(GO) vet ./... && test -z "$$(gofmt -l .)" && cd ../voice && $(GO) build ./... && $(GO) vet ./... && test -z "$$(gofmt -l .)"'
@@ -168,21 +172,26 @@ test-pg:
 	PLATFORM_BENCH_DATABASE="postgres://postgres@127.0.0.1:$$port/bench?sslmode=disable" GO="$(GO)" node scripts/check-invariants.mjs '$(RUN)' --require-no-skip
 
 trunk-changed:
-	@specs="$$(node scripts/trunk-affected.mjs $(BASE))"; \
+	@set -e; specs="$$(node scripts/trunk-affected.mjs $(BASE))"; \
 	if [ -z "$$specs" ]; then echo "没有影响主干用例的改动"; \
-	elif [ "$$specs" = all ]; then cd frontend && node ../scripts/connector-trunk.mjs $(PNPM) exec playwright test -c e2e $(if $(HEADED),--headed) $(TRUNK_ARGS); \
+	elif [ "$$specs" = all ]; then echo "影响范围过广：请明确 SPEC 定点验收，或发版前运行 make verify；不自动启动全量。"; exit 2; \
 	else echo "只跑：$$specs"; cd frontend && node ../scripts/connector-trunk.mjs $(PNPM) exec playwright test -c e2e $$specs $(if $(HEADED),--headed) $(TRUNK_ARGS); fi
 
 test-runner:
 	node --test scripts/test-results.test.mjs
 
-test: test-runner
+test:
 	GO="$(GO)" node scripts/check-invariants.mjs '$(RUN)'
 
 test-voice:
 	cd capabilities/voice && $(GO) test -race -count=1 ./...
 
-verify: check check-frontend test trunk
+verify:
+	mkdir -p .build/trunk
+	rm -f .build/trunk/playwright-results.json
+	$(MAKE) test-pg RUN=
+	PLAYWRIGHT_JSON_OUTPUT_FILE="$(CURDIR)/.build/trunk/playwright-results.json" $(MAKE) trunk-pg SPEC= HEADED= TRUNK_ARGS='--workers=1 --reporter=list,json --forbid-only --fail-on-flaky-tests'
+	node -e 'const {stats} = require("./.build/trunk/playwright-results.json"); if (!stats.expected || stats.skipped !== 0 || stats.unexpected !== 0 || stats.flaky !== 0) process.exit(1)'
 
 verify-sql:
 	mkdir -p .build/host

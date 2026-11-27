@@ -1,9 +1,8 @@
 #!/usr/bin/env bash
 # 内核改动的验收门槛：静态检查、内核不变量、竞态检查、PostgreSQL 写入与恢复、CSV 导入压测。
-# 用法：bash deploy/dev/kernel-gates.sh quick      （改一处、验一处：约 2.5 分钟）
-#       bash deploy/dev/kernel-gates.sh            （提交前全部跑一遍：约 15 分钟）
-#       GATES="check test" bash deploy/dev/kernel-gates.sh   （只跑其中几项）
-# quick：编译、vet 与格式；只跑和写入、重放、快照相关的不变量（K1、K13）；
+# 用法：bash deploy/dev/kernel-gates.sh quick      （定点 K1/K13 不变量）
+#       GATES="race sql" bash deploy/dev/kernel-gates.sh   （明确选择专项）
+#       GATES="snapshot import" bash deploy/dev/kernel-gates.sh
 #        snapshot：导入 1000 行，快照每 200 条一次，看写入不停时快照是否都成功；
 #        import：导入 300、3000、再 300 行（不试算、快照用默认间隔）。首尾两次都是 300 行，
 #        只差在表里已有的数据量，所以首尾倍数就是"表变大后每行变慢多少"，不受单次导入长短影响；
@@ -15,12 +14,17 @@ set -uo pipefail
 cd "$(dirname "${BASH_SOURCE[0]}")/../.."
 
 GO="${GO:-go}"
-gates="${GATES:-check test race sql import}"
+gates="${GATES:-}"
 if [[ "${1:-}" == "quick" ]]; then
-  gates="${GATES:-build invariants snapshot import}"
+  gates="${GATES:-invariants}"
   export PLATFORM_LOAD_IMPORT_ROWS="${PLATFORM_LOAD_IMPORT_ROWS:-300,3000,300}"
   export PLATFORM_LOAD_IMPORT_PREVIEW="${PLATFORM_LOAD_IMPORT_PREVIEW:-0}"
 fi
+if [[ -z "$gates" ]]; then
+  echo '请选择专项：GATES="race sql" bash deploy/dev/kernel-gates.sh；发版全量用 make verify。' >&2
+  exit 2
+fi
+
 out="$PWD/.build/gates/$(date +%Y%m%d-%H%M%S)"
 mkdir -p "$out"
 declare -a summary

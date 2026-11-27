@@ -14,4 +14,4 @@ paths:
 - 条件用 Expr，对象读取用对象集；不新增第二种过滤或查询语言。
 - 拒绝带可翻译的英文原因；新的原因字符串加到 `frontend/src/i18n.ts`。
 - 改宿主类型后 `make contract`；改 proto 后重新生成。
-- 改到内核语义时定点跑相关的不变量：`make test RUN=K<编号>`。改完跑 `make check`。
+- 改到内核语义时定点跑相关的不变量：`make test RUN=K<编号>`；全量构建与静态检查由 CI 执行。

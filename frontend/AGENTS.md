@@ -8,7 +8,7 @@
 - 真实数据：仓库根跑 `make frontend-host`，`.env` 里写 `PLATFORM_HOST=http://127.0.0.1:18511`，然后在登录页选一个夹具身份。
 - 跑 `pnpm dev`（http://localhost:8496）；下面的命令行写作 `pnpm astryx <命令>`。
 - 每个可见字符串都经 `t()`，并在 `src/i18n.ts` 有简体中文条目。不写代码注释。
-- 在仓库根用 `make check-frontend` 核对。它报什么就修什么；永不改检查。
+- 日常定点核对，完整 `make check-frontend` 由 CI 执行。它报什么就修什么；永不改检查。
 - 下面的块由 Astryx 生成，只用 `pnpm astryx init --agent-docs-path AGENTS.md` 刷新，永不手改。这里的中文是手译，刷新时会整块换回英文。
 
 <!-- ASTRYX:START -->

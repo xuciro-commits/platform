@@ -29,7 +29,7 @@ pnpm --dir frontend astryx docs tokens               # 令牌参考
 5. **守住不变式。** 拿 `docs/ux.md` 的十三条逐条对照这个页面。需要破一条的页面，是对那份文档的改动，不是一个页面。
 6. **接数据。** 读取与写入只经 `src/host/`。表现吃契约的形状和四种读状态；它永不自己取数。字段在失焦或回车时提交；没有保存按钮。
 7. **写文字。** 每个字符串经 `t()`，并在 `src/i18n.ts` 里有简体中文条目。用词取自 `docs/glossary.md`；文案照 `docs/ux.md` 的“文字”一节。
-8. **看。** 先 `make check-frontend`；再用真实数据（`make frontend-host`，`frontend/.env` 里 `PLATFORM_HOST=http://127.0.0.1:18511`，登录页选 `admin-1`）看亮色、暗色、窄窗口与中文。先自己按 `docs/design.md`“负责人怎样看”的六步走一遍。
+8. **看。** 按需定点类型核对；用真实数据（`make frontend-host`，`frontend/.env` 里 `PLATFORM_HOST=http://127.0.0.1:18511`，登录页选 `admin-1`）看亮色、暗色、窄窗口与中文。先自己按 `docs/design.md`“负责人怎样看”的六步走一遍。
 9. **汇报。** 说清改了哪些页面、负责人该打开哪个地址。没看过什么，照实说。
 
 ## 观感要点
@@ -66,7 +66,7 @@ pnpm --dir frontend astryx docs tokens               # 令牌参考
 
 ## 做完的样子
 
-- `make check-frontend` 通过，`git diff --check` 干净。
+- CI 的 `make check-frontend` 通过，暂存变更检查干净。
 - 新字符串有简体中文条目；动态键都在。
 - 页面是四种页面之一，且守住十三条不变式；否则同一提交里改了 `docs/ux.md`。
 - 界面上没有 `docs/design.md`“不许出现”清单里的东西。

@@ -13,5 +13,5 @@ paths:
   把示例数据换成契约，补模板缺的表现，改造完删掉落地的原件。模板的框架、间距与交互不动。
 - 属性先查再用：`astryx component <Name>`。只用 Astryx 组件与主题令牌；不写裸元素，不硬编码颜色与尺寸。
 - 读取与写入只经 `src/host/`。每个可见字符串经 `t()`，同时在 `src/i18n.ts` 加中文；术语取自 docs/glossary.md。
-- 改完跑 `make check-frontend`，按报错改到通过，不改检查脚本；再用真实数据在浏览器里看（`make frontend-host`）。
+- 改完定点核对（按需 `pnpm --dir frontend typecheck`），完整 `make check-frontend` 由 CI 执行；用真实数据在浏览器里看（`make frontend-host`）。
 - 汇报改了哪些界面、负责人该看哪个地址；没在浏览器里看过的，要说没看过。

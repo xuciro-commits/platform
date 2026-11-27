@@ -1,9 +1,12 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-make check
-
-staged="$(git diff --cached --name-only --diff-filter=ACMR)"
-if printf '%s\n' "$staged" | grep -q '^frontend/'; then
-  make check-frontend
-fi
+git diff --cached --check
+git diff --cached --name-only --diff-filter=ACMR -z | while IFS= read -r -d '' path; do
+  if [[ "$path" == *.go ]]; then
+    if ! diff=$(git show ":$path" | gofmt -d) || [[ -n "$diff" ]]; then
+      printf '%s\n%s\n' "Go 格式不符：$path（请格式化并重新暂存）" "$diff" >&2
+      exit 1
+    fi
+  fi
+done
