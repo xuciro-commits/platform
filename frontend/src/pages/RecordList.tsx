@@ -8,6 +8,7 @@ import { t } from "../i18n";
 import { useRecordHref } from "../recordRoutes";
 import { navigate, usePath, useSearch } from "../router";
 import { balanceDrillOf } from "./listModel";
+import { pageSize, useRecordPages } from "./recordPages";
 import { ActionDialog } from "./ActionDialog";
 import { type Intent, stepIntent, useAct } from "./act";
 import { type ListShape, ListView, type Move } from "./ListPage";
@@ -22,7 +23,7 @@ import { RecordPage } from "./RecordPage";
 import { type Dot, dots, Transitions } from "./Transitions";
 import { isCodeField, isEmailField, isPercentField, isPhoneField, isUrlField, parseQuantity } from "../semantic";
 import { money, plain, present } from "./values";
-import { domainOf, ganttSpan, hasFilters, monthSpan, newView, parseDomain, readView, reportView, shownMonth, type ViewState } from "./view";
+import { domainOf, ganttSpan, monthSpan, newView, parseDomain, readView, reportView, shownMonth, type ViewState } from "./view";
 
 type Row = Record<string, unknown>;
 type Creator = ComponentType<{ onClose: () => void; onDone: (id: string) => void }>;
@@ -33,103 +34,6 @@ type Formats = Record<string, Api.FieldFormat>;
 const formatted = "__formats";
 const referenced = "__refs";
 const formats = (row: Row) => (row[formatted] as Formats | undefined) ?? {};
-const pageSize = 100;
-
-type LoadedPage = {
-  signature: string;
-  records: Record<string, unknown>[];
-  refs: NonNullable<Api.RecordPage["refs"]>;
-  formats: NonNullable<Api.RecordPage["formats"]>;
-  actions: NonNullable<Api.RecordPage["actions"]>;
-  total: number;
-  partial: boolean;
-};
-
-const noPage = (signature = ""): LoadedPage => ({ signature, records: [], refs: {}, formats: {}, actions: {}, total: 0, partial: false });
-
-function mergePage(loaded: LoadedPage, page: Api.RecordPage): LoadedPage {
-  const records = new Map(loaded.records.map((record) => [String(record.id), record]));
-  for (const value of page.records) {
-    const record = value as Row;
-    records.set(String(record.id), record);
-  }
-  const refs = { ...loaded.refs };
-  for (const [field, values] of Object.entries(page.refs ?? {})) refs[field] = { ...refs[field], ...values };
-  const actions = { ...loaded.actions };
-  for (const [id, available] of Object.entries(page.actions ?? {})) actions[id] = available;
-  return {
-    signature: loaded.signature,
-    records: [...records.values()],
-    refs,
-    formats: { ...loaded.formats, ...page.formats },
-    actions,
-    total: page.total,
-    partial: loaded.partial || Boolean(page.partial),
-  };
-}
-
-function useRecordPages(type: string, view: ViewState, enabled: boolean, choiceValue: (field: string, value: string) => string, externalDomain: string, range: unknown[][]) {
-  const baseFilters = view.filters.filter((filter) => !filter.field.includes(":"));
-  const conditions = [...domainOf(baseFilters, choiceValue), ...range];
-  try {
-    const external = externalDomain ? (JSON.parse(externalDomain) as unknown) : [];
-    if (Array.isArray(external)) conditions.push(...external.filter(Array.isArray));
-  } catch {
-    conditions.push(["id", "in", []]);
-  }
-  const domain = conditions.length ? JSON.stringify(conditions) : "";
-  const sort = view.sort.filter((item) => !item.sortKey.includes(":")).map((item) => (item.direction === "descending" ? "-" : "") + item.sortKey).join(",");
-  const signature = JSON.stringify([domain, sort, view.search]);
-  const [offset, setOffset] = useState(0);
-  const [loaded, setLoaded] = useState<LoadedPage>(() => noPage());
-  const currentOffset = loaded.signature === signature ? offset : 0;
-  const query = new URLSearchParams({ offset: String(currentOffset), limit: String(pageSize), actions: "1" });
-  if (domain) query.set("domain", domain);
-  if (sort) query.set("sort", sort);
-  if (view.search.trim()) query.set("search", view.search.trim());
-  const path = enabled ? `/v1/records/${type}?${query}` : null;
-  const exported = new URLSearchParams(query);
-  ["offset", "limit", "actions"].forEach((name) => exported.delete(name));
-  const page = useRead<Api.RecordPage>(path);
-  const filtered = hasFilters(view, externalDomain);
-  const count = useRead<Pick<Api.RecordPage, "total">>(enabled && filtered ? `/v1/records/${type}?limit=1` : null);
-  useEffect(() => {
-    if (loaded.signature !== signature) setOffset(0);
-  }, [loaded.signature, signature]);
-  useEffect(() => {
-    if (page.status !== "ready" || page.path !== path) return;
-    setLoaded((previous) => mergePage(previous.signature === signature && currentOffset > 0 ? previous : noPage(signature), page.data));
-  }, [page, path, signature, currentOffset]);
-  const answer: Api.RecordPage = {
-    records: loaded.records,
-    refs: loaded.refs,
-    formats: loaded.formats,
-    actions: loaded.actions,
-    total: loaded.total,
-    partial: loaded.partial,
-  };
-  const read: Read<Api.RecordPage> =
-    loaded.signature === signature
-      ? { status: "ready", data: answer }
-      : page.status === "refused" || page.status === "error" || page.status === "loading"
-        ? page
-        : { status: "loading" };
-  return {
-    read,
-    answer,
-    exportPath: `/v1/export/${type}?${exported}`,
-    total: loaded.total,
-    unfiltered: filtered ? count.status === "ready" ? count.data.total : undefined : loaded.total,
-    loaded: loaded.records.length,
-    hasMore: loaded.signature === signature && loaded.records.length < loaded.total,
-    loading: loaded.signature === signature && page.status === "loading",
-    loadMore: () => {
-      if (page.status === "loading") return;
-      setOffset(loaded.records.length);
-    },
-  };
-}
-
 function boundOf(field: Api.FieldInfo, day: string) {
   return field.type === "date" ? day : new Date(`${day}T00:00:00`).toISOString();
 }
@@ -296,21 +200,32 @@ export function Records({ declared, listPath, id, back, primaryExtra, initialCre
   }, [declared, described, listPath, report]);
   const view = useMemo(() => readView(new URLSearchParams(currentSearch).get("view"), fallback), [currentSearch, fallback]);
   const externalDomain = new URLSearchParams(currentSearch).get("domain") ?? "";
+  const extensions = useMemo(
+    () => (described && !id && types.status === "ready" && actions.status === "ready" ? extensionsOf(described.type, types.data, actions.data) : []),
+    [described, id, types, actions],
+  );
   const dateFields = useMemo(() => described?.entity.fields.filter((field) => field.type === "date" || field.type === "datetime") ?? [], [described]);
-  const dateField = view.layout === "calendar" ? dateFields.find((field) => field.name === view.dates) ?? dateFields[0] : undefined;
+  const extensionDates = useMemo(() => extensions.flatMap((ext) => ext.entity.fields
+    .filter((field) => field.type === "date" || field.type === "datetime")
+    .map((field) => ({ ext, field, key: ext.type + ":" + field.name }))), [extensions]);
+  const extDate = view.layout === "calendar" ? extensionDates.find((entry) => entry.key === view.dates) ?? (!dateFields.length ? extensionDates[0] : undefined) : undefined;
+  const dateField = view.layout === "calendar" && !extDate ? dateFields.find((field) => field.name === view.dates) ?? dateFields[0] : undefined;
   const hasGantt = Boolean(fallback.until || view.until || view.layout === "gantt");
   const ganttStartField = hasGantt && dateFields.length >= 2 ? dateFields.find((field) => field.name === view.dates) ?? dateFields[0] : undefined;
   const ganttEndField = ganttStartField ? dateFields.find((field) => field.name === view.until) ?? dateFields.find((field) => field.name !== ganttStartField.name) ?? dateFields[1] : undefined;
   const ganttAfterField = view.after && described ? described.entity.fields.find((field) => field.name === view.after && field.type === "reference" && field.ref === described.type) : undefined;
   const span = monthSpan(shownMonth(view));
   const ganttWindow = ganttSpan(shownMonth(view), view.scale);
-  const range = dateField
+  const extCalendar = useRecordPages(extDate?.ext.type ?? declared.type, { ...view, filters: [], sort: [], search: "" }, Boolean(extDate && !id), (_field, value) => value, "",
+    extDate ? [[extDate.field.name, ">=", boundOf(extDate.field, span.start)], [extDate.field.name, "<", boundOf(extDate.field, span.end)]] : []);
+  const extCalendarRows = new Map((extCalendar.read.status === "ready" && extDate ? extCalendar.answer.records as Row[] : []).filter((row) => row.base != null).map((row) => [String(row.base), row]));
+  const range = extDate ? [["id", "in", [...extCalendarRows.keys()]]] : dateField
     ? [[dateField.name, ">=", boundOf(dateField, span.start)], [dateField.name, "<", boundOf(dateField, span.end)]]
     : view.layout === "gantt" && ganttStartField && ganttEndField
       ? [[ganttStartField.name, "<", boundOf(ganttStartField, ganttWindow.end)], [ganttEndField.name, ">=", boundOf(ganttEndField, ganttWindow.start)]]
       : [];
   const choiceOf = (field: string, value: string) => keyOf(described?.field(field), value) ?? value;
-  const records = useRecordPages(declared.type, view, Boolean(described && !id), choiceOf, externalDomain, range);
+  const records = useRecordPages(declared.type, view, Boolean(described && !id && (!extDate || extCalendar.read.status === "ready")), choiceOf, externalDomain, range);
   const unscheduledPath = useMemo(() => {
     if (view.layout !== "gantt" || !ganttStartField || !ganttEndField || !described || id) return null;
     const conditions: unknown[] = [...domainOf(view.filters, choiceOf), "|", emptyDateCondition(ganttStartField), emptyDateCondition(ganttEndField)];
@@ -425,10 +340,10 @@ export function Records({ declared, listPath, id, back, primaryExtra, initialCre
       },
     },
   } : undefined;
-  const calendar: RecordShape["calendar"] = dateFields.length ? {
-    fields: dateFields.map((field) => ({ key: field.name, label: t(field.title) })),
-    of: (row, field) => dayOf(row[field]),
-    accepts: (id) => Boolean(editFor(id)),
+  const calendar: RecordShape["calendar"] = dateFields.length || extensionDates.length ? {
+    fields: [...dateFields.map((field) => ({ key: field.name, label: t(field.title) })), ...extensionDates.map(({ key, field }) => ({ key, label: t(field.title) }))],
+    of: (row, field) => dayOf(extDate && extDate.key === field ? extCalendarRows.get(String(row.id))?.[extDate.field.name] : row[field]),
+      accepts: (id) => !extDate && Boolean(editFor(id)),
     move: reschedule,
   } : undefined;
   const laneDot = (row: Row, rowFormats?: Formats): Dot | undefined => {
@@ -477,10 +392,6 @@ export function Records({ declared, listPath, id, back, primaryExtra, initialCre
       </VStack>
     );
   }) || undefined;
-  const extensions = useMemo(
-    () => (described && !id && types.status === "ready" && actions.status === "ready" ? extensionsOf(described.type, types.data, actions.data) : []),
-    [described, id, types, actions],
-  );
   const [extPages, setExtPages] = useState<ExtensionMap>({});
   useEffect(() => {
     setExtPages({});
@@ -520,9 +431,9 @@ export function Records({ declared, listPath, id, back, primaryExtra, initialCre
       columns,
       remote: "all" as const,
       unfiltered: records.unfiltered,
-      page: { total: records.total, loaded: records.loaded, hasMore: records.hasMore, loading: records.loading, loadMore: records.loadMore },
+      page: { total: records.total, loaded: records.loaded, hasMore: records.hasMore || Boolean(extDate && extCalendar.hasMore), loading: records.loading || Boolean(extDate && extCalendar.loading), loadMore: records.hasMore || !extDate ? records.loadMore : extCalendar.loadMore },
     };
-  }, [described, declared, listPath, pending, board, calendar, gantt, bulk, options, detail, extensions, extPages, records.total, records.unfiltered, records.loaded, records.hasMore, records.loading, records.loadMore, externalDomain, view.filters, actions, balanceDrill]);
+  }, [described, declared, listPath, pending, board, calendar, gantt, bulk, options, detail, extensions, extPages, records.total, records.unfiltered, records.loaded, records.hasMore, records.loading, records.loadMore, externalDomain, view.filters, actions, balanceDrill, extDate, extCalendar.hasMore, extCalendar.loading, extCalendar.loadMore]);
   const exportList = async () => {
     setExportFailure("");
     try {
@@ -548,7 +459,7 @@ export function Records({ declared, listPath, id, back, primaryExtra, initialCre
     );
   }
   const missing: Read<Api.RecordPage> = { status: "error", reason: t("This type is not published in this workspace.") };
-  const read: Read<Api.RecordPage> = types.status !== "ready" ? types : actions.status !== "ready" ? actions : described ? records.read : missing;
+  const read: Read<Api.RecordPage> = types.status !== "ready" ? types : actions.status !== "ready" ? actions : described ? extDate && extCalendar.read.status !== "ready" ? extCalendar.read : records.read : missing;
   return (
     <>
       {extensions.length > 0 && (

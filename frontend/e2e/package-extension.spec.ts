@@ -2,6 +2,7 @@ import { expect, test } from "@playwright/test";
 import { property, signIn } from "./support";
 
 test("extension project: create an extension object from its project page and gate an action on the base record", async ({ page }) => {
+  test.setTimeout(180_000);
   await signIn(page);
   await page.goto("/home/projects");
   await page.getByRole("button", { name: "New", exact: true }).click();
@@ -36,6 +37,14 @@ test("extension project: create an extension object from its project page and ga
   await fieldDialog.getByRole("textbox", { name: /^Label/ }).fill("Survey engineer");
   await fieldDialog.getByRole("combobox", { name: /^Type/ }).click();
   await page.getByRole("option", { name: "text", exact: true }).click();
+  await fieldDialog.getByRole("button", { name: "Save", exact: true }).click();
+  await expect(fieldDialog).toBeHidden();
+
+  await page.getByRole("button", { name: "Add field", exact: true }).click();
+  await fieldDialog.getByRole("textbox", { name: /^Name/ }).fill("surveydate");
+  await fieldDialog.getByRole("textbox", { name: /^Label/ }).fill("Site survey date");
+  await fieldDialog.getByRole("combobox", { name: /^Type/ }).click();
+  await page.getByRole("option", { name: "date", exact: true }).click();
   await fieldDialog.getByRole("button", { name: "Save", exact: true }).click();
   await expect(fieldDialog).toBeHidden();
 
@@ -80,4 +89,18 @@ test("extension project: create an extension object from its project page and ga
   await allowedSurvey.getByRole("button", { name: "Request site survey", exact: true }).click();
   await expect(allowedSurvey).toBeHidden();
   await expect(property(page, "Survey engineer")).toContainText("周工");
+  const today = new Date();
+  const date = today.toISOString().slice(0, 10);
+  await page.getByRole("button", { name: "Edit Site survey date", exact: true }).press("Enter");
+  const input = page.getByRole("combobox", { name: "Site survey date", exact: true });
+  await input.fill(today.toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" }));
+  await page.keyboard.press("Tab");
+  await expect(property(page, "Site survey date")).toContainText(date);
+  await page.goto("/ontology/objects/crm.deal");
+  await page.getByRole("radio", { name: "Calendar", exact: true }).click();
+  await page.getByRole("combobox", { name: "Date field", exact: true }).click();
+  await page.getByRole("option", { name: "Site survey date", exact: true }).click();
+  await expect(page.locator('a[href*="/demo-deal-1"]')).toBeVisible();
+  await expect(page.locator('a[href*="/demo-deal-4"]')).toHaveCount(0);
+
 });
