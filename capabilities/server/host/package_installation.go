@@ -39,6 +39,7 @@ func (h hostView) PrepareManagedPackage(c platform.Caller, descriptor platform.P
 		Projection:      h.t.Projection,
 		CheckExtensions: func() error { return d.tenant.checkExtensionSet() },
 		CheckStorage:    func(upgrade, downgrade bool) error { return h.t.validateAssetStorage(d.tenant, upgrade, downgrade) },
+		Processes:       func() runtimeprotocol.Processes { return d.tenant.Processes },
 	}.Prepare()
 }
 

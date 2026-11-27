@@ -1,16 +1,15 @@
 package host
 
-import releaseowner "platformserver/services/devops/releases"
-
 import (
 	"platformserver/kernel/protocol"
 	"platformserver/platform"
 	automation "platformserver/services/automate/runtime"
+	releaseowner "platformserver/services/devops/releases"
 )
 
 func (h hostView) flowBindings() automation.FlowBindingContext {
-	checks := releaseowner.NewRetentionChecks(PublicationResolver())
-	return automation.FlowBindingContext{Resolver: PublicationResolver(), App: h.t.App, Asset: h.t.flowReleaseAsset, Assets: func() ([]platform.ReleaseAsset, error) { return h.t.releaseAssetsLocked(nil, false) }, Active: h.t.releases.Active, Candidate: h.t.releases.Candidate, Applications: func(ref platform.AssetRef, release, dependencies string) ([]platform.AssetBinding, error) {
+	checks, retention := releaseowner.NewRetentionChecks(PublicationResolver()), releaseowner.FlowRetention{Store: &h.t.releases, Files: h.t.files(), Tenant: h.t.ID, Records: h.t.Projection}
+	return automation.FlowBindingContext{Resolver: PublicationResolver(), App: h.t.App, Asset: h.t.flowReleaseAsset, Assets: func() ([]platform.ReleaseAsset, error) { return h.t.releaseAssetsLocked(nil, false) }, Active: h.t.releases.Active, Candidate: retention.Candidate, RetainManaged: retention.RetainManaged, Applications: func(ref platform.AssetRef, release, dependencies string) ([]platform.AssetBinding, error) {
 		return h.t.bindApplications(ref, release, dependencies)
 	}, CloseCandidate: h.t.candidateWithBindings, SameRetained: checks.SameRetained, CodeMatches: checks.CodeMatches}
 }

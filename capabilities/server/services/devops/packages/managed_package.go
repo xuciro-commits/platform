@@ -50,6 +50,7 @@ type ManagedPreparation struct {
 
 	CheckExtensions func() error
 	CheckStorage    func(upgrade, downgrade bool) error
+	Processes       func() protocol.Processes
 }
 
 func NewManaged(caller platform.Caller, descriptor platform.PackageDescriptor, rows func() *records.Store, install func(platform.ReleaseInstallation), fail func(*platform.Error)) Managed {
@@ -181,6 +182,11 @@ func (p ManagedPreparation) Prepare() (func(*pb.ChangeRecord), *platform.Error) 
 	}
 	if err := p.CheckStorage(p.Upgrade, p.Downgrade); err != nil {
 		return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "The package version cannot read the current data: {reason}", err.Error())
+	}
+	if processes := p.Processes(); processes != nil {
+		if err := processes.Check(); err != nil {
+			return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "The package cannot be installed: {reason}", err.Error())
+		}
 	}
 	media := make([]platform.ReleaseInstallation, 0, len(plans))
 	for _, plan := range plans {

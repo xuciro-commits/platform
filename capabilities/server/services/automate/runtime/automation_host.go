@@ -18,6 +18,7 @@ type FlowBindingContext struct {
 	Assets         func() ([]platform.ReleaseAsset, error)
 	Active         func() string
 	Candidate      func(string) (protocol.ReleaseCandidate, error)
+	RetainManaged  func(platform.AssetRef, protocol.ReleaseCandidate) (bool, error)
 	Applications   func(platform.AssetRef, string, string) ([]platform.AssetBinding, error)
 	CloseCandidate func([]platform.AssetRef, []platform.ReleaseAsset, []platform.AssetRef) (protocol.ReleaseCandidate, error)
 	SameRetained   func(protocol.ReleaseCandidate, protocol.ReleaseCandidate) bool
@@ -53,7 +54,18 @@ func (h FlowBindingContext) BindFlow(app, name string, version int, prior protoc
 		return protocol.FlowBinding{}, nil
 	}
 	binding := protocol.FlowBinding{Dependencies: closure.ID}
-	bindings, bindErr := h.Applications(root, h.Active(), closure.ID)
+	release := h.Active()
+	if !prior.Existing && prior.Dependencies == "" && h.RetainManaged != nil {
+		retained, err := h.RetainManaged(root, closure)
+		if err != nil {
+			return binding, err
+		}
+		if retained {
+			binding.Release = closure.ID
+			release = ""
+		}
+	}
+	bindings, bindErr := h.Applications(root, release, closure.ID)
 	if bindErr != nil {
 		return binding, bindErr
 	}
@@ -67,7 +79,10 @@ func (h FlowBindingContext) BindFlow(app, name string, version int, prior protoc
 		}
 		return binding, nil
 	}
-	binding.Release = h.Active()
+	if binding.Release != "" {
+		return binding, nil
+	}
+	binding.Release = release
 	if binding.Release == "" {
 		return binding, nil
 	}
