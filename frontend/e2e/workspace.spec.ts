@@ -85,7 +85,10 @@ test("member menu: language and appearance live in settings, sign out returns to
   await expect(page.getByRole("button", { name: "账户", exact: true })).toBeVisible();
 
   dialog = await settings("账户", "偏好");
-  await dialog.getByText("深色", { exact: true }).click();
+  await Promise.all([
+    page.waitForResponse((response) => response.url().endsWith("/v1/submissions") && response.ok()),
+    dialog.getByText("深色", { exact: true }).click(),
+  ]);
   await expect(page.locator("html")).toHaveAttribute("data-theme", "dark");
   await close(dialog);
   await page.reload();
@@ -163,7 +166,7 @@ test("vocabulary: a workspace translation wins over the shipped one and reverts"
 test("tenants: switching keeps the entry and replaces what the page shows", async ({ page }) => {
   await signIn(page);
   await open(page, "Ontology", "Object types");
-  const opportunity = page.getByRole("row").filter({ hasText: "opportunityline" });
+  const opportunity = page.getByRole("row").filter({ has: page.getByRole("cell", { name: "sales.opportunity", exact: true }) });
   await expect(opportunity).toBeVisible();
   const tenant = async (from: string, to: string) => {
     await page.getByRole("navigation", { name: "Primary navigation" }).getByRole("button", { name: from, exact: true }).click();
@@ -241,7 +244,10 @@ test("settings: the profile is edited in place and the member menu follows", asy
   const name = settings.getByRole("textbox", { name: "Display name", exact: true });
   const before = await name.inputValue();
   await name.fill("Dana W.");
-  await name.press("Enter");
+  await Promise.all([
+    page.waitForResponse((response) => response.url().endsWith("/v1/submissions") && response.ok()),
+    name.press("Enter"),
+  ]);
   await settings.getByRole("navigation", { name: "Settings sections" }).getByText("Login & security", { exact: true }).click();
   await expect(settings.getByText("This session", { exact: true })).toBeVisible();
   await expect(settings.getByRole("button", { name: "Sign out others", exact: true })).toBeDisabled();
@@ -253,7 +259,10 @@ test("settings: the profile is edited in place and the member menu follows", asy
 
   settings = await openSettings();
   await settings.getByRole("textbox", { name: "Display name", exact: true }).fill(before);
-  await settings.getByRole("textbox", { name: "Display name", exact: true }).press("Enter");
+  await Promise.all([
+    page.waitForResponse((response) => response.url().endsWith("/v1/submissions") && response.ok()),
+    settings.getByRole("textbox", { name: "Display name", exact: true }).press("Enter"),
+  ]);
   await settings.getByRole("button", { name: "Close", exact: true }).click();
   await page.getByRole("button", { name: "Account", exact: true }).click();
   await expect(page.getByRole("menuitem", { name: new RegExp(before || "user-1") })).toBeVisible();

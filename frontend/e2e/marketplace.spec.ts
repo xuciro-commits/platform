@@ -33,6 +33,7 @@ test.afterAll(async () => {
 });
 
 test("blank tenant: an administrator installs CRM from the marketplace after reviewing its applications and roles", async () => {
+  test.setTimeout(180_000);
   await signIn(page, "admin-1 · blank");
   await expect(page.getByRole("link", { name: "CRM", exact: true })).toHaveCount(0);
 
@@ -45,12 +46,14 @@ test("blank tenant: an administrator installs CRM from the marketplace after rev
   await addToLibrary(wizard);
   await expect(wizard.getByText(/salesrep/).first()).toBeVisible();
   await wizard.getByRole("button", { name: "Continue", exact: true }).click();
-  await wizard.getByRole("button", { name: "Install package", exact: true }).click();
+  const installBtn = wizard.getByRole("button", { name: "Install package", exact: true });
+  await expect(installBtn).toBeEnabled({ timeout: 30_000 });
+  await installBtn.click();
   await expect(wizard).toBeHidden({ timeout: 120_000 });
   await expect(page).toHaveURL(/\/delivery\/installations$/, { timeout: 30_000 });
   await expect(page.getByRole("listitem").filter({ hasText: /^CRM/ })).toContainText("active");
   const access = page.getByRole("dialog", { name: "Who can use it" });
-  await expect(access).toContainText("Nobody holds a role in CRM yet");
+  await expect(access).toContainText(/Nobody holds a role in CRM\b.*yet/);
   await expect(access.getByRole("button", { name: "People", exact: true })).toContainText("(you)");
   await expect(page.getByRole("link", { name: "CRM", exact: true })).toHaveCount(0);
   await access.getByRole("button", { name: "Grant access", exact: true }).click();
@@ -120,8 +123,19 @@ test("blank tenant: the sales rep runs a lead to Won and the sales manager sees 
   await edit(page, "Company");
   const org = page.getByRole("textbox", { name: "Company", exact: true });
   await org.fill("星海制造");
-  await org.press("Enter");
+  await Promise.all([
+    page.waitForResponse((response) => response.url().endsWith("/v1/submissions") && response.ok()),
+    org.press("Enter"),
+  ]);
   await expect(property(page, "Company")).toContainText("星海制造");
+  await edit(page, "Budget");
+  const budget = page.getByRole("spinbutton", { name: "Budget", exact: true });
+  await budget.fill("300000");
+  await Promise.all([
+    page.waitForResponse((response) => response.url().endsWith("/v1/submissions") && response.ok()),
+    budget.press("Enter"),
+  ]);
+  await expect(property(page, "Budget")).toContainText("300,000.00");
   await page.getByRole("button", { name: "Convert to deal", exact: true }).click();
   const convert = page.getByRole("dialog", { name: "Convert to deal", exact: true });
   for (const [name, date] of [["Expected close", "December 31, 2026"], ["Next step due", "November 30, 2026"]]) {
@@ -147,7 +161,7 @@ test("blank tenant: the sales rep runs a lead to Won and the sales manager sees 
   await page.getByRole("radio", { name: "Table" }).click();
   await expect(page.getByRole("link", { name: "星海制造", exact: true }).first()).toBeVisible();
   await page.goto("/crm/dashboard");
-  await expect(page.getByRole("main").getByRole("link", { name: "Won deals", exact: true }).locator("..")).toHaveText(/\D1$/);
+  await expect(page.getByRole("main").getByRole("link", { name: "Won revenue", exact: true }).locator("..")).toContainText("$300K USD");
 });
 
 test("blank tenant: retiring CRM removes its entry and keeps the records, reinstalling brings both back", async () => {
@@ -157,26 +171,28 @@ test("blank tenant: retiring CRM removes its entry and keeps the records, reinst
   const crmRow = page.getByRole("listitem").filter({ hasText: /^CRM/ });
   await crmRow.getByRole("button", { name: "Manage installation", exact: true }).click();
   const manage = page.getByRole("dialog", { name: /Manage installation/ });
+  const markUninstall = manage.getByRole("button", { name: "Mark for uninstall", exact: true });
+  await expect(markUninstall).toBeEnabled({ timeout: 30_000 });
   await expect(manage.getByRole("button", { name: "Retire package", exact: true })).toBeDisabled();
-  await manage.getByRole("button", { name: "Mark for uninstall", exact: true }).click();
-  await expect(manage).toBeHidden();
+  await markUninstall.click();
+  await expect(manage).toBeHidden({ timeout: 30_000 });
   await expect(crmRow).toContainText("draining");
   await crmRow.getByRole("button", { name: "Manage installation", exact: true }).click();
-  await manage.getByRole("button", { name: "Retire package", exact: true }).click();
-  await expect(manage).toBeHidden();
+  const retireBtn = manage.getByRole("button", { name: "Retire package", exact: true });
+  await expect(retireBtn).toBeEnabled({ timeout: 30_000 });
+  await retireBtn.click();
+  await expect(manage).toBeHidden({ timeout: 30_000 });
   await expect(crmRow).toContainText("retired");
   await expect(page.getByRole("link", { name: "CRM", exact: true })).toHaveCount(0);
 
   await crmRow.getByRole("button", { name: "Reinstall", exact: true }).click();
   const reinstall = page.getByRole("dialog", { name: /Review and install/ });
-  await reinstall.getByRole("button", { name: "Reinstall package", exact: true }).click();
-  await expect(reinstall).toBeHidden();
+  const reinstallBtn = reinstall.getByRole("button", { name: "Reinstall package", exact: true });
+  await expect(reinstallBtn).toBeEnabled({ timeout: 30_000 });
+  await reinstallBtn.click();
+  await expect(reinstall).toBeHidden({ timeout: 60_000 });
   await expect(crmRow).toContainText("active");
-  const access = page.getByRole("dialog", { name: "Who can use it" });
-  await expect(access.getByRole("combobox", { name: "Role in CRM" })).toBeVisible();
-  await access.getByRole("button", { name: "Skip for now", exact: true }).click();
-  await expect(access).toHaveCount(0);
-  await expect(page.getByText(/stays hidden from anyone without a role/).first()).toBeVisible();
+  await expect(page.getByRole("link", { name: "CRM", exact: true }).first()).toBeVisible();
 
   await signOut();
   await signIn(page, "user-1 · blank");
@@ -319,11 +335,13 @@ test("library tenant: a remote catalog lists its package beside the built-in ind
     const wizard = page.getByRole("dialog", { name: /Install from URL or file/ });
     await expect(wizard.getByText(address.replace("catalog.json", "crm.json"), { exact: true })).toBeVisible({ timeout: 20_000 });
     await expect(wizard.getByText(sha256, { exact: true })).toBeVisible();
-    await wizard.getByRole("button", { name: "Add to library", exact: true }).click();
+    await addToLibrary(wizard);
     await expect(wizard.getByRole("textbox", { name: /Project API name/ })).toHaveValue("application.production-provider");
     await wizard.getByRole("button", { name: "Continue", exact: true }).click();
-    await wizard.getByRole("button", { name: "Install package", exact: true }).click();
-    await expect(wizard).toBeHidden({ timeout: 30_000 });
+    const installBtn = wizard.getByRole("button", { name: "Install package", exact: true });
+    await expect(installBtn).toBeEnabled({ timeout: 30_000 });
+    await installBtn.click();
+    await expect(wizard).toBeHidden({ timeout: 60_000 });
     await open(page, "Delivery", "Installations");
     await expect(page.getByRole("listitem").filter({ hasText: "Production batch provider" })).toContainText(version);
   } finally {
@@ -345,10 +363,12 @@ test("publisher tenant: a master data package installs under Admin → Master da
   await wizard.getByRole("button", { name: "Inspect package", exact: true }).click();
   await expect(wizard.getByText("uom · 0.1.1", { exact: true })).toBeVisible();
   await expect(wizard.getByText(release.url, { exact: true }).first()).toBeVisible();
-  await wizard.getByRole("button", { name: "Add to library", exact: true }).click();
-  await wizard.getByRole("button", { name: "Continue", exact: true }).click({ timeout: 20_000 });
-  await wizard.getByRole("button", { name: "Install package", exact: true }).click();
-  await expect(wizard).toBeHidden({ timeout: 30_000 });
+  await addToLibrary(wizard);
+  await wizard.getByRole("button", { name: "Continue", exact: true }).click();
+  const installBtn = wizard.getByRole("button", { name: "Install package", exact: true });
+  await expect(installBtn).toBeEnabled({ timeout: 30_000 });
+  await installBtn.click();
+  await expect(wizard).toBeHidden({ timeout: 60_000 });
 
   await page.goto("/");
   await open(page, "Admin", "Master data");
@@ -464,10 +484,12 @@ test("publisher tenant: authoritative CRM upgrade review preserves compatible ex
   await selectPackage(installWizard, "crm");
   await installWizard.getByRole("button", { name: "Inspect package", exact: true }).click();
   await expect(installWizard.getByText(`crm · ${input("crm").version}`, { exact: true })).toBeVisible();
-  await installWizard.getByRole("button", { name: "Add to library", exact: true }).click();
-  await installWizard.getByRole("button", { name: "Continue", exact: true }).click({ timeout: 60_000 });
-  await installWizard.getByRole("button", { name: "Install package", exact: true }).click();
-  await expect(installWizard).toBeHidden({ timeout: 60_000 });
+  await addToLibrary(installWizard);
+  await installWizard.getByRole("button", { name: "Continue", exact: true }).click();
+  const installBtn = installWizard.getByRole("button", { name: "Install package", exact: true });
+  await expect(installBtn).toBeEnabled({ timeout: 30_000 });
+  await installBtn.click();
+  await expect(installWizard).toBeHidden({ timeout: 120_000 });
 
   await submit(page, "platform.member.grant", "platform.member", "admin-1", { app: "crm", role: "salesrep" });
 

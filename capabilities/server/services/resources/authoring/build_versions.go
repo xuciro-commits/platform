@@ -51,7 +51,16 @@ func (b *Build) captureObjectSchema(object *ontology.Object) error {
 	}
 	var versions []platform.SchemaVersion
 	family := uint32(1)
+	var closures map[string][]string
 	if previous, exists := publication.Read[ontology.Object](object.Published); exists {
+		closures = protocol.MergeFlowClosures(object.RetainedFlowClosures, previous.RetainedFlowClosures)
+		if b.host != nil {
+			active, activeErr := b.host.UnboundFlowClosures(previous.Type())
+			if activeErr != nil {
+				return activeErr
+			}
+			closures = protocol.MergeFlowClosures(closures, active)
+		}
 		versions = slices.Clone(previous.SchemaVersions)
 		if len(versions) == 0 {
 			portable, err := b.data.PortableObject(previous)
@@ -81,6 +90,7 @@ func (b *Build) captureObjectSchema(object *ontology.Object) error {
 			return err
 		}
 	}
+	object.RetainedFlowClosures = closures
 	if len(versions) > 0 && versions[len(versions)-1] == (platform.SchemaVersion{Version: version, Family: family}) {
 		object.SchemaVersions = versions
 		return nil
@@ -118,4 +128,24 @@ func objectActions(object ontology.Object, entity platform.RecordType) []platfor
 		}
 	}
 	return actions
+}
+
+func HasRetainedObjectFlowClosure(store *records.Store, ref platform.AssetRef, version int, dependencies string) bool {
+	if store == nil || dependencies == "" {
+		return false
+	}
+	et := store.Type(ObjectType)
+	if et == nil {
+		return false
+	}
+	for _, row := range et.Rows().All() {
+		obj, _ := row.Value.Interface().(ontology.Object)
+		if protocol.HasFlowClosure(obj.RetainedFlowClosures, ref, version, dependencies) {
+			return true
+		}
+		if pub, ok := publication.Read[ontology.Object](obj.Published); ok && protocol.HasFlowClosure(pub.RetainedFlowClosures, ref, version, dependencies) {
+			return true
+		}
+	}
+	return false
 }

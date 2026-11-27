@@ -1,6 +1,7 @@
 package protocol
 
 import (
+	"maps"
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
 	"platformserver/platform"
 )
@@ -27,6 +28,7 @@ func (r *SchemaRegistry) Learn(refs ...*pb.SchemaRef) *platform.Error {
 			return errorf(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT)
 		}
 	}
+	r.known = maps.Clone(r.known)
 	for _, s := range refs {
 		r.known[schemaKey(s)] = true
 	}

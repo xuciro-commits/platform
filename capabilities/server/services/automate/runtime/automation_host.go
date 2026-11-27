@@ -12,16 +12,17 @@ import (
 )
 
 type FlowBindingContext struct {
-	Resolver       releasepub.Resolver
-	App            func(string) platform.Service
-	Asset          func(string, string, int) (platform.ReleaseAsset, error)
-	Assets         func() ([]platform.ReleaseAsset, error)
-	Active         func() string
-	Candidate      func(string) (protocol.ReleaseCandidate, error)
-	Applications   func(platform.AssetRef, string, string) ([]platform.AssetBinding, error)
-	CloseCandidate func([]platform.AssetRef, []platform.ReleaseAsset, []platform.AssetRef) (protocol.ReleaseCandidate, error)
-	SameRetained   func(protocol.ReleaseCandidate, protocol.ReleaseCandidate) bool
-	CodeMatches    func(platform.ReleaseAsset, platform.ReleaseAsset) (bool, error)
+	Resolver        releasepub.Resolver
+	App             func(string) platform.Service
+	Asset           func(string, string, int) (platform.ReleaseAsset, error)
+	Assets          func() ([]platform.ReleaseAsset, error)
+	Active          func() string
+	Candidate       func(string) (protocol.ReleaseCandidate, error)
+	Applications    func(platform.AssetRef, string, string) ([]platform.AssetBinding, error)
+	CloseCandidate  func([]platform.AssetRef, []platform.ReleaseAsset, []platform.AssetRef) (protocol.ReleaseCandidate, error)
+	SameRetained    func(protocol.ReleaseCandidate, protocol.ReleaseCandidate) bool
+	RetainedClosure func(platform.AssetRef, int, string) bool
+	CodeMatches     func(platform.ReleaseAsset, platform.ReleaseAsset) (bool, error)
 }
 
 func (h FlowBindingContext) BindFlow(app, name string, version int, prior protocol.FlowBinding) (protocol.FlowBinding, error) {
@@ -63,6 +64,10 @@ func (h FlowBindingContext) BindFlow(app, name string, version int, prior protoc
 	}
 	if prior.Dependencies != "" {
 		if prior.Dependencies != closure.ID {
+			if prior.Existing && h.RetainedClosure != nil && h.RetainedClosure(root, version, prior.Dependencies) {
+				binding.Dependencies = prior.Dependencies
+				return binding, nil
+			}
 			return binding, fmt.Errorf("flow %s version %d dependency release changed", root, version)
 		}
 		return binding, nil

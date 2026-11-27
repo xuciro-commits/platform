@@ -66,7 +66,7 @@ func DefinitionBody(value Object, typ string) (json.RawMessage, error) {
 	if err := json.Unmarshal(raw, &body); err != nil {
 		return nil, err
 	}
-	for _, key := range []string{"id", "revision", "created", "changed", "archived", "state", "installed", "published"} {
+	for _, key := range []string{"id", "revision", "created", "changed", "archived", "state", "installed", "published", "retainedFlowClosures"} {
 		delete(body, key)
 	}
 	body["type"], err = json.Marshal(typ)
@@ -77,7 +77,7 @@ func DefinitionBody(value Object, typ string) (json.RawMessage, error) {
 }
 
 func ObjectSchemaBody(object Object) (json.RawMessage, error) {
-	object.SchemaVersions, object.View, object.Records = nil, nil, nil
+	object.SchemaVersions, object.RetainedFlowClosures, object.View, object.Records = nil, nil, nil, nil
 	return DefinitionBody(object, object.Type())
 }
 
@@ -94,6 +94,9 @@ func checkDefaultView(view json.RawMessage) error {
 
 func CheckObjectSchemas(object Object) error {
 	if err := checkDefaultView(object.View); err != nil {
+		return err
+	}
+	if err := protocol.ValidateFlowClosures(object.RetainedFlowClosures); err != nil {
 		return err
 	}
 	if len(object.SchemaVersions) == 0 {
@@ -127,7 +130,7 @@ func CompatibleObjectSchema(previous, next Object) bool {
 		object.Icon, object.Color, object.Display = "", "", ""
 		object.ObjectView, object.View = nil, nil
 		object.State, object.Installed, object.Published = "", "", ""
-		object.ExtensionSource, object.SchemaVersions = nil, nil
+		object.ExtensionSource, object.SchemaVersions, object.RetainedFlowClosures = nil, nil, nil
 		object.ActionTypes, object.Actions = nil, nil
 		object.Fields = nil
 		object.States = slices.Clone(object.States)
@@ -263,11 +266,14 @@ func prepareObjectPublication(asset platform.ReleaseAsset, objects []Object, res
 	}
 	frozen.Record = objects[i].Record
 	objects[i].State, objects[i].Installed = "published", frozen.Type()
+	closures := protocol.MergeFlowClosures(objects[i].RetainedFlowClosures, frozen.RetainedFlowClosures)
+	frozen.RetainedFlowClosures = closures
 	retained := frozen
 	retained.Published = ""
 	objects[i].Published = string(platform.Raw(retained))
 	objects[i].ExtensionSource = frozen.ExtensionSource
 	objects[i].SchemaVersions = frozen.SchemaVersions
+	objects[i].RetainedFlowClosures = closures
 	return frozen, objects[i], nil
 }
 

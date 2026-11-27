@@ -67,7 +67,7 @@ func ProductVersionEntity() platform.RecordType {
 
 func ProductVersionActions() []platform.Action {
 	return []platform.Action{{
-		Schema: SchemaProductVersion, Target: ProductVersionType, Capability: "releases",
+		Schema: SchemaProductVersion, Target: ProductVersionType, New: true, Capability: "releases",
 		Title: "Publish product version", Description: "Freeze one saved release candidate as an immutable semantic product version.",
 		Roles: []string{"builder", "publisher"},
 		Payload: []platform.Field{

@@ -2,6 +2,7 @@ package host
 
 import (
 	"encoding/json"
+	"go.opentelemetry.io/otel/trace"
 	"io"
 	"net/http"
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
@@ -53,13 +54,16 @@ func (h *Host) routesCore(rt *routes) {
 		defer func() {
 			t.observeSubmission(r, m, sub, record, refusal, h.Now())
 		}()
+		span := trace.SpanFromContext(r.Context())
+		span.AddEvent("submission.decode")
 		body, _ := io.ReadAll(r.Body)
 		if sub, refusal = transport.DecodeSubmission(body, r.Header.Get("Platform-Correction-Of")); refusal != nil {
 			Reply(w, nil, refusal)
 			return
 		}
 		var issues []platform.FieldIssue
-		record, refusal, issues = t.submitSchemaDiagnosed(m, sub, r.Header.Get(SchemaVersionHeader), h.Now())
+		record, refusal, issues = t.submit(r.Context(), m, sub, h.Now(), submitOptions{versioned: true, contentVersion: strings.TrimSpace(r.Header.Get(SchemaVersionHeader))})
+		span.AddEvent("response.encode")
 		localized := t.localizedFieldIssues(m, issues, t.Language(m, r))
 		refusal = t.i18n.Said(refusal, t.Language(m, r))
 		Reply(w, record, refusal, localized...)

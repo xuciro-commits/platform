@@ -2,9 +2,13 @@ package monitoring
 
 import (
 	"context"
+	"go.opentelemetry.io/otel/propagation"
 	"log"
+	"net/http"
 	"os"
+	pb "platformkernel/gen/platform/kernel/v1alpha1"
 	"strings"
+	"sync/atomic"
 	"time"
 
 	"go.opentelemetry.io/otel"
@@ -19,7 +23,37 @@ import (
 	"go.opentelemetry.io/otel/trace"
 )
 
+var ExportingTraces atomic.Bool
+
 var Tracer = otel.Tracer("platformserver")
+
+func TraceRequest(r *http.Request, route string) (*http.Request, trace.Span) {
+	if !ExportingTraces.Load() {
+		return r, nil
+	}
+	ctx := propagation.TraceContext{}.Extract(r.Context(), propagation.HeaderCarrier(r.Header))
+	ctx, span := Tracer.Start(ctx, route, trace.WithSpanKind(trace.SpanKindServer))
+	span.AddEvent("auth.resolve")
+	return r.WithContext(ctx), span
+}
+
+func StartSubmission(ctx context.Context, holder, tenant, member string, sub *pb.Submission) (context.Context, trace.Span) {
+	if !ExportingTraces.Load() && !trace.SpanFromContext(ctx).IsRecording() {
+		return ctx, nil
+	}
+	ctx, span := Tracer.Start(ctx, holder)
+	if span.IsRecording() {
+		span.SetAttributes(attribute.String("platform.tenant", tenant), attribute.String("platform.member", member), attribute.String("platform.app", sub.GetAuthority()), attribute.String("platform.target", sub.GetTarget().GetType()+"/"+sub.GetTarget().GetId()))
+	}
+	return ctx, span
+}
+
+func DecisionConflict(ctx context.Context, tenant, outcome string) {
+	trace.SpanFromContext(ctx).AddEvent(outcome)
+	if Meters.Decisions.Enabled(ctx) {
+		Meters.Decisions.Add(ctx, 1, metric.WithAttributes(attribute.String("platform.tenant", tenant), attribute.String("platform.outcome", outcome)))
+	}
+}
 
 func Outside(parent trace.SpanContext, name string, attrs ...attribute.KeyValue) trace.Span {
 	_, span := Tracer.Start(trace.ContextWithSpanContext(context.Background(), parent), name, trace.WithAttributes(attrs...))
@@ -55,10 +89,13 @@ func init() {
 // A holder may name what it holds after its kind ("submit crm.lead.update"); metrics keep only the kind, the slow-hold log keeps both.
 func LaneObserver(tenant string, slow func(holder string, held time.Duration)) func(holder string, waited, held time.Duration) {
 	return func(holder string, waited, held time.Duration) {
-		kind, _, _ := strings.Cut(holder, " ")
-		attrs := metric.WithAttributes(attribute.String("platform.tenant", tenant), attribute.String("platform.lane.holder", kind))
-		Meters.LaneWait.Record(context.Background(), waited.Seconds(), attrs)
-		Meters.LaneHold.Record(context.Background(), held.Seconds(), attrs)
+		ctx := context.Background()
+		if Meters.LaneHold.Enabled(ctx) || Meters.LaneWait.Enabled(ctx) {
+			kind, _, _ := strings.Cut(holder, " ")
+			attrs := metric.WithAttributes(attribute.String("platform.tenant", tenant), attribute.String("platform.lane.holder", kind))
+			Meters.LaneWait.Record(ctx, waited.Seconds(), attrs)
+			Meters.LaneHold.Record(ctx, held.Seconds(), attrs)
+		}
 		if held > laneHoldBudget {
 			slow(holder, held)
 			log.Printf("tenant %s lane held %v by %s (budget %v)", tenant, held.Round(time.Millisecond), holder, laneHoldBudget)
@@ -123,12 +160,14 @@ func ExportTelemetry(ctx context.Context, service string) func(context.Context) 
 	}
 	traces := sdktrace.NewTracerProvider(sdktrace.WithBatcher(spans), sdktrace.WithResource(res))
 	otel.SetTracerProvider(traces)
+	ExportingTraces.Store(true)
 	var metrics *sdkmetric.MeterProvider
 	if exporter, err := otlpmetrichttp.New(ctx); err == nil {
 		metrics = sdkmetric.NewMeterProvider(sdkmetric.WithReader(sdkmetric.NewPeriodicReader(exporter)), sdkmetric.WithResource(res))
 		otel.SetMeterProvider(metrics)
 	}
 	return func(ctx context.Context) {
+		ExportingTraces.Store(false)
 		traces.Shutdown(ctx)
 		if metrics != nil {
 			metrics.Shutdown(ctx)

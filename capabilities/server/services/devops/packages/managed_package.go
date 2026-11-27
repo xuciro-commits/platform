@@ -40,6 +40,7 @@ type ManagedPreparation struct {
 	At         time.Time
 	Upgrade    bool
 	Downgrade  bool
+	PriorDemo  []string
 	Owner      build.ConstructionDrafts
 	Resolver   publication.Resolver
 	Code       func() ([]platform.ReleaseAsset, error)
@@ -50,6 +51,7 @@ type ManagedPreparation struct {
 
 	CheckExtensions func() error
 	CheckStorage    func(upgrade, downgrade bool) error
+	UnboundClosures func() (map[string][]string, error)
 }
 
 func NewManaged(caller platform.Caller, descriptor platform.PackageDescriptor, rows func() *records.Store, install func(platform.ReleaseInstallation), fail func(*platform.Error)) Managed {
@@ -106,12 +108,20 @@ func RestoreReferencedResources(store *records.Store, installations []platform.R
 	}
 }
 
-func (p ManagedPreparation) Prepare() (func(*pb.ChangeRecord), *platform.Error) {
+func (p ManagedPreparation) Prepare() (func(*pb.ChangeRecord), map[string][]string, *platform.Error) {
 	if p.Descriptor.Blueprint == nil && !p.Archive {
-		return nil, nil
+		return nil, nil, nil
 	}
 	if p.Archive {
-		return p.Managed.Archive, nil
+		return p.Managed.Archive, nil, nil
+	}
+	var closures map[string][]string
+	if p.UnboundClosures != nil {
+		var err error
+		closures, err = p.UnboundClosures()
+		if err != nil {
+			return nil, nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "{reason}", err.Error())
+		}
 	}
 	if !p.Upgrade && !p.Downgrade {
 		for _, raw := range p.Descriptor.Blueprint.Seed {
@@ -124,63 +134,63 @@ func (p ManagedPreparation) Prepare() (func(*pb.ChangeRecord), *platform.Error) 
 				continue
 			}
 			if json.Unmarshal(raw, &seed) != nil || seed.Type == "" || seed.ID == "" {
-				return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "Invalid demo seed record")
+				return nil, nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "Invalid demo seed record")
 			}
-			if p.Rows.Exists(seed.Type, seed.ID) {
-				return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "Demo seed record {type}/{id} already exists", seed.Type, seed.ID)
+			if p.Rows.Exists(seed.Type, seed.ID) && !slices.Contains(p.PriorDemo, seed.Type+"/"+seed.ID) {
+				return nil, nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "Demo seed record {type}/{id} already exists", seed.Type, seed.ID)
 			}
 		}
 	}
 	if space := Space(p.Descriptor); space != "" && p.Managed.Taken() {
-		return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "A project named {name} already exists; install under another name", space)
+		return nil, nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "A project named {name} already exists; install under another name", space)
 	}
 	code, err := p.Code()
 	if err != nil {
-		return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "{reason}", err.Error())
+		return nil, nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "{reason}", err.Error())
 	}
 	candidate, err := BlueprintCandidate(p.Resolver, *p.Descriptor.Blueprint, p.Owner, p.Available)
 	if err != nil {
-		return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "{reason}", err.Error())
+		return nil, nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "{reason}", err.Error())
 	}
 	owned, err := p.Owner.CompleteBlueprintAssets(p.Descriptor.Blueprint.Assets)
 	if err != nil {
-		return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "{reason}", err.Error())
+		return nil, nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "{reason}", err.Error())
 	}
 	refs, refusal := p.Managed.Owned(code, owned)
 	if refusal != nil {
-		return nil, refusal
+		return nil, nil, refusal
 	}
 	impact, err := p.Impact(p.Descriptor.ID, owned)
 	if err != nil {
-		return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "Package impact could not be inspected: {reason}", err.Error())
+		return nil, nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "Package impact could not be inspected: {reason}", err.Error())
 	}
 	if len(impact.References) > 0 {
-		return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "Remove references to {resource} from {consumer} before switching the product version", impact.References[0].Resource.String(), impact.References[0].Consumer.String())
+		return nil, nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "Remove references to {resource} from {consumer} before switching the product version", impact.References[0].Resource.String(), impact.References[0].Consumer.String())
 	}
 	projectID, _ := p.Managed.Project()
 	context := protocol.AssetReleaseContext{Member: p.Caller.Member, At: p.At, ManagedBy: p.Descriptor.ID, ManagedAssets: refs, Project: projectID, Upgrade: p.Upgrade}
 	if err := p.Bootstrap(candidate, context); err != nil {
-		return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "The package cannot be installed: {reason}", err.Error())
+		return nil, nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "The package cannot be installed: {reason}", err.Error())
 	}
 	registry, err := p.Registry()
 	if err != nil {
-		return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "{reason}", err.Error())
+		return nil, nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "{reason}", err.Error())
 	}
 	end, err := registry.BeginBootstrap(candidate.Assets)
 	if err != nil {
-		return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "{reason}", err.Error())
+		return nil, nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "{reason}", err.Error())
 	}
 	defer end()
 	owned = slices.DeleteFunc(slices.Clone(candidate.Assets), func(asset platform.ReleaseAsset) bool { return !refs[asset.Ref] })
 	plans, err := registry.PrepareReleaseAssets(owned, context)
 	if err != nil {
-		return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "{reason}", err.Error())
+		return nil, nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "{reason}", err.Error())
 	}
 	if err := p.CheckExtensions(); err != nil {
-		return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "The package version breaks an extension: {reason}", err.Error())
+		return nil, nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "The package version breaks an extension: {reason}", err.Error())
 	}
 	if err := p.CheckStorage(p.Upgrade, p.Downgrade); err != nil {
-		return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "The package version cannot read the current data: {reason}", err.Error())
+		return nil, nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "The package version cannot read the current data: {reason}", err.Error())
 	}
 	media := make([]platform.ReleaseInstallation, 0, len(plans))
 	for _, plan := range plans {
@@ -189,9 +199,9 @@ func (p ManagedPreparation) Prepare() (func(*pb.ChangeRecord), *platform.Error) 
 	}
 	mediaVersions, err := records.PrepareMediaVersionImages(p.Projection, media)
 	if err != nil {
-		return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "{reason}", err.Error())
+		return nil, nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "{reason}", err.Error())
 	}
-	return func(r *pb.ChangeRecord) { p.Managed.Install(r, refs, plans, mediaVersions) }, nil
+	return func(r *pb.ChangeRecord) { p.Managed.Install(r, refs, plans, mediaVersions) }, closures, nil
 }
 
 func (m Managed) Project() (id, name string) {

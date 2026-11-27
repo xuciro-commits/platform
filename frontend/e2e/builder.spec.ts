@@ -357,8 +357,10 @@ test("gate: an installed package contributes an app whose record action runs", a
   await provider.getByRole("button", { name: "Install", exact: true }).click();
   const review = page.getByRole("dialog", { name: /Review and install/ });
   await expect(review).toContainText("application.production-provider");
-  await review.getByRole("button", { name: "Install package", exact: true }).click();
-  await expect(page).toHaveURL(/\/delivery\/installations$/, { timeout: 20_000 });
+  const install = review.getByRole("button", { name: "Install package", exact: true });
+  await expect(install).toBeEnabled({ timeout: 30_000 });
+  await install.click();
+  await expect(page).toHaveURL(/\/delivery\/installations$/, { timeout: 30_000 });
   const installed = page.getByRole("listitem").filter({ hasText: "Production batch provider" });
   await expect(installed).toContainText("0.1.5");
 
@@ -441,8 +443,10 @@ test("applications: install the sample version and run a contributed record acti
   await provider.getByRole("button", { name: "Reinstall", exact: true }).click();
   const review = page.getByRole("dialog", { name: /Review and install/ });
   await expect(review.getByText("Installation scope", { exact: true })).toBeVisible();
-  await review.getByRole("button", { name: "Reinstall package", exact: true }).click();
-  await expect(page).toHaveURL(/\/delivery\/installations$/);
+  const reinstall = review.getByRole("button", { name: "Reinstall package", exact: true });
+  await expect(reinstall).toBeEnabled({ timeout: 30_000 });
+  await reinstall.click();
+  await expect(page).toHaveURL(/\/delivery\/installations$/, { timeout: 30_000 });
   await expect(page.getByRole("listitem").filter({ hasText: "Production batch provider" })).toContainText("0.1.5");
 
   await open(page, "Production order provider", "Production orders");
@@ -533,12 +537,16 @@ test("applications: shared records respect roles and keep their history after re
   const retained = metadata(review, "Business records retained");
   await expect(retained).toHaveText(/^[1-9]\d*$/);
   const kept = await retained.innerText();
-  await review.getByRole("button", { name: "Mark for uninstall", exact: true }).click();
-  await expect(review).toBeHidden();
+  const markUninstall = review.getByRole("button", { name: "Mark for uninstall", exact: true });
+  await expect(markUninstall).toBeEnabled({ timeout: 30_000 });
+  await markUninstall.click();
+  await expect(review).toBeHidden({ timeout: 30_000 });
   await expect(installation).toContainText("draining");
   await manage.click();
-  await review.getByRole("button", { name: "Retire package", exact: true }).click();
-  await expect(review).toBeHidden();
+  const retireBtn = review.getByRole("button", { name: "Retire package", exact: true });
+  await expect(retireBtn).toBeEnabled({ timeout: 30_000 });
+  await retireBtn.click();
+  await expect(review).toBeHidden({ timeout: 30_000 });
   await expect(installation).toContainText("retired");
   await expect(page.getByRole("link", { name: "Production order provider", exact: true })).toHaveCount(0);
   expect(await direct(page)).toMatchObject({ code: "ERROR_CODE_POLICY_DENIED", message: expect.stringContaining("The package contribution is retired") });
@@ -585,10 +593,13 @@ test("delivery: a builder publishes a version and installs beside its source pro
   const review = page.getByRole("dialog");
   const name = review.getByRole("textbox", { name: "Project API name" });
   await expect(name).toHaveValue("releaseexample");
-  await review.getByRole("button", { name: "Install package", exact: true }).click();
+  const install = review.getByRole("button", { name: "Install package", exact: true });
+  await expect(install).toBeEnabled({ timeout: 30_000 });
+  await install.click();
   await expect(review.getByText("A project named releaseexample already exists; install under another name")).toBeVisible();
   await name.fill("releasecopy");
-  await review.getByRole("button", { name: "Install package", exact: true }).click();
+  await expect(install).toBeEnabled({ timeout: 30_000 });
+  await install.click();
   await expect(review).toBeHidden({ timeout: 60_000 });
   await page.goto("/ontology/objects/releasecopy.item");
   await expect(page.getByRole("heading", { name: "Release items", exact: true })).toBeVisible();

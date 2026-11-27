@@ -18,11 +18,7 @@ type RecordApply struct {
 	DefinitionType string
 }
 
-func (s *Sequence) ApplyRecordResult(l platform.Authority, raw []byte, h RecordApply) (bool, error) {
-	result, receipt, err := acceptedformat.DecodeRecord(raw)
-	if err != nil {
-		return false, err
-	}
+func (s *Sequence) ApplyRecordResult(l platform.Authority, result acceptedformat.Record, receipt *pb.ChangeRecord, h RecordApply) (bool, error) {
 	if result.Tenant != s.ID || l == nil || !slices.ContainsFunc(l.Declarations(), func(d *pb.AuthorityDeclaration) bool {
 		return d.GetTenantId() == result.Tenant && d.GetAuthorityId() == result.App && d.GetDataClass() == result.Row.Type
 	}) {

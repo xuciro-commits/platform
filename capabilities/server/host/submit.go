@@ -15,18 +15,17 @@ import (
 	dataowner "platformserver/services/data"
 	releaseowner "platformserver/services/devops/releases"
 	build "platformserver/services/resources/authoring"
+	"platformserver/services/resources/monitoring"
 	controlowner "platformserver/services/security/control"
 	"slices"
 	"time"
 
-	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/trace"
 )
 
 func unknown() *platform.Error { return &platform.Error{Code: pb.ErrorCode_ERROR_CODE_UNKNOWN_SCHEMA} }
 
 type submitOptions struct {
-	report         func(*platform.Error, []platform.FieldIssue)
 	source         *dataowner.SourceApplication
 	versioned      bool
 	contentVersion string
@@ -43,44 +42,37 @@ type acceptOptions struct {
 }
 
 func (t *Tenant) Submit(m platform.Member, s *pb.Submission, now time.Time) (*pb.ChangeRecord, *platform.Error) {
-	return t.submit(m, s, now, submitOptions{})
+	record, refusal, _ := t.submit(context.Background(), m, s, now, submitOptions{})
+	return record, refusal
 }
 
-func (t *Tenant) submitDiagnosed(m platform.Member, s *pb.Submission, now time.Time) (*pb.ChangeRecord, *platform.Error, []platform.FieldIssue) {
-	var issues []platform.FieldIssue
-	record, err := t.submit(m, s, now, submitOptions{report: func(_ *platform.Error, found []platform.FieldIssue) { issues = found }})
-	return record, err, issues
-}
-
-func (t *Tenant) submit(m platform.Member, s *pb.Submission, now time.Time, opts submitOptions) (*pb.ChangeRecord, *platform.Error) {
+func (t *Tenant) submit(ctx context.Context, m platform.Member, s *pb.Submission, now time.Time, opts submitOptions) (record *pb.ChangeRecord, refusal *platform.Error, issues []platform.FieldIssue) {
+	holder := "submit " + s.GetSchema().GetName()
+	ctx, span := monitoring.StartSubmission(ctx, holder, t.ID, m.ID, s)
+	if span != nil {
+		defer func() { monitoring.End(span, runtimekernel.OutcomeOf(refusal)) }()
+	}
 	if err := t.Admits(m); err != nil {
-		return nil, err
+		return nil, err, nil
 	}
 	if t.quarantined() {
-		return nil, &platform.Error{Code: pb.ErrorCode_ERROR_CODE_CONFLICT}
+		return nil, &platform.Error{Code: pb.ErrorCode_ERROR_CODE_CONFLICT}, nil
 	}
 	if s.GetSchema().GetName() == "flow.dead-letter.replay" {
-		record, refusal, handled := t.prepareContinuousDeadLetterReplay(m, s, now, opts)
+		record, refusal, handled := t.prepareContinuousDeadLetterReplay(ctx, m, s, now, opts)
 		if handled {
-			if refusal != nil && opts.report != nil {
-				opts.report(refusal, nil)
-			}
-			return record, refusal
+			return record, refusal, nil
 		}
 	}
-	result, refusal := decideOnImage(t, context.Background(), "submit "+s.GetSchema().GetName(), func(t *Tenant) (diagnosedSubmission, *platform.Error) {
+	result, refusal := decideOnImage(t, ctx, holder, func(t *Tenant) (diagnosedSubmission, *platform.Error) {
 		return t.prepareSubmission(m, s, now, opts)
 	}, func(t *Tenant, decision preparedAccepted, value diagnosedSubmission, refusal *platform.Error) (diagnosedSubmission, *platform.Error) {
 		value.record, refusal = t.finishPreparedSubmission(m, decision, value.record, refusal)
 		return value, refusal
 	})
-	if refusal != nil && opts.report != nil {
-		opts.report(refusal, result.issues)
-	}
-	return result.record, refusal
+	return result.record, refusal, result.issues
 }
 
-// prepareSubmission uses the same admission, authority, schema and decision path for a single submission and an import batch.
 type diagnosedSubmission struct {
 	record *pb.ChangeRecord
 	issues []platform.FieldIssue
@@ -90,13 +82,13 @@ func (t *Tenant) prepareSubmission(m platform.Member, s *pb.Submission, now time
 	if refusal := t.recordReadRefusal(); refusal != nil {
 		return out, refusal
 	}
-	a, refusal := t.ActionOwner(t.App(t.owner["action:"+s.GetSchema().GetName()]), t.App(s.GetAuthority()), s.GetIdempotencyKey())
+	a, prior, refusal := t.SubmissionPrior(t.App(t.owner["action:"+s.GetSchema().GetName()]), t.App(s.GetAuthority()), s.GetIdempotencyKey())
 	if refusal != nil {
 		return out, refusal
 	}
 	source := opts.source
 	if source != nil {
-		if record, refusal, done := t.PriorOf(a, s.GetIdempotencyKey()).SourceReplay(m.ID, s, source.Deleted); done {
+		if record, refusal, done := prior.SourceReplay(m.ID, s, source.Deleted); done {
 			return diagnosedSubmission{record: record}, refusal
 		}
 	}
@@ -109,8 +101,8 @@ func (t *Tenant) prepareSubmission(m platform.Member, s *pb.Submission, now time
 		if decision.schemaRefusal != nil && decision.schemaRefusal.Code == pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT {
 			return out, decision.schemaRefusal
 		}
-	} else {
-		s = t.CurrentSchema(a, s)
+	} else if source != nil {
+		s = prior.CurrentSchema(a, s)
 	}
 	if source != nil {
 		prepared, refusal := t.sourcePreparation().Prepare(m, s, source, now)
@@ -119,25 +111,26 @@ func (t *Tenant) prepareSubmission(m platform.Member, s *pb.Submission, now time
 		}
 		s, decision.source = prepared.Submission, &runtimekernel.ClaimSet{Origin: prepared.Origin, Claims: prepared.Claims, Restore: prepared.Restore}
 	}
-	end := t.begin("submit "+s.GetSchema().GetName(), trace.SpanContext{}, attribute.String("platform.app", a.Manifest().ID),
-		attribute.String("platform.target", runtimekernel.Target(s)), attribute.String("platform.member", m.ID))
-	defer func() { end(runtimekernel.OutcomeOf(err)) }()
-	out.record, err = t.accept(a, m, s, now, decision)
+	out.record, err = t.acceptWithPrior(a, m, s, now, decision, prior)
 	if err == nil {
 		return out, nil
 	}
 	if t.preparedResult != nil && len(t.preparedResult.entry.Body) > 0 {
 		out.issues = t.readableFieldIssues(m, t.preparedResult.issues, now)
-	} else if prior, ok := t.Committed.RefusedIssues(a.Manifest().ID, s, decision.binding); ok {
+	} else if prior, ok := prior.RefusedIssues(s, decision.binding); ok {
 		out.issues = t.readableFieldIssues(m, prior, now)
 	}
 	return out, err
 }
 
 func (t *Tenant) accept(a platform.Service, m platform.Member, s *pb.Submission, now time.Time, opts acceptOptions) (record *pb.ChangeRecord, refusal *platform.Error) {
+	return t.acceptWithPrior(a, m, s, now, opts, t.PriorOf(a, s.GetIdempotencyKey()))
+}
+
+func (t *Tenant) acceptWithPrior(a platform.Service, m platform.Member, s *pb.Submission, now time.Time, opts acceptOptions, prior runtimekernel.Prior) (record *pb.ChangeRecord, refusal *platform.Error) {
 	binding := opts.binding
 	if binding == nil {
-		s = t.CurrentSchema(a, s)
+		s = prior.CurrentSchema(a, s)
 	}
 	if t.businessStopped() {
 		return nil, actions.StoppedForMaintenance()
@@ -145,7 +138,7 @@ func (t *Tenant) accept(a platform.Service, m platform.Member, s *pb.Submission,
 	if refusal := t.CheckSubmission(m, s); refusal != nil {
 		return nil, refusal
 	}
-	record, hash, refusal, done := t.ReplayPrior(a, s, binding)
+	record, hash, refusal, done := t.ReplayPrior(a, s, binding, prior)
 	if done {
 		return record, refusal
 	}
@@ -171,10 +164,12 @@ func (t *Tenant) accept(a platform.Service, m platform.Member, s *pb.Submission,
 			refusal = opts.before(draft)
 		}
 		if refusal == nil {
+			trace.SpanFromContext(t.readContext()).AddEvent("business.decide")
 			record, refusal = decideAcceptedAs(a, draft, m, s, now, opts.automation)
 		}
 	}
 	record, refusal = draft.Settled(record, refusal, automation.PendingOperationInputs(draft.operationInputs))
+	trace.SpanFromContext(t.readContext()).AddEvent("accepted.encode")
 	raw, refusal, err := draft.Outcome(draft.sources(), runtimekernel.OutcomeHooks{
 		Explain: func(r *platform.Error) *platform.Error {
 			return actions.Explained(r, a, s.GetSchema().GetName(), runtimekernel.Target(s))
@@ -206,7 +201,7 @@ func (t *Tenant) finishCommittedResult(a platform.Service, m platform.Member, ha
 			refusal = &platform.Error{Code: pb.ErrorCode_ERROR_CODE_CONFLICT}
 		}
 	}()
-	return t.FinishCommitted(a, m, hash, committed, runtimekernel.CommittedResult{Settlement: t.settlement(), App: t.App, ApplyBatch: t.applyAcceptedBatch, ApplyRecord: t.applyAcceptedResult, Publish: t.publishAccepted})
+	return t.FinishCommitted(t.readContext(), a, m, hash, committed, runtimekernel.CommittedResult{Settlement: t.settlement(), App: t.App, Batch: t.batchApply(), Record: t.recordApply(), Publish: t.publishAccepted})
 }
 
 func decideAcceptedAs(a platform.Service, draft *stagedDecision, m platform.Member, s *pb.Submission, now time.Time, automation bool) (record *pb.ChangeRecord, refusal *platform.Error) {
@@ -245,10 +240,13 @@ func (t *Tenant) finishPreparedSubmission(m platform.Member, decision preparedAc
 	if len(decision.entry.Body) == 0 {
 		return record, refusal
 	}
+	span := trace.SpanFromContext(t.readContext())
+	span.AddEvent("storage.append")
 	committed, err := t.acceptResult(decision.entry, decision.key, decision.hash)
 	if err != nil {
 		return nil, runtimekernel.CommitRefusal(err)
 	}
+	span.AddEvent("projection.apply")
 	return t.finishCommittedResult(t.App(decision.entry.App), m, decision.hash, committed)
 }
 
@@ -262,10 +260,6 @@ func (t *Tenant) submitBackground(m platform.Member, s *pb.Submission, now time.
 	}, func(t *Tenant, decision preparedAccepted, record *pb.ChangeRecord, refusal *platform.Error) (*pb.ChangeRecord, *platform.Error) {
 		return t.finishPreparedSubmission(m, decision, record, refusal)
 	})
-}
-
-func (t *Tenant) applyAcceptedBatch(l platform.Authority, raw []byte) (bool, error) {
-	return t.ApplyBatch(l, raw, t.batchApply())
 }
 
 func (t *Tenant) batchApply() runtimekernel.BatchApply {
@@ -312,11 +306,11 @@ func (t *Tenant) publishAcceptedBatch(result acceptedformat.Batch) {
 	runtimekernel.PublishBatch(result, t.publishAccepted)
 }
 
-func (t *Tenant) applyAcceptedResult(l platform.Authority, raw []byte) (bool, error) {
-	return t.ApplyRecordResult(l, raw, runtimekernel.RecordApply{App: t.App, CheckBindings: build.CheckRunApplicationBindings, DefinitionType: protocol.AppType,
+func (t *Tenant) recordApply() runtimekernel.RecordApply {
+	return runtimekernel.RecordApply{App: t.App, CheckBindings: build.CheckRunApplicationBindings, DefinitionType: protocol.AppType,
 		Claims: func(result acceptedformat.Record, receipt *pb.ChangeRecord) (func() error, error) {
 			return t.Claims.RecordClaims(t.ID, result, receipt)
-		}})
+		}}
 }
 
 func (t *Tenant) acceptResult(entry Entry, key, hash string) ([]byte, error) {
@@ -326,7 +320,7 @@ func (t *Tenant) acceptResult(entry Entry, key, hash string) ([]byte, error) {
 	if t.readError() != nil {
 		return nil, t.readError()
 	}
-	return t.Accept(entry, key, hash, storageDelta, t.quarantine)
+	return t.Accept(t.readContext(), entry, key, hash, storageDelta, t.quarantine)
 }
 
 func (t *Tenant) acceptedResultApplied() {

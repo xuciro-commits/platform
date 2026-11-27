@@ -31,6 +31,7 @@ type Owner struct {
 	packages         map[string]*protocol.InstalledPackage
 	packageSources   map[string]protocol.PackageSource
 	packageLibraries map[string]protocol.PackageLibrary
+	flowClosures     map[string][]string
 	index            *protocol.PackageIndex
 	host             protocol.PackageHost
 	viewsCacheKey    string
@@ -55,7 +56,7 @@ func (d *Owner) BoundIndex() *protocol.PackageIndex { d.mu.Lock(); defer d.mu.Un
 func (d *Owner) SnapshotState() protocol.PackageState {
 	d.mu.Lock()
 	defer d.mu.Unlock()
-	return protocol.PackageState{Packages: maps.Clone(d.packages), Sources: maps.Clone(d.packageSources), Libraries: maps.Clone(d.packageLibraries)}
+	return protocol.PackageState{Packages: maps.Clone(d.packages), Sources: maps.Clone(d.packageSources), Libraries: maps.Clone(d.packageLibraries), FlowClosures: protocol.CloneFlowClosures(d.flowClosures)}
 }
 
 func (d *Owner) Restore(s protocol.PackageState) {
@@ -64,10 +65,17 @@ func (d *Owner) Restore(s protocol.PackageState) {
 	d.packages = s.Packages
 	d.packageSources = s.Sources
 	d.packageLibraries = s.Libraries
+	d.flowClosures = protocol.CloneFlowClosures(s.FlowClosures)
 	if d.packages == nil {
 		d.packages = map[string]*protocol.InstalledPackage{}
 	}
 	d.viewsCacheKey, d.viewsCache = "", nil
+}
+
+func (d *Owner) HasRetainedFlowClosure(ref platform.AssetRef, version int, dependencies string) bool {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	return protocol.HasFlowClosure(d.flowClosures, ref, version, dependencies)
 }
 
 func (d *Owner) Prepare(c platform.Caller, s *pb.Submission) (func(*pb.ChangeRecord), *platform.Error) {
@@ -276,6 +284,16 @@ func (d *Owner) PackageSeed(id string) ([]json.RawMessage, bool) {
 		descriptor = rebound
 	}
 	return slices.Clone(descriptor.Blueprint.Seed), true
+}
+
+func PriorDemo(owner PreparationOwner, id string) []string {
+	if owner == nil {
+		return nil
+	}
+	if held := owner.InstalledPackages()[id]; held != nil && held.State == "retired" {
+		return held.DemoRecords
+	}
+	return nil
 }
 
 func SeedOf(owner PreparationOwner, id string) ([]json.RawMessage, bool) {
@@ -569,7 +587,7 @@ func (d *Owner) decide(c platform.Caller, s *pb.Submission) (func(*pb.ChangeReco
 		var archive func(*pb.ChangeRecord)
 		if schema == SchemaPackageRetire {
 			var refusal *platform.Error
-			archive, refusal = d.host.PrepareManagedPackage(c, platform.PackageDescriptor{ID: p.ID, Namespace: held.Namespace}, nil, true, false, false)
+			archive, _, refusal = d.host.PrepareManagedPackage(c, platform.PackageDescriptor{ID: p.ID, Namespace: held.Namespace}, nil, true, false, false)
 			if refusal != nil {
 				return nil, refusal
 			}
@@ -692,7 +710,7 @@ func (d *Owner) decide(c platform.Caller, s *pb.Submission) (func(*pb.ChangeReco
 	if descriptor, err = Rebind(descriptor, namespace); err != nil {
 		return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "{reason}", err.Error())
 	}
-	install, refusal := d.host.PrepareManagedPackage(c, descriptor, available, false, upgrade || rollbackUpgrade, downgrade || rollback && !rollbackUpgrade)
+	install, closures, refusal := d.host.PrepareManagedPackage(c, descriptor, available, false, upgrade || rollbackUpgrade, downgrade || rollback && !rollbackUpgrade)
 	if refusal != nil {
 		return nil, refusal
 	}
@@ -700,6 +718,7 @@ func (d *Owner) decide(c platform.Caller, s *pb.Submission) (func(*pb.ChangeReco
 		if install != nil {
 			install(r)
 		}
+		d.flowClosures = protocol.MergeFlowClosures(d.flowClosures, closures)
 		now := time.Now().UTC()
 		if d.packages == nil {
 			d.packages = map[string]*protocol.InstalledPackage{}
@@ -708,7 +727,7 @@ func (d *Owner) decide(c platform.Caller, s *pb.Submission) (func(*pb.ChangeReco
 		installed := &protocol.InstalledPackage{ID: descriptor.ID, Version: descriptor.Version, Namespace: descriptor.Namespace,
 			Title: descriptor.Title, State: "active", Contributions: descriptor.Contributions, Digest: descriptor.ArtifactDigest,
 			Artifact: sealed, InstalledAt: now, ChangedAt: now, Space: namespace}
-		if prior != nil && prior.State != "retired" {
+		if prior != nil {
 			installed.DemoRecords = slices.Clone(prior.DemoRecords)
 			installed.DemoCleared = prior.DemoCleared
 		} else if descriptor.Blueprint != nil && len(descriptor.Blueprint.Seed) > 0 {

@@ -2,6 +2,7 @@ package host
 
 import (
 	"context"
+	"go.opentelemetry.io/otel/trace"
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
 	"platformserver/kernel/records"
 	"platformserver/platform"
@@ -36,6 +37,7 @@ func (t *Tenant) readError() error {
 }
 
 func (t *Tenant) beginRecordRead(ctx context.Context) {
+	trace.SpanFromContext(ctx).AddEvent("lane.acquired")
 	t.readScope = &recordReadScope{ctx: ctx}
 	t.openRecordRead(ctx)
 }

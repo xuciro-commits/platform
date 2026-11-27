@@ -19,31 +19,56 @@ func (t *Owner) referenceNames(m platform.Member, typ string, rows []any, now ti
 	if !ok {
 		return nil, false
 	}
-	byField := map[string]map[string]bool{}
 	m = t.authorizationMember(m)
-	sourceCaller := t.caller(m, source.App)
-	for _, field := range source.Fields {
-		if field.Type != "member" && (field.Type != "reference" || field.Ref == "") {
+	caller := t.caller(m, source.App)
+	byField := map[string]map[string]bool{}
+	fields := referenceFields(source)
+	ids := make([]string, len(fields))
+	for _, row := range rows {
+		value := reflect.ValueOf(row)
+		if value.Type() != source.Go {
 			continue
 		}
-		for _, row := range rows {
-			value := reflect.ValueOf(row)
-			if value.Type() != source.Go {
-				continue
-			}
-			if id := records.BusinessField(source, value, field.Name); id != "" {
-				visible := sourceCaller.Authorize(platform.AuthzRequest{Principal: m.ID, Tenant: sourceCaller.Tenant, Kind: "read", Type: typ, Record: value.Field(0).Interface().(platform.Record).ID, Fields: []string{field.Name}}, now)
-				if !visible.Allow || len(visible.Withheld) > 0 {
-					continue
-				}
-				if byField[field.Name] == nil {
-					byField[field.Name] = map[string]bool{}
-				}
-				byField[field.Name][id] = true
-			}
+		for i, name := range fields {
+			ids[i] = records.BusinessField(source, value, name)
 		}
+		addVisibleReferences(caller, typ, value.Field(0).Interface().(platform.Record).ID, fields, ids, now, byField)
 	}
 	return t.nameReferences(m, source, byField, now)
+}
+
+func referenceFields(source platform.RecordTypeInfo) []string {
+	var fields []string
+	for _, field := range source.Fields {
+		if field.Type == "member" || field.Type == "reference" && field.Ref != "" {
+			fields = append(fields, field.Name)
+		}
+	}
+	return fields
+}
+
+func addVisibleReferences(caller platform.Caller, typ, record string, fields, ids []string, now time.Time, byField map[string]map[string]bool) {
+	var populated []string
+	for i, name := range fields {
+		if ids[i] != "" {
+			populated = append(populated, name)
+		}
+	}
+	if len(populated) == 0 {
+		return
+	}
+	visible := caller.Authorize(platform.AuthzRequest{Principal: caller.ID, Tenant: caller.Tenant, Kind: "read", Type: typ, Record: record, Fields: populated}, now)
+	if !visible.Allow {
+		return
+	}
+	for i, name := range fields {
+		if ids[i] != "" && !slices.Contains(visible.Withheld, name) {
+			if byField[name] == nil {
+				byField[name] = map[string]bool{}
+			}
+			byField[name][ids[i]] = true
+		}
+	}
 }
 
 func (t *Owner) recordSetNames(m platform.Member, typ string, rows []json.RawMessage, now time.Time) (map[string]map[string]string, bool) {
@@ -52,8 +77,10 @@ func (t *Owner) recordSetNames(m platform.Member, typ string, rows []json.RawMes
 		return nil, false
 	}
 	m = t.authorizationMember(m)
-	sourceCaller := t.caller(m, source.App)
+	caller := t.caller(m, source.App)
 	byField := map[string]map[string]bool{}
+	fields := referenceFields(source)
+	ids := make([]string, len(fields))
 	for _, raw := range rows {
 		var row map[string]json.RawMessage
 		if json.Unmarshal(raw, &row) != nil {
@@ -63,23 +90,11 @@ func (t *Owner) recordSetNames(m platform.Member, typ string, rows []json.RawMes
 		if json.Unmarshal(row["id"], &record) != nil || record == "" {
 			continue
 		}
-		for _, field := range source.Fields {
-			if field.Type != "member" && (field.Type != "reference" || field.Ref == "") {
-				continue
-			}
-			var id string
-			if json.Unmarshal(row[field.Name], &id) != nil || id == "" {
-				continue
-			}
-			visible := sourceCaller.Authorize(platform.AuthzRequest{Principal: m.ID, Tenant: sourceCaller.Tenant, Kind: "read", Type: typ, Record: record, Fields: []string{field.Name}}, now)
-			if !visible.Allow || len(visible.Withheld) > 0 {
-				continue
-			}
-			if byField[field.Name] == nil {
-				byField[field.Name] = map[string]bool{}
-			}
-			byField[field.Name][id] = true
+		clear(ids)
+		for i, name := range fields {
+			_ = json.Unmarshal(row[name], &ids[i])
 		}
+		addVisibleReferences(caller, typ, record, fields, ids, now, byField)
 	}
 	return t.nameReferences(m, source, byField, now)
 }

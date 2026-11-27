@@ -4,6 +4,7 @@ import transport "platformserver/kernel/transport"
 
 import (
 	"net/http"
+	"platformserver/services/resources/monitoring"
 	"time"
 
 	"platformserver/platform"
@@ -25,6 +26,10 @@ func (rt *routes) handle(route transport.Route, f func(w http.ResponseWriter, r 
 	h.routes = append(h.routes, route)
 	rt.mux.HandleFunc(route.Pattern, func(w http.ResponseWriter, r *http.Request) {
 		started := time.Now()
+		r, span := monitoring.TraceRequest(r, route.Pattern)
+		if span != nil {
+			defer span.End()
+		}
 		m, t, ok := h.member(r)
 		if !ok {
 			w.WriteHeader(http.StatusUnauthorized)

@@ -1,6 +1,7 @@
 package protocol
 
 import (
+	"maps"
 	"slices"
 
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
@@ -14,6 +15,8 @@ type Authorities struct {
 func NewAuthorities() *Authorities {
 	return &Authorities{current: map[[2]string]*pb.AuthorityDeclaration{}}
 }
+
+func (a *Authorities) Clone() *Authorities { return &Authorities{current: maps.Clone(a.current)} }
 
 func (a *Authorities) Declare(d *pb.AuthorityDeclaration) *platform.Error {
 	if slices.Contains([]string{d.GetTenantId(), d.GetDataClass(), d.GetAuthorityId()}, "") ||

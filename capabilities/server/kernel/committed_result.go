@@ -1,8 +1,10 @@
 package kernel
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
+	"go.opentelemetry.io/otel/trace"
 	"platformserver/kernel/protocol"
 	"time"
 
@@ -14,13 +16,14 @@ import (
 
 type CommittedResult struct {
 	Settlement
-	App         func(string) platform.Service
-	ApplyBatch  func(platform.Authority, []byte) (bool, error)
-	ApplyRecord func(platform.Authority, []byte) (bool, error)
-	Publish     func(platform.Event, protocol.AcceptedEventPlan)
+	App     func(string) platform.Service
+	Batch   BatchApply
+	Record  RecordApply
+	Publish func(platform.Event, protocol.AcceptedEventPlan)
 }
 
-func (s *Sequence) FinishCommitted(a platform.Service, m platform.Member, hash string, committed []byte, h CommittedResult) (*pb.ChangeRecord, *platform.Error) {
+func (s *Sequence) FinishCommitted(ctx context.Context, a platform.Service, m platform.Member, hash string, committed []byte, h CommittedResult) (*pb.ChangeRecord, *platform.Error) {
+	span := trace.SpanFromContext(ctx)
 	conflict := &platform.Error{Code: pb.ErrorCode_ERROR_CODE_CONFLICT}
 	var envelope struct{ Kind string }
 	if err := json.Unmarshal(committed, &envelope); err != nil {
@@ -48,14 +51,16 @@ func (s *Sequence) FinishCommitted(a platform.Service, m platform.Member, hash s
 			h.Quarantine(fmt.Errorf("committed batch differs from the accepted request: %v", err))
 			return nil, conflict
 		}
-		applied, err := h.ApplyBatch(a.Authority(), committed)
+		applied, err := s.applyDecodedBatch(a.Authority(), committed, saved, receipt, h.Batch)
 		if err != nil {
 			h.Quarantine(fmt.Errorf("committed record batch could not be applied: %w", err))
 			return nil, conflict
 		}
 		h.Applied()
 		if applied {
+			span.AddEvent("audit.persist")
 			s.AuditLog.Remember(Submitted(m.ID, a, sub, saved.At))
+			span.AddEvent("events.publish")
 			PublishBatch(saved, h.Publish)
 			h.ChangedOwner(saved.App)
 		}
@@ -74,7 +79,7 @@ func (s *Sequence) FinishCommitted(a platform.Service, m platform.Member, hash s
 			return nil, conflict
 		}
 	}
-	applied, err := h.ApplyRecord(a.Authority(), committed)
+	applied, err := s.ApplyRecordResult(a.Authority(), saved, receipt, h.Record)
 	if err != nil {
 		h.Quarantine(fmt.Errorf("committed accepted result could not be applied: %w", err))
 		return nil, conflict
@@ -84,7 +89,9 @@ func (s *Sequence) FinishCommitted(a platform.Service, m platform.Member, hash s
 		saved.At = receipt.GetRecordedTime().AsTime()
 	}
 	if applied {
+		span.AddEvent("audit.persist")
 		s.AuditLog.Remember(Submitted(m.ID, a, receipt.GetSubmission(), saved.At))
+		span.AddEvent("events.publish")
 		h.Publish(platform.Event{App: a.Manifest().ID, Record: receipt, Changed: saved.Event.Changed}, saved.Event)
 		h.ChangedOwner(saved.App)
 	}
@@ -92,8 +99,7 @@ func (s *Sequence) FinishCommitted(a platform.Service, m platform.Member, hash s
 	return receipt, nil
 }
 
-func (s *Sequence) ReplayPrior(a platform.Service, sub *pb.Submission, binding *platform.SchemaVersion) (record *pb.ChangeRecord, hash string, refusal *platform.Error, done bool) {
-	prior := s.Committed.Prior(a.Manifest().ID, a.Authority(), s.ID, sub.GetIdempotencyKey())
+func (s *Sequence) ReplayPrior(a platform.Service, sub *pb.Submission, binding *platform.SchemaVersion, prior Prior) (record *pb.ChangeRecord, hash string, refusal *platform.Error, done bool) {
 	if len(prior.Answer) > 0 {
 		result, receipt, err := acceptedformat.DecodeBatch(prior.Answer)
 		hash, hashErr := acceptedformat.SubmissionHash(sub, binding)
@@ -148,7 +154,15 @@ func (p Prior) SourceReplay(principal string, sub *pb.Submission, deleted bool) 
 }
 
 func (s *Sequence) ApplyBatch(l platform.Authority, raw []byte, h BatchApply) (bool, error) {
-	prepared, err := s.PrepareBatch(l, raw, h)
+	result, receipt, err := acceptedformat.DecodeBatch(raw)
+	if err != nil {
+		return false, err
+	}
+	return s.applyDecodedBatch(l, raw, result, receipt, h)
+}
+
+func (s *Sequence) applyDecodedBatch(l platform.Authority, raw []byte, result acceptedformat.Batch, receipt *pb.ChangeRecord, h BatchApply) (bool, error) {
+	prepared, err := s.prepareDecodedBatch(l, raw, result, receipt, h)
 	if err != nil || prepared == nil {
 		return false, err
 	}

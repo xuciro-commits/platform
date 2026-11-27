@@ -119,7 +119,7 @@ func TestInvariantK1ReplayIsByteIdentical(t *testing.T) {
 					t.Fatal(err)
 				}
 				retry, err := journal.AppendAccepted(ctx, live.ID, entry, id.Key, id.Hash)
-				if err != nil || !bytes.Equal(saved, retry) || journal.Position(live.ID) != int64(i+1) {
+				if err != nil || !bytes.Equal(saved.Body, retry.Body) || journal.Position(live.ID) != int64(i+1) {
 					t.Fatalf("retry at %d: %v", i+1, err)
 				}
 				if _, err := journal.AppendAccepted(ctx, live.ID, entry, id.Key, id.Hash+"x"); !errors.Is(err, persistence.ErrAcceptedConflict) {

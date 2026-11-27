@@ -7,6 +7,8 @@ import (
 	"google.golang.org/protobuf/proto"
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
 	"platformserver/kernel/acceptedformat"
+	"platformserver/kernel/protocol"
+	"platformserver/kernel/records"
 	"platformserver/platform"
 )
 
@@ -18,8 +20,15 @@ func (s *Sequence) CurrentSchema(app platform.Service, sub *pb.Submission) *pb.S
 	if sub.GetSchema().GetVersion() != 1 {
 		return sub
 	}
+	return s.PriorOf(app, sub.GetIdempotencyKey()).CurrentSchema(app, sub)
+}
+
+func (prior Prior) CurrentSchema(app platform.Service, sub *pb.Submission) *pb.Submission {
+	if sub.GetSchema().GetVersion() != 1 {
+		return sub
+	}
 	family := uint32(1)
-	if prior := s.PriorOf(app, sub.GetIdempotencyKey()); len(prior.Answer) > 0 {
+	if len(prior.Answer) > 0 {
 		result, receipt, err := acceptedformat.DecodeBatch(prior.Answer)
 		if err == nil {
 			saved, err := acceptedformat.BatchSubmission(result, receipt)
@@ -62,6 +71,9 @@ func (s *Sequence) SchemaBinding(app platform.Service, sub *pb.Submission, conte
 		return binding, platform.Refuse(pb.ErrorCode_ERROR_CODE_UNKNOWN_SCHEMA, "The action definition is unavailable; refresh definitions")
 	}
 	if content == "" {
+		if action.SchemaVersion == nil && current.Family == 1 && sub.GetSchema().GetVersion() == 1 {
+			return nil, nil
+		}
 		key := app.Manifest().ID + "/" + sub.GetIdempotencyKey()
 		if _, bound := s.Committed.SchemaVersion(key); !bound && app.Authority().AcceptedFor(s.ID, sub.GetIdempotencyKey()) != nil {
 			return nil, nil
@@ -69,35 +81,33 @@ func (s *Sequence) SchemaBinding(app platform.Service, sub *pb.Submission, conte
 		if prior, exists := s.Committed.Refusal(key); exists && prior.SchemaVersion == nil {
 			return nil, nil
 		}
-		if action.SchemaVersion == nil && current.Family == 1 && sub.GetSchema().GetVersion() == 1 {
-			return nil, nil
-		}
 		return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_UNKNOWN_SCHEMA, "The submission needs its schema content version; refresh definitions")
 	}
 	if binding.Version == current.Version && binding.Family == current.Family {
 		return binding, nil
 	}
-	if et := s.Projection.Type("build.object"); et != nil {
-		for _, row := range et.Rows().All() {
-			var metadata struct {
-				Published string `json:"published"`
-			}
-			raw, _ := row.Image()
-			if json.Unmarshal(raw, &metadata) != nil {
-				continue
-			}
+	if et := s.Projection.Type("build.object"); et != nil && binding.Family == current.Family {
+		matches := func(row *records.Row) bool {
 			var object struct {
 				Name           string                   `json:"name"`
 				Namespace      string                   `json:"namespace"`
 				SchemaVersions []platform.SchemaVersion `json:"schemaVersions"`
 			}
-			if object.Namespace == "" {
-				object.Namespace = "build"
+			object.Namespace = "build"
+			published := records.BusinessField(et.Info(), row.Value, "published")
+			return json.Unmarshal([]byte(published), &object) == nil && object.Namespace+"."+object.Name == action.Target && slices.Contains(object.SchemaVersions, *binding)
+		}
+		if directory := s.Projection.Type("build.resource"); directory != nil {
+			ref := platform.AssetRef{App: "build", Kind: platform.AssetObject, Name: action.Target}
+			if entry := directory.Rows().Get(protocol.ResourceID(s.ID, ref)); entry != nil {
+				resource := entry.Value.Interface().(protocol.Resource)
+				if row := et.Rows().Get(resource.Draft); row != nil && matches(row) {
+					return binding, nil
+				}
 			}
-			if json.Unmarshal([]byte(metadata.Published), &object) != nil || object.Namespace+"."+object.Name != action.Target {
-				continue
-			}
-			if slices.Contains(object.SchemaVersions, *binding) && binding.Family == current.Family {
+		}
+		for _, row := range et.Rows().All() {
+			if matches(row) {
 				return binding, nil
 			}
 		}

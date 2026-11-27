@@ -7,10 +7,10 @@ import (
 	"platformserver/platform"
 	"platformserver/services/resources/monitoring"
 	"slices"
+	"strings"
 	"time"
 
-	"go.opentelemetry.io/otel/attribute"
-	"go.opentelemetry.io/otel/metric"
+	"go.opentelemetry.io/otel/trace"
 )
 
 type preparedAccepted struct {
@@ -22,8 +22,11 @@ type preparedAccepted struct {
 }
 
 func decideOnImage[T any](t *Tenant, ctx context.Context, holder string, prepare func(*Tenant) (T, *platform.Error), finish func(*Tenant, preparedAccepted, T, *platform.Error) (T, *platform.Error)) (T, *platform.Error) {
+	span := trace.SpanFromContext(ctx)
 	attempt := func(state *Tenant) (value T, decision preparedAccepted, refusal *platform.Error, err error) {
+		span.AddEvent("image.fork")
 		value, refusal, err = readImageState(t, state, ctx, func(scope *Tenant) (T, *platform.Error) {
+			span.AddEvent("decision.prepare")
 			scope.preparedResult = &decision
 			if state == t {
 				if image := t.readImage.Load(); image != nil && maps.Equal(image.state.disabledOwners, t.disabledOwners) {
@@ -35,14 +38,14 @@ func decideOnImage[T any](t *Tenant, ctx context.Context, holder string, prepare
 		return
 	}
 	attempts := 0
-	if holder == "import" || holder == "work" {
+	if holder == "import" || holder == "work" || strings.HasPrefix(holder, "submit platform.package.") || holder == "submit build.object.publish" || holder == "submit build.release.publish" {
 		attempts = 1
 	}
 	return runtimekernel.ImageDecision[T, preparedAccepted]{
 		Attempts:    attempts,
 		Stopped:     t.businessStopped,
 		Quarantined: t.quarantined,
-		Hold:        func() error { return t.Lane.Hold(ctx, holder) },
+		Hold:        func() error { return t.Lane.HoldForCommit(ctx, holder) },
 		Unlock:      t.Lane.Unlock,
 		Contended:   func() bool { return t.Lane.State().Waiters > 0 },
 		Unavailable: func() bool { return t.recordReadRefusal() != nil || t.businessStopped() },
@@ -63,9 +66,7 @@ func decideOnImage[T any](t *Tenant, ctx context.Context, holder string, prepare
 		Finish: func(decision preparedAccepted, value T, refusal *platform.Error) (T, *platform.Error) {
 			return finish(t, decision, value, refusal)
 		},
-		Count: func(outcome string) {
-			monitoring.Meters.Decisions.Add(ctx, 1, metric.WithAttributes(attribute.String("platform.tenant", t.ID), attribute.String("platform.outcome", outcome)))
-		},
+		Count: func(outcome string) { monitoring.DecisionConflict(ctx, t.ID, outcome) },
 	}.Run(ctx)
 }
 

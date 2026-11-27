@@ -17,16 +17,16 @@ import (
 	"time"
 )
 
-func (h hostView) PrepareManagedPackage(c platform.Caller, descriptor platform.PackageDescriptor, available []platform.ReleaseAsset, archive, upgrade, downgrade bool) (func(*pb.ChangeRecord), *platform.Error) {
+func (h hostView) PrepareManagedPackage(c platform.Caller, descriptor platform.PackageDescriptor, available []platform.ReleaseAsset, archive, upgrade, downgrade bool) (func(*pb.ChangeRecord), map[string][]string, *platform.Error) {
 	if c.Replaying || descriptor.Blueprint == nil && !archive {
-		return nil, nil
+		return nil, nil, nil
 	}
 	d := h.decision
 	managed := packages.NewManaged(platform.NewCaller(d, c.Member, build.ID, true, false), descriptor, func() *records.Store { return d.Records }, func(installation platform.ReleaseInstallation) {
 		d.Installations = append(d.Installations, installation)
 	}, d.FailDecision)
 	return packages.ManagedPreparation{
-		Managed: managed, Archive: archive, Available: available, At: d.At, Upgrade: upgrade, Downgrade: downgrade,
+		Managed: managed, Archive: archive, Available: available, At: d.At, Upgrade: upgrade, Downgrade: downgrade, PriorDemo: packages.PriorDemo(h.t.PackageOwner, descriptor.ID),
 		Owner: h.t.builders[build.ID], Resolver: PublicationResolver(), Code: h.CodeReleaseAssets,
 		Impact: func(id string, after []platform.ReleaseAsset) (platform.PackageLifecycleImpact, error) {
 			return h.t.packageLifecycleImpact(c.Member, id, after)
@@ -39,6 +39,7 @@ func (h hostView) PrepareManagedPackage(c platform.Caller, descriptor platform.P
 		Projection:      h.t.Projection,
 		CheckExtensions: func() error { return d.tenant.checkExtensionSet() },
 		CheckStorage:    func(upgrade, downgrade bool) error { return h.t.validateAssetStorage(d.tenant, upgrade, downgrade) },
+		UnboundClosures: func() (map[string][]string, error) { return h.UnboundFlowClosures("") },
 	}.Prepare()
 }
 

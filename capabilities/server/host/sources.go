@@ -94,7 +94,7 @@ func (t *Tenant) integration() dataowner.Integration {
 		Source: t.sourcePreparation(), DeclaredRows: t.declaredRows, PrepareRows: t.prepareRows, AbsentRows: t.absentSourceRows,
 		Refused: t.integrationRefused, Submit: t.Submit, SubmitBackground: t.submitBackground,
 		SubmitSource: func(member platform.Member, submission *pb.Submission, binding *platform.DataSourceBinding, row dataowner.SourceRow, now time.Time) *platform.Error {
-			_, err := t.submit(member, submission, now, submitOptions{source: &dataowner.SourceApplication{Binding: binding, Row: row, Deleted: row.Deleted}})
+			_, err, _ := t.submit(context.Background(), member, submission, now, submitOptions{source: &dataowner.SourceApplication{Binding: binding, Row: row, Deleted: row.Deleted}})
 			return err
 		},
 		ObserveRun: t.observeOwnerRun, PipelineInputs: t.pipelineInputs,

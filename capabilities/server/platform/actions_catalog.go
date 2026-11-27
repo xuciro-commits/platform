@@ -2,6 +2,7 @@ package platform
 
 import (
 	"encoding/json"
+	"iter"
 	"maps"
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
 	"slices"
@@ -67,19 +68,14 @@ func NewCatalog(actions ...Action) *Catalog {
 }
 
 func (c *Catalog) CloneActions() *Catalog {
-	return c.WithActions(c.All())
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+	return &Catalog{actions: c.actions, policies: c.policies, disabled: maps.Clone(c.disabled), custom: maps.Clone(c.custom)}
 }
 
 func (c *Catalog) WithActions(actions []Action) *Catalog {
-	bound := NewCatalog(actions...)
-	c.mu.RLock()
-	defer c.mu.RUnlock()
-	bound.policies = c.policies
-	bound.disabled = maps.Clone(c.disabled)
-	bound.custom = make(map[string][]string, len(c.custom))
-	for role, schemas := range c.custom {
-		bound.custom[role] = slices.Clone(schemas)
-	}
+	bound := c.CloneActions()
+	bound.actions = NewCatalog(actions...).actions
 	return bound
 }
 
@@ -96,6 +92,7 @@ func (c *Catalog) Disable(capability string) bool {
 func (c *Catalog) Add(actions ...Action) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
+	c.actions = slices.Clone(c.actions)
 	for _, a := range actions {
 		checkAction(&a)
 		if i := slices.IndexFunc(c.actions, func(x Action) bool { return x.Schema == a.Schema }); i >= 0 {
@@ -115,14 +112,17 @@ func (c *Catalog) ReplaceTarget(target string, actions []Action) {
 	}
 	c.mu.Lock()
 	defer c.mu.Unlock()
-	c.actions = append(slices.DeleteFunc(c.actions, func(action Action) bool { return action.Target == target }), actions...)
+	c.actions = append(slices.DeleteFunc(slices.Clone(c.actions), func(action Action) bool { return action.Target == target }), actions...)
 }
 
-func (c *Catalog) All() []Action {
+func (c *Catalog) snapshot() []Action {
 	c.mu.RLock()
 	defer c.mu.RUnlock()
-	return slices.Clone(c.actions)
+	return c.actions
 }
+
+func (c *Catalog) All() []Action             { return slices.Clone(c.snapshot()) }
+func (c *Catalog) Actions() iter.Seq[Action] { return slices.Values(c.snapshot()) }
 
 func (c *Catalog) Action(schema string) (Action, bool) {
 	c.mu.RLock()

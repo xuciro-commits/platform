@@ -53,10 +53,10 @@ func TestInvariantK1BuildListenerWorkResultKeepsEvidenceOnce(t *testing.T) {
 	commit := live.AcceptResult
 	workCount, total, maxBytes := 0, 0, 0
 	var commitTime time.Duration
-	live.AcceptResult = func(e persistence.Entry, key, hash string) ([]byte, error) {
+	live.AcceptResult = func(ctx context.Context, e persistence.Entry, key, hash string) (*persistence.AcceptedWrite, error) {
 		w, decodeErr := acceptedformat.DecodeWork(e.Body)
 		start := time.Now()
-		raw, err := commit(e, key, hash)
+		raw, err := commit(ctx, e, key, hash)
 		elapsed := time.Since(start)
 		if decodeErr == nil && w.App == build.ID {
 			if len(w.Changes) > 0 {

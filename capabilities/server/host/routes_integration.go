@@ -57,7 +57,7 @@ func (h *Host) routesIntegration(rt *routes) {
 			Reply(w, nil, &platform.Error{Code: pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT})
 			return
 		}
-		_, record, refusal, issues := t.invokeDiagnosed(m, r.PathValue("protocol")+"/"+r.PathValue("version"), r.PathValue("action"), r.PathValue("target"), body, r.Header.Get("Idempotency-Key"), h.Now())
+		_, record, refusal, issues := t.invokeDiagnosed(r.Context(), m, r.PathValue("protocol")+"/"+r.PathValue("version"), r.PathValue("action"), r.PathValue("target"), body, r.Header.Get("Idempotency-Key"), h.Now())
 		Reply(w, record, t.i18n.Said(refusal, t.Language(m, r)), t.localizedFieldIssues(m, issues, t.Language(m, r))...)
 	})
 	rt.handle(transport.Route{Pattern: "POST /v1/connectors/{input}", Summary: "Deliver a connector's batch or page as the connector's member (K8)", Body: json.RawMessage{}, Answer: SubmissionAnswer{}}, func(w http.ResponseWriter, r *http.Request, m platform.Member, t *Tenant) {
@@ -72,7 +72,7 @@ func (h *Host) routesIntegration(rt *routes) {
 			Reply(w, nil, &platform.Error{Code: pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT})
 			return
 		}
-		_, record, err, issues := t.invokeDiagnosed(m, r.PathValue("protocol")+"/"+r.PathValue("version"), r.PathValue("action"), call.Target, call.Payload, call.IdempotencyKey, h.Now())
+		_, record, err, issues := t.invokeDiagnosed(r.Context(), m, r.PathValue("protocol")+"/"+r.PathValue("version"), r.PathValue("action"), call.Target, call.Payload, call.IdempotencyKey, h.Now())
 		Reply(w, record, t.i18n.Said(err, t.Language(m, r)), t.localizedFieldIssues(m, issues, t.Language(m, r))...)
 	})
 	rt.handle(transport.Route{Pattern: "POST /v1/capabilities/invoke", Summary: "Route a typed call to its canonical query, action, AI or compute owner", Body: runtimeprotocol.CapabilityInvocation{}, Answer: runtimeprotocol.CapabilityResult{}}, func(w http.ResponseWriter, r *http.Request, m platform.Member, t *Tenant) {

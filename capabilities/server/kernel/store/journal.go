@@ -53,6 +53,11 @@ func DecodeVector(b []byte) []float32 {
 	return out
 }
 
+type AcceptedWrite struct {
+	Body  []byte
+	Delta *StateDelta
+}
+
 type Journals interface {
 	Store
 	BatchJournal
@@ -61,7 +66,7 @@ type Journals interface {
 	SaveSnapshot(ctx context.Context, tenant string, seq int64, code string, state []byte) error
 	RepairSnapshot(ctx context.Context, tenant string, seq int64, code string, state []byte) error
 	Snapshot(ctx context.Context, tenant, code string) (int64, []byte, bool, error)
-	AppendAccepted(ctx context.Context, tenant string, e Entry, key, hash string) ([]byte, error)
+	AppendAccepted(ctx context.Context, tenant string, e Entry, key, hash string) (*AcceptedWrite, error)
 	Close()
 }
 

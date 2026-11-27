@@ -2,6 +2,7 @@ package host
 
 import (
 	"context"
+	"go.opentelemetry.io/otel/trace"
 	"log"
 	"maps"
 	runtimekernel "platformserver/kernel"
@@ -41,7 +42,11 @@ func (t *Tenant) invalidateReadImage() {
 }
 
 func (t *Tenant) endLane() {
-	defer t.closeRecordRead()
+	defer func() {
+		t.closeRecordRead()
+		trace.SpanFromContext(t.readContext()).AddEvent("lane.release")
+		t.readScope = nil
+	}()
 	if t.readError() != nil || t.quarantined() {
 		return
 	}
@@ -54,6 +59,8 @@ func (t *Tenant) endLane() {
 	if previous := t.readImage.Load(); previous != nil && previous.epoch == epoch && previous.work == work && previous.definitions == definitions && previous.records == generation && previous.operations == operations && previous.position == position {
 		return
 	}
+	span := trace.SpanFromContext(t.readContext())
+	span.AddEvent("image.publish")
 	state, err := t.forkReadState(context.Background())
 	if err != nil {
 		monitoring.CountReadImage(context.Background(), t.ID, "unpublished")
@@ -109,9 +116,7 @@ func (t *Tenant) forkReadState(ctx context.Context) (*Tenant, error) {
 	view.words.Restore(t.words.Clone())
 	view.endpoints.Restore(t.endpoints.Saved())
 	t.outbound.CopyTo(&view.outbound)
-	if err := t.work.ForkInto(t.ID, &view.work, func(app string) bool { return view.App(app) != nil }); err != nil {
-		return nil, err
-	}
+	t.work.ForkInto(&view.work)
 	view.readScope = &recordReadScope{ctx: ctx}
 	view.readOrigin = t
 	if t.readOrigin != nil {
@@ -151,7 +156,6 @@ func (t *Tenant) forkReadState(ctx context.Context) (*Tenant, error) {
 		view.agentEvaluator = t.services.NewAgentEvaluator()
 	}
 	view.breakers = t.breakers.Fork()
-	view.work.CopyRotation(&t.work)
 	view.staged = compute.NewChannel(t.ID, view.files)
 	view.staged.Restore(t.staged.Snapshot())
 	view.Claims = t.Claims.Fork()
@@ -159,7 +163,7 @@ func (t *Tenant) forkReadState(ctx context.Context) (*Tenant, error) {
 	view.runIndex.CopyGeneration(&t.runIndex)
 	view.includeArchivedDefinitions = t.includeArchivedDefinitions
 	view.i18n = view.translator()
-	view.i18n.InstallApplications(view.definitions)
+	view.i18n.CopyApplications(&t.i18n)
 	view.AuditLog = t.AuditLog.Fork()
 	view.AuditLog.SetSink(view.readOrigin.AuditLog.Remember, view.readOrigin.AuditLog.ReadPersonal)
 	view.ObservationBuffer.CopyCounts(&t.ObservationBuffer)

@@ -58,6 +58,7 @@ export function useSavedViews({ entity, view, fallback, columnCount, filterLabel
   const [removing, setRemoving] = useState(false);
   const [failure, setFailure] = useState("");
   const [busy, setBusy] = useState(false);
+  const [prefOverride, setPrefOverride] = useState<{ baseRevision: number; view: string; pinned: boolean; preferred: boolean } | null>(null);
   const catalog = useRead<Api.Action[]>(entity ? "/v1/actions" : null);
   const views = useRead<Api.SavedView[]>(entity ? "/v1/views" : null);
   const me = useRead<Api.MeView>(entity ? "/v1/me" : null);
@@ -67,8 +68,11 @@ export function useSavedViews({ entity, view, fallback, columnCount, filterLabel
   const preferenceQuery = new URLSearchParams({ domain: JSON.stringify([["id", "=", preferenceId]]), limit: "1" });
   const preference = useRead<Api.RecordPage>(preferenceId ? `/v1/records/work.viewpreference?${preferenceQuery}` : null);
   const pref = preference.status === "ready" ? preference.data.records[0] as Preference | undefined : undefined;
+  const activeOverride = prefOverride && (pref?.revision ?? 0) <= prefOverride.baseRevision ? prefOverride : null;
+  const isPinned = (viewId: string) => activeOverride?.view === viewId ? activeOverride.pinned : Boolean(pref?.pinned?.includes(viewId));
+  const isPreferred = (viewId: string) => activeOverride?.view === viewId ? activeOverride.preferred : pref?.default === viewId;
   const visible = views.status === "ready" ? views.data.filter((candidate) => candidate.entity === entity) : [];
-  const ordered = [...visible].sort((left, right) => Number(pref?.pinned?.includes(right.id)) - Number(pref?.pinned?.includes(left.id)));
+  const ordered = [...visible].sort((left, right) => Number(isPinned(right.id)) - Number(isPinned(left.id)));
   const current = ordered.find((candidate) => candidate.id === selected);
   const owned = current?.owner === principal;
   const actions = catalog.status === "ready" ? catalog.data : [];
@@ -120,8 +124,8 @@ export function useSavedViews({ entity, view, fallback, columnCount, filterLabel
       title: current.title,
       scope: (current.share as Scope | undefined) ?? "self",
       project: current.project ?? "",
-      pinned: Boolean(pref?.pinned?.includes(current.id)),
-      preferred: pref?.default === current.id,
+      pinned: isPinned(current.id),
+      preferred: isPreferred(current.id),
     });
   };
   const saveEdit = (draft: Draft, state?: string) =>
@@ -134,10 +138,12 @@ export function useSavedViews({ entity, view, fallback, columnCount, filterLabel
         await send(shareAction, current.id, { scope: draft.scope, project: draft.scope === "project" ? draft.project : "" }, current.revision + (draft.title.trim() !== current.title || state ? 1 : 0));
       }
       if (preferenceAction && preferenceId) {
-        const pinned = Boolean(pref?.pinned?.includes(current.id));
-        const preferred = pref?.default === current.id;
+        const pinned = isPinned(current.id);
+        const preferred = isPreferred(current.id);
         if (draft.pinned !== pinned || (draft.preferred && !preferred)) {
-          await send(preferenceAction, preferenceId, { view: current.id, ...(draft.pinned !== pinned ? { pinned: draft.pinned } : {}), ...(draft.preferred && !preferred ? { default: true } : {}) }, pref?.revision ?? 0);
+          const baseRevision = pref?.revision ?? 0;
+          await send(preferenceAction, preferenceId, { view: current.id, ...(draft.pinned !== pinned ? { pinned: draft.pinned } : {}), ...(draft.preferred && !preferred ? { default: true } : {}) }, baseRevision);
+          setPrefOverride({ baseRevision, view: current.id, pinned: draft.pinned, preferred: draft.preferred || preferred });
         }
       }
       setEditing(null);

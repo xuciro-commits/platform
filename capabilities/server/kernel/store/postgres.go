@@ -10,6 +10,7 @@ import (
 	"errors"
 	"fmt"
 	pgx "github.com/jackc/pgx/v5"
+	"go.opentelemetry.io/otel/trace"
 	"io"
 	"log"
 	"platformserver/kernel/protocol"
@@ -345,7 +346,9 @@ func (j *Postgres) Snapshot(ctx context.Context, tenant, code string) (int64, []
 	return seq, state, true, nil
 }
 
-func (j *Postgres) AppendAccepted(ctx context.Context, tenant string, e Entry, key, hash string) ([]byte, error) {
+func (j *Postgres) AppendAccepted(ctx context.Context, tenant string, e Entry, key, hash string) (*AcceptedWrite, error) {
+	span := trace.SpanFromContext(ctx)
+	span.AddEvent("storage.identify")
 	identity, err := j.identify(e.Body)
 	if err != nil || e.Kind != "accepted-result" || identity.Tenant != tenant || identity.App != e.App ||
 		identity.Key != key {
@@ -354,16 +357,11 @@ func (j *Postgres) AppendAccepted(ctx context.Context, tenant string, e Entry, k
 	if identity.Hash != hash {
 		return nil, ErrAcceptedConflict
 	}
-	j.mu.Lock()
-	lock := j.locks[tenant]
-	if lock == nil {
-		lock = &sync.Mutex{}
-		j.locks[tenant] = lock
-	}
-	j.mu.Unlock()
+	span.AddEvent("storage.mutex.wait")
+	lock := j.batchTenantLock(tenant)
 	lock.Lock()
 	defer lock.Unlock()
-	read := func() ([]byte, error) {
+	read := func() (*AcceptedWrite, error) {
 		var raw []byte
 		var priorHash string
 		var priorPosition int64
@@ -378,7 +376,7 @@ func (j *Postgres) AppendAccepted(ctx context.Context, tenant string, e Entry, k
 				return nil, ErrAcceptedConflict
 			}
 			advance()
-			return raw, nil
+			return &AcceptedWrite{Body: raw}, nil
 		}
 		if !errors.Is(lookupErr, pgx.ErrNoRows) {
 			return nil, lookupErr
@@ -403,7 +401,7 @@ func (j *Postgres) AppendAccepted(ctx context.Context, tenant string, e Entry, k
 			return nil, ErrAcceptedConflict
 		}
 		advance()
-		return raw, nil
+		return &AcceptedWrite{Body: raw}, nil
 	}
 	j.mu.Lock()
 	seq, ok := j.next[tenant]
@@ -414,16 +412,19 @@ func (j *Postgres) AppendAccepted(ctx context.Context, tenant string, e Entry, k
 		}
 		return nil, fmt.Errorf("journal: append to %s before reading its entries", tenant)
 	}
+	span.AddEvent("storage.begin")
 	tx, err := j.pool.Begin(ctx)
 	if err != nil {
 		return nil, err
 	}
 	defer tx.Rollback(ctx)
+	span.AddEvent("storage.advisory_lock")
 	if _, err = tx.Exec(ctx, `select pg_advisory_xact_lock(hashtext($1),63)`, tenant); err != nil {
 		return nil, err
 	}
 	var active bool
 	var statePosition int64
+	span.AddEvent("storage.position_lock")
 	stateErr := tx.QueryRow(ctx, `select seq from runtime_tenants where tenant=$1 for update`, tenant).Scan(&statePosition)
 	if stateErr == nil {
 		active = true
@@ -438,6 +439,8 @@ func (j *Postgres) AppendAccepted(ctx context.Context, tenant string, e Entry, k
 		return nil, stateErr
 	}
 	var saved []byte
+	var committedDelta *StateDelta
+	span.AddEvent("storage.journal")
 	err = tx.QueryRow(ctx, `insert into journal (tenant, seq, app, kind, principal, body, at, versions, epoch)
 	select $1,$2,$3,$4,$5,$6,$7,$8,$9 where not exists
 	(select 1 from runtime_results where tenant=$1 and app=$3 and scope=$10 and key=$11)
@@ -456,10 +459,13 @@ func (j *Postgres) AppendAccepted(ctx context.Context, tenant string, e Entry, k
 		if j.Delta == nil {
 			return nil, fmt.Errorf("tenant %s has no state delta owner", tenant)
 		}
+		span.AddEvent("storage.delta")
 		delta, err := j.Delta(saved)
 		if err != nil {
 			return nil, err
 		}
+		committedDelta = &delta
+		span.AddEvent("storage.write_state")
 		if err = j.writeState(ctx, tx, tenant, seq, delta); err != nil {
 			return nil, err
 		}
@@ -470,6 +476,7 @@ func (j *Postgres) AppendAccepted(ctx context.Context, tenant string, e Entry, k
 			return nil, err
 		}
 	}
+	span.AddEvent("storage.commit")
 	if err = tx.Commit(ctx); err != nil {
 		if prior, lookupErr := read(); lookupErr == nil && prior != nil {
 			j.mu.Lock()
@@ -486,7 +493,7 @@ func (j *Postgres) AppendAccepted(ctx context.Context, tenant string, e Entry, k
 	j.mu.Lock()
 	j.next[tenant] = seq + 1
 	j.mu.Unlock()
-	return saved, nil
+	return &AcceptedWrite{Body: saved, Delta: committedDelta}, nil
 }
 
 func (j *Postgres) Close() { j.readPool.Close(); j.pool.Close() }
@@ -700,11 +707,6 @@ func (j *Postgres) SaveAuditEntries(tenant string, entries []protocol.AuditEntry
 		return nil
 	}
 	ctx := context.Background()
-	tx, err := j.pool.Begin(ctx)
-	if err != nil {
-		return err
-	}
-	defer tx.Rollback(ctx)
 	batch := &pgx.Batch{}
 	for _, entry := range entries {
 		entry = normalizeAuditEntry(entry)
@@ -715,17 +717,7 @@ func (j *Postgres) SaveAuditEntries(tenant string, entries []protocol.AuditEntry
 			values ($1,$2,$3,$4,$5,$6,$7) on conflict (tenant, id) do nothing`,
 			tenant, entry.ID, entry.At, entry.Member, entry.App, entry.Action, entry.Target)
 	}
-	results := tx.SendBatch(ctx, batch)
-	for range entries {
-		if _, err := results.Exec(); err != nil {
-			results.Close()
-			return err
-		}
-	}
-	if err := results.Close(); err != nil {
-		return err
-	}
-	return tx.Commit(ctx)
+	return j.pool.SendBatch(ctx, batch).Close()
 }
 
 func (j *Postgres) QueryAuditEntries(query protocol.AuditQuery) (protocol.AuditPage, error) {

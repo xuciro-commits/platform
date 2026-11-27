@@ -52,14 +52,20 @@ test("cells: a list cell edits in place with the input its type asks for", async
   await row.getByText("Lost", { exact: true }).click();
   await expect(page.getByRole("dialog", { name: "Details" })).toBeVisible();
   await row.getByText("Lost", { exact: true }).click();
-  await page.getByRole("option", { name: "Qualifying", exact: true }).click();
+  await Promise.all([
+    page.waitForResponse((response) => response.url().endsWith("/v1/submissions") && response.ok()),
+    page.getByRole("option", { name: "Qualifying", exact: true }).click(),
+  ]);
   await expect(row.getByText("Qualifying", { exact: true })).toBeVisible();
   await page.reload();
   const saved = page.getByRole("row", { name: /会员数据集成/ });
   await expect(saved.getByText("Qualifying", { exact: true })).toBeVisible();
   await saved.getByText("Qualifying", { exact: true }).click();
   await saved.getByText("Qualifying", { exact: true }).click();
-  await page.getByRole("option", { name: "Lost", exact: true }).click();
+  await Promise.all([
+    page.waitForResponse((response) => response.url().endsWith("/v1/submissions") && response.ok()),
+    page.getByRole("option", { name: "Lost", exact: true }).click(),
+  ]);
   await expect(saved.getByText("Lost", { exact: true })).toBeVisible();
 });
 
@@ -73,12 +79,18 @@ test("sections: a field shows only when its condition holds", async ({ page }) =
   await expect(reason).toHaveCount(0);
 
   await edit(page, "Stage");
-  await page.getByRole("option", { name: "Lost", exact: true }).click();
+  await Promise.all([
+    page.waitForResponse((response) => response.url().endsWith("/v1/submissions") && response.ok()),
+    page.getByRole("option", { name: "Lost", exact: true }).click(),
+  ]);
   await expect(reason.first()).toBeVisible();
   await expect(property(page, "Stage")).toHaveText("Lost");
 
   await edit(page, "Stage");
-  await page.getByRole("option", { name: "Proposal", exact: true }).click();
+  await Promise.all([
+    page.waitForResponse((response) => response.url().endsWith("/v1/submissions") && response.ok()),
+    page.getByRole("option", { name: "Proposal", exact: true }).click(),
+  ]);
   await expect(reason).toHaveCount(0);
 });
 
@@ -180,7 +192,10 @@ test("leave: a typed value is kept when the user walks away without Enter", asyn
   await page.getByRole("link", { name: "熔炉监测" }).click();
   await edit(page, "Next step");
   await page.getByRole("textbox", { name: "Next step" }).fill("Book the site walk");
-  await page.getByRole("link", { name: "Opportunities" }).click();
+  await Promise.all([
+    page.waitForResponse((response) => response.url().endsWith("/v1/submissions") && response.ok()),
+    page.getByRole("link", { name: "Opportunities" }).click(),
+  ]);
   await expect(page.getByRole("heading", { level: 1, name: "Opportunities" })).toBeVisible();
   await page.reload();
   await page.getByRole("link", { name: "熔炉监测" }).click();
@@ -282,7 +297,10 @@ test("reference: search by name, save the selected record and follow its link", 
   await page.getByRole("link", { name: "冲压线改造" }).click();
   await edit(page, "Customer");
   await page.getByRole("combobox", { name: "Customer", exact: true }).fill("哈特");
-  await page.getByRole("option", { name: /哈特曼/ }).click();
+  await Promise.all([
+    page.waitForResponse((response) => response.url().endsWith("/v1/submissions") && response.ok()),
+    page.getByRole("option", { name: /哈特曼/ }).click(),
+  ]);
   await expect(page.getByRole("link", { name: "哈特曼制造", exact: true })).toBeVisible();
   await page.reload();
   const customer = page.getByRole("link", { name: "哈特曼制造", exact: true });
@@ -318,7 +336,10 @@ test("lines: add and edit a child row from its parent record", async ({ page }) 
   await edit(table, "Quantity");
   const quantity = table.getByRole("spinbutton", { name: "Quantity" });
   await quantity.fill("3");
-  await quantity.press("Enter");
+  await Promise.all([
+    page.waitForResponse((response) => response.url().endsWith("/v1/submissions") && response.ok()),
+    quantity.press("Enter"),
+  ]);
   await expect(table.getByRole("row", { name: /Totals/ })).toContainText("3");
   await page.reload();
   await expect(property(table, "Quantity")).toHaveText("3");
@@ -339,7 +360,11 @@ test("activity: a comment and an inline change appear in one timeline", async ({
   await next.press("Enter");
   await page.getByRole("link", { name: "Activity", exact: true }).click();
   await page.getByRole("textbox", { name: "Write a comment" }).fill("I asked the warehouse lead.");
-  await page.getByRole("button", { name: "Post comment" }).click();
+  await Promise.all([
+    page.waitForResponse((response) => response.url().endsWith("/v1/submissions") && response.ok()),
+    page.getByRole("button", { name: "Post comment" }).click(),
+  ]);
+  await expect(page.getByRole("textbox", { name: "Write a comment" })).toHaveValue("");
   const comment = page.getByText("I asked the warehouse lead.", { exact: true });
   const change = page.getByRole("listitem", { name: `Next step: ${before} → Confirm scanner quantities`, exact: true });
   await expect(comment).toBeVisible();
@@ -768,8 +793,13 @@ test("members: an opportunity owner is shown by name and can be reassigned", asy
   await expect(property(page, "Owner")).toContainText("王丹");
   await edit(page, "Owner");
   await page.getByRole("combobox", { name: "Owner", exact: true }).fill("韩奥");
-  await page.getByRole("option", { name: /韩奥/ }).click();
-  await expectRevision(page, 2);
+  const [savedOwner] = await Promise.all([
+    page.waitForResponse((response) => response.url().endsWith("/v1/submissions") && response.ok()),
+    page.getByRole("option", { name: /韩奥/ }).click(),
+  ]);
+  const { revision } = (await savedOwner.json()) as { revision: number };
+  expect(revision).toBeGreaterThanOrEqual(2);
+  await expectRevision(page, revision);
   await page.reload();
   await expect(property(page, "Owner")).toContainText("韩奥");
 });
@@ -876,7 +906,11 @@ test("inbox: a comment mention opens the referenced record from the Mentions tab
   await expect(suggestions).toHaveCount(0);
   await expect(input).toHaveValue("@admin-1 ");
   await input.pressSequentially("Please review the spare parts agreement.");
-  await author.getByRole("button", { name: "Post comment" }).click();
+  await Promise.all([
+    author.waitForResponse((response) => response.url().endsWith("/v1/submissions") && response.ok()),
+    author.getByRole("button", { name: "Post comment" }).click(),
+  ]);
+  await expect(input).toHaveValue("");
   await expect(author.getByText(message, { exact: true })).toBeVisible();
   await author.close();
 

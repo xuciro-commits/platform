@@ -1,6 +1,7 @@
 package kernel
 
 import (
+	"context"
 	"errors"
 	"fmt"
 
@@ -11,7 +12,7 @@ import (
 
 func (s *Sequence) Recording() bool { return s.AcceptResult != nil || s.Record != nil }
 
-func (s *Sequence) Accept(entry persistence.Entry, key, hash string, delta func([]byte) (persistence.StateDelta, error), quarantine func(error)) ([]byte, error) {
+func (s *Sequence) Accept(ctx context.Context, entry persistence.Entry, key, hash string, delta func([]byte) (persistence.StateDelta, error), quarantine func(error)) ([]byte, error) {
 	entry.Epoch = persistence.FormatEpoch
 	if s.AcceptResult == nil {
 		if s.Record != nil {
@@ -24,19 +25,26 @@ func (s *Sequence) Accept(entry persistence.Entry, key, hash string, delta func(
 		before = s.RuntimePosition()
 		s.Committed.ReleasePending()
 	}
-	raw, err := s.AcceptResult(entry, key, hash)
+	saved, err := s.AcceptResult(ctx, entry, key, hash)
 	if err != nil && (errors.Is(err, persistence.ErrCommitUnknown) || s.RuntimePosition != nil && s.RuntimePosition() > before) {
 		quarantine(fmt.Errorf("accepted result commit could not be resolved: %w", err))
 	}
-	if err == nil && s.RuntimePosition != nil && s.RuntimePosition() > before {
-		state, decodeErr := delta(raw)
-		if decodeErr != nil {
-			quarantine(fmt.Errorf("committed state delta: %w", decodeErr))
-			return nil, decodeErr
-		}
-		s.Committed.HoldPending(state)
+	if err != nil {
+		return nil, err
 	}
-	return raw, err
+	if s.Committed.storage != nil && s.RuntimePosition != nil && s.RuntimePosition() > before {
+		state := saved.Delta
+		if state == nil {
+			recovered, err := delta(saved.Body)
+			if err != nil {
+				quarantine(fmt.Errorf("committed state delta: %w", err))
+				return nil, err
+			}
+			state = &recovered
+		}
+		s.Committed.HoldPending(*state)
+	}
+	return saved.Body, nil
 }
 
 func (s *Sequence) AcceptBatch(batch []persistence.AcceptedAppend, quarantine func(error)) ([][]byte, error) {

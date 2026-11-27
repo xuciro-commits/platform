@@ -40,6 +40,20 @@ func ReferenceContinues(e platform.Event) bool {
 	return strings.HasPrefix(key, "reference:") && protocol.Continues(key)
 }
 
+func ReferenceSeed(e platform.Event) (string, bool, bool) {
+	key := strings.TrimSuffix(e.Record.GetSubmission().GetIdempotencyKey(), protocol.ContinuationSuffix)
+	if !strings.HasPrefix(key, "reference:") || !protocol.Continues(e.Record.GetSubmission().GetIdempotencyKey()) {
+		return "", false, false
+	}
+	if _, pkg, ok := strings.Cut(key, "?install="); ok && pkg != "" {
+		return pkg, true, true
+	}
+	if _, pkg, ok := strings.Cut(key, "?seed="); ok && pkg != "" {
+		return pkg, false, true
+	}
+	return "", false, false
+}
+
 func FillsReference(names []string) bool {
 	return slices.ContainsFunc(names, func(name string) bool { return slices.Contains(referenceEvents, name) })
 }
@@ -77,10 +91,10 @@ func CheckReferenceRecords(o *Object) *platform.Error {
 	return nil
 }
 
-func FillReference(c platform.Caller, lang string, model func(string) (reflect.Type, bool), submit func(*pb.Submission) *platform.Error) *platform.Error {
+func FillReference(c platform.Caller, lang, continuationTag string, model func(string) (reflect.Type, bool), submit func(*pb.Submission) *platform.Error) (bool, *platform.Error) {
 	found, _, refusal := platform.Find[Object](c, platform.Query{Limit: 500})
 	if refusal != nil {
-		return refusal
+		return false, refusal
 	}
 	var pending []*pb.Submission
 	for _, object := range found {
@@ -113,16 +127,17 @@ func FillReference(c platform.Caller, lang string, model func(string) (reflect.T
 				Target: &pb.EntityRef{Type: typ, Id: id}, Schema: &pb.SchemaRef{Name: typ + ".create", Version: 1}, Payload: platform.Raw(values)})
 		}
 	}
-	if len(pending) > ReferenceGroup {
+	more := len(pending) > ReferenceGroup
+	if more {
 		pending = pending[:ReferenceGroup]
-		pending[len(pending)-1].IdempotencyKey += protocol.ContinuationSuffix
+		pending[len(pending)-1].IdempotencyKey += continuationTag + protocol.ContinuationSuffix
 	}
 	for _, s := range pending {
 		if refusal := submit(s); refusal != nil {
-			return refusal
+			return false, refusal
 		}
 	}
-	return nil
+	return more, nil
 }
 
 func FillSeed(c platform.Caller, pkgID string, seeds []json.RawMessage, demo bool, now time.Time, model func(string) (reflect.Type, bool), submit func(*pb.Submission) *platform.Error) *platform.Error {

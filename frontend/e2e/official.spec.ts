@@ -217,7 +217,10 @@ test("official tenant: an extension project adds fields, an action and columns t
   await edit(page, "Source channel");
   const channelInput = page.getByRole("textbox", { name: "Source channel", exact: true });
   await channelInput.fill("行业峰会");
-  await channelInput.press("Enter");
+  await Promise.all([
+    page.waitForResponse((response) => response.url().endsWith("/v1/submissions") && response.ok()),
+    channelInput.press("Enter"),
+  ]);
   await expect(property(page, "Source channel")).toContainText("行业峰会");
 
   await page.getByRole("button", { name: "More actions", exact: true }).click();
@@ -301,7 +304,10 @@ test("official tenant: CRM upgrades to the next authoritative version and retain
   await edit(page, "Company");
   const company = page.getByRole("textbox", { name: "Company", exact: true });
   await company.fill("升级演练公司");
-  await company.press("Enter");
+  await Promise.all([
+    page.waitForResponse((response) => response.url().endsWith("/v1/submissions") && response.ok()),
+    company.press("Enter"),
+  ]);
   await expect(property(page, "Company")).toContainText("升级演练公司");
 
   await as("admin-1");
@@ -317,7 +323,9 @@ test("official tenant: CRM upgrades to the next authoritative version and retain
   await expect(extItem).toContainText("Shape compatible");
   await expect(extItem).toContainText("sourcechannel, verifiednote");
   await expect(extItem).toContainText("OK");
-  await review.getByRole("button", { name: "Upgrade package", exact: true }).click();
+  const upgrade = review.getByRole("button", { name: "Upgrade package", exact: true });
+  await expect(upgrade).toBeEnabled({ timeout: 30_000 });
+  await upgrade.click();
   await expect(review).toBeHidden({ timeout: 60_000 });
   await page.goto("/delivery/installations");
   await expect(page.getByRole("listitem").filter({ hasText: /^CRM/ })).toContainText(input("crm-next").version);
@@ -328,7 +336,10 @@ test("official tenant: CRM upgrades to the next authoritative version and retain
   await edit(page, "LinkedIn");
   const linked = page.getByRole("textbox", { name: "LinkedIn", exact: true });
   await linked.fill("https://linkedin.com/in/upgrade-001");
-  await linked.press("Enter");
+  await Promise.all([
+    page.waitForResponse((response) => response.url().endsWith("/v1/submissions") && response.ok()),
+    linked.press("Enter"),
+  ]);
   await expect(property(page, "LinkedIn")).toContainText("upgrade-001");
   await page.reload();
   await expect(property(page, "LinkedIn")).toContainText("upgrade-001");

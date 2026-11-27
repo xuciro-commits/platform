@@ -50,6 +50,7 @@ type Processes interface {
 	Validate(a platform.Service, fl platform.Flow) error
 	HasRunningDependency(typ string) (bool, error)
 	HasUnboundRunningDependency(typ string) (bool, error)
+	UnboundRunningClosures(typ string) (map[string][]string, error)
 	Check() error
 	Versions() map[string]int
 	Pin(versions map[string]int)

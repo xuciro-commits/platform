@@ -1,6 +1,7 @@
 package kernel
 
 import (
+	"context"
 	"sync/atomic"
 	"time"
 
@@ -32,7 +33,7 @@ type Sequence struct {
 	SnapshotPosition  int64
 	RuntimePosition   func() int64
 	Record            func(persistence.Entry)
-	AcceptResult      func(persistence.Entry, string, string) ([]byte, error)
+	AcceptResult      func(context.Context, persistence.Entry, string, string) (*persistence.AcceptedWrite, error)
 	AcceptResults     func([]persistence.AcceptedAppend) ([][]byte, error)
 }
 

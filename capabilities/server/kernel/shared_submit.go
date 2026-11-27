@@ -7,17 +7,18 @@ import (
 	"platformserver/platform"
 )
 
-func (s *Sequence) ActionOwner(owner, authority platform.Service, key string) (platform.Service, *platform.Error) {
+func (s *Sequence) SubmissionPrior(owner, authority platform.Service, key string) (platform.Service, Prior, *platform.Error) {
 	if owner != nil {
-		return owner, nil
+		return owner, s.PriorOf(owner, key), nil
 	}
 	if authority == nil {
-		return nil, &platform.Error{Code: pb.ErrorCode_ERROR_CODE_UNKNOWN_SCHEMA}
+		return nil, Prior{}, &platform.Error{Code: pb.ErrorCode_ERROR_CODE_UNKNOWN_SCHEMA}
 	}
-	if !s.PriorOf(authority, key).Known() {
-		return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_UNKNOWN_SCHEMA, "The action definition is unavailable; refresh definitions")
+	prior := s.PriorOf(authority, key)
+	if !prior.Known() {
+		return nil, Prior{}, platform.Refuse(pb.ErrorCode_ERROR_CODE_UNKNOWN_SCHEMA, "The action definition is unavailable; refresh definitions")
 	}
-	return authority, nil
+	return authority, prior, nil
 }
 
 func SubmitTo(c platform.Caller, owner platform.Service, missing *platform.Error, s *pb.Submission, at time.Time) (*pb.ChangeRecord, *platform.Error) {

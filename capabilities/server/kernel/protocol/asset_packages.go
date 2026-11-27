@@ -199,14 +199,15 @@ type PackageRemoval struct {
 }
 
 type PackageState struct {
-	Packages  map[string]*InstalledPackage
-	Sources   map[string]PackageSource
-	Libraries map[string]PackageLibrary
+	Packages     map[string]*InstalledPackage
+	Sources      map[string]PackageSource
+	Libraries    map[string]PackageLibrary
+	FlowClosures map[string][]string
 }
 
 type PackageHost interface {
 	PackageLifecycleImpact(platform.Caller, string, []platform.ReleaseAsset) (platform.PackageLifecycleImpact, error)
-	PrepareManagedPackage(platform.Caller, platform.PackageDescriptor, []platform.ReleaseAsset, bool, bool, bool) (func(*pb.ChangeRecord), *platform.Error)
+	PrepareManagedPackage(platform.Caller, platform.PackageDescriptor, []platform.ReleaseAsset, bool, bool, bool) (func(*pb.ChangeRecord), map[string][]string, *platform.Error)
 	Apps() []platform.Service
 	CodeReleaseAssets() ([]platform.ReleaseAsset, error)
 	PutPackageArtifact(string, []byte) error
@@ -228,6 +229,7 @@ type ConsolePackages interface {
 	PackageViews() []PackageView
 	PackageLibraries() []PackageLibrary
 	Contributions() []Contribution
+	HasRetainedFlowClosure(platform.AssetRef, int, string) bool
 	Precheck(platform.PackageDescriptor) Precheck
 	Offer(string) (Offer, error)
 	PreparationBlueprint(string, string) (platform.PackageBlueprint, *InstalledPackage, error)

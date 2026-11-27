@@ -148,8 +148,8 @@ func TestFileAcceptedIdentitySurvivesReopen(t *testing.T) {
 		for _, pair := range [][2]string{{"one|two", "three"}, {"one", "two|three"}} {
 			e := benchmarkEntry(tenant, pair[0], pair[1], "h")
 			body, err := j.AppendAccepted(ctx, tenant, e, pair[1], "h")
-			if err != nil || !bytes.Equal(body, e.Body) {
-				t.Fatalf("retry: %s %v", body, err)
+			if err != nil || !bytes.Equal(body.Body, e.Body) {
+				t.Fatalf("retry: %v %v", body, err)
 			}
 			e = benchmarkEntry(tenant, pair[0], pair[1], "new")
 			if _, err = j.AppendAccepted(ctx, tenant, e, pair[1], "new"); !errors.Is(err, ErrAcceptedConflict) {

@@ -6,7 +6,7 @@ import (
 	"errors"
 	"fmt"
 	pgx "github.com/jackc/pgx/v5"
-
+	"slices"
 	"sync"
 	"time"
 )
@@ -16,17 +16,21 @@ type stateQueries interface {
 	QueryRow(context.Context, string, ...any) pgx.Row
 }
 
-const pointReadMemory = 4096
+const (
+	pointReadMemory = 4096
+	firstPageMemory = 512
+)
 
 type postgresStateRead struct {
-	mu       sync.Mutex
-	tx       pgx.Tx
-	ctx      context.Context
-	tenant   string
-	position int64
-	stop     func() bool
-	closed   bool
-	records  map[[2]string]StateCurrent
+	mu              sync.Mutex
+	tx              pgx.Tx
+	ctx             context.Context
+	tenant          string
+	position        int64
+	stop            func() bool
+	closed          bool
+	records         map[[2]string]StateCurrent
+	firstCandidates map[string][]string
 }
 
 func (j *Postgres) BeginStateRead(ctx context.Context, tenant string, expected int64) (StateReadView, error) {
@@ -127,8 +131,17 @@ func (v *postgresStateRead) StateCurrents(ctx context.Context, tenant, typ strin
 		if err != nil {
 			return nil, err
 		}
-		for id, current := range found {
-			out[id] = current
+		for _, id := range missing {
+			current := found[id]
+			if len(current.Image) != 0 {
+				out[id] = current
+			}
+			if len(v.records) < pointReadMemory {
+				if v.records == nil {
+					v.records = map[[2]string]StateCurrent{}
+				}
+				v.records[[2]string{typ, id}] = current
+			}
 		}
 		return out, nil
 	})
@@ -173,7 +186,20 @@ func (v *postgresStateRead) StateCandidates(ctx context.Context, tenant, typ str
 		if applied != v.position {
 			return nil, fmt.Errorf("candidate position %d differs from read view %d", applied, v.position)
 		}
-		return stateCandidates(ctx, db, tenant, typ, filters, after, limit, -1)
+		cacheable := len(filters) == 0 && after == "" && limit == 256
+		if cacheable {
+			if cached, ok := v.firstCandidates[typ]; ok {
+				return slices.Clone(cached), nil
+			}
+		}
+		ids, err := stateCandidates(ctx, db, tenant, typ, filters, after, limit, -1)
+		if err == nil && cacheable && len(v.firstCandidates) < firstPageMemory {
+			if v.firstCandidates == nil {
+				v.firstCandidates = map[string][]string{}
+			}
+			v.firstCandidates[typ] = slices.Clone(ids)
+		}
+		return ids, err
 	})
 }
 func (v *postgresStateRead) StateUnique(ctx context.Context, tenant, typ, rule, key string, applied int64) ([]string, error) {

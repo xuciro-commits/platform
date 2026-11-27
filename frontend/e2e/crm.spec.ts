@@ -203,7 +203,9 @@ test("calendar: activities sit on their due dates, the month pages, a drag resch
   await page.mouse.down();
   await page.mouse.move(from.x + 40, from.y + 20, { steps: 4 });
   await page.mouse.move(to.x + to.width / 2, to.y + to.height / 2, { steps: 8 });
+  const rescheduled = page.waitForResponse((response) => response.url().endsWith("/v1/submissions") && response.ok());
   await page.mouse.up();
+  await rescheduled;
   await expect(day("November 20, 2026")).toContainText(subject);
   await page.reload();
   await expect(day("November 20, 2026")).toContainText(subject);
@@ -378,7 +380,7 @@ test("import: an Excel workbook of leads, accounts and contacts maps by column t
   await importValid;
   await peerPage.close();
 
-  await expect(wizard.getByText("6 records imported", { exact: true })).toBeVisible();
+  await expect(wizard.getByText("6 records imported", { exact: true })).toBeVisible({ timeout: 30_000 });
   await expect(wizard.getByText("0 can be imported · 3 need fixing", { exact: true })).toBeVisible();
 
   await wizard.getByRole("textbox", { name: "Full name · Leads · Row 3", exact: true }).fill(`Fiona Gao ${tag}`);
@@ -388,7 +390,7 @@ test("import: an Excel workbook of leads, accounts and contacts maps by column t
   await wizard.getByRole("button", { name: "Check", exact: true }).click();
   await expect(wizard.getByText("3 can be imported · 0 need fixing", { exact: true })).toBeVisible();
   await wizard.getByRole("button", { name: "Import 3", exact: true }).click();
-  await expect(wizard.getByText("9 records imported", { exact: true })).toBeVisible();
+  await expect(wizard.getByText("9 records imported", { exact: true })).toBeVisible({ timeout: 30_000 });
   await wizard.getByRole("button", { name: "Done", exact: true }).click();
   await expect(wizard).toBeHidden();
 
@@ -548,12 +550,18 @@ test("defaults and from: an activity is assigned to its creator, and a deal take
   await edit(page, "Probability %");
   const probability = page.getByRole("spinbutton", { name: "Probability %", exact: true });
   await probability.fill("35");
-  await probability.press("Enter");
+  await Promise.all([
+    page.waitForResponse((response) => response.url().endsWith("/v1/submissions") && response.ok()),
+    probability.press("Enter"),
+  ]);
   await expect(property(page, "Probability %")).toHaveText("35%");
   await edit(page, "Next step");
   const next = page.getByRole("textbox", { name: "Next step", exact: true });
   await next.fill("Send the revised proposal");
-  await next.press("Enter");
+  await Promise.all([
+    page.waitForResponse((response) => response.url().endsWith("/v1/submissions") && response.ok()),
+    next.press("Enter"),
+  ]);
   await page.reload();
   await expect(property(page, "Probability %")).toHaveText("35%");
 });

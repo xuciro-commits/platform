@@ -21,19 +21,35 @@ var uniqueStateSchema = []string{
 }
 
 func (j *Postgres) writeUnique(ctx context.Context, tx pgx.Tx, tenant string, position int64, replacements []StateUnique) error {
+	var batch pgx.Batch
+	flush := func() error {
+		if batch.Len() == 0 {
+			return nil
+		}
+		err := tx.SendBatch(ctx, &batch).Close()
+		batch = pgx.Batch{}
+		return err
+	}
+	queue := func(sql string, args ...any) error {
+		batch.Queue(sql, args...)
+		if batch.Len() == 256 {
+			return flush()
+		}
+		return nil
+	}
 	for _, row := range replacements {
-		if _, err := tx.Exec(ctx, `delete from runtime_unique where tenant=$1 and type=$2 and id=$3`, tenant, row.Type, row.ID); err != nil {
+		if err := queue(`delete from runtime_unique where tenant=$1 and type=$2 and id=$3`, tenant, row.Type, row.ID); err != nil {
 			return err
 		}
 		for _, rule := range slices.Sorted(maps.Keys(row.Keys)) {
 			key := row.Keys[rule]
 			digest := sha256.Sum256([]byte(key))
-			if _, err := tx.Exec(ctx, `insert into runtime_unique(tenant,type,id,rule,key,key_hash,seq) values($1,$2,$3,$4,$5,$6,$7)`, tenant, row.Type, row.ID, rule, key, digest[:], position); err != nil {
+			if err := queue(`insert into runtime_unique(tenant,type,id,rule,key,key_hash,seq) values($1,$2,$3,$4,$5,$6,$7)`, tenant, row.Type, row.ID, rule, key, digest[:], position); err != nil {
 				return err
 			}
 		}
 	}
-	return nil
+	return flush()
 }
 
 func (j *Postgres) StateUnique(ctx context.Context, tenant, typ, rule, key string, applied int64) ([]string, error) {
