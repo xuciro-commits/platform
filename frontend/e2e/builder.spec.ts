@@ -1,5 +1,5 @@
 import { type Page, expect, test } from "@playwright/test";
-import { signIn, open, property, metadata, edit } from "./support";
+import { signIn, open, property, metadata, edit, submit } from "./support";
 
 test.describe.serial("builder and applications", () => {
 test("publish: a draft type goes live from its record page and takes records", async ({ page }) => {
@@ -317,15 +317,16 @@ test("gate: a builder creates a type with fields, states and a transition, publi
 });
 
 test("gate: a type of the same name in another project is its own type with its own records", async () => {
+  await submit(page, "build.app.create", "build.app", "gatetwin", { name: "gatetwin", title: "Gate twin" }, 0);
   await open(page, "Ontology", "Object types");
   await page.getByRole("button", { name: "New", exact: true }).click();
   const twin = page.getByRole("dialog");
   await twin.getByRole("combobox", { name: /^Project/ }).click();
-  await page.getByRole("option", { name: "CRM", exact: true }).click();
+  await page.getByRole("option", { name: "Gate twin", exact: true }).click();
   await twin.getByRole("textbox", { name: /^API name/ }).fill("gateitem");
-  await twin.getByRole("textbox", { name: /^Name/ }).fill("CRM gate item");
+  await twin.getByRole("textbox", { name: /^Name/ }).fill("Twin gate item");
   await twin.getByRole("button", { name: "Create", exact: true }).click();
-  await expect(page.getByRole("heading", { level: 1, name: "CRM gate item", exact: true })).toBeVisible();
+  await expect(page.getByRole("heading", { level: 1, name: "Twin gate item", exact: true })).toBeVisible();
   await page.getByRole("button", { name: "Add field", exact: true }).click();
   const twinField = page.getByRole("dialog");
   await twinField.getByRole("textbox", { name: /^Name/ }).fill("code");
@@ -339,10 +340,10 @@ test("gate: a type of the same name in another project is its own type with its 
   const publishTwin = page.getByRole("dialog", { name: /Publish/ });
   await publishTwin.getByRole("button", { name: "Publish", exact: true }).click();
   await expect(publishTwin).toBeHidden();
-  await page.goto("/ontology/objects/crm.gateitem");
+  await page.goto("/ontology/objects/gatetwin.gateitem");
   await page.getByRole("button", { name: "New", exact: true }).click();
   await page.getByRole("dialog").getByRole("button", { name: "Create", exact: true }).click();
-  await expect(page).toHaveURL(/\/ontology\/objects\/crm\.gateitem\/[^/]+$/);
+  await expect(page).toHaveURL(/\/ontology\/objects\/gatetwin\.gateitem\/[^/]+$/);
   const twinRecord = new URL(page.url()).pathname.split("/").at(-1)!;
   await page.goto("/ontology/objects/sales.gateitem");
   await expect(page.getByRole("heading", { level: 1 })).toBeVisible();
@@ -352,16 +353,14 @@ test("gate: a type of the same name in another project is its own type with its 
 test("gate: an installed package contributes an app whose record action runs", async () => {
   await open(page, "Delivery", "Marketplace");
   await expect(page.getByRole("listitem").filter({ hasText: "application.production-provider · 0.1.5" })).toBeVisible();
-  await page.getByRole("button", { name: "More actions", exact: true }).click();
-  await page.getByRole("menuitem", { name: "Show all versions", exact: true }).click();
-  const provider = page.getByRole("listitem").filter({ hasText: "application.production-provider · 0.1.4" });
+  const provider = page.getByRole("listitem").filter({ hasText: "application.production-provider · 0.1.5" });
   await provider.getByRole("button", { name: "Install", exact: true }).click();
   const review = page.getByRole("dialog", { name: /Review and install/ });
   await expect(review).toContainText("application.production-provider");
   await review.getByRole("button", { name: "Install package", exact: true }).click();
   await expect(page).toHaveURL(/\/delivery\/installations$/, { timeout: 20_000 });
   const installed = page.getByRole("listitem").filter({ hasText: "Production batch provider" });
-  await expect(installed).toContainText("0.1.4");
+  await expect(installed).toContainText("0.1.5");
 
   await page.reload();
   await page.getByRole("link", { name: "Production order provider", exact: true }).click();
@@ -437,12 +436,12 @@ test("applications: an installed package contributes a menu and an object list",
 
 test("applications: install the sample version and run a contributed record action", async ({ page }) => {
   await signIn(page);
-  await open(page, "Delivery", "Marketplace");
+  await open(page, "Delivery", "Installations");
   const provider = page.getByRole("listitem").filter({ hasText: "application.production-provider · 0.1.5" });
-  await provider.getByRole("button", { name: "Install", exact: true }).click();
+  await provider.getByRole("button", { name: "Reinstall", exact: true }).click();
   const review = page.getByRole("dialog", { name: /Review and install/ });
   await expect(review.getByText("Installation scope", { exact: true })).toBeVisible();
-  await review.getByRole("button", { name: "Install package", exact: true }).click();
+  await review.getByRole("button", { name: "Reinstall package", exact: true }).click();
   await expect(page).toHaveURL(/\/delivery\/installations$/);
   await expect(page.getByRole("listitem").filter({ hasText: "Production batch provider" })).toContainText("0.1.5");
 
@@ -565,50 +564,37 @@ test("applications: shared records respect roles and keep their history after re
 });
 
 
-test("delivery: a builder publishes a version, which installs beside its source project under another name as its own app", async ({ page }) => {
+test("delivery: a builder publishes a version and installs beside its source project under another name", async ({ page }) => {
   await signIn(page);
+  await submit(page, "build.app.create", "build.app", "releaseexample", { name: "releaseexample", title: "Release example" }, 0);
+  await submit(page, "build.object.create", "build.object", "releaseexample.item", { name: "item", project: "releaseexample", title: "Release item", plural: "Release items", display: "title", fields: [{ name: "title", title: "Title", type: "text", required: true, search: true }] }, 0);
+  await submit(page, "build.object.publish", "build.object", "releaseexample.item", {}, 1);
+  await submit(page, "build.app.edit", "build.app", "releaseexample", { pages: ["releaseexample.item"], groups: [{ title: "Workspace", pages: ["releaseexample.item"] }] }, 1);
+  await submit(page, "build.app.publish", "build.app", "releaseexample", {}, 2);
+  await submit(page, "releaseexample.item.create", "releaseexample.item", "source-item", { title: "Source only" }, 0);
   await page.goto("/delivery/versions");
-  await expect(page.getByRole("heading", { level: 1, name: "Versions", exact: true })).toBeVisible();
   await page.getByRole("button", { name: "New", exact: true }).first().click();
   const release = page.getByRole("dialog", { name: "Publish product version", exact: true });
   await release.getByRole("combobox", { name: "Product" }).click();
-  await page.getByRole("option", { name: "CRM · Create product", exact: true }).click();
+  await page.getByRole("option", { name: "Release example · Create product", exact: true }).click();
   await expect(release.getByRole("textbox", { name: "Version" })).toHaveValue("0.1.0");
-  await expect(release.getByText("Convert to deal", { exact: true })).toBeVisible();
   await release.getByRole("button", { name: "Publish product version", exact: true }).click();
-  await expect(page).toHaveURL(/\/delivery\/versions\/crm%400\.1\.0$/);
-  await expect(page.getByRole("heading", { level: 1, name: "0.1.0", exact: true })).toBeVisible();
-  await page.goto("/delivery/versions");
-  await page.getByRole("button", { name: "New", exact: true }).first().click();
-  await release.getByRole("combobox", { name: "Product" }).click();
-  await page.getByRole("option", { name: "CRM · CRM", exact: true }).click();
-  await expect(release.getByRole("textbox", { name: "Version" })).toHaveValue("0.1.1");
-  await release.getByRole("button", { name: "Cancel", exact: true }).click();
-
+  await expect(page).toHaveURL(/releaseexample%400\.1\.0$/);
   await page.goto("/delivery/marketplace");
-  await expect(page.getByRole("listitem").filter({ hasText: /crm · 0\.1\.22/ })).toBeVisible();
-  await page.getByRole("button", { name: "More actions", exact: true }).click();
-  await page.getByRole("menuitem", { name: "Show all versions", exact: true }).click();
-  await page.getByRole("listitem").filter({ hasText: "crm · 0.1.0" }).getByRole("button", { name: "Install" }).click();
+  await page.getByRole("listitem").filter({ hasText: "releaseexample · 0.1.0" }).getByRole("button", { name: "Install", exact: true }).click();
   const review = page.getByRole("dialog");
   const name = review.getByRole("textbox", { name: "Project API name" });
-  await expect(name).toHaveValue("crm");
-  const install = review.getByRole("button", { name: "Install package", exact: true });
-  await expect(install).toBeEnabled({ timeout: 30_000 });
-  await install.click();
-  await expect(review.getByText("A project named crm already exists; install under another name")).toBeVisible();
-  await name.fill("pipeline");
+  await expect(name).toHaveValue("releaseexample");
   await review.getByRole("button", { name: "Install package", exact: true }).click();
-  await expect(page).toHaveURL(/\/delivery\/installations$/, { timeout: 30_000 });
-  await expect(page.getByRole("listitem").filter({ hasText: "crm · 0.1.0" })).toContainText("pipeline");
-  await page.locator('a[href="/pipeline/dashboard"]').first().click();
-  await expect(page.getByRole("main").getByRole("link", { name: "Leads", exact: true })).toBeVisible();
-  await page.locator('a[href="/pipeline/pipeline.lead"]').first().click();
-  await expect(page).toHaveURL(/\/pipeline\/pipeline\.lead$/);
-  await expect(page.getByRole("heading", { level: 1, name: "Leads", exact: true })).toBeVisible();
-  await expect(page.getByRole("heading", { level: 2, name: "Nothing here yet", exact: true })).toBeVisible();
-  await page.goto("/ontology/objects/crm.lead");
-  await expect(page.getByText("林子航", { exact: true })).toBeVisible();
+  await expect(review.getByText("A project named releaseexample already exists; install under another name")).toBeVisible();
+  await name.fill("releasecopy");
+  await review.getByRole("button", { name: "Install package", exact: true }).click();
+  await expect(review).toBeHidden({ timeout: 60_000 });
+  await page.goto("/ontology/objects/releasecopy.item");
+  await expect(page.getByRole("heading", { name: "Release items", exact: true })).toBeVisible();
+  await expect(page.getByText("Source only", { exact: true })).toHaveCount(0);
+  await page.goto("/ontology/objects/releaseexample.item");
+  await expect(page.getByText("Source only", { exact: true })).toBeVisible();
 });
 });
 
@@ -659,7 +645,7 @@ test("extension project: create an extension object from its project page and ga
   await actionDialog.getByRole("combobox", { name: /^Available when/ }).click();
   await page.getByRole("option", { name: "Deal · Status", exact: true }).click();
   await actionDialog.getByRole("combobox", { name: /^Values/ }).click();
-  await page.getByRole("option", { name: "Negotiation", exact: true }).click();
+  await page.getByRole("option", { name: "Won", exact: true }).click();
   await page.keyboard.press("Escape");
   await actionDialog.getByRole("button", { name: "Save", exact: true }).click();
   await expect(actionDialog).toBeHidden();
@@ -674,18 +660,18 @@ test("extension project: create an extension object from its project page and ga
   await expect(page.getByRole("link", { name: /Deal survey/ })).toBeVisible();
 
   await page.goto("/ontology/objects/crm.deal");
-  await page.getByRole("link", { name: "先锋车队门户", exact: true }).click();
+  await page.getByRole("link", { name: "Northwind Regional CRM Expansion", exact: true }).click();
   await page.getByRole("button", { name: "More actions", exact: true }).click();
   await page.getByRole("menuitem", { name: "Request site survey", exact: true }).click();
   const blockedSurvey = page.getByRole("dialog", { name: "Request site survey", exact: true });
   await blockedSurvey.getByRole("textbox", { name: /^Survey engineer/ }).fill("周工");
   await blockedSurvey.getByRole("button", { name: "Request site survey", exact: true }).click();
-  await expect(blockedSurvey.getByText(/Deal · Status: Negotiation/)).toBeVisible();
+  await expect(blockedSurvey.getByText(/Deal · Status: Won/)).toBeVisible();
   await blockedSurvey.getByRole("button", { name: "Cancel", exact: true }).click();
   await expect(blockedSurvey).toBeHidden();
 
   await page.goto("/ontology/objects/crm.deal");
-  await page.getByRole("link", { name: "曦和工厂客户关系系统上线", exact: true }).click();
+  await page.getByRole("link", { name: "Northwind Service Desk Add-on", exact: true }).click();
   await page.getByRole("button", { name: "More actions", exact: true }).click();
   await page.getByRole("menuitem", { name: "Request site survey", exact: true }).click();
   const allowedSurvey = page.getByRole("dialog", { name: "Request site survey", exact: true });

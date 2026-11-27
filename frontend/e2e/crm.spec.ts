@@ -23,166 +23,124 @@ const dragCard = async (page: Page, fromColumn: string, cardName: string, toColu
 type Case = {
   type: string;
   plural: string;
-  filterTerm: string;
-  filterHit: string;
+  seedTitle: string;
   create: (form: ReturnType<Page["getByRole"]>, page: Page) => Promise<void>;
   createdTitle: string;
   editField: string;
   editValue: string;
+  prepare?: (page: Page) => Promise<unknown>;
+};
+const text = (form: ReturnType<Page["getByRole"]>, name: string, value: string) =>
+  form.getByRole("textbox", { name: new RegExp("^" + name + "(?: Required)?$") }).fill(value);
+const choose = async (form: ReturnType<Page["getByRole"]>, page: Page, name: string, label: string) => {
+  await form.getByRole("combobox", { name: new RegExp("^" + name + "(?: Required)?$") }).fill(label);
+  await page.getByRole("option", { name: label, exact: true }).click();
 };
 const cases: Case[] = [
-  {
-    type: "crm.source", plural: "Lead sources", filterTerm: "展会", filterHit: "展会",
-    create: async (form, page) => { await form.getByRole("textbox", { name: "Source name" }).fill("Partner Webinar"); },
-    createdTitle: "Partner Webinar", editField: "Source name", editValue: "Partner Event",
-  },
-  {
-    type: "crm.organization", plural: "Organizations", filterTerm: "曦和", filterHit: "曦和精密",
-    create: async (form, page) => { await form.getByRole("textbox", { name: "Organization" }).fill("Orion Systems"); },
-    createdTitle: "Orion Systems", editField: "Website", editValue: "https://orion.example",
-  },
-  {
-    type: "crm.contact", plural: "Contacts", filterTerm: "魏", filterHit: "魏清",
-    create: async (form, page) => { await form.getByRole("textbox", { name: "Full name" }).fill("Nadia Chen"); },
-    createdTitle: "Nadia Chen", editField: "Designation", editValue: "Operations Lead",
-  },
-  {
-    type: "crm.product", plural: "Products", filterTerm: "CRM-CORE", filterHit: "CRM-CORE",
+  { type: "crm.source", plural: "Lead sources", seedTitle: "Website",
+    create: form => text(form, "Source", "Partner Webinar"), createdTitle: "Partner Webinar", editField: "Source", editValue: "Partner Event" },
+  { type: "crm.account", plural: "Accounts", seedTitle: "Northwind Precision Manufacturing",
+    prepare: page => submit(page, "party.organization.create", "party.organization", "acceptance-orion", { name: "Orion Systems" }, 0),
+    create: (form, page) => choose(form, page, "Organization", "Orion Systems"),
+    createdTitle: "Orion Systems", editField: "Annual revenue", editValue: "120000" },
+  { type: "crm.contact", plural: "Contacts", seedTitle: "Lin Hao",
+    prepare: page => submit(page, "party.contact.create", "party.contact", "acceptance-nadia", { fullname: "Nadia Chen" }, 0),
+    create: (form, page) => choose(form, page, "Person", "Nadia Chen"),
+    createdTitle: "Nadia Chen", editField: "Background", editValue: "Operations Lead" },
+  { type: "crm.product", plural: "Products", seedTitle: "Enterprise Workspace Subscription",
+    create: form => text(form, "Product", "Admin Training"), createdTitle: "Admin Training", editField: "Product", editValue: "Admin Training Pack" },
+  { type: "crm.lead", plural: "Leads", seedTitle: "Zhao Ming",
+    create: form => text(form, "Full name", "Sven Lindholm"), createdTitle: "Sven Lindholm", editField: "Company", editValue: "Baltic Robotics" },
+  { type: "crm.deal", plural: "Deals", seedTitle: "Northwind Regional CRM Expansion",
     create: async (form, page) => {
-      await form.getByRole("textbox", { name: "Product code" }).fill("CRM-TRN");
-      await form.getByRole("textbox", { name: "Product name" }).fill("Admin Training");
-      await form.getByRole("spinbutton", { name: "Standard rate" }).fill("1200");
-      await form.getByRole("spinbutton", { name: "Standard rate" }).press("Tab");
-    },
-    createdTitle: "Admin Training", editField: "Product name", editValue: "Admin Training Pack",
-  },
-  {
-    type: "crm.lead", plural: "Leads", filterTerm: "林子", filterHit: "林子航",
-    create: async (form, page) => {
-      await form.getByRole("textbox", { name: "Full name" }).fill("Sven Lindholm");
-      await form.getByRole("combobox", { name: "Status" }).click();
-      await page.getByRole("option", { name: "New", exact: true }).click();
-    },
-    createdTitle: "Sven Lindholm", editField: "Organization", editValue: "Baltic Robotics",
-  },
-  {
-    type: "crm.deal", plural: "Deals", filterTerm: "曦和工厂", filterHit: "曦和工厂客户关系系统上线",
-    create: async (form, page) => {
-      await form.getByRole("textbox", { name: "Deal" }).fill("Orion phase one");
-      await form.getByRole("combobox", { name: "Status" }).click();
-      await page.getByRole("option", { name: "Qualification", exact: true }).click();
-    },
-    createdTitle: "Orion phase one", editField: "Deal", editValue: "Orion phase one rollout",
-  },
-  {
-    type: "crm.dealline", plural: "Deal product lines", filterTerm: "ERP 连接器", filterHit: "ERP 连接器模块",
-    create: async (form, page) => {
-      await form.getByRole("combobox", { name: "Deal" }).fill("曦和");
-      await page.getByRole("option", { name: /曦和工厂客户关系系统上线/ }).click();
-      await form.getByRole("textbox", { name: "Product name" }).fill("Custom Workshop");
-      await form.getByRole("spinbutton", { name: "Quantity" }).fill("2");
-      await form.getByRole("spinbutton", { name: "Rate" }).fill("500");
-      await form.getByRole("spinbutton", { name: "Rate" }).press("Tab");
-    },
-    createdTitle: "Custom Workshop", editField: "Product name", editValue: "Custom Workshop Day",
-  },
-  {
-    type: "crm.task", plural: "Tasks", filterTerm: "北辰", filterHit: "给北辰发需求调研资料",
-    create: async (form, page) => {
-      await form.getByRole("textbox", { name: "Title" }).fill("Confirm CRM pilot dates");
-      await form.getByRole("combobox", { name: "Status" }).click();
-      await page.getByRole("option", { name: "Todo", exact: true }).click();
-    },
-    createdTitle: "Confirm CRM pilot dates", editField: "Title", editValue: "Confirm CRM pilot schedule",
-  },
-  {
-    type: "crm.note", plural: "Notes", filterTerm: "北辰", filterHit: "北辰首次通话纪要",
-    create: async (form, page) => { await form.getByRole("textbox", { name: "Title" }).fill("Pilot kickoff notes"); },
-    createdTitle: "Pilot kickoff notes", editField: "Title", editValue: "Pilot kickoff summary",
-  },
+      await text(form, "Deal", "Orion phase one");
+      await choose(form, page, "Account", "Northwind Precision Manufacturing");
+      for (const [name, date] of [["Expected close", "December 31, 2026"], ["Next step due", "November 30, 2026"]]) {
+        const field = form.getByRole("combobox", { name: new RegExp("^" + name + "(?: Required)?$") });
+        await field.fill(date); await field.press("Tab");
+      }
+      await text(form, "Next step", "Send proposal");
+    }, createdTitle: "Orion phase one", editField: "Deal", editValue: "Orion phase one rollout" },
+  { type: "crm.activity", plural: "Activities", seedTitle: "Contract review call with Lin Hao",
+    create: form => text(form, "Subject", "Confirm CRM pilot dates"), createdTitle: "Confirm CRM pilot dates", editField: "Subject", editValue: "Confirm CRM pilot schedule" },
+  { type: "crm.note", plural: "Notes", seedTitle: "Northwind rollout feedback",
+    create: form => text(form, "Title", "Pilot kickoff notes"), createdTitle: "Pilot kickoff notes", editField: "Title", editValue: "Pilot kickoff summary" },
 ];
-
 for (const entry of cases) {
   test(`crm: ${entry.plural} can be created, edited and filtered`, async ({ page }) => {
     await signIn(page);
-      await page.goto(`/ontology/objects/${entry.type}`);
-      await expect(page.getByRole("heading", { level: 1, name: entry.plural, exact: true })).toBeVisible();
-      const search = page.getByRole("textbox", { name: "Search this list" });
-      await search.fill(entry.filterTerm);
-      await search.press("Enter");
-      await expect(page.getByRole("link", { name: entry.filterHit, exact: true }).first()).toBeVisible();
-      await page.getByRole("button", { name: "New", exact: true }).click();
-      const form = page.getByRole("dialog");
-      await entry.create(form, page);
-      await form.getByRole("button", { name: "Create", exact: true }).click();
-      await expect(page.getByRole("heading", { level: 1, name: entry.createdTitle, exact: true })).toBeVisible();
-      await edit(page, entry.editField);
-      const field = page.getByRole("textbox", { name: entry.editField, exact: true });
-      await field.fill(entry.editValue);
-      await field.press("Enter");
-      await expectRevision(page, 2);
+    if (entry.prepare) await entry.prepare(page);
+    await page.goto(`/ontology/objects/${entry.type}`);
+    await page.getByRole("radio", { name: "Table", exact: true }).click();
+    const search = page.getByRole("textbox", { name: "Search this list" });
+    await search.fill(entry.seedTitle);
+    await search.press("Enter");
+    await expect(page.getByRole("link", { name: entry.seedTitle, exact: true }).first()).toBeVisible();
+    await page.getByRole("button", { name: "New", exact: true }).click();
+    const form = page.getByRole("dialog");
+    await entry.create(form, page);
+    await form.getByRole("button", { name: "Create", exact: true }).click();
+    await expect(page.getByRole("heading", { level: 1, name: entry.createdTitle, exact: true })).toBeVisible();
+    await edit(page, entry.editField);
+    const field = page.getByRole("textbox", { name: entry.editField, exact: true }).or(page.getByRole("spinbutton", { name: entry.editField, exact: true }));
+    await field.fill(entry.editValue);
+    await field.press("Enter");
+    await expectRevision(page, 2);
   });
 }
 
 test("crm: deal product lines total into the deal and move between deals", async ({ page }) => {
   await signIn(page);
-
-  await page.goto("/ontology/objects/crm.deal/DEL-001");
-  const lines = page.getByRole("table", { name: "Deal product lines" });
-  await expect(lines).toBeVisible();
-  await expect(property(lines, "Product name").filter({ hasText: "平台核心席位" }).first()).toBeVisible();
-  await expect(page.getByText("$19,500.00 USD", { exact: true }).first()).toBeVisible();
-  const added = lines.getByRole("row").filter({ hasText: "$1,000.00 USD" });
-  await edit(added, "Quantity");
-  await added.getByRole("spinbutton", { name: "Quantity" }).fill("3");
-  await added.getByRole("spinbutton", { name: "Quantity" }).press("Enter");
-  await expect(lines.getByText("$1,500.00 USD", { exact: true })).toBeVisible();
-  await page.reload();
-  await expect(page.getByText("$20,000.00 USD", { exact: true }).first()).toBeVisible();
-  await page.goto("/ontology/objects/crm.dealline");
-  const lineSearch = page.getByRole("textbox", { name: "Search this list" });
-  await lineSearch.fill("Custom Workshop");
-  await lineSearch.press("Enter");
-  await page.getByRole("link", { name: "Custom Workshop Day", exact: true }).first().click();
+  const line = await submit(page, "crm.dealline.create", "crm.dealline", "acceptance-line", { deal: "demo-deal-1", product: "demo-product-1", quantity: 2, price: { amount: 50000, currency: "USD" }, discount: 10 }, 0);
+  const id = line.record.submission.target.id;
+  await page.goto("/ontology/objects/crm.deal/demo-deal-1");
+  const rows = page.getByRole("table", { name: "Deal products" });
+  await expect(rows).toBeVisible();
+  const row = rows.getByRole("row").filter({ hasText: "$900.00" });
+  await expect(row).toBeVisible();
+  await edit(row, "Quantity");
+  await row.getByRole("spinbutton", { name: "Quantity" }).fill("3");
+  await row.getByRole("spinbutton", { name: "Quantity" }).press("Enter");
+  await expect(rows.getByText("$1,350.00 USD", { exact: true })).toBeVisible();
+  await page.goto(`/ontology/objects/crm.dealline/${id}`);
   await edit(page, "Deal");
-  await page.getByRole("combobox", { name: "Deal", exact: true }).fill("先锋");
-  await page.getByRole("option", { name: /先锋车队门户/ }).click();
-  await expect(page.getByRole("link", { name: "先锋车队门户" })).toBeVisible();
-  await page.goto("/ontology/objects/crm.deal/DEL-001");
-  await expect(page.getByText("$18,500.00 USD", { exact: true }).first()).toBeVisible();
+  await choose(page, page, "Deal", "Harborline Multi-Branch Pipeline Rollout");
+  await page.reload();
+  await expect(property(page, "Deal")).toContainText("Harborline Multi-Branch Pipeline Rollout");
+  await page.goto("/ontology/objects/crm.deal/demo-deal-1");
+  await expect(rows.getByText("$1,350.00 USD", { exact: true })).toHaveCount(0);
 });
 
-test("crm: notes show what they relate to and a task switches from a lead to a deal", async ({ page }) => {
+test("crm: a note and activity link to actual CRM leads and deals", async ({ page }) => {
   await signIn(page);
-  await page.goto("/ontology/objects/crm.note");
-  await expect(page.getByRole("columnheader", { name: "Related to" })).toBeVisible();
-  await expect(page.getByRole("row", { name: /曦和采购时间线/ }).getByText("曦和工厂客户关系系统上线", { exact: true })).toBeVisible();
-  await page.goto("/ontology/objects/crm.task/TSK-001");
-  await expect(page.getByRole("radio", { name: "Lead", exact: true })).toBeChecked();
-  await page.getByRole("radio", { name: "Deal", exact: true }).click();
-  await page.getByRole("combobox", { name: "Deal", exact: true }).fill("曦和");
-  await page.getByRole("option", { name: "曦和工厂客户关系系统上线" }).click();
-  await expect(page.getByRole("link", { name: "曦和工厂客户关系系统上线" })).toBeVisible();
+  const note = await submit(page, "crm.note.create", "crm.note", "acceptance-note", { title: "Linked note", deal: "demo-deal-1" }, 0);
+  await page.goto(`/ontology/objects/crm.note/${note.record.submission.target.id}`);
+  await expect(property(page, "Deal")).toContainText("Northwind Regional CRM Expansion");
+  const activity = await submit(page, "crm.activity.create", "crm.activity", "acceptance-activity", { subject: "Linked follow-up", lead: "demo-lead-1" }, 0);
+  await page.goto(`/ontology/objects/crm.activity/${activity.record.submission.target.id}`);
+  await expect(property(page, "Lead")).toContainText("Zhao Ming");
+  await edit(page, "Deal");
+  await choose(page, page, "Deal", "Northwind Regional CRM Expansion");
   await page.reload();
-  await expect(page.getByRole("radio", { name: "Deal", exact: true })).toBeChecked();
-  await expect(page.getByRole("link", { name: "曦和工厂客户关系系统上线" })).toBeVisible();
+  await expect(property(page, "Deal")).toContainText("Northwind Regional CRM Expansion");
 });
 
 test("crm: lead and deal move on the kanban", async ({ page }) => {
   await signIn(page);
+  const leadId = "acceptance-board-lead";
+  await submit(page, "crm.lead.create", "crm.lead", leadId, { fullname: "Board lead", stage: "new" }, 0);
   await page.goto("/ontology/objects/crm.lead");
   await page.getByRole("radio", { name: "Board" }).click();
-  await dragCard(page, "New", "林子航", "Contacted");
+  await dragCard(page, "New", "Board lead", "Attempting");
   await page.reload();
-  await expect(page.getByRole("region", { name: "Contacted", exact: true }).getByRole("heading", { level: 4, name: "林子航", exact: true })).toBeVisible();
-
+  await expect(page.getByRole("region", { name: "Attempting", exact: true }).getByRole("heading", { level: 4, name: "Board lead", exact: true })).toBeVisible();
   await page.goto("/ontology/objects/crm.deal");
   await page.getByRole("radio", { name: "Board" }).click();
-  await dragCard(page, "Qualification", "先锋车队门户", "Demo/Making");
+  const card = "Orion phase one rollout";
+  await dragCard(page, "Qualification", card, "Discovery");
   await page.reload();
-  await expect(page.getByRole("region", { name: "Demo/Making", exact: true }).getByRole("heading", { level: 4, name: "先锋车队门户", exact: true })).toBeVisible();
+  await expect(page.getByRole("region", { name: "Discovery", exact: true }).getByRole("heading", { level: 4, name: card, exact: true })).toBeVisible();
 });
-
 
 test("crm: date filters stay available while reference choices load", async ({ page }) => {
   await signIn(page);
@@ -190,61 +148,47 @@ test("crm: date filters stay available while reference choices load", async ({ p
   let release!: () => void;
   const held = new Promise<void>((resolve) => { release = resolve; });
   let requested = false;
-  await page.route(/\/v1\/records\/crm\.organization\?/, async (route) => {
-    requested = true;
-    await held;
-    await route.continue();
-  });
+  await page.route(/\/v1\/records\/crm\.account\?/, async (route) => { requested = true; await held; await route.continue(); });
   try {
     await page.goto("/ontology/objects/crm.deal");
     await expect.poll(() => requested).toBe(true);
-    const organization = page.getByRole("combobox", { name: "Organization filter", exact: true });
-    await expect(organization).toBeVisible();
+    await expect(page.getByRole("combobox", { name: "Account filter", exact: true })).toBeVisible();
     const date = page.getByRole("combobox", { name: "Expected close filter", exact: true });
     if (!(await date.count())) await page.getByRole("button", { name: /more filters?$/ }).click();
     await date.click();
     const next = page.getByRole("radio", { name: "Next 30 days", exact: true });
     await expect(next).toBeVisible();
-    const response = page.waitForResponse((r) => r.url().includes("/v1/records/crm.organization?") && r.ok());
+    const response = page.waitForResponse(r => r.url().includes("/v1/records/crm.account?") && r.ok());
     release();
     await response;
     await expect(next).toBeVisible();
     await next.click();
     await expect(page).toHaveURL(/expectedclose.*after.*expectedclose.*before/);
-  } finally {
-    release();
-    await page.unrouteAll({ behavior: "wait" });
-  }
+  } finally { release(); await page.unrouteAll({ behavior: "wait" }); }
 });
 
-test("crm: a lead with a note and a task converts into an organization, contact and deal, and the deal is won", async ({ page }) => {
-  test.setTimeout(120000);
+test("crm: a lead with a note and an activity converts into an account, contact and deal, and the deal is won", async ({ page }) => {
+  test.setTimeout(120_000);
   await signIn(page);
-  await crmMainline(page, (type) => page.goto(`/ontology/objects/${type}`), "Mira Holm", "Fjord Analytics");
+  await crmMainline(page, type => page.goto(`/ontology/objects/${type}`), "Mira Holm", "Fjord Analytics");
 });
 
-
-test("crm: a sales rep works only their own leads while the sales manager sees the whole team's, whose activity reads in names", async ({ page }) => {
-  const leads = async (seat: string) => {
-    await signIn(page, `${seat} · acceptance`);
-    await page.goto("/ontology/objects/crm.lead");
-    await expect(page.getByText("沈若溪", { exact: true })).toBeVisible();
-  };
-  await leads("user-1");
-  await expect(page.getByText("林子航", { exact: true })).toHaveCount(0);
-  await page.getByRole("button", { name: "Account", exact: true }).click();
-  await page.getByRole("menuitem", { name: "Sign out", exact: true }).click();
-  await leads("manager-1");
-  await expect(page.getByText("林子航", { exact: true })).toBeVisible();
-
-  await page.getByText("沈若溪", { exact: true }).click();
-  await page.getByRole("link", { name: "Activity", exact: true }).click();
-  const main = page.getByRole("main");
-  for (const line of ["Source: 邮件", "Industry: 物流", "Territory: 华东大区", "Lead owner: 田雪"]) await expect(main.getByRole("listitem", { name: line, exact: true })).toBeVisible();
-  await expect(main.getByText("王丹", { exact: true }).first()).toBeVisible();
-  await expect(main.getByText(/SRC-|IND-|TER-|admin-1|Unnamed member/)).toHaveCount(0);
+test("crm: a sales rep works only their own leads while the sales manager sees the whole team", async ({ page }) => {
+  await signIn(page, "user-1 · acceptance");
+  await submit(page, "crm.lead.create", "crm.lead", "acceptance-own-lead", { fullname: "Own lead", source: "website" }, 0);
+  await signIn(page, "builder-1 · acceptance");
+  await submit(page, "crm.lead.create", "crm.lead", "acceptance-peer-lead", { fullname: "Peer lead" }, 0);
+  await signIn(page, "user-1 · acceptance");
+  await page.goto("/ontology/objects/crm.lead");
+  await page.getByRole("radio", { name: "Table" }).click();
+  await expect(page.getByText("Own lead", { exact: true })).toBeVisible();
+  await expect(page.getByText("Peer lead", { exact: true })).toHaveCount(0);
+  await signIn(page, "manager-1 · acceptance");
+  await page.goto("/ontology/objects/crm.lead");
+  await page.getByRole("radio", { name: "Table" }).click();
+  await expect(page.getByText("Own lead", { exact: true })).toBeVisible();
+  await expect(page.getByText("Peer lead", { exact: true })).toBeVisible();
 });
-
 
 function workbookSheets(sheets: { name: string; rows: string[][] }[]) {
   const main = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";

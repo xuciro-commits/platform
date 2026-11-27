@@ -26,7 +26,7 @@ func TestInvariantK24InstalledPackageContributesOnlyActiveAuthorizedNavigationAn
 		protocol.Seat{Subjects: []string{"auditor"}, Member: platform.Member{ID: "auditor"}},
 	)
 	const name, typ, schema = "productionprovider", "build.batchproviderorder", "build.batchproviderorder.start"
-	raw, err := os.ReadFile(fixturePath(t, "packages/production-provider.json"))
+	raw, err := os.ReadFile(fixturePath(t, "production-provider"))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -163,7 +163,7 @@ func TestInvariantK24PackageDemoSeedInstallAndClear(t *testing.T) {
 		protocol.Seat{Subjects: []string{"admin"}, Member: platform.Member{ID: "admin", Roles: map[string]string{"platform": "admin", build.ID: ontology.BuilderRole}}},
 	)
 	const name, typ = "productionprovider", "build.batchproviderorder"
-	raw, err := os.ReadFile(fixturePath(t, "packages/production-provider.json"))
+	raw, err := os.ReadFile(fixturePath(t, "production-provider"))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -296,8 +296,8 @@ func TestInvariantMultiPackageTranslationsScopeByNamespaceAndTranslateFieldGroup
 	adminSeat := protocol.Seat{Subjects: []string{"admin"}, Member: platform.Member{ID: "admin", Roles: map[string]string{"platform": "admin", build.ID: ontology.BuilderRole, "crm": "salesmanager", "party": "steward", "geo": "steward"}}}
 	live := newInvariantTenant(t, "invariant-multi-pkg-i18n", adminSeat)
 	admin, _ := live.Member("admin")
-	for _, fixture := range []string{"geo-0.1.2.json", "party-0.2.2.json", "crm-official-0.3.0.json"} {
-		raw, err := os.ReadFile(fixturePath(t, "frontend-fixtures/"+fixture))
+	for _, fixture := range []string{"geo", "party", "crm"} {
+		raw, err := os.ReadFile(fixturePath(t, fixture))
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -402,7 +402,7 @@ func TestInvariantK24PackageReferenceReadiness(t *testing.T) {
 		protocol.Seat{Subjects: []string{"admin"}, Member: platform.Member{ID: "admin", Roles: map[string]string{"platform": "admin", build.ID: ontology.BuilderRole}}},
 		protocol.Seat{Subjects: []string{"other"}, Member: platform.Member{ID: "other", Roles: map[string]string{build.ID: ontology.UserRole}}},
 	)
-	raw, err := os.ReadFile(fixturePath(t, "frontend-fixtures/party-0.1.0.json"))
+	raw, err := os.ReadFile(fixturePath(t, "party-previous"))
 	if err != nil {
 		t.Fatal(err)
 	}

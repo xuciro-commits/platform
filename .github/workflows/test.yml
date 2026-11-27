@@ -14,7 +14,6 @@ concurrency:
 
 env:
   GOPROXY: https://proxy.golang.org,direct
-  PLATFORM_FIXTURES_DIR: ${{ github.workspace }}/.build/package-fixtures/fixtures/platform
 
 jobs:
   server:
@@ -31,19 +30,6 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 22
-      - name: Resolve pinned package fixtures
-        id: fixtures
-        run: |
-          revision=$(node scripts/package-fixtures.mjs --revision)
-          echo "revision=$revision" >> "$GITHUB_OUTPUT"
-      - uses: actions/checkout@v4
-        with:
-          repository: xuciro-commits/platform-packages
-          ref: ${{ steps.fixtures.outputs.revision }}
-          path: .build/package-fixtures
-          persist-credentials: false
-      - name: Verify package fixtures
-        run: node scripts/package-fixtures.mjs
       - run: make check
       - run: make test
       - run: make test-voice
@@ -66,19 +52,6 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 22
-      - name: Resolve pinned package fixtures
-        id: fixtures
-        run: |
-          revision=$(node scripts/package-fixtures.mjs --revision)
-          echo "revision=$revision" >> "$GITHUB_OUTPUT"
-      - uses: actions/checkout@v4
-        with:
-          repository: xuciro-commits/platform-packages
-          ref: ${{ steps.fixtures.outputs.revision }}
-          path: .build/package-fixtures
-          persist-credentials: false
-      - name: Verify package fixtures
-        run: node scripts/package-fixtures.mjs
       - run: docker build -f deploy/local/Dockerfile.postgres -t platform-postgres:18-vector deploy/local
       - run: make test-pg
       - uses: actions/upload-artifact@v4
@@ -105,19 +78,6 @@ jobs:
           node-version: 22
           cache: pnpm
           cache-dependency-path: frontend/pnpm-lock.yaml
-      - name: Resolve pinned package fixtures
-        id: fixtures
-        run: |
-          revision=$(node scripts/package-fixtures.mjs --revision)
-          echo "revision=$revision" >> "$GITHUB_OUTPUT"
-      - uses: actions/checkout@v4
-        with:
-          repository: xuciro-commits/platform-packages
-          ref: ${{ steps.fixtures.outputs.revision }}
-          path: .build/package-fixtures
-          persist-credentials: false
-      - name: Verify package fixtures
-        run: node scripts/package-fixtures.mjs
       - run: pnpm --dir frontend install --frozen-lockfile
       - run: make check-frontend
       - run: pnpm --dir frontend exec playwright install --with-deps chrome

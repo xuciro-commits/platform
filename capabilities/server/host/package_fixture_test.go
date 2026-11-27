@@ -1,27 +1,37 @@
 package host
 
 import (
+	"crypto/sha256"
+	"encoding/json"
 	"fmt"
-	"os/exec"
+	"os"
 	"path/filepath"
-	"strings"
-	"sync"
 	"testing"
 )
 
-var fixtureDirectory = sync.OnceValues(func() (string, error) {
-	raw, err := exec.Command("node", "../../../scripts/package-fixtures.mjs").CombinedOutput()
-	if err != nil {
-		return "", fmt.Errorf("%w: %s", err, raw)
-	}
-	return strings.TrimSpace(string(raw)), nil
-})
-
-func fixturePath(t testing.TB, path string) string {
+func fixturePath(t testing.TB, name string) string {
 	t.Helper()
-	root, err := fixtureDirectory()
-	if err != nil {
-		t.Fatalf("external package fixtures: %v (set PLATFORM_FIXTURES_DIR to the pinned package fixture root)", err)
+	root := os.Getenv("PLATFORM_TEST_PACKAGES_DIR")
+	if root == "" {
+		t.Fatal("run package tests via make test or make test-pg")
 	}
-	return filepath.Join(root, path)
+	raw, err := os.ReadFile(filepath.Join(root, "inputs.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	var inputs struct {
+		Packages map[string]struct{ SHA256 string }
+	}
+	if err := json.Unmarshal(raw, &inputs); err != nil {
+		t.Fatal(err)
+	}
+	file := filepath.Join(root, name+".json")
+	content, err := os.ReadFile(file)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if want := inputs.Packages[name].SHA256; want != fmt.Sprintf("sha256:%x", sha256.Sum256(content)) {
+		t.Fatalf("package input digest mismatch: %s", name)
+	}
+	return file
 }

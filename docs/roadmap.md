@@ -154,7 +154,7 @@
   把内置应用改成系统产品包；安全评审；达成 [plan](plan.md) 阶段 4 全部吞吐、分位数、重启恢复与防退化容量门槛（万行导入 ≤ 20s、5000 人在线读写与 SSE 延迟、10 万日志重启 ≤ 3s）。
 - **2.8 · 开放应用接入第二波**：灵魂是读懂业务流转后按平台对象、动作、状态、角色重新设计（`redesign`，Apache-2.0 发布，不搬 GPL/AGPL 定义与代码；`derived` 只对宽松许可来源做；交付前由负责人取得法律意见）。
   官方包在 [platform-packages](https://github.com/xuciro-commits/platform-packages)（普查见 [sources](https://github.com/xuciro-commits/platform-packages/blob/main/docs/sources.md)。
-  测试夹具统一在外部包库 `fixtures/platform/`）。
+  验收包与正式包统一在外部包库 `packages/`）。
   第一波 `crm`、`helpdesk`、`hr-core`、`projects`、`assets` 黄金路线 v1 已跑通；第二波**库存、购销、会计、制造与质量**按客户需求逐个接入，参考多家取最优设计，重叠能力扩展已有包，新坑持续补进 `open-app-intake` Skill。
 - **阶段 5 · 流程画布、数据管道与外部 AI 协同**：落地 `FlowCanvas`（`@xyflow/react` + `elkjs`）驱动 `services/automate` 流程、管道、血缘与智能体节点图（批量提案审阅复用 `RecordComparison`）；
   解冻 `services/data`（外部连接、同步、管道、数据集、血缘）与 `services/ai`（智能体工作室、全局助手）；经 `/mcp` 走通 ChatGPT、Claude、DeepSeek 或 Magpie 客户端授权读取、提议与成员确认。

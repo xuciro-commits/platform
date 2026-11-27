@@ -48,8 +48,8 @@ func TestInvariantK44MasterDataRequiresExplicitGrantAndRevokes(t *testing.T) {
 			live.Work(invariantClock)
 		}
 	}
-	install(fixturePath(t, "frontend-fixtures/geo-0.1.2.json"))
-	install(fixturePath(t, "frontend-fixtures/party-0.2.2.json"))
+	install(fixturePath(t, "geo"))
+	install(fixturePath(t, "party"))
 
 	member, _ := live.Member("rep")
 	if roles := member.RolesIn("party.organization"); len(roles) != 0 {

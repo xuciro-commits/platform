@@ -230,7 +230,7 @@
 | 客户扩展、客户项目、连接地址、凭据引用、授权 | 保留 | 保留，需确认配置 | 不随包删除 |
 
 作者态源统一在独立 `platform-packages/packages/<id>/`，YAML，一个资源一个文件；依赖、能力与模式历史由 `cmd/pkg` 用宿主的同一实现算出，不进源。
-平台验收夹具统一在外部包库 `fixtures/platform/`；通过 `PLATFORM_FIXTURES_DIR` 指定根目录，按 `scripts/package-fixtures.lock.json` 验证清单和文件哈希。正式宿主不默认加载测试夹具；发布制品不可原地重建。
+正式包从不可变 Release 下载并核对 SHA-256；未发布候选及验收包从 `scripts/package-fixtures.lock.json` 固定的外部包库提交现场构建。正式宿主不默认加载验收包；测试临时制品不进入 Git，发布制品不可原地重建。
 
 读外部定义（Frappe 应用）的工具在官方包库的 `scripts/frappe-read.mjs`，是作者的构建工具，不是租户里的能力：
 

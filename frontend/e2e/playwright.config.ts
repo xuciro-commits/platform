@@ -1,10 +1,8 @@
-import { copyFileSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
+import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { defineConfig } from "@playwright/test";
-import { fixtureRoot } from "../../scripts/package-fixtures.mjs";
 
 const root = fileURLToPath(new URL("../..", import.meta.url));
-const fixtures = fixtureRoot();
 const work = `${root}.build/trunk`;
 const offset = Number(process.env.TRUNK_PORT_OFFSET ?? 0);
 const hostPort = 18521 + offset;
@@ -18,10 +16,6 @@ if (process.env.TEST_WORKER_INDEX === undefined) {
   const files = args.filter((arg, i) => !arg.startsWith("-") && args[i - 1] !== "-c" && args[i - 1] !== "--grep" && arg !== "test");
   process.env.TRUNK_SPLIT_OFFICIAL = Boolean(process.env.TRUNK_DATABASE) && (files.length === 0 || (files.some((f) => f.includes("official")) && files.some((f) => !f.includes("official")))) ? "1" : "0";
   mkdirSync(work, { recursive: true });
-  const packageDir = mkdtempSync(work + "/packages-");
-  for (const source of [fixtures + "/packages", fixtures + "/test-packages"]) {
-    for (const name of readdirSync(source).filter((entry) => entry.endsWith(".json"))) copyFileSync(source + "/" + name, packageDir + "/" + name);
-  }
   const tenants = JSON.parse(readFileSync(`${root}scripts/frontend-tenants.json`, "utf8"));
   const securityTenants = JSON.parse(readFileSync(`${root}scripts/frontend-security-tenants.json`, "utf8"));
   writeFileSync(`${work}/tenants.json`, JSON.stringify([...tenants, ...securityTenants]));
@@ -38,7 +32,6 @@ const cwd = ${JSON.stringify(`${root}capabilities/server`)};
 const tenantsFile = ${JSON.stringify(`${work}/tenants.json`)};
 const logFile = ${JSON.stringify(`${work}/host.log`)};
 const backupDir = ${JSON.stringify(work)};
-const packageDir = ${JSON.stringify(packageDir)};
 
 let currentDatabase = process.env.TRUNK_DATABASE ?? "";
 let child = null;
@@ -51,7 +44,6 @@ async function startHost(snapshotEvery) {
   const args = [
     "-addr", "127.0.0.1:${hostPort}",
     "-tenants", tenantsFile,
-    "-packages", packageDir,
     "-host-admins", "admin,root",
     "-allow-loopback-packages",
     ...(currentDatabase ? ["-database", currentDatabase] : []),
@@ -119,7 +111,7 @@ const control = createServer((req, res) => {
       const tenant = String(body.tenant ?? "");
       const backupFile = \`\${backupDir}/\${tenant}.backup.gz\`;
       await stopHost();
-      execFileSync(bin, ["-database", currentDatabase, "-tenants", tenantsFile, "-packages", packageDir, "-export-tenant", tenant, "-backup", backupFile], { cwd });
+      execFileSync(bin, ["-database", currentDatabase, "-tenants", tenantsFile, "-export-tenant", tenant, "-backup", backupFile], { cwd });
       if ((statSync(backupFile).mode & 0o777) !== 0o600) {
         throw new Error("backup file mode is not 0600");
       }
@@ -184,7 +176,7 @@ export default defineConfig({
       url: page,
       timeout: 360_000,
       reuseExistingServer: false,
-      env: { PLATFORM_HOST: host, PLATFORM_LEGACY_CRM_FIXTURE: "1" },
+      env: { PLATFORM_HOST: host },
     },
   ],
 });
