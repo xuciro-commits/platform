@@ -8,11 +8,11 @@ import (
 )
 
 type RuleReadSpec struct {
-	Object      string                    `json:"object,omitempty"`
-	Inputs      map[string]ExprType       `json:"inputs,omitempty"`
-	Collections map[string]RuleCollection `json:"collections,omitempty"`
+	PriorBalance bool                      `json:"priorBalance,omitempty"`
+	Object       string                    `json:"object,omitempty"`
+	Inputs       map[string]ExprType       `json:"inputs,omitempty"`
+	Collections  map[string]RuleCollection `json:"collections,omitempty"`
 }
-
 type RuleCollection struct {
 	Set     string `json:"set,omitempty"`
 	App     string `json:"app"`

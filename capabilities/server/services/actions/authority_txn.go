@@ -34,7 +34,7 @@ func (l *authority) ApplyTxnRecord(c platform.Caller, r *pb.ChangeRecord, e plat
 	}
 	if !c.Staging() || c.Replaying || c.App != l.authority || r.GetSubmission().GetAuthority() != c.App ||
 		r.GetSubmission().GetTenantId() != l.tenant || r.GetSubmission().GetPrincipalId() != c.ID || r.GetChangeId() == "" || id == "" || platform.OwnerOfType(e.Type) != c.App ||
-		(verb != "create" && verb != "edit" && verb != "archive") {
+		(verb != "create" && verb != "edit" && verb != "archive" && verb != "reverse") {
 		return platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "Transaction step is outside its private authority / 事务步骤超出私有权威范围")
 	}
 	s := proto.Clone(r.GetSubmission()).(*pb.Submission)

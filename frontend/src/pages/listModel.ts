@@ -1,8 +1,9 @@
+import type { Api } from "../host";
 import { pixel, proportional } from "@astryxdesign/core/Table";
 import type { PowerSearchFilter } from "@astryxdesign/core/PowerSearch";
 import { t } from "../i18n";
 import { formatTenantNumber } from "../semantic";
-import { type Cells, dotOf, idKey, rawOf, targetOf, toneOf, typeOf } from "./ListDetail";
+import { type Cells, dotOf, hrefOf, idKey, rawOf, targetOf, toneOf, typeOf } from "./ListDetail";
 import type { ListBoard, ListCalendar, ListColumn, ListGantt, ListGroup, ListShape } from "./listShape";
 import type { Chip } from "./ListFilters";
 import type { StickyEdge, ViewSort, ViewState } from "./view";
@@ -181,6 +182,8 @@ export function prepareRows<Answer, Row>({
       if (tone) cells[toneOf(column.key)] = tone;
       const reference = cells[column.key] ? column.reference?.(row) : undefined;
       if (reference) [cells[typeOf(column.key)], cells[targetOf(column.key)]] = [reference.type, reference.id];
+      const cellHref = cells[column.key] ? column.href?.(row) : undefined;
+      if (cellHref) cells[hrefOf(column.key)] = cellHref;
       const memberId = column.memberId?.(row);
       if (memberId && !cells[targetOf(column.key)]) cells[targetOf(column.key)] = memberId;
       if (column.raw) {
@@ -237,4 +240,13 @@ export function sortPreparedRows<Row>(
       return 0;
     })
     .map((entry) => entry.cells);
+}
+
+
+export function balanceDrillOf(entity: Api.EntityInfo | undefined, entities: Api.EntityInfo[] | undefined, hrefOfType: (t: string) => string | undefined) {
+  if (!entity?.balanceOf || !entities) return undefined;
+  const ledger = entities.find((c) => c.type === entity.balanceOf);
+  const spec = ledger?.ledger?.balances.find((b) => b.name === entity.type.slice(entity.balanceOf!.length + 1));
+  const href = hrefOfType(entity.balanceOf);
+  return spec && href ? { href, keys: spec.keys, measures: new Set(spec.measures) } : undefined;
 }

@@ -112,6 +112,25 @@ func expandObject(body *object, path string, definitions map[string]*object, typ
 	}
 	expandSets(body)
 	s := exprScope{objects: types, self: self, sets: setNames(body)}
+	var priorBals map[string]map[string]string
+	if isLedger, _ := body.values["ledger"].(bool); isLedger {
+		priorBals = map[string]map[string]string{}
+		if bList, ok := body.get("balances"); ok {
+			bs, _ := bList.([]any)
+			for _, elem := range bs {
+				if b := asObject(elem); b != nil {
+					mm := map[string]string{}
+					ms, _ := b.values["measures"].([]any)
+					for _, raw := range ms {
+						if mName, ok := raw.(string); ok {
+							mm[mName] = types[self][mName].kind
+						}
+					}
+					priorBals[text(b, "name")] = mm
+				}
+			}
+		}
+	}
 	list, _ := body.get("fields")
 	fields, _ := list.([]any)
 	for _, item := range fields {
@@ -126,12 +145,28 @@ func expandObject(body *object, path string, definitions map[string]*object, typ
 		}
 		for _, key := range []string{"from", "formulaExpr", "live"} {
 			if value, ok := f.get(key); ok {
-				compiled, err := compileAt(value, s, kind, path+": field "+text(f, "name")+" "+key)
+				fieldScope := s
+				if key == "from" && priorBals != nil {
+					fieldScope.priorBalances = priorBals
+				}
+				compiled, err := compileAt(value, fieldScope, kind, path+": field "+text(f, "name")+" "+key)
 				if err != nil {
 					return err
 				}
 				f.set(key, compiled)
 			}
+		}
+	}
+	if dep := asObject(body.values["depletion"]); dep != nil {
+		if l := text(dep, "ledger"); l != "" && !strings.Contains(l, ".") && text(body, "namespace") != "" {
+			dep.set("ledger", text(body, "namespace")+"."+l)
+		}
+		if when, ok := dep.get("when"); ok {
+			compiled, err := compileAt(when, s, "boolean", path+": depletion when")
+			if err != nil {
+				return err
+			}
+			dep.set("when", compiled)
 		}
 	}
 	// Balance constraints share the expression compiler.
@@ -141,6 +176,21 @@ func expandObject(body *object, path string, definitions map[string]*object, typ
 			b := asObject(item)
 			if b == nil {
 				continue
+			}
+			if bfList, ok := b.get("fields"); ok {
+				bfs, _ := bfList.([]any)
+				balScope := exprScope{objects: types, self: self + "." + text(b, "name")}
+				for _, bfElem := range bfs {
+					if bf := asObject(bfElem); bf != nil {
+						if liveVal, ok := bf.get("live"); ok {
+							compiled, err := compileAt(liveVal, balScope, fieldKind(text(bf, "type")), path+": balance "+text(b, "name")+" field "+text(bf, "name")+" live")
+							if err != nil {
+								return err
+							}
+							bf.set("live", compiled)
+						}
+					}
+				}
 			}
 			cs, _ := b.get("constraints")
 			constraints, _ := cs.([]any)
@@ -622,6 +672,13 @@ func expand(dir string, manifest *object, resources []resource, released bool, e
 						for _, raw := range items {
 							if name, ok := raw.(string); ok {
 								projected[name] = fields[name]
+							}
+						}
+					}
+					if bfs, ok := b.values["fields"].([]any); ok {
+						for _, bfElem := range bfs {
+							if bf := asObject(bfElem); bf != nil {
+								projected[text(bf, "name")] = exprField{kind: fieldKind(text(bf, "type")), ref: text(bf, "ref"), live: true}
 							}
 						}
 					}

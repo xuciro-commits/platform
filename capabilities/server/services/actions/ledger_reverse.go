@@ -22,6 +22,11 @@ func reverseLedgerAction(c platform.Caller, e platform.RecordType, s *pb.Submiss
 	if input.On == "" {
 		input.On = c.Today(now)
 	}
+	if e.ReverseCheck != nil && !c.Replaying && !c.SourceProjection() {
+		if refusal := e.ReverseCheck(c, existing, input.On, now); refusal != nil {
+			return nil, refusal
+		}
+	}
 	probe, err := records.ReverseLedgerValue(e, existing, "_reverse_probe", input.On)
 	if err != nil {
 		return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, err.Error())
@@ -30,7 +35,11 @@ func reverseLedgerAction(c platform.Caller, e platform.RecordType, s *pb.Submiss
 		return nil, refusal
 	}
 	return func(r *pb.ChangeRecord) {
-		fact, err := records.ReverseLedgerValue(e, existing, "reverse-"+r.GetChangeId(), input.On)
+		revID := "reverse-" + r.GetChangeId()
+		if s.GetTarget().GetType() != r.GetSubmission().GetTarget().GetType() || s.GetTarget().GetId() != r.GetSubmission().GetTarget().GetId() {
+			revID += "-" + s.GetTarget().GetId()
+		}
+		fact, err := records.ReverseLedgerValue(e, existing, revID, input.On)
 		if err != nil {
 			c.FailDecision(platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, err.Error()))
 			return
@@ -41,6 +50,13 @@ func reverseLedgerAction(c platform.Caller, e platform.RecordType, s *pb.Submiss
 		}
 		if refusal := c.Put(r, fact); refusal != nil {
 			c.FailDecision(refusal)
+			return
+		}
+		if e.ReverseFollow != nil && !c.Replaying && !c.SourceProjection() {
+			if refusal := e.ReverseFollow(c, r, existing, input.On, now); refusal != nil {
+				c.FailDecision(refusal)
+				return
+			}
 		}
 	}, nil
 }

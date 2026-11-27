@@ -5,7 +5,9 @@ import { MoreMenu } from "@astryxdesign/core/MoreMenu";
 import { type ComponentType, type ReactNode, lazy, Suspense, useCallback, useEffect, useMemo, useState } from "react";
 import { type Api, type Read, requestBlob, useRead, reasonOf, send } from "../host";
 import { t } from "../i18n";
+import { useRecordHref } from "../recordRoutes";
 import { navigate, usePath, useSearch } from "../router";
+import { balanceDrillOf } from "./listModel";
 import { ActionDialog } from "./ActionDialog";
 import { type Intent, stepIntent, useAct } from "./act";
 import { type ListShape, ListView, type Move } from "./ListPage";
@@ -160,7 +162,7 @@ function keyOf(field: Api.FieldInfo | undefined, title: string) {
 
 type RecordShape = ListShape<Api.RecordPage, Row>;
 
-function shape(described: Described, declared: Declared, listPath: string, extra?: Pick<RecordShape, "board" | "calendar" | "gantt" | "bulk" | "detail" | "summary">, options: Options = {}): RecordShape {
+function shape(described: Described, declared: Declared, listPath: string, extra?: Pick<RecordShape, "board" | "calendar" | "gantt" | "bulk" | "detail" | "summary">, options: Options = {}, drill?: { href: string; keys: string[]; measures: Set<string> }): RecordShape {
   const lifecycle = described.lifecycle;
   const states = lifecycle?.states ?? [];
   const linked = (field: Api.FieldInfo, row: Row) => described.members(field).find((member) => row[member.name]) ?? field;
@@ -245,6 +247,7 @@ function shape(described: Described, declared: Declared, listPath: string, extra
           const target = linked(field, row);
           return row[target.name] ? { type: String(target.ref), id: String(row[target.name]) } : undefined;
         } : undefined,
+        href: drill?.measures.has(field.name) ? (row: Row) => `${drill.href}?domain=${encodeURIComponent(JSON.stringify(drill.keys.map((k) => [k, "=", plain(row[k]) ?? ""])))}` : undefined,
         value: numeric.has(field.type) ? (row: Row) => field.type === "money" ? money(row[field.name])?.amount : plain(row[field.name]) : undefined,
         edit: cellEdit(field),
       })),
@@ -281,8 +284,10 @@ export function Records({ declared, listPath, id, back, primaryExtra, initialCre
   const [creating, setCreating] = useState<Record<string, unknown> | false>(() => initialCreate ? {} : false);
   const [importing, setImporting] = useState(false);
   const [exportFailure, setExportFailure] = useState("");
+  const recordHref = useRecordHref();
   const entity = types.status === "ready" ? types.data.find((candidate) => candidate.type === declared.type) : undefined;
   const described = useMemo(() => (entity && actions.status === "ready" ? describe(entity, actions.data) : undefined), [entity, actions]);
+  const balanceDrill = useMemo(() => balanceDrillOf(entity, types.status === "ready" ? types.data : undefined, recordHref), [entity, types, recordHref]);
   const currentSearch = useSearch();
   const fallback = useMemo(() => {
     const columns = described ? shape(described, declared, listPath).columns.filter((column) => !column.hiddenByDefault).map((column) => column.key) : [];
@@ -499,7 +504,7 @@ export function Records({ declared, listPath, id, back, primaryExtra, initialCre
     if (!described) return pending;
     const effective = editRowsAllowed ? described : { ...described, edit: undefined, editable: new Set<string>() };
     const summary = { described, listPath, baseDomain: [...domainOf(view.filters, choiceOf), ...parseDomain(externalDomain)], options };
-    const baseShape = shape(effective, declared, listPath, { board, calendar, gantt, bulk, detail, summary }, options);
+    const baseShape = shape(effective, declared, listPath, { board, calendar, gantt, bulk, detail, summary }, options, balanceDrill);
     const extColumns = extensions.length > 0
       ? extensionListColumns(extensions, extPages, new Set(baseShape.columns.map((column) => column.header)))
       : [];
@@ -517,7 +522,7 @@ export function Records({ declared, listPath, id, back, primaryExtra, initialCre
       unfiltered: records.unfiltered,
       page: { total: records.total, loaded: records.loaded, hasMore: records.hasMore, loading: records.loading, loadMore: records.loadMore },
     };
-  }, [described, declared, listPath, pending, board, calendar, gantt, bulk, options, detail, extensions, extPages, records.total, records.unfiltered, records.loaded, records.hasMore, records.loading, records.loadMore, externalDomain, view.filters, actions]);
+  }, [described, declared, listPath, pending, board, calendar, gantt, bulk, options, detail, extensions, extPages, records.total, records.unfiltered, records.loaded, records.hasMore, records.loading, records.loadMore, externalDomain, view.filters, actions, balanceDrill]);
   const exportList = async () => {
     setExportFailure("");
     try {

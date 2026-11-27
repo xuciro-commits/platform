@@ -15,12 +15,12 @@ import (
 	"platformserver/services/resources/publication"
 )
 
-func computeRulesOf(o ontology.Object, lookup func(string) (platform.RecordTypeInfo, bool)) func(platform.Caller, any, any, time.Time) *platform.Error {
+func (b *Build) computeRulesOf(o ontology.Object, lookup func(string) (platform.RecordTypeInfo, bool)) func(platform.Caller, any, any, time.Time) *platform.Error {
 	list, orderErr := ontology.FormulaOrder(o.Fields)
 	followed := slices.DeleteFunc(slices.Clone(o.Fields), func(f ontology.Field) bool { return f.From == nil })
 	defaults := slices.DeleteFunc(slices.Clone(o.Fields), func(f ontology.Field) bool { return f.Default == "" })
 	assigned := o.Scope != nil && o.Scope.Assigned && o.Scope.Owner != ""
-	if len(list) == 0 && len(followed) == 0 && len(defaults) == 0 && !assigned {
+	if len(list) == 0 && len(followed) == 0 && len(defaults) == 0 && !assigned && o.Depletion == nil {
 		return nil
 	}
 	lookup = ruleLookup(o, lookup)
@@ -42,6 +42,11 @@ func computeRulesOf(o ontology.Object, lookup func(string) (platform.RecordTypeI
 		}
 		for _, f := range followed {
 			if err := follow(c, o, f, lookup, record, previous, now); err != nil {
+				return err
+			}
+		}
+		if o.Depletion != nil {
+			if err := b.computeDepletion(c, o, lookup, record, previous, now); err != nil {
 				return err
 			}
 		}
@@ -138,6 +143,9 @@ func computeRulesOf(o ontology.Object, lookup func(string) (platform.RecordTypeI
 }
 
 func follow(c platform.Caller, o ontology.Object, f ontology.Field, lookup func(string) (platform.RecordTypeInfo, bool), record, previous any, now time.Time) *platform.Error {
+	if c.Replaying || c.SourceProjection() {
+		return nil
+	}
 	target := reflect.ValueOf(record).Elem().FieldByName(ontology.GoName(f.Name))
 	if previous == nil && !target.IsZero() {
 		return nil
@@ -154,6 +162,7 @@ func follow(c platform.Caller, o ontology.Object, f ontology.Field, lookup func(
 		}
 	}
 	s := ruleSpec(o, ontology.Action{}, o.Reads)
+	s.PriorBalance = o.Ledger
 	schema, err := ruleprotocol.RuleSchema(*f.From, s, lookup, c.Rules())
 	if err != nil {
 		return platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, err.Error())
@@ -417,12 +426,14 @@ func (b *Build) checkObjectRules(o ontology.Object, engines ...platform.RuleEngi
 			if f.FormulaExpr != nil || f.Formula != "" || f.ReadOnly || f.AliasOf != "" || platform.RuleFieldKind(f.Type) != platform.RuleFieldKind(f.From.Kind) {
 				return fmt.Errorf("field %s follows a rule only as an editable field of the same type", f.Name)
 			}
-			if err := check(*f.From, ruleSpec(o, ontology.Action{}, o.Reads), "field "+f.Name); err != nil {
+			fromSpec := ruleSpec(o, ontology.Action{}, o.Reads)
+			fromSpec.PriorBalance = o.Ledger
+			if err := check(*f.From, fromSpec, "field "+f.Name); err != nil {
 				return err
 			}
 		}
 	}
-	return nil
+	return checkDepletionRules(b, o, lookup, engines...)
 }
 
 func (b *Build) checkRuleCollections(s platform.RuleReadSpec, where string, lookup func(string) (platform.RecordTypeInfo, bool)) error {

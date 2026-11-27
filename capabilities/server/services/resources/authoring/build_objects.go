@@ -238,6 +238,15 @@ func (b *Build) install(c platform.Caller, o ontology.Object) *platform.Error {
 	if err := b.validateObjectInstallation(c, o); err != nil {
 		return &platform.Error{Code: pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, Message: err.Error()}
 	}
+	if o.Depletion != nil {
+		target, ok := b.lookupEntity(o.Depletion.Ledger)
+		if !ok {
+			return platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "depletion target %s must be published before %s", o.Depletion.Ledger, o.Type())
+		}
+		if err := validateDepletionTarget(o, target); err != nil {
+			return platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, err.Error())
+		}
+	}
 	entity := b.entity(o)
 	actions := objectActions(o, entity)
 	pages, _, err := b.objectInstallationPages(o)
@@ -278,7 +287,28 @@ func (b *Build) entity(o ontology.Object) platform.RecordType {
 			return b.authority.ApplyTxnRecord(c, r, e, "refresh", id, json.RawMessage(`{}`), now)
 		},
 	})
-	entity.ComputeAt = computeRulesOf(o, b.conditionLookup)
+	entity.ComputeAt = b.computeRulesOf(o, b.conditionLookup)
+	if o.Depletion != nil {
+		prevFollow := entity.Follow
+		lookup := ruleLookup(o, b.conditionLookup)
+		entity.Follow = func(c platform.Caller, r *pb.ChangeRecord, verb string, before any, now time.Time) *platform.Error {
+			if verb == "create" {
+				if err := b.applyDepletionSlices(c, r, o, lookup, now); err != nil {
+					return err
+				}
+			}
+			if prevFollow != nil {
+				return prevFollow(c, r, verb, before, now)
+			}
+			return nil
+		}
+		entity.ReverseCheck = func(c platform.Caller, existing any, revOn string, now time.Time) *platform.Error {
+			return b.checkDepletionReversal(c, o, existing, revOn, now)
+		}
+		entity.ReverseFollow = func(c platform.Caller, r *pb.ChangeRecord, existing any, revOn string, now time.Time) *platform.Error {
+			return b.reverseDepletionSlices(c, r, o, existing, revOn, now)
+		}
+	}
 	entity.Protocols = b.objectProvisions(o, entity)
 	return entity
 }

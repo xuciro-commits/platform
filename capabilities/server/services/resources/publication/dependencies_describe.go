@@ -51,13 +51,15 @@ func (resolver Resolver) describeAssetFresh(asset platform.ReleaseAsset, histori
 	}
 	object := func(name string) platform.AssetRef {
 		if ref, ok := bindings.Objects[name]; ok {
+			ref.Name = ObjectAssetName(ref.Name)
 			return ref
 		}
-		app, ok := platform.OwnerOfType(name), strings.Contains(name, ".")
+		base := ObjectAssetName(name)
+		app, ok := platform.OwnerOfType(base), strings.Contains(base, ".")
 		if !ok {
 			app = asset.Ref.App
 		}
-		return platform.AssetRef{App: app, Kind: platform.AssetObject, Name: name}
+		return platform.AssetRef{App: app, Kind: platform.AssetObject, Name: base}
 	}
 	add := func(ref platform.AssetRef) {
 		if ref.Name != "" {
@@ -65,13 +67,14 @@ func (resolver Resolver) describeAssetFresh(asset platform.ReleaseAsset, histori
 		}
 	}
 	addObject := func(name string) {
-		if name == "enterprise.element" {
+		base := ObjectAssetName(name)
+		if base == "enterprise.element" {
 			return
 		}
-		if asset.Ref.Kind == platform.AssetObject && name == asset.Ref.Name {
+		if asset.Ref.Kind == platform.AssetObject && base == asset.Ref.Name {
 			return
 		}
-		if name != "" {
+		if base != "" {
 			add(object(name))
 		}
 	}
@@ -403,4 +406,11 @@ func (resolver Resolver) describeAssetFresh(asset platform.ReleaseAsset, histori
 		out.Provides = append(out.Provides, dependencies.Provides...)
 	}
 	return completeAssetDependencies(asset, out)
+}
+
+func ObjectAssetName(name string) string {
+	if parts := strings.Split(name, "."); len(parts) == 3 {
+		return parts[0] + "." + parts[1]
+	}
+	return name
 }

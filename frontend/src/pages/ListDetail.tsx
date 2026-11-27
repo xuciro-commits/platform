@@ -32,6 +32,7 @@ export const dotOf = (key: string) => `__dot:${key}`;
 export const toneOf = (key: string) => `__tone:${key}`;
 export const typeOf = (key: string) => `__type:${key}`;
 export const targetOf = (key: string) => `__target:${key}`;
+export const hrefOf = (key: string) => `__href:${key}`;
 export const rawOf = (key: string) => `__raw:${key}`;
 
 type Column = { key: string; header: string; kind?: ListColumnKind; boolean?: boolean; integer?: boolean };
@@ -81,10 +82,12 @@ export function ListCell({ column, cells, first }: { column: Column; cells: Cell
     return <BooleanValue value={checked} size="sm" surface="cell" />;
   }
 
+  const cellHref = cells[hrefOf(column.key)] || undefined;
+  const linkNum = (node: ReactNode) => (cellHref ? <HStack hAlign="end"><Link href={cellHref}>{node}</Link></HStack> : node);
   if (column.kind === "money") {
     const parsed = parseSerialized(rawJson);
-    if (parsed) return <MoneyValue value={parsed} size="sm" align="end" />;
-    return value ? <Text type="body" hasTabularNumbers maxLines={1}>{value}</Text> : null;
+    if (parsed) return linkNum(<MoneyValue value={parsed} size="sm" align="end" />);
+    return value ? linkNum(<Text type="body" hasTabularNumbers maxLines={1}>{value}</Text>) : null;
   }
 
   if (column.kind === "percent") {
@@ -101,7 +104,7 @@ export function ListCell({ column, cells, first }: { column: Column; cells: Cell
   if (column.kind === "number" && rawJson !== undefined && rawJson !== "") {
     const parsed = parseSerialized(rawJson);
     if (typeof parsed === "number" && Number.isFinite(parsed)) {
-      return <NumberValue value={parsed} integer={column.integer} size="sm" align="end" />;
+      return linkNum(<NumberValue value={parsed} integer={column.integer} size="sm" align="end" />);
     }
   }
 

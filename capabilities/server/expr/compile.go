@@ -400,6 +400,21 @@ func check(e Expr, s Schema, at string, depth int, nodes *int, mode int) (Type, 
 		good = arity(2, 2) && args[0].Kind == "set" && args[1].Kind == "set" && args[0].Element != nil && args[1].Element != nil && textual(args[0].Element.Kind) && textual(args[1].Element.Kind) && e.Kind == "boolean"
 	case "range":
 		good = arity(3, 3) && same(args[0].Kind, args[1].Kind) && same(args[0].Kind, args[2].Kind) && numeric(args[0].Kind) && e.Kind == "boolean"
+	case "prior-balance":
+		if !frozen && arity(2, 2) && all("text") && e.Args[0].Lit != nil && e.Args[1].Lit != nil {
+			var bal, meas string
+			_ = json.Unmarshal(e.Args[0].Lit.Value, &bal)
+			_ = json.Unmarshal(e.Args[1].Lit.Value, &meas)
+			measures, ok := s.PriorBalances[bal]
+			if !ok {
+				return Type{}, fail("operator", at, "prior-balance is only allowed in a ledger fact from rule")
+			}
+			m, ok := measures[meas]
+			if !ok || !same(m.Kind, e.Kind) {
+				return Type{}, fail("type", at, "prior-balance needs a declared balance measure of matching type")
+			}
+			return m, nil
+		}
 	default:
 		return Type{}, fail("operator", at+".op", "unknown operator")
 	}

@@ -116,7 +116,7 @@ func (ds Describer) DescribeOwnedAsset(asset platform.ReleaseAsset) (platform.Re
 						if info, exists := ds.host.Entity(name); exists {
 							prefix, _, _ := strings.Cut(name, ".")
 							if prefix != info.App {
-								bindings[name] = platform.AssetRef{App: info.App, Kind: platform.AssetObject, Name: name}
+								bindings[name] = platform.AssetRef{App: info.App, Kind: platform.AssetObject, Name: releasepub.ObjectAssetName(name)}
 							}
 						} else if name == "enterprise.element" || key == "target" && ds.host.AuthorityOf(name) != "" {
 							bindings[name] = platform.AssetRef{}
@@ -128,7 +128,7 @@ func (ds Describer) DescribeOwnedAsset(asset platform.ReleaseAsset) (platform.Re
 						for _, value := range types {
 							if name, ok := value.(string); ok {
 								if info, exists := ds.host.Entity(name); exists && strings.SplitN(name, ".", 2)[0] != info.App {
-									bindings[name] = platform.AssetRef{App: info.App, Kind: platform.AssetObject, Name: name}
+									bindings[name] = platform.AssetRef{App: info.App, Kind: platform.AssetObject, Name: releasepub.ObjectAssetName(name)}
 								}
 							}
 						}

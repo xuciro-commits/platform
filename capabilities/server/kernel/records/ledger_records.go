@@ -305,7 +305,8 @@ func (et *Type) CheckLedgerReceipt(v reflect.Value, schema string) error {
 	if err != nil {
 		return err
 	}
-	if (f.reverses != "") != (schema == et.info.Type+".reverse") {
+	if f.reverses == "" && schema == et.info.Type+".reverse" ||
+		f.reverses != "" && !(schema == et.info.Type+".reverse" || strings.HasSuffix(schema, ".reverse") && platform.OwnerOfType(schema) == et.info.App) {
 		return fmt.Errorf("only the system reverse action can post a reversal")
 	}
 	return nil

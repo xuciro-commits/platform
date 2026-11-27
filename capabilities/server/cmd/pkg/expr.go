@@ -14,14 +14,15 @@ type exprField struct {
 }
 
 type exprScope struct {
-	objects map[string]map[string]exprField
-	self    string
-	inputs  map[string]exprField
-	steps   map[string]string
-	sets    map[string]string
-	item    string
-	row     string
-	json    bool
+	objects       map[string]map[string]exprField
+	priorBalances map[string]map[string]string
+	self          string
+	inputs        map[string]exprField
+	steps         map[string]string
+	sets          map[string]string
+	item          string
+	row           string
+	json          bool
 }
 
 func fieldKind(t string) string {
@@ -532,6 +533,24 @@ var resultKinds = map[string]string{
 func (s exprScope) call(n *exprNode, want string) (*object, string, error) {
 	name := n.name
 	switch name {
+	case "prior-balance":
+		if len(n.args) != 2 || n.args[0].kind != "string" || n.args[1].kind != "string" {
+			return nil, "", fmt.Errorf("prior_balance takes (balance, measure) string literals")
+		}
+		if s.priorBalances == nil {
+			return nil, "", fmt.Errorf("prior_balance is only allowed in a ledger fact from expression")
+		}
+		measures, ok := s.priorBalances[n.args[0].text]
+		if !ok {
+			return nil, "", fmt.Errorf("unknown ledger balance %s", n.args[0].text)
+		}
+		kind, ok := measures[n.args[1].text]
+		if !ok {
+			return nil, "", fmt.Errorf("balance %s has no measure %s", n.args[0].text, n.args[1].text)
+		}
+		out := exprObject("prior-balance", kind)
+		out.set("args", []any{s.literal(n.args[0], "text"), s.literal(n.args[1], "text")})
+		return out, kind, nil
 	case "today", "now", "me":
 		kinds := map[string]string{"today": "date", "now": "datetime", "me": "reference"}
 		return exprObject("$"+name, kinds[name]), kinds[name], nil

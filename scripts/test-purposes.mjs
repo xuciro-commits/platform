@@ -170,6 +170,7 @@ K52AskFirstHoldsAIActionsUntilInboxApproval|先问动作由 AI 调用时转入�
 K53MCPTypeGeneratedToolSurface|MCP 工具面按可读类型生成对象集查询工具并按已发布动作生成执行工具
 K54AIProvenanceSourceSlot|AI 写入在已接受结果来源槽位记录来由并在重放与快照恢复后一致呈现
 AskObjectActions|包检查校验对象与动作的 ask 先问声明
+K53LedgerValuationAndDepletion|过账前余额读取、余额实时派生、加权与逐层消耗计价、已消耗层冲正拦截及重放字节一致
 `.trim().split("\n").map(line => line.split("|")));
 
 const subcases = { postgres: "PostgreSQL 持久化", file: "文件持久化", memory: "内存模式", accepted: "接受结果", refused: "拒绝结果" };

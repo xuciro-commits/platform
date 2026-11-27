@@ -1531,6 +1531,7 @@ export type Constraint = {
 export type Context = {
   sources?: string[];
   windows?: Record<string, WindowSummary>;
+  priorBalances?: Record<string, Record<string, Value>>;
   refs: Record<string, Value>;
   sets?: Record<string, Collection>;
   me: string;
@@ -5241,6 +5242,7 @@ export type RuleCriterion = {
 };
 
 export type RuleReadSpec = {
+  priorBalance?: boolean;
   object?: string;
   inputs?: Record<string, Type>;
   collections?: Record<string, RuleCollection>;

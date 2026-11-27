@@ -1,6 +1,8 @@
 package protocol
 
 import (
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
@@ -51,6 +53,18 @@ func RuleSchema(expr platform.Expr, spec platform.RuleReadSpec, lookup func(stri
 			schema.Refs[f.Name] = platform.ExprType{Kind: platform.RuleFieldKind(f.Type), Object: f.Ref}
 		}
 		schema.Refs["id"] = platform.ExprType{Kind: "text"}
+		if spec.PriorBalance && record.Ledger != nil {
+			schema.PriorBalances = map[string]map[string]platform.ExprType{}
+			for _, b := range record.Ledger.Balances {
+				measures := map[string]platform.ExprType{}
+				for _, m := range b.Measures {
+					if mf, ok := record.Field(m); ok {
+						measures[m] = platform.ExprType{Kind: platform.RuleFieldKind(mf.Type)}
+					}
+				}
+				schema.PriorBalances[b.Name] = measures
+			}
+		}
 	}
 	for name, set := range spec.Collections {
 		if _, _, err := RuleCollectionSubjectField(spec.Object, set.Of, lookup); err != nil {
@@ -306,6 +320,54 @@ func RuleContext(c platform.Caller, expr platform.Expr, spec platform.RuleReadSp
 	}
 	if err := visit(expr); err != nil {
 		return ctx, err
+	}
+	if spec.PriorBalance && info.Ledger != nil && usesOp(expr, "prior-balance") {
+		ctx.PriorBalances = map[string]map[string]platform.ExprValue{}
+		for _, b := range info.Ledger.Balances {
+			keys := make([]json.RawMessage, 0, len(b.Keys))
+			completeKeys := true
+			for _, k := range b.Keys {
+				raw := values[k]
+				if len(raw) == 0 || string(raw) == "null" || string(raw) == `""` {
+					completeKeys = false
+					break
+				}
+				keys = append(keys, raw)
+			}
+			balRow := map[string]json.RawMessage{}
+			if completeKeys {
+				digest := sha256.Sum256([]byte(b.Name + "/" + string(platform.Raw(keys))))
+				balID := hex.EncodeToString(digest[:])
+				if raw, readErr := c.ReadRecord(info.Type+"."+b.Name, balID, now); readErr == nil {
+					if err := json.Unmarshal(raw, &balRow); err != nil {
+						return ctx, err
+					}
+				} else if readErr.Code != pb.ErrorCode_ERROR_CODE_NOT_FOUND {
+					return ctx, fmt.Errorf("prior balance %s: %s", b.Name, readErr.Message)
+				}
+			}
+			measures := map[string]platform.ExprValue{}
+			for _, m := range b.Measures {
+				mf, _ := info.Field(m)
+				kind := platform.RuleFieldKind(mf.Type)
+				if mRaw, ok := balRow[m]; ok && len(mRaw) > 0 && string(mRaw) != "null" {
+					measures[m] = platform.ExprValue{Kind: kind, Status: "value", Data: mRaw}
+				} else if kind == "money" {
+					var cur struct {
+						Currency string `json:"currency"`
+					}
+					_ = json.Unmarshal(values[m], &cur)
+					if cur.Currency != "" {
+						measures[m] = platform.ExprPresent("money", map[string]any{"amount": 0, "currency": cur.Currency})
+					} else {
+						measures[m] = platform.ExprValue{Kind: "money", Status: "missing"}
+					}
+				} else {
+					measures[m] = platform.ExprPresent(kind, 0)
+				}
+			}
+			ctx.PriorBalances[b.Name] = measures
+		}
 	}
 	used := map[string][]platform.Expr{}
 	needed := map[string]map[string]bool{}

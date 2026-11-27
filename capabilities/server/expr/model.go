@@ -52,9 +52,10 @@ type SetType struct {
 	Policy  string `json:"policy"`
 }
 type Schema struct {
-	Refs    map[string]Type       `json:"refs"`
-	Sets    map[string]SetType    `json:"sets,omitempty"`
-	Windows map[string]WindowType `json:"windows,omitempty"`
+	Refs          map[string]Type            `json:"refs"`
+	Sets          map[string]SetType         `json:"sets,omitempty"`
+	Windows       map[string]WindowType      `json:"windows,omitempty"`
+	PriorBalances map[string]map[string]Type `json:"priorBalances,omitempty"`
 }
 
 type Value struct {
@@ -75,17 +76,18 @@ type Collection struct {
 	Withheld bool   `json:"withheld,omitempty"`
 }
 type Context struct {
-	Sources  []string                 `json:"sources,omitempty"`
-	Windows  map[string]WindowSummary `json:"windows,omitempty"`
-	Refs     map[string]Value         `json:"refs"`
-	Sets     map[string]Collection    `json:"sets,omitempty"`
-	Me       string                   `json:"me"`
-	Now      time.Time                `json:"now"`
-	Today    string                   `json:"today"`
-	Workdays []int                    `json:"workdays,omitempty"`
-	Holidays []string                 `json:"holidays,omitempty"`
-	item     *itemScope
-	source   RefSource
+	Sources       []string                    `json:"sources,omitempty"`
+	Windows       map[string]WindowSummary    `json:"windows,omitempty"`
+	PriorBalances map[string]map[string]Value `json:"priorBalances,omitempty"`
+	Refs          map[string]Value            `json:"refs"`
+	Sets          map[string]Collection       `json:"sets,omitempty"`
+	Me            string                      `json:"me"`
+	Now           time.Time                   `json:"now"`
+	Today         string                      `json:"today"`
+	Workdays      []int                       `json:"workdays,omitempty"`
+	Holidays      []string                    `json:"holidays,omitempty"`
+	item          *itemScope
+	source        RefSource
 }
 type Issue struct {
 	Code    string `json:"code"`

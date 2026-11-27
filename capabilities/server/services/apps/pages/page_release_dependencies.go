@@ -5,6 +5,7 @@ import (
 
 	"platformserver/platform"
 	"platformserver/services/ontology"
+	"platformserver/services/resources/publication"
 )
 
 func modelDependencies(p platform.Page) []platform.AssetRef {
@@ -126,6 +127,11 @@ func PageDependencies(original platform.Page) []platform.AssetRef {
 					refs = append(refs, effect.Action.Ref)
 				}
 			}
+		}
+	}
+	for i := range refs {
+		if refs[i].Kind == platform.AssetObject {
+			refs[i].Name = publication.ObjectAssetName(refs[i].Name)
 		}
 	}
 	return refs

@@ -539,6 +539,13 @@ func (p *Program) eval(e Expr, c Context, at string, reasons *[]Issue) (Value, e
 			return Value{}, err
 		}
 		return out(a >= 0 && b <= 0)
+	case "prior-balance":
+		v, ok := c.PriorBalances[values[0].(string)][values[1].(string)]
+		if !ok {
+			return Value{}, fail("missing", at, "prior balance is unavailable")
+		}
+		_, err := validateValue(v, at)
+		return v, err
 	case "overlaps":
 		right := map[string]bool{}
 		for _, item := range values[1].([]any) {

@@ -8,6 +8,7 @@ import (
 	"strings"
 
 	"platformserver/platform"
+	"platformserver/services/resources/publication"
 )
 
 func ObjectDescriptor(body []byte) (platform.RecordTypeInfo, error) {
@@ -144,16 +145,19 @@ func ObjectDependencies(asset platform.ReleaseAsset, historical bool) ([]platfor
 	}
 	object := func(name string) platform.AssetRef {
 		if ref, ok := bindings.Objects[name]; ok {
+			ref.Name = publication.ObjectAssetName(ref.Name)
 			return ref
 		}
-		app, ok := platform.OwnerOfType(name), strings.Contains(name, ".")
+		base := publication.ObjectAssetName(name)
+		app, ok := platform.OwnerOfType(base), strings.Contains(base, ".")
 		if !ok {
 			app = asset.Ref.App
 		}
-		return platform.AssetRef{App: app, Kind: platform.AssetObject, Name: name}
+		return platform.AssetRef{App: app, Kind: platform.AssetObject, Name: base}
 	}
 	addObject := func(name string) {
-		if name == "enterprise.element" || name == "" || asset.Ref.Kind == platform.AssetObject && name == asset.Ref.Name {
+		base := publication.ObjectAssetName(name)
+		if base == "enterprise.element" || base == "" || asset.Ref.Kind == platform.AssetObject && base == asset.Ref.Name {
 			return
 		}
 		requires = append(requires, object(name))
@@ -207,7 +211,10 @@ func ObjectDependencies(asset platform.ReleaseAsset, historical bool) ([]platfor
 		Reads       *platform.RuleReadSpec `json:"reads"`
 		Constraints []platform.Constraint  `json:"constraints"`
 		Sets        []platform.RecordSet   `json:"sets"`
-		Actions     []struct {
+		Depletion   *struct {
+			Ledger string `json:"ledger"`
+		} `json:"depletion"`
+		Actions []struct {
 			Reads       *platform.RuleReadSpec     `json:"reads"`
 			Transaction *platform.BusinessTxn      `json:"transaction"`
 			Adoption    *platform.ProposalAdoption `json:"adoption"`
@@ -223,6 +230,9 @@ func ObjectDependencies(asset platform.ReleaseAsset, historical bool) ([]platfor
 		return nil, nil, err
 	}
 	readSpec(declaration.Reads)
+	if declaration.Depletion != nil {
+		addObject(declaration.Depletion.Ledger)
+	}
 	if declaration.Creation != nil {
 		var visit func([]platform.TxnStep)
 		visit = func(steps []platform.TxnStep) {
@@ -319,13 +329,15 @@ func ActionDependencies(asset platform.ReleaseAsset, historical bool) ([]platfor
 	}
 	object := func(name string) platform.AssetRef {
 		if ref, ok := bindings.Objects[name]; ok {
+			ref.Name = publication.ObjectAssetName(ref.Name)
 			return ref
 		}
-		app, ok := platform.OwnerOfType(name), strings.Contains(name, ".")
+		base := publication.ObjectAssetName(name)
+		app, ok := platform.OwnerOfType(base), strings.Contains(base, ".")
 		if !ok {
 			app = asset.Ref.App
 		}
-		return platform.AssetRef{App: app, Kind: platform.AssetObject, Name: name}
+		return platform.AssetRef{App: app, Kind: platform.AssetObject, Name: base}
 	}
 	add := func(ref platform.AssetRef) {
 		if ref.Name != "" {
@@ -333,7 +345,8 @@ func ActionDependencies(asset platform.ReleaseAsset, historical bool) ([]platfor
 		}
 	}
 	addObject := func(name string) {
-		if name != "" && name != "enterprise.element" {
+		base := publication.ObjectAssetName(name)
+		if base != "" && base != "enterprise.element" {
 			add(object(name))
 		}
 	}

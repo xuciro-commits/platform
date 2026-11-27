@@ -41,6 +41,7 @@ export type ListColumn<Row> = {
   hiddenByDefault?: boolean;
   chip?: boolean;
   reference?: (row: Row) => { type: string; id: string } | undefined;
+  href?: (row: Row) => string | undefined;
   edit?: CellEdit<Row>;
 };
 

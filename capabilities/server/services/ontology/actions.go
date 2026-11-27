@@ -268,7 +268,7 @@ func RuleLookup(o Object, app, builderRole string, lookup func(string) (platform
 			}
 			return lookup(typ)
 		}
-		info := platform.RecordTypeInfo{Type: typ, App: app, Sets: o.Sets, LiveRules: map[string]platform.Expr{}, LiveReads: o.Reads}
+		info := platform.RecordTypeInfo{Type: typ, App: app, Ledger: LedgerOf(o), Sets: o.Sets, LiveRules: map[string]platform.Expr{}, LiveReads: o.Reads}
 		for _, f := range o.Fields {
 			read := f.Read
 			if len(read) > 0 {

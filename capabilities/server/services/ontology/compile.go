@@ -139,7 +139,8 @@ func CompileObjectShape(o Object, app, builderRole string) platform.RecordType {
 			tag += fmt.Sprintf(` write:"%s"`, strings.Join(append([]string{builderRole}, f.Write...), ","))
 		}
 		fieldType := goType(f.Type)
-		if (!f.Required || f.FormulaExpr != nil || f.Live != nil) && (f.Type == "integer" || f.Type == "decimal" || f.Type == "boolean" || f.Type == "datetime" || f.Type == "money") {
+		isMeasure := o.Ledger && slices.ContainsFunc(o.Balances, func(b Balance) bool { return slices.Contains(b.Measures, f.Name) })
+		if (!f.Required || f.FormulaExpr != nil || f.Live != nil || isMeasure) && (f.Type == "integer" || f.Type == "decimal" || f.Type == "boolean" || f.Type == "datetime" || f.Type == "money") {
 			fieldType = reflect.PointerTo(fieldType)
 		}
 		fields = append(fields, reflect.StructField{Name: GoName(f.Name), Type: fieldType, Tag: reflect.StructTag(tag)})

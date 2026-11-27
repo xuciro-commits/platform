@@ -22,7 +22,7 @@ func LedgerOf(o Object) *platform.LedgerSpec {
 
 func NormalizeLedger(o *Object) error {
 	if !o.Ledger {
-		if len(o.Balances) > 0 || o.ClosedBefore != "" {
+		if len(o.Balances) > 0 || o.ClosedBefore != "" || o.Depletion != nil {
 			return fmt.Errorf("balances and closedBefore require ledger: true")
 		}
 		return nil
@@ -104,6 +104,29 @@ func CheckLedger(o Object, engine platform.RuleEngine) error {
 				return fmt.Errorf("ledger balance %s constraint %s: %w", b.Name, c.Name, err)
 			}
 		}
+		for _, bf := range b.Fields {
+			if !publication.ValidName(bf.Name) || bf.Title == "" || seen[bf.Name] || bf.Live == nil || bf.From != nil || bf.FormulaExpr != nil || bf.Formula != "" || bf.Default != "" || bf.Required {
+				return fmt.Errorf("ledger balance %s field %s must be a live derived field", b.Name, bf.Name)
+			}
+			if platform.RuleFieldKind(bf.Type) != platform.RuleFieldKind(bf.Live.Kind) {
+				return fmt.Errorf("ledger balance %s field %s live result type differs", b.Name, bf.Name)
+			}
+			if _, err := engine.CompileExpr(*bf.Live, platform.ExprSchema{Refs: refs}); err != nil {
+				return fmt.Errorf("ledger balance %s field %s: %w", b.Name, bf.Name, err)
+			}
+			seen[bf.Name] = true
+		}
+	}
+	if d := o.Depletion; d != nil {
+		qf, qok := fields[d.Quantity]
+		af, aok := fields[d.Amount]
+		if d.Ledger == "" || d.Balance == "" || d.Origin == "" || d.Consumer == "" || !qok || !aok || !qf.Required || !af.Required ||
+			!slices.Contains([]string{"integer", "decimal"}, qf.Type) || !slices.Contains([]string{"integer", "decimal", "money"}, af.Type) {
+			return fmt.Errorf("ledger %s depletion requires target ledger, balance, origin, consumer and numeric quantity/amount fields", o.Type())
+		}
+		if d.When != nil && d.When.Kind != "boolean" {
+			return fmt.Errorf("ledger %s depletion condition must be boolean", o.Type())
+		}
 	}
 	return nil
 }
@@ -122,11 +145,19 @@ func LedgerBalances(o Object) []platform.RecordType {
 				continue
 			}
 			f := o.Fields[i]
+			if slices.Contains(b.Measures, name) {
+				f.Required = false
+			}
 			f.ReadOnly = true
 			f.From, f.FormulaExpr, f.Live = nil, nil, nil
 			f.Formula, f.Default, f.When, f.OneOf = "", "", "", ""
 			f.Write = nil
 			shape.Fields = append(shape.Fields, f)
+		}
+		for _, bf := range b.Fields {
+			bf.ReadOnly = true
+			bf.Write = nil
+			shape.Fields = append(shape.Fields, bf)
 		}
 		model := CompileObjectShape(shape, AppID, BuilderRole)
 		_, model.Scope, _ = CompileAccess(shape, BuilderRole, UserRole)

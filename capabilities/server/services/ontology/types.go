@@ -15,6 +15,7 @@ type Object struct {
 	Ledger               bool                         `json:"ledger,omitempty" title:"Ledger"`
 	ClosedBefore         string                       `json:"closedBefore,omitempty" type:"date" title:"Closed before"`
 	Balances             []Balance                    `json:"balances,omitempty" type:"json" field:"aside"`
+	Depletion            *LedgerDepletion             `json:"depletion,omitempty" type:"json" field:"aside"`
 	Name                 string                       `json:"name" field:"required,search" title:"API name" help:"Its name in the platform, lower-case letters and digits" example:"visit"`
 	Namespace            string                       `json:"namespace,omitempty" title:"Application" help:"The project whose application owns this type; set from the project when the type is created"`
 	Title                string                       `json:"title" field:"required,search" title:"Name" help:"What people call it" example:"Visit"`
@@ -57,7 +58,18 @@ type Object struct {
 type Balance struct {
 	platform.LedgerBalance
 	Title  string   `json:"title"`
+	Fields []Field  `json:"fields,omitempty"`
 	Access []Access `json:"access,omitempty"`
+}
+
+type LedgerDepletion struct {
+	Ledger   string         `json:"ledger"`
+	Balance  string         `json:"balance"`
+	When     *platform.Expr `json:"when,omitempty"`
+	Origin   string         `json:"origin"`
+	Consumer string         `json:"consumer"`
+	Quantity string         `json:"quantity"`
+	Amount   string         `json:"amount"`
 }
 
 type Field struct {

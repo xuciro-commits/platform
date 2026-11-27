@@ -60,6 +60,8 @@ type RecordType struct {
 	Protocols         []Provision
 	CreateTxn         *BusinessTxn
 	Follow            func(Caller, *pb.ChangeRecord, string, any, time.Time) *Error
+	ReverseCheck      func(Caller, any, string, time.Time) *Error
+	ReverseFollow     func(Caller, *pb.ChangeRecord, any, string, time.Time) *Error
 	Versioning        *Versioning
 	VersionPins       []VersionPinBinding
 	Sets              []RecordSet
@@ -432,7 +434,6 @@ func Get[T any](c Caller, id string) (T, bool) {
 	}
 	return v.(T), true
 }
-
 func Find[T any](c Caller, q Query) ([]T, int, *Error) {
 	if c.rt == nil {
 		return nil, 0, notFound()
