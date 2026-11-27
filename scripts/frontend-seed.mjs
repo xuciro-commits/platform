@@ -118,6 +118,26 @@ async function filled(session, descriptor) {
   }
 }
 
+async function filledDemo(session, descriptor) {
+  const expected = new Map();
+  for (const seed of descriptor.blueprint.seed ?? []) {
+    if (seed.kind === "data") continue;
+    if (!expected.has(seed.type)) expected.set(seed.type, []);
+    expected.get(seed.type).push(seed.id);
+  }
+  const deadline = Date.now() + 120_000;
+  while (expected.size) {
+    for (const [type, ids] of expected) {
+      const { records: rows } = await session.call(`/v1/records/${type}?limit=500`);
+      const present = new Set(rows.map((row) => row.id));
+      if (ids.every((id) => present.has(id))) expected.delete(type);
+    }
+    if (!expected.size) break;
+    if (Date.now() >= deadline) throw new Error(`${session.identity.tenantId}: ${descriptor.id} demo records not filled: ${JSON.stringify([...expected])}`);
+    await new Promise((resolve) => setTimeout(resolve, 200));
+  }
+}
+
 async function words(session, sample) {
   if (!sample.words || Object.keys(sample.words).length === 0) return;
   const authority = session.authorityFor("platform.translation");
@@ -235,6 +255,7 @@ const tenantPackages = {
     bind: ["call/1"],
   },
   publisher: {
+    verifyDemo: true,
     packages: [...partyPackages, "./frontend-fixtures/projects-0.1.1.json", "./frontend-fixtures/assets-0.1.0.json"],
     grants: { "admin-1": [["party", "user"], ["projects", "manager"], ["assets", "custodian"]], "user-1": [["party", "user"], ["projects", "member"], ["assets", "staff"]] },
   },
@@ -253,7 +274,7 @@ await Promise.all(["blank", "rebac", "upgrade", "publisher", "official", "phone"
   const plan = tenantPackages[name];
   if (!plan) return;
   const installed = [];
-  for (const path of plan.packages) installed.push((await installPackage(empty, path)).id);
+  for (const path of plan.packages) installed.push(await installPackage(empty, path));
   await empty.refresh();
   for (const [member, roles] of Object.entries(plan.grants)) {
     let revision = 0;
@@ -267,5 +288,6 @@ await Promise.all(["blank", "rebac", "upgrade", "publisher", "official", "phone"
     if (providers.length !== 1) throw new Error(`${name}: ${protocol} has ${providers.length} providers, expected one`);
     await empty.submit("platform.protocol", protocol, "bind", { provider: providers[0] }, "platform");
   }
-  console.log(`frontend-seed: installed ${installed.join(", ")} in tenant ${name}`);
+  if (plan.verifyDemo) for (const descriptor of installed) await filledDemo(empty, descriptor);
+  console.log(`frontend-seed: installed ${installed.map((descriptor) => descriptor.id).join(", ")} in tenant ${name}`);
 }));
