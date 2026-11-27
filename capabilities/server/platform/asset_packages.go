@@ -14,7 +14,14 @@ type PackageContribution struct {
 	App     string `json:"app,omitempty"`
 }
 
+type PackageContracts struct {
+	Requires []string `json:"requires,omitempty"`
+	Optional []string `json:"optional,omitempty"`
+	Provides []string `json:"provides,omitempty"`
+}
+
 type PackageDescriptor struct {
+	Contracts      *PackageContracts               `json:"contracts,omitempty"`
 	Blueprint      *PackageBlueprint               `json:"blueprint,omitempty"`
 	ID             string                          `json:"id"`
 	Version        string                          `json:"version"`

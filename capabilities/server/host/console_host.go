@@ -87,4 +87,4 @@ func (h hostView) GetPackageArtifact(key string) ([]byte, error) {
 	return io.ReadAll(reader)
 }
 
-var _ platform.ConsoleHost = hostView{}
+var _ runtimeprotocol.ConsoleHost = hostView{}

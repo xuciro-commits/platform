@@ -307,6 +307,11 @@ func split(artifactPath, dir string) error {
 			manifest.set(key, descriptor.values[key])
 		}
 	}
+	if raw, present := manifest.get("contracts"); present {
+		if contracts := asObject(raw); contracts != nil {
+			contracts.remove("provides")
+		}
+	}
 	roots, _ := blueprint.get("roots")
 	manifest.set("roots", roots)
 	manifest.set("artifact", filepath.Base(artifactPath))
@@ -718,6 +723,26 @@ func build(dir string, previous *platform.PackageDescriptor) (built, error) {
 		blueprint.set("seed", append(items, data...))
 	}
 	manifest.set("blueprint", blueprint)
+	if raw, present := manifest.get("contracts"); present {
+		contracts := asObject(raw)
+		if contracts == nil {
+			return built{}, fmt.Errorf("%s: contracts must be an object", manifestFile)
+		}
+		if _, manual := contracts.get("provides"); manual {
+			return built{}, fmt.Errorf("%s: contracts.provides is generated from implementations", manifestFile)
+		}
+		var candidate platform.PackageDescriptor
+		if err := json.Unmarshal([]byte(stringify(manifest)), &candidate); err != nil {
+			return built{}, err
+		}
+		provided, err := packagedesc.ProvidedContracts(candidate)
+		if err != nil {
+			return built{}, err
+		}
+		if len(provided) > 0 {
+			contracts.set("provides", toValue(provided))
+		}
+	}
 	artifact := stringify(manifest)
 	next.Artifact = digest(artifact)
 	var descriptor platform.PackageDescriptor

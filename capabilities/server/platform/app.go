@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"google.golang.org/protobuf/proto"
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
-	"platformserver/capability"
 	"regexp"
 	"slices"
 	"strings"
@@ -418,22 +417,6 @@ type AppCatalog interface {
 	App(id string) Service
 	AppIDs() []string
 	Manifest(app string) Manifest
-}
-
-type ConsoleHost interface {
-	PackageLifecycleImpact(Caller, string, []ReleaseAsset) (PackageLifecycleImpact, error)
-	PrepareManagedPackage(Caller, PackageDescriptor, []ReleaseAsset, bool, bool, bool) (func(*pb.ChangeRecord), map[string][]string, *Error)
-	AppCatalog
-	CodeReleaseAssets() ([]ReleaseAsset, error)
-	ConsoleSetting(name string) string
-	Languages() []string
-	TenantSuspended() bool
-	GovernanceRead(Caller, string) (any, *Error)
-	ConnectorHeartbeat(Caller, time.Time) *Error
-	PutPackageArtifact(key string, raw []byte) error
-	GetPackageArtifact(key string) ([]byte, error)
-	BaseModules() []capability.CapabilityModule
-	ProductVersions() []ProductVersionView
 }
 
 type Listener interface {

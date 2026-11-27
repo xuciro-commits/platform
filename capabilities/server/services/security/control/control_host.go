@@ -76,7 +76,7 @@ type Console struct {
 	runtimeprotocol.ConsolePackages
 	authority   platform.Authority
 	authorities platform.Authorities
-	host        platform.ConsoleHost
+	host        runtimeprotocol.ConsoleHost
 }
 
 func ConsoleActions(ownerActions []platform.Action) *platform.Catalog {

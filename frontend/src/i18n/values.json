@@ -1059,5 +1059,11 @@
   "Swedish Krona": "瑞典克朗",
   "Norwegian Krone": "挪威克朗",
   "Danish Krone": "丹麦克朗",
-  "Polish Zloty": "波兰兹罗提"
+  "Polish Zloty": "波兰兹罗提",
+  "Provided contract": "提供的契约",
+  "Required contract": "必需契约",
+  "Optional contract": "可选契约",
+  "Provider in this package": "本包提供实现",
+  "Connected entries": "已接入的入口",
+  "Entries awaiting provider activation": "等待提供方启用的入口"
 }

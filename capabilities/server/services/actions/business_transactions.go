@@ -498,7 +498,7 @@ func (b *Runtime) transactAttempt(c platform.Caller, receipt *pb.ChangeRecord, t
 				if frame != "" {
 					target += "-" + frame
 				}
-				c.Request(receipt, platform.Request{Protocol: protocol, Action: action, Target: target, Payload: payload})
+				c.Request(receipt, platform.Request{Protocol: protocol, Action: action, Target: target, Payload: payload, Deferred: step.Request.Deferred})
 				continue
 			}
 			if step.Work != nil {

@@ -45,6 +45,9 @@ func Validate(p platform.PackageDescriptor, withDependencies func(platform.Relea
 			return err
 		}
 	}
+	if err := CheckContracts(p); err != nil {
+		return err
+	}
 	if p.Blueprint == nil {
 		return nil
 	}

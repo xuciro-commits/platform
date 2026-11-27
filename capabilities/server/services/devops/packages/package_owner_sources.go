@@ -198,6 +198,7 @@ func (d *Owner) packageDependents(id string) []string {
 	}
 	slices.Sort(ids)
 	var blockers []string
+	active := map[string]platform.PackageDescriptor{}
 	for _, other := range ids {
 		held := installed[other]
 		if other == id || held.State == "retired" {
@@ -222,11 +223,18 @@ func (d *Owner) packageDependents(id string) []string {
 			blockers = append(blockers, fmt.Sprintf("Package retirement cannot check %s: %s", other, err))
 			continue
 		}
+		if held.State == "active" {
+			active[other] = descriptor
+		}
 		if slices.ContainsFunc(descriptor.Requires, func(need string) bool { required, _ := packagedesc.PackageDependency(need); return required == id }) {
 			blockers = append(blockers, fmt.Sprintf("The package %s is still required by %s", id, other))
 		}
 	}
-	return blockers
+	problems, err := requiredContractProblems(active)
+	if err != nil {
+		return append(blockers, err.Error())
+	}
+	return append(blockers, problems...)
 }
 
 func (d *Owner) packageRemoval(id string) *runtimeprotocol.PackageRemoval {
@@ -260,6 +268,18 @@ func (d *Owner) packageComposition(candidate platform.PackageDescriptor, index *
 		installed[descriptor.ID] = descriptor
 	}
 	installed[candidate.ID] = candidate
+	active := maps.Clone(installed)
+	state := d.packagesOf()
+	for id := range active {
+		if held := state[id]; held != nil && held.State != "active" && id != candidate.ID && !slices.ContainsFunc(proposed, func(p platform.PackageDescriptor) bool { return p.ID == id }) {
+			delete(active, id)
+		}
+	}
+	if problems, err := requiredContractProblems(active); err != nil {
+		return runtimeprotocol.CompositionPlan{}, err
+	} else if len(problems) > 0 {
+		return runtimeprotocol.CompositionPlan{}, fmt.Errorf("%s", strings.Join(problems, "; "))
+	}
 	for _, id := range slices.Sorted(maps.Keys(installed)) {
 		modules = append(modules, Module(installed[id]))
 	}

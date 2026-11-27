@@ -108,6 +108,15 @@ func (d *stagedDecision) Request(c platform.Caller, r *pb.ChangeRecord, q platfo
 		d.Intents = append(d.Intents, d.routingTenant().gatewayRuntime().Plan(c, r, q, d.Intents))
 		return
 	}
+	if q.Deferred {
+		effect, err := d.routingTenant().router().PlanDeferredRequest(c, r, q)
+		if err != nil {
+			d.FailDecision(err)
+		} else {
+			d.Intents = append(d.Intents, effect)
+		}
+		return
+	}
 	q.Payload = slices.Clone(platform.Raw(q.Payload))
 	d.requests = append(d.requests, actions.PendingRequest{Request: q, Caller: c,
 		Record: proto.Clone(r).(*pb.ChangeRecord), N: d.NextRequest(c.App + "/" + r.GetChangeId())})

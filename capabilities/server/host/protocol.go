@@ -3,6 +3,7 @@ package host
 import (
 	"context"
 	releaseowner "platformserver/services/devops/releases"
+	build "platformserver/services/resources/authoring"
 	"time"
 
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
@@ -11,7 +12,7 @@ import (
 )
 
 func (t *Tenant) router() actions.Router {
-	return actions.Router{Host: t, Bindings: t.bindings, Tenant: t.ID}
+	return actions.Router{Host: t, Bindings: t.bindings, Tenant: t.ID, AssetActive: func(ref platform.AssetRef) bool { return build.StoreProtocolAssetActive(t.Projection, t.ID, ref) }}
 }
 
 func (t *Tenant) StageSubmission(c platform.Caller, s *pb.Submission, now time.Time) (*pb.ChangeRecord, *platform.Error) {

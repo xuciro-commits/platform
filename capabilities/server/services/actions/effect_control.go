@@ -76,7 +76,7 @@ func (e EffectControl) RemoveEndpoint(c platform.Caller, id string, now time.Tim
 
 func (e EffectControl) AddEndpoint(id string, payload []byte) (func(*pb.ChangeRecord), *platform.Error) {
 	var ep Endpoint
-	if json.Unmarshal(payload, &ep) != nil || id == "" || !e.Valid(ep) {
+	if json.Unmarshal(payload, &ep) != nil || id == "" || id == DeferredRequestEndpoint || !e.Valid(ep) {
 		return nil, &platform.Error{Code: pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT}
 	}
 	if e.Endpoints.Has(id) {

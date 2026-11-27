@@ -234,6 +234,7 @@ type ConsolePackages interface {
 	Offer(string) (Offer, error)
 	PreparationBlueprint(string, string) (platform.PackageBlueprint, *InstalledPackage, error)
 	PackagePrerequisites(string, string) ([]platform.ReleaseAsset, error)
+	PackageContractStatus(string, string) ([]PackageContractStatus, error)
 	InstalledPackages() map[string]*InstalledPackage
 	PackageSeed(string) ([]json.RawMessage, bool)
 }
@@ -251,4 +252,30 @@ type CompositeAnswer struct {
 	Key     string `json:"key"`
 	Applied int    `json:"applied"`
 	Digest  string `json:"digest,omitempty"`
+}
+
+type PackageContractStatus struct {
+	Contract  string   `json:"contract"`
+	Required  bool     `json:"required"`
+	Providers []string `json:"providers"`
+	Bound     bool     `json:"bound"`
+	Provided  bool     `json:"provided,omitempty"`
+	Consumers []string `json:"consumers,omitempty"`
+	Entries   []string `json:"entries,omitempty"`
+}
+
+type ConsoleHost interface {
+	PackageLifecycleImpact(platform.Caller, string, []platform.ReleaseAsset) (platform.PackageLifecycleImpact, error)
+	PrepareManagedPackage(platform.Caller, platform.PackageDescriptor, []platform.ReleaseAsset, bool, bool, bool) (func(*pb.ChangeRecord), map[string][]string, *platform.Error)
+	platform.AppCatalog
+	CodeReleaseAssets() ([]platform.ReleaseAsset, error)
+	ConsoleSetting(name string) string
+	Languages() []string
+	TenantSuspended() bool
+	GovernanceRead(platform.Caller, string) (any, *platform.Error)
+	ConnectorHeartbeat(platform.Caller, time.Time) *platform.Error
+	PutPackageArtifact(key string, raw []byte) error
+	GetPackageArtifact(key string) ([]byte, error)
+	BaseModules() []capability.CapabilityModule
+	ProductVersions() []platform.ProductVersionView
 }

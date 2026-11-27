@@ -121,3 +121,11 @@ func StoreDraftName(store *records.Store, s *pb.Submission) string {
 	}
 	return row.Value.FieldByIndex(field.Index).String()
 }
+
+func StoreProtocolAssetActive(store *records.Store, tenant string, ref platform.AssetRef) bool {
+	if ref.Name == "" {
+		return true
+	}
+	resource, found := StoreResourceRow(store, tenant, ref)
+	return !found || resource.ManagedBy == "" || !resource.Archived
+}

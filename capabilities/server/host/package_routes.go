@@ -18,9 +18,7 @@ func (h *Host) routesPackages(rt *routes) {
 	h.routesPackageOwnership(rt)
 	rt.recordRead(transport.Route{Pattern: "GET /v1/packages/{id}/preparation", Summary: "Describe every application and target-environment prerequisite before creating or publishing a package", Answer: packages.PackagePreparation{}}, transport.Answering(func(r *http.Request, m platform.Member, t *Tenant) (packages.PackagePreparation, *platform.Error) {
 		value, err := t.PackagePreparation(r.Context(), m, r.PathValue("id"), r.URL.Query().Get("version"), h.Now())
-		for i := range value.AI {
-			value.AI[i].Problem = t.i18n.Say(t.Language(m, r), value.AI[i].Problem)
-		}
+		value.TranslateProblems(func(problem string) string { return t.i18n.Say(t.Language(m, r), problem) })
 		return value, err
 	}))
 	h.routesPackageReview(rt)
@@ -77,7 +75,8 @@ func (t *Tenant) PackagePreparation(ctx context.Context, m platform.Member, id, 
 				b, _, r := t.modelResolver().Resolve(purpose, model, options)
 				return b.Model, r
 			},
-			Callable: func(model string) *platform.Error { _, _, r := t.Models.Callable(m, model); return r },
+			Callable:       func(model string) *platform.Error { _, _, r := t.Models.Callable(m, model); return r },
+			BoundContracts: t.router().BoundContracts,
 		})
 	})
 }

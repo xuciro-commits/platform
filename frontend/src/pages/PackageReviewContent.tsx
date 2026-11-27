@@ -157,6 +157,30 @@ export function PackageReviewContent({
         </>
       )}
 
+      {mode === "install" && preparation.status === "ready" && (preparation.data.contracts?.length ?? 0) > 0 && (
+        <>
+          <Divider />
+          <List header={t("Capability contracts")} hasDividers>
+            {preparation.data.contracts?.map((contract) => {
+              const role = contract.provided ? t("Provided contract") : contract.required ? t("Required contract") : t("Optional contract");
+              const status = contract.provided ? t("Provider in this package") : contract.bound ? t("Active") : contract.required && !contract.providers.length ? t("No providers installed") : t("Not enabled — entries hidden");
+              const details = [
+                role,
+                contract.providers.length ? contract.providers.join(", ") : t("No providers installed"),
+                contract.consumers?.length ? t("Used by") + ": " + contract.consumers.join(", ") : "",
+                contract.entries?.length ? (contract.bound ? t("Connected entries") : t("Entries awaiting provider activation")) + ": " + contract.entries.join(", ") : "",
+              ].filter(Boolean).join(" · ");
+              return <ListItem
+                key={contract.contract + ":" + role}
+                label={contract.contract}
+                description={details}
+                endContent={<Token label={status} color={contract.bound ? "green" : contract.provided ? "blue" : contract.required && !contract.providers.length ? "red" : "orange"} size="sm" />}
+              />;
+            })}
+          </List>
+        </>
+      )}
+
       {mode === "install" && steps.length > 0 && (
         <>
           <Divider />

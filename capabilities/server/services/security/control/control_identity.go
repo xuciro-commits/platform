@@ -150,7 +150,7 @@ var _ IdentityOwner = (*Console)(nil)
 
 var _ platform.CompositionReady = (*Console)(nil)
 
-func (d *Console) AttachConsole(h platform.ConsoleHost) {
+func (d *Console) AttachConsole(h runtimeprotocol.ConsoleHost) {
 	d.host = h
 	d.ConsolePackages.Attach(h)
 	d.ConsolePolicies.Attach(h)

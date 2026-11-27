@@ -3794,6 +3794,22 @@ export type PackageConnection = {
   ready: boolean;
 };
 
+export type PackageContractStatus = {
+  contract: string;
+  required: boolean;
+  providers: string[];
+  bound: boolean;
+  provided?: boolean;
+  consumers?: string[];
+  entries?: string[];
+};
+
+export type PackageContracts = {
+  requires?: string[];
+  optional?: string[];
+  provides?: string[];
+};
+
 export type PackageContribution = {
   view: string;
   surface?: string;
@@ -3803,6 +3819,7 @@ export type PackageContribution = {
 };
 
 export type PackageDescriptor = {
+  contracts?: PackageContracts;
   blueprint?: PackageBlueprint;
   id: string;
   version: string;
@@ -3939,6 +3956,7 @@ export type PackageOwnershipEntry = {
 };
 
 export type PackagePreparation = {
+  contracts?: PackageContractStatus[];
   package: string;
   version: string;
   applications: PackageApplication[];
@@ -5904,6 +5922,7 @@ export type TxnRef = {
 };
 
 export type TxnRequest = {
+  deferred?: boolean;
   use: string;
   payload?: TxnSet[];
 };

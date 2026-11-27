@@ -125,9 +125,10 @@ type ProtocolHost interface {
 }
 
 type Router struct {
-	Host     ProtocolHost
-	Bindings *Bindings
-	Tenant   string
+	Host        ProtocolHost
+	Bindings    *Bindings
+	Tenant      string
+	AssetActive func(platform.AssetRef) bool
 }
 
 func (r Router) DecideBinding(_ platform.Caller, s *pb.Submission, _ time.Time) (func(*pb.ChangeRecord), *platform.Error) {
@@ -137,7 +138,10 @@ func (r Router) DecideBinding(_ platform.Caller, s *pb.Submission, _ time.Time) 
 	if p.Provider == "" {
 		return func(*pb.ChangeRecord) { r.Bindings.unset(id) }, nil
 	}
-	if app, _, named := runtimeprotocol.SplitImplementationIdentity(p.Provider); named {
+	if app, name, named := runtimeprotocol.SplitImplementationIdentity(p.Provider); named {
+		if !r.AssetActive(platform.AssetRef{App: app, Kind: runtimeprotocol.AssetImplementation, Name: name}) {
+			return nil, &platform.Error{Code: pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT}
+		}
 		for _, a := range r.Host.LiveApps() {
 			gate, ok := a.(interface {
 				ConnectorBindable(string, string) (bool, error)
@@ -174,16 +178,24 @@ func (r Router) Bound(protocol string) (Binding, bool) {
 		return Binding{}, false
 	}
 	if !r.Host.OwnerActive(app) {
-		return Binding{Provider: provider}, true
+		return Binding{}, false
 	}
 	provisions := provisionsOf(provider, protocol)
 	for _, current := range provisions {
 		b := Binding{Provider: provider, Provision: current, Qualified: len(provisions) > 1}
 		if typ == "" || b.EntityType() == typ {
+			if !r.provisionActive(provider, current) {
+				return Binding{}, false
+			}
 			return b, true
 		}
 	}
-	return Binding{Provider: provider}, true
+	return Binding{}, false
+}
+
+func (r Router) provisionActive(a platform.Service, pv platform.Provision) bool {
+	b := Binding{Provider: a, Provision: pv}
+	return r.AssetActive(platform.AssetRef{App: b.App(), Kind: platform.AssetObject, Name: b.EntityType()})
 }
 
 func provisionsOf(a platform.Service, protocol string) []platform.Provision {
@@ -203,7 +215,9 @@ func (r Router) Providers(protocol string) []Binding {
 	for _, a := range r.Host.LiveApps() {
 		provisions := provisionsOf(a, protocol)
 		for _, pv := range provisions {
-			out = append(out, Binding{a, pv, len(provisions) > 1})
+			if r.provisionActive(a, pv) {
+				out = append(out, Binding{a, pv, len(provisions) > 1})
+			}
 		}
 	}
 	return out
@@ -231,7 +245,7 @@ func (r Router) Resolve(protocol string) (Binding, bool) {
 	if b, ok := r.Bound(protocol); ok {
 		return b, true
 	}
-	if r.Declared(protocol) {
+	if _, explicit := r.Bindings.get(protocol); explicit || r.Declared(protocol) {
 		return Binding{}, false
 	}
 	if all := r.Providers(protocol); len(all) > 0 {
@@ -251,7 +265,10 @@ func (r Router) Provider(used string) (platform.Service, string, bool) {
 			served := slices.ContainsFunc(r.implementations()[app], func(i runtimeprotocol.ProtocolImplementation) bool {
 				return i.Name == name && i.Contract == protocol && slices.ContainsFunc(i.Requests, func(q runtimeprotocol.ImplementationRequest) bool { return q.Action == action })
 			})
-			return owner, runtimeprotocol.SchemaCapabilityCallSend, served && owner != nil
+			if !served || owner == nil {
+				return nil, "", false
+			}
+			return owner, runtimeprotocol.SchemaCapabilityCallSend, true
 		}
 	}
 	b, bound := r.Resolve(protocol)
@@ -259,7 +276,10 @@ func (r Router) Provider(used string) (platform.Service, string, bool) {
 		return nil, "", false
 	}
 	schema, mapped := b.Provision.Actions[action]
-	return b.Provider, schema, mapped
+	if !mapped {
+		return nil, "", false
+	}
+	return b.Provider, schema, true
 }
 
 func (r Router) ProtocolProvider(protocol string) (string, bool) {
@@ -532,7 +552,12 @@ func (r Router) implementations() map[string][]runtimeprotocol.ProtocolImplement
 		if declared, ok := a.(interface {
 			ProtocolImplementations() []runtimeprotocol.ProtocolImplementation
 		}); ok {
-			out[a.Manifest().ID] = declared.ProtocolImplementations()
+			app := a.Manifest().ID
+			for _, impl := range declared.ProtocolImplementations() {
+				if r.AssetActive(platform.AssetRef{App: app, Kind: runtimeprotocol.AssetImplementation, Name: impl.Name}) {
+					out[app] = append(out[app], impl)
+				}
+			}
 		}
 	}
 	return out
@@ -553,6 +578,9 @@ func (r Router) Protocols() []ProtocolInfo {
 	}
 	for _, a := range r.Host.LiveApps() {
 		for _, pv := range a.Manifest().Provides {
+			if !r.provisionActive(a, pv) {
+				continue
+			}
 			i := info(pv.Protocol)
 			b := Binding{Provider: a, Provision: pv, Qualified: len(provisionsOf(a, pv.Protocol.ID())) > 1}
 			i.Providers = append(i.Providers, b.ID())
@@ -603,7 +631,7 @@ func (r Router) Protocols() []ProtocolInfo {
 		if b, ok := r.Bound(id); ok {
 			byID[id].Bound = b.ID()
 		} else if provider, ok := r.Bindings.get(id); ok {
-			if _, _, named := runtimeprotocol.SplitImplementationIdentity(provider); named {
+			if app, name, named := runtimeprotocol.SplitImplementationIdentity(provider); named && slices.ContainsFunc(r.implementations()[app], func(i runtimeprotocol.ProtocolImplementation) bool { return i.Name == name && i.Contract == id }) {
 				byID[id].Bound = provider
 			}
 		}
@@ -646,4 +674,12 @@ func (r Router) ReadName(protocol, read string) (string, *platform.Error) {
 		return "", &platform.Error{Code: pb.ErrorCode_ERROR_CODE_NOT_FOUND}
 	}
 	return name, nil
+}
+
+func (r Router) BoundContracts() map[string]bool {
+	out := map[string]bool{}
+	for _, info := range r.Protocols() {
+		out[info.ID] = info.Bound != "" || !info.Declared && len(info.Providers) > 0
+	}
+	return out
 }

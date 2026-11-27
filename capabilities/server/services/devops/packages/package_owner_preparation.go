@@ -24,16 +24,17 @@ import (
 )
 
 type PackagePreparation struct {
-	Package           string                   `json:"package"`
-	Version           string                   `json:"version"`
-	Applications      []PackageApplication     `json:"applications"`
-	Connections       []PackageConnection      `json:"connections"`
-	AI                []PackageAIRequirement   `json:"ai"`
-	Roles             []PackageRoleRequirement `json:"roles"`
-	Setup             *platform.PackageSetup   `json:"setup,omitempty"`
-	Installed         bool                     `json:"installed"`
-	InstalledVersion  string                   `json:"installedVersion,omitempty"`
-	InstallationState string                   `json:"installationState,omitempty"`
+	Contracts         []protocol.PackageContractStatus `json:"contracts,omitempty"`
+	Package           string                           `json:"package"`
+	Version           string                           `json:"version"`
+	Applications      []PackageApplication             `json:"applications"`
+	Connections       []PackageConnection              `json:"connections"`
+	AI                []PackageAIRequirement           `json:"ai"`
+	Roles             []PackageRoleRequirement         `json:"roles"`
+	Setup             *platform.PackageSetup           `json:"setup,omitempty"`
+	Installed         bool                             `json:"installed"`
+	InstalledVersion  string                           `json:"installedVersion,omitempty"`
+	InstallationState string                           `json:"installationState,omitempty"`
 }
 
 type PackageApplication struct {
@@ -263,6 +264,7 @@ func Inspect(ctx context.Context, resolver publication.Resolver, tenant string, 
 }
 
 type PreparationOwner interface {
+	PackageContractStatus(id, version string) ([]protocol.PackageContractStatus, error)
 	PreparationBlueprint(id, version string) (platform.PackageBlueprint, *protocol.InstalledPackage, error)
 	PackagePrerequisites(id, version string) ([]platform.ReleaseAsset, error)
 	Precheck(platform.PackageDescriptor) protocol.Precheck
@@ -272,14 +274,15 @@ type PreparationOwner interface {
 }
 
 type PreparationHooks struct {
-	Authorize func() *platform.Error
-	Resolver  publication.Resolver
-	Source    func() (PreparationOwner, bool)
-	Drafts    func() (build.ConstructionDrafts, bool)
-	Records   func(typ string, q platform.Query) (int, []any, *platform.Error)
-	App       func(string) platform.Service
-	Resolve   func(purpose, model string, options platform.ModelOptions) (string, *platform.Error)
-	Callable  func(model string) *platform.Error
+	Authorize      func() *platform.Error
+	Resolver       publication.Resolver
+	Source         func() (PreparationOwner, bool)
+	Drafts         func() (build.ConstructionDrafts, bool)
+	Records        func(typ string, q platform.Query) (int, []any, *platform.Error)
+	App            func(string) platform.Service
+	Resolve        func(purpose, model string, options platform.ModelOptions) (string, *platform.Error)
+	Callable       func(model string) *platform.Error
+	BoundContracts func() map[string]bool
 }
 
 func (h PreparationHooks) modelProblem(purpose, model string, options platform.ModelOptions) (string, string) {
@@ -361,5 +364,21 @@ func Prepare(id, version string, m platform.Member, hooks PreparationHooks) (Pac
 	if err != nil {
 		return fail(err)
 	}
+	answer.Contracts, err = source.PackageContractStatus(id, version)
+	if err != nil {
+		return fail(err)
+	}
+	if len(answer.Contracts) > 0 {
+		bound := hooks.BoundContracts()
+		for i := range answer.Contracts {
+			answer.Contracts[i].Bound = bound[answer.Contracts[i].Contract]
+		}
+	}
 	return answer, nil
+}
+
+func (p *PackagePreparation) TranslateProblems(say func(string) string) {
+	for i := range p.AI {
+		p.AI[i].Problem = say(p.AI[i].Problem)
+	}
 }

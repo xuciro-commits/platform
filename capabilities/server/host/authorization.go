@@ -32,10 +32,4 @@ func (t *Tenant) delegatedBound(m platform.Member, s *pb.Submission) *platform.E
 	}.Bound(m, s, access)
 }
 
-func (t *Tenant) member(id string) (platform.Member, bool) {
-	if t.Identity == nil {
-		return platform.Member{}, false
-	}
-	member, found := t.Identity.MemberByID(id)
-	return member.WithAuthorization(t.services.Authorization), found
-}
+func (t *Tenant) member(id string) (platform.Member, bool) { return t.Member(id) }

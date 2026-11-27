@@ -406,6 +406,7 @@ func (c Caller) Probe(protocol, action, id string, payload any, now time.Time) *
 }
 
 type Request struct {
+	Deferred           bool
 	Tag                string
 	Provider           string
 	Key                string

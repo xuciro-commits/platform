@@ -370,6 +370,10 @@ func expandRequest(step *object, use string, s exprScope, at string) error {
 	}
 	request := &object{}
 	request.set("use", use)
+	if deferred, ok := step.get("deferred"); ok {
+		request.set("deferred", deferred)
+		step.remove("deferred")
+	}
 	request.set("payload", payload)
 	step.set("kind", "request")
 	step.set("request", request)
