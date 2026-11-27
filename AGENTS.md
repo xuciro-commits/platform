@@ -25,7 +25,7 @@
 | 导航、四种页面、保存模型、文字 | [ux](docs/ux.md) |
 | 观感、数据怎样显示、什么不许出现 | [design](docs/design.md)（令牌与规约见 [DESIGN.md](DESIGN.md)） |
 | 命名与翻译 | [glossary](docs/glossary.md) |
-| 文档的规矩、谁决定什么、一行怎样算做完 | [docs/README](docs/README.md) |
+| 三档验收、文档的规矩、谁决定什么、一行怎样算做完 | [docs/README](docs/README.md) |
 
 改界面之前用技能 `platform-design`（设计打磨可配合 `impeccable`，读 [PRODUCT.md](PRODUCT.md) 与 [DESIGN.md](DESIGN.md)）。
 
@@ -87,9 +87,10 @@
 | 内核不变量 | `make test RUN=K13` 定点跑相关编号；不给 `RUN` 跑全部 |
 | 产品包 | `make packages`（刷新作者态源的锁文件，并把夹具一起装进内存租户检查；顶层制品是发布快照，不重建）；试跑动作用 `pkg try` |
 
-GitHub 的 push/PR CI 只跑 `make check`、`make test-runner`、`make check-frontend`；本地仅定点测试与快速提交检查；同一改动不重复跑已通过的检查。发版前执行一次 `make verify`，核对同一提交的 CI 结果；不以远程轻量检查代替全量验收。竞态、容量压测、额外恢复演练仅按需。Tag 发行流程仍负责多平台制品构建与签发。
-
-提交钩子（`.githooks/`，通过 `make hooks` 启用）只检查暂存空白与 Go 格式，不编译、不跑测试，并用 `scripts/check-commit-msg.mjs` 拦截不合规范的提交信息。
+验收以 [三档验收](docs/README.md#三档验收) 为唯一规则：日常定点、提交快速检查、GitHub 轻量 CI、发版前本地一次 `make verify`。
+同一改动不重复执行已通过的检查；语音竞态、容量压测和额外恢复演练仅按需。
+提交钩子（`make hooks` 启用）不编译、不跑测试；只核对暂存空白、Go 格式与提交信息。
+发版必须核对同一候选提交的 CI 和本地验收证据，再打 Tag；Tag 本身不证明验收通过。
 
 ## 工作方式
 

@@ -34,6 +34,11 @@ pnpm --dir frontend dev
 带 PostgreSQL、对象存储与登录服务的整套环境用 `make setup` 和 `make local`，需要 Docker，说明见[本地运行](deploy/local/README.md)。
 本地账号保存在 `.build/local/`，不要写进代码或提交。
 
+## 开发与验收
+
+日常定点测试，提交钩子做快速检查，GitHub 做轻量集成检查；发版前在本地运行一次 `make verify`。
+完整规则、选择命令和发版证据要求见[三档验收](docs/README.md#三档验收)。
+
 ## 文档
 
 十份，按问题分。规矩见[文档地图](docs/README.md)。

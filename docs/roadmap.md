@@ -5,6 +5,7 @@
 
 ## 规矩
 
+- 工程验收遵循[三档验收](README.md#三档验收)，不额外设日常全量门禁。
 - 一项一次提交。先写能跑的验收，再动手；做完把这一项删掉，一行的项删完就删掉 plan 里的那一行。
 - 路上发现的新项加在本行末尾，不另起清单。
 - 验收里的“trunk”指在 `frontend/e2e/<模块>.spec.ts`（records、builder、crm、workspace、marketplace、official）加一步并让它通过；
