@@ -61,8 +61,7 @@ export function stateProblem(source: Values) {
   return missing.length ? `${t("These states cannot be reached from the initial state:")} ${missing.join(", ")}` : "";
 }
 
-export function DefinitionRows({ described, source, entities, catalog, id, revision }: { described: Described; source: Values; entities: Api.EntityInfo[]; catalog: Api.Action[]; id: string; revision: number }) {
-  const [acceptedRevision, setAcceptedRevision] = useState(revision);
+export function DefinitionRows({ described, source, entities, catalog, id, revision, refreshing, onAccepted }: { described: Described; source: Values; entities: Api.EntityInfo[]; catalog: Api.Action[]; id: string; revision: number; refreshing: boolean; onAccepted: (revision: number) => void }) {
   const fields = rowsOf(source, "fields");
   const states = rowsOf(source, "states");
   const access = rowsOf(source, "access");
@@ -80,10 +79,10 @@ export function DefinitionRows({ described, source, entities, catalog, id, revis
         catalog={catalog}
         objectId={id}
         objectRevision={revision}
-        refreshing={revision < acceptedRevision}
+        refreshing={refreshing}
         save={action && edit ? async (rows) => {
           const accepted = await send(edit, id, { [slot]: rows }, revision);
-          setAcceptedRevision(accepted.revision);
+          onAccepted(accepted.revision);
           reread();
         } : undefined} />
     );
@@ -167,7 +166,7 @@ function DefinitionTable({ slot, field, rows, fields: objectFields, states, acce
             <Button label={t("Create transition")} variant="secondary" isDisabled={busy || states.length < 2} onClick={() => setCreatingTransition(true)} />
           </>
         )}
-        {canWrite && slot !== "actions" && <Button label={t(schema.add)} variant="secondary" isDisabled={saving} onClick={() => { setFailure(""); setEditing({ index: -1, row: {} }); }} />}
+        {canWrite && slot !== "actions" && <Button label={t(schema.add)} variant="secondary" isDisabled={busy} onClick={() => { setFailure(""); setEditing({ index: -1, row: {} }); }} />}
       </HStack>
       {bound && <Text type="supporting">{t("Transitions use the linked action types.")}</Text>}
       {failure && !editing && removing === undefined && <Banner status="error" title={t("Not saved")} description={failure} />}

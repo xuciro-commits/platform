@@ -118,6 +118,7 @@ function Rail({ described, editor, kept, refs, people, restricted, collaboration
 
 export function RecordPage({ described, id, listPath, listTitle, instances, entities, catalog }: RecordPageProps) {
   const [refusal, setRefusal] = useState("");
+  const [acceptedDefinitionRevision, setAcceptedDefinitionRevision] = useState(0);
   const [fresh] = useState(() => (history.state as { fresh?: string } | null)?.fresh === id);
   const base = `${listPath}/${encodeURIComponent(id)}`;
   const origin = originOf(history.state, (href) => {
@@ -144,6 +145,7 @@ export function RecordPage({ described, id, listPath, listTitle, instances, enti
   const collaboration = <Collaboration target={`${described.type}/${id}`} comments={comments} catalog={catalog} entities={entities} />;
   const changes = read.status === "ready" ? read.data.changes ?? [] : [];
   const definition = described.type === "build.object" && kept ? kept as unknown as Values : undefined;
+  const definitionRefreshing = Boolean(definition && kept && kept.revision < acceptedDefinitionRevision);
   const refs = read.status === "ready" ? read.data.refs : undefined;
   const people = read.status === "ready" ? read.data.people : undefined;
   const restrictedFields = read.status === "ready" ? read.data.restrictedFields : undefined;
@@ -213,6 +215,7 @@ export function RecordPage({ described, id, listPath, listTitle, instances, enti
       instances={instances}
       allowed={read.status === "ready" ? read.data.actions : undefined}
       contributed={contributedActions}
+      refreshing={definitionRefreshing}
       publishProblem={definition && stateProblem(definition)}
       onFailure={setRefusal}
     />
@@ -316,7 +319,7 @@ export function RecordPage({ described, id, listPath, listTitle, instances, enti
                   {extensions.length > 0 && (
                     <ExtensionHost extensions={extensions} baseId={id} catalog={catalog} showFields onActions={onExtensionActions} />
                   )}
-                  {definition && <DefinitionRows described={detail} source={definition} entities={entities} catalog={catalog} id={id} revision={kept.revision} />}
+                  {definition && <DefinitionRows described={detail} source={definition} entities={entities} catalog={catalog} id={id} revision={kept.revision} refreshing={definitionRefreshing} onAccepted={setAcceptedDefinitionRevision} />}
                   {described.entity.sets?.flatMap((set) => {
                     if (set.direction !== "inverse") return [];
                     const type = entities.find((entry) => entry.type === set.object);

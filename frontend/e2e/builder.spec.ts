@@ -128,8 +128,23 @@ test("object definition: add a field, publish it and review a removal", async ({
   await page.getByRole("button", { name: "Add state", exact: true }).click();
   await edit.getByRole("textbox", { name: /^API name/ }).fill("left");
   await edit.getByRole("textbox", { name: /^Name/ }).fill("Left");
-  await edit.getByRole("button", { name: "Save", exact: true }).click();
-  await expect(edit).toBeHidden();
+  let held = false;
+  let release!: () => void;
+  const gate = new Promise<void>((resolve) => { release = resolve; });
+  await page.route("**/v1/records/build.object/sales.opportunity", async (route) => {
+    held = true;
+    await gate;
+    await route.continue();
+  });
+  try {
+    await edit.getByRole("button", { name: "Save", exact: true }).click();
+    await expect(edit).toBeHidden();
+    await expect.poll(() => held).toBe(true);
+    await expect(page.getByRole("button", { name: "Publish", exact: true })).toBeDisabled();
+  } finally {
+    release();
+    await page.unrouteAll({ behavior: "wait" });
+  }
   await page.getByRole("button", { name: "Publish", exact: true }).click();
   await expect(publish.getByText(/cannot be reached/)).toBeVisible();
   await expect(publish.getByRole("button", { name: "Publish", exact: true })).toBeDisabled();

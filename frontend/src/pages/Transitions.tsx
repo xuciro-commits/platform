@@ -22,6 +22,7 @@ export type TransitionsProps = {
   allowed?: Api.RecordAction[];
   contributed?: ContributedAction[];
   publishProblem?: string;
+  refreshing?: boolean;
   onFailure: (reason: string) => void;
 };
 
@@ -34,8 +35,9 @@ function Gated({ label, verdict, busy, danger, onClick }: { label: string; verdi
   );
 }
 
-export function Transitions({ described, id, values, revision, title, instances, allowed, contributed = [], publishProblem, onFailure }: TransitionsProps) {
+export function Transitions({ described, id, values, revision, title, instances, allowed, contributed = [], publishProblem, refreshing, onFailure }: TransitionsProps) {
   const act = useAct(described);
+  const busy = act.busy || Boolean(refreshing);
   const lifecycle = described.lifecycle;
   const current = lifecycle ? String(values[lifecycle.field] ?? "") : "";
   const verdicts = new Map(allowed?.map((entry) => [entry.schema, entry]));
@@ -87,26 +89,26 @@ export function Transitions({ described, id, values, revision, title, instances,
       id: `step:${step.transition.name}`,
       label: t(step.transition.title),
       description: verdict.allowed ? undefined : verdict.reason,
-      isDisabled: !verdict.allowed || act.busy,
+      isDisabled: !verdict.allowed || busy,
       onClick: () => click(step, verdict),
     })),
     ...offeredMore.filter((entry) => entry !== lead).map(({ action, verdict }) => ({
       id: action.schema,
       label: t(action.title),
       description: verdict.allowed ? undefined : verdict.reason,
-      isDisabled: !verdict.allowed || act.busy,
+      isDisabled: !verdict.allowed || busy,
       onClick: () => run(action, verdict),
     })),
     ...contributed.map((entry) => ({
       id: entry.key,
       label: t(entry.action.title),
       description: entry.verdict.allowed ? undefined : entry.verdict.reason,
-      isDisabled: !entry.verdict.allowed || act.busy,
+      isDisabled: !entry.verdict.allowed || busy,
       onClick: () => runContributed(entry),
     })),
   ];
 
-  usePageCommands(act.busy ? [] : [
+  usePageCommands(busy ? [] : [
     ...(first?.verdict.allowed ? [{ id: `step:${first.step.transition.name}`, label: t(first.step.transition.title), run: () => click(first.step, first.verdict) }] : []),
     ...(lead?.verdict.allowed ? [{ id: lead.action.schema, label: t(lead.action.title), run: () => run(lead.action, lead.verdict) }] : []),
     ...items.filter((item) => !item.isDisabled).map((item) => ({ id: item.id, label: item.label, run: item.onClick })),
@@ -116,8 +118,8 @@ export function Transitions({ described, id, values, revision, title, instances,
     <>
       <HStack gap={2} vAlign="center">
         {link && <Button label={t("Open records")} variant="secondary" href={link} />}
-        {first && <Gated label={t(first.step.transition.title)} verdict={first.verdict} busy={act.busy} danger={isDangerAction(first.step.action, toneOf(first.step))} onClick={() => click(first.step, first.verdict)} />}
-        {lead && <Gated label={t(lead.action.title)} verdict={lead.verdict} busy={act.busy} danger={isDangerAction(lead.action)} onClick={() => run(lead.action, lead.verdict)} />}
+        {first && <Gated label={t(first.step.transition.title)} verdict={first.verdict} busy={busy} danger={isDangerAction(first.step.action, toneOf(first.step))} onClick={() => click(first.step, first.verdict)} />}
+        {lead && <Gated label={t(lead.action.title)} verdict={lead.verdict} busy={busy} danger={isDangerAction(lead.action)} onClick={() => run(lead.action, lead.verdict)} />}
         {items.length > 0 && <MoreMenu label={t("More actions")} items={items} alignment="end" />}
       </HStack>
       {act.element}
