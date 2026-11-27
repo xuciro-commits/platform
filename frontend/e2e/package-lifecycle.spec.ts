@@ -189,7 +189,7 @@ test("delivery: a builder publishes a version and installs beside its source pro
   await install.click();
   await expect(review).toBeHidden({ timeout: 60_000 });
   const access = page.getByRole("dialog", { name: "Who can use it" });
-  await expect(access.getByRole("combobox", { name: "Role in Releasecopy", exact: true })).toBeVisible();
+  await expect(access.getByRole("combobox", { name: "Role in Release example", exact: true })).toBeVisible();
   await access.getByRole("button", { name: "Grant access", exact: true }).click();
   await expect(access).toBeHidden();
   await page.goto("/ontology/objects/releasecopy.item");

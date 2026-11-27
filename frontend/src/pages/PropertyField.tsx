@@ -8,7 +8,7 @@ import { VisuallyHidden } from "@astryxdesign/core/VisuallyHidden";
 import { useClickableContainer, usePressFeedback } from "@astryxdesign/core/hooks";
 import { radiusVars, sizeVars, spacingVars } from "@astryxdesign/core/theme/tokens.stylex";
 import { focusOutlineStyles, interactionOverlayStyles } from "@astryxdesign/core/utils";
-import { ArrowTurnDownRightIcon, CalculatorIcon, CheckIcon, LockClosedIcon } from "@heroicons/react/24/outline";
+import { ArrowPathIcon, ArrowTurnDownRightIcon, CalculatorIcon, CheckIcon, LockClosedIcon } from "@heroicons/react/24/outline";
 import * as stylex from "@stylexjs/stylex";
 import { type FocusEvent, type KeyboardEvent, useEffect, useId, useRef, useState } from "react";
 import { type Api, reasonOf } from "../host";
@@ -27,6 +27,7 @@ const sources = {
   formula: { icon: CalculatorIcon, text: "Calculated by a formula" },
   from: { icon: ArrowTurnDownRightIcon, text: "Filled in from other fields; you can change it" },
   action: { icon: LockClosedIcon, text: "Changed only by actions" },
+  live: { icon: ArrowPathIcon, text: "Read live from the records it refers to; not stored" },
 };
 
 const styles = stylex.create({

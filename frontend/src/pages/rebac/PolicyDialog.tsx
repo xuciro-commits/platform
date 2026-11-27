@@ -157,7 +157,7 @@ export function PolicyDialog({
                   label={t("Permission schema or prefix")}
                   isRequired
                   value={permission}
-                  placeholder={t("crm.deal.archive or crm.*")}
+                  placeholder={t("app.type.archive or app.*")}
                   onChange={setPermission}
                 />
                 <Selector
@@ -182,7 +182,7 @@ export function PolicyDialog({
                   label={t("Restrict to target object")}
                   isOptional
                   value={whereTarget}
-                  placeholder={t("crm.deal")}
+                  placeholder={t("app.type")}
                   onChange={setWhereTarget}
                 />
                 <CheckboxInput
