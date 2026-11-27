@@ -69,7 +69,7 @@ test("library tenant: a remote catalog lists its package beside the built-in ind
     await expect(wizard.getByText(address.replace("catalog.json", "crm.json"), { exact: true })).toBeVisible({ timeout: 20_000 });
     await expect(wizard.getByText(sha256, { exact: true })).toBeVisible();
     await wizard.getByRole("button", { name: "Add to library", exact: true }).click();
-    await expect(wizard.getByRole("textbox", { name: /Project API name/ })).toHaveValue("application.production-provider");
+    await expect(wizard.getByRole("textbox", { name: /Project API name/ })).toHaveCount(0);
     await wizard.getByRole("button", { name: "Continue", exact: true }).click();
     await wizard.getByRole("button", { name: "Install package", exact: true }).click();
     await expect(wizard).toBeHidden({ timeout: 30_000 });

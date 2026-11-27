@@ -54,7 +54,7 @@ export function PackageImportWizard({
   const [dependencies, setDependencies] = useState<DependencyResolution>(emptyDependencies);
   const [progress, setProgress] = useState("");
   const [imported, setImported] = useState(false);
-  const [namespace, setNamespace] = useState("");
+  const [namespace, setNamespace] = useState<string>();
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const autoInspected = useRef(false);
@@ -75,6 +75,8 @@ export function PackageImportWizard({
     return packages.data.find((entry) => entry.descriptor.id === preview.descriptor.id && entry.descriptor.version === preview.descriptor.version);
   }, [packages, preview]);
 
+  const projectName = namespace ?? importedView?.space ?? "";
+  const namedProject = Boolean(importedView?.space) && !importedView?.installed;
   const id = preview?.descriptor.id ?? "";
   const version = preview?.descriptor.version ?? "";
   const review = useRead<Api.PackageReview>(imported && id && version ? `/v1/packages/${encodeURIComponent(id)}/review?version=${encodeURIComponent(version)}` : null);
@@ -179,7 +181,7 @@ export function PackageImportWizard({
       }
       setPreview(answer);
       setDependencies(resolved);
-      setNamespace(answer.descriptor.namespace);
+      setNamespace(undefined);
       setImported(false);
       setStep(1);
     } catch (problem) {
@@ -224,7 +226,7 @@ export function PackageImportWizard({
             if (!depAction) throw new Error(t("Install package"));
             const payload = dep.action === "upgrade"
               ? { id: dep.id, version: dep.version }
-              : { id: dep.id, version: dep.version, namespace: dep.namespace };
+              : { id: dep.id, version: dep.version };
             await send(depAction, dep.id, payload);
             acceptedDeps.current.add(`${dep.id}@${dep.version}`);
           }
@@ -262,9 +264,9 @@ export function PackageImportWizard({
     setBusy(true);
     setError("");
     try {
-      const named = !importedView?.installed && Boolean(namespace.trim());
+      const named = namedProject && Boolean(projectName.trim());
       if (acceptedVersion !== `${id}@${version}` && action) {
-        await send(action, preview.descriptor.id, named ? { id, version, namespace: namespace.trim() } : { id, version });
+        await send(action, preview.descriptor.id, named ? { id, version, namespace: projectName.trim() } : { id, version });
         setAcceptedVersion(`${id}@${version}`);
       }
       setProgress(t("Preparing reference records…"));
@@ -289,7 +291,7 @@ export function PackageImportWizard({
   const canProceed =
     step === 0 ? (sourceMode === "file" ? Boolean(file) : Boolean(url.trim()))
     : step === 1 ? Boolean(preview && importAction && !hasBlockingPrecheck && (!hasAutoDeps || canInstallDeps))
-    : step === 2 ? Boolean(importedView && review.status === "ready" && preparation.status !== "loading" && reviewProblems.length === 0 && (importedView.installed || namespace.trim()))
+    : step === 2 ? Boolean(importedView && review.status === "ready" && preparation.status !== "loading" && reviewProblems.length === 0 && (!namedProject || projectName.trim()))
     : Boolean(preview && (acceptedVersion === `${id}@${version}` || (importedView?.update ? upgradeAction : installAction)));
 
   const primaryLabel =
@@ -410,11 +412,11 @@ export function PackageImportWizard({
             {setupNotices.length > 0 && (
               <Banner status="warning" title={t("Configuration needed after installation")} description={setupNotices.join(" · ")} />
             )}
-            {!importedView.installed && (
+            {namedProject && (
               <TextInput
                 label={t("Project API name")}
                 isRequired
-                value={namespace}
+                value={projectName}
                 onChange={setNamespace}
                 description={t("The managed project, its types and its actions take this name. Choose another when this tenant already has a project with it.")}
               />
@@ -443,7 +445,7 @@ export function PackageImportWizard({
               <Text type="code" color="secondary">{preview.artifactSha256 || preview.digest}</Text>
             </MetadataListItem>
             <MetadataListItem label={t("Namespace")}>
-              <Text type="code" color="secondary">{namespace || preview.descriptor.namespace}</Text>
+              <Text type="code" color="secondary">{projectName || preview.descriptor.namespace}</Text>
             </MetadataListItem>
           </MetadataList>
           <Text type="supporting" color="secondary">
