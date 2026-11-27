@@ -28,7 +28,7 @@ test("security and real installation scenarios do not clone seeded state", () =>
   assert.deepEqual(securityAPIPlan.tenants, ["audit-a", "audit-b", "library"]);
   assert.equal(securityAPIPlan.cache, false);
   assert.deepEqual(security.seed, []);
-  for (const spec of ["tenant-security", "official", "marketplace", "connector", "phone"]) {
+  for (const spec of ["tenant-security", "official", "marketplace", "package-upgrade", "party-upgrade", "package-library", "package-apps", "connector", "phone"]) {
     assert.equal(seedPlan([spec + ".spec.ts"]).cache, false);
   }
   assert.equal(seedPlan([]).cache, false);
@@ -58,4 +58,18 @@ test("Trunk specs do not silently disable or focus tests", () => {
       names.add(name);
     }
   }
+});
+
+test("delivery specs prepare only the tenant needed for their lifecycle", () => {
+  for (const [spec, tenant] of [["marketplace", "blank"], ["package-upgrade", "upgrade"], ["party-upgrade", "party-upgrade"], ["package-library", "library"], ["package-apps", "publisher"]]) {
+    assert.deepEqual(seedPlan([spec + ".spec.ts"]).tenants, [tenant]);
+  }
+});
+
+
+test("generic builder and CRM business cases avoid unrelated package installations", () => {
+  assert.equal(seedPlan(["builder.spec.ts"]).acceptanceCrm, false);
+  assert.deepEqual(seedPlan(["crm.spec.ts"]).tenants, ["crm"]);
+  assert.equal(seedPlan(["crm-records.spec.ts"]).acceptanceCrm, true);
+  assert.equal(seedPlan(["package-extension.spec.ts"]).acceptanceCrm, true);
 });

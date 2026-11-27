@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 import { randomUUID } from "node:crypto";
 import { readFileSync } from "node:fs";
-import { packageRequest } from "./package-fixtures.mjs";
+import { seedPackageRequest } from "./package-fixtures.mjs";
 import { enterpriseRosterSteps, resolveMemberProfile } from "./demo-roster.mjs";
 
 const host = process.env.PLATFORM_HOST ?? "http://127.0.0.1:18511";
@@ -59,7 +59,9 @@ async function connect(tenant, subject = "admin") {
 }
 
 async function importPackage(session, path) {
-  const inspected = await session.call("/v1/packages/inspect", packageRequest(path));
+  const inspected = await session.call("/v1/packages/inspect", seedPackageRequest(path)).catch(error => {
+    throw Error(`Seed package ${path}: ${error.message}`, { cause: error });
+  });
   const id = inspected.descriptor.id;
   const accepted = await session.submit("platform.package", id, "import", { id, digest: inspected.digest }, "platform", session.packageRevisions.get(id) ?? 0);
   session.packageRevisions.set(id, accepted.revision);
@@ -278,7 +280,8 @@ const tenantPackages = {
     verifyDemoAs: "manager",
     profiles: { root: "系统管理员", "admin-1": "王丹", "builder-1": "韩奥", "manager-1": "赵敏", "user-1": "田雪" },
   },
-  official: { packages: partyPackages, grants: {} },
+  official: { packages: [...partyPackages, "call"], grants: {} },
+  upgrade: { packages: [...partyPackages, "call"], grants: { "admin-1": [["party", "user"]] } },
   sim: {
     packages: partyPackages,
     imports: ["crm", "crm-next"],

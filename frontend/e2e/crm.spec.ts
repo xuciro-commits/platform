@@ -9,87 +9,6 @@ const choose = async (form: ReturnType<Page["getByRole"]> | Page, page: Page, na
 };
 
 test.describe.serial("crm and peek", () => {
-test("crm: deal product lines total into the deal and move between deals", async ({ page }) => {
-  await signIn(page);
-  const line = await submit(page, "crm.dealline.create", "crm.dealline", "acceptance-line", { deal: "demo-deal-1", product: "demo-product-1", quantity: 2, price: { amount: 50000, currency: "USD" }, discount: 10 }, 0);
-  const id = line.record.submission.target.id;
-  await page.goto("/ontology/objects/crm.deal/demo-deal-1");
-  const rows = page.getByRole("table", { name: "Deal products" });
-  await expect(rows).toBeVisible();
-  const row = rows.getByRole("row").filter({ hasText: "$900.00" });
-  await expect(row).toBeVisible();
-  await edit(row, "Quantity");
-  await row.getByRole("spinbutton", { name: "Quantity" }).fill("3");
-  await row.getByRole("spinbutton", { name: "Quantity" }).press("Enter");
-  await expect(rows.getByText("$1,350.00 USD", { exact: true })).toBeVisible();
-  await page.goto(`/ontology/objects/crm.dealline/${id}`);
-  await edit(page, "Deal");
-  await choose(page, page, "Deal", "Harborline Multi-Branch Pipeline Rollout");
-  await page.reload();
-  await expect(property(page, "Deal")).toContainText("Harborline Multi-Branch Pipeline Rollout");
-  await page.goto("/ontology/objects/crm.deal/demo-deal-1");
-  await expect(rows.getByText("$1,350.00 USD", { exact: true })).toHaveCount(0);
-});
-
-test("crm: a note and activity link to actual CRM leads and deals", async ({ page }) => {
-  await signIn(page);
-  const note = await submit(page, "crm.note.create", "crm.note", "acceptance-note", { title: "Linked note", deal: "demo-deal-1" }, 0);
-  await page.goto(`/ontology/objects/crm.note/${note.record.submission.target.id}`);
-  await expect(property(page, "Deal")).toContainText("Northwind Regional CRM Expansion");
-  const activity = await submit(page, "crm.activity.create", "crm.activity", "acceptance-activity", { subject: "Linked follow-up", lead: "demo-lead-1" }, 0);
-  await page.goto(`/ontology/objects/crm.activity/${activity.record.submission.target.id}`);
-  await expect(property(page, "Lead")).toContainText("Zhao Ming");
-  await edit(page, "Deal");
-  await choose(page, page, "Deal", "Northwind Regional CRM Expansion");
-  await page.reload();
-  await expect(property(page, "Deal")).toContainText("Northwind Regional CRM Expansion");
-});
-
-test("crm: date filters stay available while reference choices load", async ({ page }) => {
-  await signIn(page);
-  await page.setViewportSize({ width: 1600, height: 900 });
-  let release!: () => void;
-  const held = new Promise<void>((resolve) => { release = resolve; });
-  let requested = false;
-  await page.route(/\/v1\/records\/crm\.account\?/, async (route) => { requested = true; await held; await route.continue(); });
-  try {
-    await page.goto("/ontology/objects/crm.deal");
-    await expect.poll(() => requested).toBe(true);
-    await expect(page.getByRole("combobox", { name: "Account filter", exact: true })).toBeVisible();
-    const date = page.getByRole("combobox", { name: "Expected close filter", exact: true });
-    if (!(await date.count())) await page.getByRole("button", { name: /more filters?$/ }).click();
-    await date.click();
-    const next = page.getByRole("radio", { name: "Next 30 days", exact: true });
-    await expect(next).toBeVisible();
-    const response = page.waitForResponse((r) => r.url().includes("/v1/records/crm.account?") && r.ok());
-    release();
-    await response;
-    await expect(next).toBeVisible();
-    await next.click();
-    await expect(page).toHaveURL(/expectedclose.*after.*expectedclose.*before/);
-  } finally {
-    release();
-    await page.unrouteAll({ behavior: "wait" });
-  }
-});
-
-test("crm: a sales rep works only their own leads while the sales manager sees the whole team", async ({ page }) => {
-  await signIn(page, "user-1 · acceptance");
-  await submit(page, "crm.lead.create", "crm.lead", "acceptance-own-lead", { fullname: "Own lead", source: "website" }, 0);
-  await signIn(page, "builder-1 · acceptance");
-  await submit(page, "crm.lead.create", "crm.lead", "acceptance-peer-lead", { fullname: "Peer lead" }, 0);
-  await signIn(page, "user-1 · acceptance");
-  await page.goto("/ontology/objects/crm.lead");
-  await page.getByRole("radio", { name: "Table" }).click();
-  await expect(page.getByText("Own lead", { exact: true })).toBeVisible();
-  await expect(page.getByText("Peer lead", { exact: true })).toHaveCount(0);
-  await signIn(page, "manager-1 · acceptance");
-  await page.goto("/ontology/objects/crm.lead");
-  await page.getByRole("radio", { name: "Table" }).click();
-  await expect(page.getByText("Own lead", { exact: true })).toBeVisible();
-  await expect(page.getByText("Peer lead", { exact: true })).toBeVisible();
-});
-
 function workbookSheets(sheets: { name: string; rows: string[][] }[]) {
   const main = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
   const links = "http://schemas.openxmlformats.org/officeDocument/2006/relationships";
@@ -512,26 +431,19 @@ test("invite: an administrator invites colleagues by customer account and grants
   await expect(page.getByRole("button", { name: "Convert to deal", exact: true })).toHaveCount(0);
 });
 
-test("naming: two new activities get consecutive numbers", async ({ page }) => {
+test("defaults and naming: activities get consecutive numbers and a creator, and deal probability follows its stage until overridden", async ({ page }) => {
   await as(page, "manager-1");
-  const create = async (subject: string) => {
-    const answer = await submit(page, "crm.activity.create", "crm.activity", "", { subject }, 0);
-    const id = answer.record.submission.target.id as string;
-    expect(id).toMatch(/^ACT-\d{4}-\d{5}$/);
-    return Number(id.slice(-5));
-  };
-  const first = await create(`Numbered one ${unique()}`);
-  const second = await create(`Numbered two ${unique()}`);
-  expect(second).toBe(first + 1);
-});
-
-test("defaults and from: an activity is assigned to its creator, and a deal takes its probability from its stage until someone overrides it", async ({ page }) => {
-  await as(page, "manager-1");
+  const first = await submit(page, "crm.activity.create", "crm.activity", "", { subject: `Numbered first ${unique()}` }, 0);
+  const firstId = first.record.submission.target.id as string;
+  expect(firstId).toMatch(/^ACT-\d{4}-\d{5}$/);
   await page.goto("/crm/crm.activity");
   await page.getByRole("button", { name: "New", exact: true }).click();
   const form = page.getByRole("dialog");
   await form.getByRole("textbox", { name: "Subject" }).fill(`Default owner ${unique()}`);
   await form.getByRole("button", { name: "Create", exact: true }).click();
+  await expect(page).toHaveURL(/\/crm\/crm\.activity\/ACT-\d{4}-\d{5}$/);
+  const secondId = new URL(page.url()).pathname.split("/").at(-1)!;
+  expect(Number(secondId.slice(-5))).toBe(Number(firstId.slice(-5)) + 1);
   await expect(property(page, "Assigned to")).toContainText("赵敏");
 
   const id = await deal(page, { title: `Derived ${unique()}` });

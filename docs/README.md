@@ -95,7 +95,10 @@
 | Delivery · 包交付 | `make trunk LAYER=delivery` | 空租户、历史版本、已安装版本等互斥状态按需创建；真实安装、升级与恢复 |
 | Security · 安全隔离 | `make trunk LAYER=security` | 浏览器验证授权 UI 与撤权后的实时行为；纯 API 隔离由 `make test-security-pg` 创建两个独立安全租户和一个非成员租户 |
 
-日常 `make frontend-host` 只建星河科技一个租户；单 spec 不加载无关租户。全量验收覆盖四层常规场景和独立 API 安全验收，不把演示、测试租户保留在开发或生产实例。
+日常 `make frontend-host` 只建星河科技一个租户；单 spec 不加载无关租户。
+`builder` 不装 CRM；`crm` 只建启明商贸；`crm-records` 与 `package-extension` 才准备星河科技的 CRM。
+交付拆为 `marketplace`（空企业）、`package-upgrade`（文件导入与 CRM 升级）、`party-upgrade`（主数据迁移）、`package-library`（目录）、`package-apps`（已安装应用）、`package-lifecycle`、`official` 等，互不加载无关业务数据。
+前置状态从已按锁校验的远程制品字节导入，不为每个租户重复下载；真实 HTTPS 安装与市场自动依赖下载仍走产品接口，不以准备缓存替代传输验收。升级场景预置目标版本声明的真实依赖（如尚未发布的 call 从锁定源码构建），不跳过依赖检查。全量验收覆盖四层常规场景和独立 API 安全验收，不把演示、测试租户保留在开发或生产实例。
 默认单 worker，当前有串行依赖的用例共享所属场景状态；不同执行批次的数据库、文件目录和宿主互不共享，尚不宣称每个用例或每个 worker 完全隔离。
 
 测试池按 PostgreSQL 镜像 ID 创建专用本机容器（仅回环地址），不使用开发/生产数据库。

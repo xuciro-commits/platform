@@ -57,7 +57,9 @@ export function packageInput(name) {
   if (!entry) throw Error("Unknown package input " + name);
   const file = join(root, name + ".json");
   const bytes = readFileSync(file);
-  if (sha(bytes) !== entry.sha256) throw Error("Test package digest mismatch: " + name);
+  const spec = lock.packages[name];
+  if (!spec || entry.id !== spec.id || entry.version !== spec.version || entry.url !== spec.url || entry.source !== spec.source ||
+      sha(bytes) !== entry.sha256 || (spec.sha256 && spec.sha256 !== entry.sha256)) throw Error("Test package identity or digest mismatch: " + name);
   return { ...entry, file, bytes };
 }
 
@@ -66,9 +68,9 @@ export function fixtureRelease(name) {
   return entry.url ? { url: entry.url, expectedSha256: entry.sha256 } : undefined;
 }
 
-export function packageRequest(name) {
+export function seedPackageRequest(name) {
   const entry = packageInput(name);
-  return entry.url ? { url: entry.url, expectedSha256: entry.sha256 } : { contentBase64: entry.bytes.toString("base64"), expectedSha256: entry.sha256 };
+  return { contentBase64: entry.bytes.toString("base64"), expectedSha256: entry.sha256 };
 }
 
 function checkout(root) {
