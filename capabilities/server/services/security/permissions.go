@@ -74,26 +74,8 @@ type Explanation struct {
 
 type PermissionsReport struct {
 	Apps    func() []platform.Service
+	Titles  map[string]string
 	Holders func(app, role string) int
-}
-
-func spaceDisplayTitle(space string) string {
-	switch space {
-	case "crm":
-		return "CRM"
-	case "hr", "hr-core":
-		return "HR"
-	case "uom":
-		return "Units of measure"
-	case "geo":
-		return "Places"
-	case "party":
-		return "Business partners"
-	}
-	if space == "" {
-		return ""
-	}
-	return strings.ToUpper(space[:1]) + space[1:]
 }
 
 func describeObjectPermissions(appID string, entity platform.RecordType) ObjectPermissions {
@@ -227,7 +209,7 @@ func (p PermissionsReport) Permissions() []AppPermissions {
 			continue
 		}
 		ap := AppPermissions{
-			App: space, Title: spaceDisplayTitle(space),
+			App: space, Title: p.spaceTitle(space),
 			Reads: []string{}, Everyone: []string{},
 			Roles:   make([]RolePermissions, 0, len(roles)),
 			Objects: slices.Clone(spaceObjects[space]),
@@ -325,4 +307,14 @@ func nonNil(list []string) []string {
 		return []string{}
 	}
 	return list
+}
+
+func (p PermissionsReport) spaceTitle(space string) string {
+	if title := p.Titles[space]; title != "" {
+		return title
+	}
+	if space == "" {
+		return ""
+	}
+	return strings.ToUpper(space[:1]) + space[1:]
 }

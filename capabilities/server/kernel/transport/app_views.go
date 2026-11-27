@@ -33,20 +33,9 @@ type AppInfo struct {
 	Interfaces   []platform.Interface      `json:"interfaces"`
 }
 
-func spaceTitle(space string) string {
-	switch space {
-	case "crm":
-		return "CRM"
-	case "hr", "hr-core":
-		return "HR"
-	case "ai":
-		return "AI"
-	case "uom":
-		return "Units of measure"
-	case "geo":
-		return "Places"
-	case "party":
-		return "Business partners"
+func SpaceTitle(space string, titles map[string]string) string {
+	if title := titles[space]; title != "" {
+		return title
 	}
 	if space == "" {
 		return ""
@@ -54,7 +43,11 @@ func spaceTitle(space string) string {
 	return strings.ToUpper(space[:1]) + space[1:]
 }
 
-func AppEntries(manifests []platform.Manifest, roles map[string]string) []AppEntry {
+func AppEntries(manifests []platform.Manifest, roles map[string]string, declared ...map[string]string) []AppEntry {
+	var titles map[string]string
+	if len(declared) > 0 {
+		titles = declared[0]
+	}
 	out := []AppEntry{}
 	seen := map[string]bool{}
 	for _, m := range manifests {
@@ -65,13 +58,17 @@ func AppEntries(manifests []platform.Manifest, roles map[string]string) []AppEnt
 	}
 	for _, app := range slices.Sorted(maps.Keys(roles)) {
 		if !seen[app] && roles[app] != "" {
-			out = append(out, AppEntry{ID: app, Title: spaceTitle(app), Role: roles[app]})
+			out = append(out, AppEntry{ID: app, Title: SpaceTitle(app, titles), Role: roles[app]})
 		}
 	}
 	return out
 }
 
-func AppInfos(manifests []platform.Manifest) []AppInfo {
+func AppInfos(manifests []platform.Manifest, declared ...map[string]string) []AppInfo {
+	var titles map[string]string
+	if len(declared) > 0 {
+		titles = declared[0]
+	}
 	out := []AppInfo{}
 	seen := map[string]bool{}
 	spaces := map[string][]string{}
@@ -146,7 +143,7 @@ func AppInfos(manifests []platform.Manifest) []AppInfo {
 		roles := slices.Clone(spaces[space])
 		slices.Sort(roles)
 		out = append(out, AppInfo{
-			ID: space, Title: spaceTitle(space), Version: "1",
+			ID: space, Title: SpaceTitle(space, titles), Version: "1",
 			Reads: []string{}, Roles: roles, Capabilities: []platform.CapabilityInfo{},
 			Inputs: []string{}, Uses: []string{}, Subscribes: []string{},
 			Provides: []string{}, Consumes: []string{}, Emits: []platform.EffectKind{}, Interfaces: []platform.Interface{},
@@ -174,4 +171,20 @@ type MeView struct {
 	Account     protocol.Account      `json:"account"`
 	Tenant      protocol.TenantRecord `json:"tenant"`
 	HostAdmin   bool                  `json:"hostAdmin,omitempty"`
+}
+
+// DeclaredSpaceTitles derives virtual namespace titles from installed apps.
+func DeclaredSpaceTitles(definitions []platform.Definition) map[string]string {
+	titles := map[string]string{}
+	for _, d := range definitions {
+		if d.Application == nil || d.Application.Title == "" {
+			continue
+		}
+		name := d.Application.Name
+		space, _, _ := strings.Cut(name, ".")
+		if name == space || titles[space] == "" {
+			titles[space] = d.Application.Title
+		}
+	}
+	return titles
 }

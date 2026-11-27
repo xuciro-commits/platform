@@ -34,10 +34,12 @@ func (t *Tenant) manifests() []platform.Manifest {
 	return out
 }
 
-func (t *Tenant) Apps() []transport.AppInfo { return transport.AppInfos(t.manifests()) }
+func (t *Tenant) Apps() []transport.AppInfo {
+	return transport.AppInfos(t.manifests(), transport.DeclaredSpaceTitles(t.definitions))
+}
 
 func (t *Tenant) AppsOf(m platform.Member) []transport.AppEntry {
-	return transport.AppEntries(t.manifests(), m.Roles)
+	return transport.AppEntries(t.manifests(), m.Roles, transport.DeclaredSpaceTitles(t.definitions))
 }
 
 func (t *Tenant) Member(id string) (platform.Member, bool) {

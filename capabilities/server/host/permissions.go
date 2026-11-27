@@ -3,12 +3,13 @@ package host
 import (
 	"time"
 
+	"platformserver/kernel/transport"
 	"platformserver/platform"
 	"platformserver/services/security"
 )
 
 func (t *Tenant) Permissions() []security.AppPermissions {
-	return security.PermissionsReport{Apps: t.LiveApps, Holders: func(app, role string) int {
+	return security.PermissionsReport{Apps: t.LiveApps, Titles: transport.DeclaredSpaceTitles(t.definitions), Holders: func(app, role string) int {
 		if t.IdentityOwner == nil {
 			return 0
 		}

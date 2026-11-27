@@ -119,3 +119,5 @@ if (problems.length) {
 }
 console.log(`boundaries: ${allowed.size} units match ${tablePath} (${usedGaps.size} exceptions in use)`);
 console.log(`shape: host ${shape.hostLines[0]}, platform ${shape.platformLines[0]}, tenant fields ${tenantFields}, probes ${capabilityProbes}, misnamed ${misnamed}`);
+
+execFileSync("node", [root + "scripts/check-purity.mjs"], { cwd: root, stdio: "inherit" });
