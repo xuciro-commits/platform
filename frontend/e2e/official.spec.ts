@@ -7,6 +7,7 @@ const artifact = fileURLToPath(new URL("../../scripts/frontend-fixtures/crm-offi
 
 test.describe.serial("official tenant", () => {
 let page: Page;
+let extensionLead = "";
 test.beforeAll(async ({ browser }) => {
   page = await browser.newPage();
 });
@@ -120,58 +121,6 @@ test("official tenant: the deal is won and the CRM home counts its revenue", asy
   await expect(page.getByRole("main").getByText("$368K USD").first()).toBeVisible();
 });
 
-test("official tenant: CRM upgrades through the marketplace with an optional field and a renamed label", async () => {
-  test.setTimeout(90_000);
-  await as("rep-1");
-  await crm("Leads");
-  await page.getByRole("button", { name: "New", exact: true }).click();
-  const lead = page.getByRole("dialog");
-  await lead.getByRole("textbox", { name: "Full name" }).fill("升级演练线索");
-  await lead.getByRole("button", { name: "Create", exact: true }).click();
-  await expect(page.getByRole("heading", { name: "升级演练线索", exact: true }).first()).toBeVisible();
-  const record = page.url();
-  await edit(page, "Company");
-  const company = page.getByRole("textbox", { name: "Company", exact: true });
-  await company.fill("升级演练公司");
-  await company.press("Enter");
-  await expect(property(page, "Company")).toContainText("升级演练公司");
-
-  await as("admin-1");
-  await page.goto("/delivery/marketplace");
-  await page.getByRole("button", { name: "More actions", exact: true }).click();
-  await page.getByRole("menuitem", { name: "Install from URL or file", exact: true }).click();
-  const wizard = page.getByRole("dialog", { name: /Install from URL or file/ });
-  const next = fileURLToPath(new URL("../../scripts/frontend-fixtures/crm-official-0.3.2.json", import.meta.url));
-  await wizard.locator('input[type="file"]').setInputFiles({ name: "crm-0.3.2.json", mimeType: "application/json", buffer: readFileSync(next) });
-  await wizard.getByRole("button", { name: "Inspect package", exact: true }).click();
-  await expect(wizard.getByText("crm · 0.3.2", { exact: true })).toBeVisible();
-  await wizard.getByRole("button", { name: "Add to library", exact: true }).click();
-  await expect(wizard.getByRole("button", { name: "Continue", exact: true })).toBeEnabled({ timeout: 30_000 });
-  await wizard.getByRole("button", { name: "Cancel", exact: true }).click();
-  await expect(wizard).toBeHidden();
-
-  const card = page.getByRole("listitem").filter({ hasText: /^CRM/ }).filter({ hasText: "crm · 0.3.2" });
-  await card.getByRole("button", { name: "Upgrade", exact: true }).click();
-  const review = page.getByRole("dialog", { name: /Review and install/ });
-  await expect(review.getByText(/\+ externalref/)).toBeVisible();
-  await expect(review.getByText(/~ company \(Company → Company name\)/)).toBeVisible();
-  await review.getByRole("button", { name: "Upgrade package", exact: true }).click();
-  await expect(review).toBeHidden({ timeout: 60_000 });
-  await page.goto("/delivery/installations");
-  await expect(page.getByRole("listitem").filter({ hasText: /^CRM/ })).toContainText("0.3.2");
-
-  await as("rep-1");
-  await page.goto(record);
-  await expect(property(page, "Company name")).toContainText("升级演练公司");
-  await edit(page, "External reference");
-  const external = page.getByRole("textbox", { name: "External reference", exact: true });
-  await external.fill("UPGRADE-001");
-  await external.press("Enter");
-  await expect(property(page, "External reference")).toContainText("UPGRADE-001");
-  await page.reload();
-  await expect(property(page, "External reference")).toContainText("UPGRADE-001");
-});
-
 test("official tenant: an extension project adds fields, an action and columns to CRM leads under its own access", async () => {
   test.setTimeout(120_000);
   const grantRole = async (memberId: string, appTitle: string, roleLabel: string) => {
@@ -256,6 +205,7 @@ test("official tenant: an extension project adds fields, an action and columns t
 
   await page.getByRole("button", { name: "Publish", exact: true }).click();
   const publish = page.getByRole("dialog", { name: /Publish/ });
+  await expect(publish.getByRole("button", { name: "Publish", exact: true })).toBeEnabled({ timeout: 30_000 });
   await publish.getByRole("button", { name: "Publish", exact: true }).click();
   await expect(publish).toBeHidden();
   await expect(page.getByText("Published", { exact: true }).first()).toBeVisible();
@@ -264,7 +214,7 @@ test("official tenant: an extension project adds fields, an action and columns t
   await grantRole("manager-1", "Crmext", "salesmanager");
 
   await page.goto("/delivery/installations");
-  await expect(page.getByRole("listitem").filter({ hasText: /^CRM/ })).toContainText("0.3.2");
+  await expect(page.getByRole("listitem").filter({ hasText: /^CRM/ })).toContainText("0.3.1");
 
   await as("rep-1");
   await crm("Leads");
@@ -274,6 +224,7 @@ test("official tenant: an extension project adds fields, an action and columns t
   await newLead.getByRole("button", { name: "Create", exact: true }).click();
   await expect(page.getByRole("heading", { name: "陆衡", exact: true }).first()).toBeVisible();
   await expect(page.getByRole("heading", { name: "Lead qualification", exact: true })).toBeVisible();
+  extensionLead = page.url();
 
   await edit(page, "Source channel");
   const channelInput = page.getByRole("textbox", { name: "Source channel", exact: true });
@@ -347,6 +298,76 @@ test("official tenant: an extension project adds fields, an action and columns t
     return response.status;
   });
   expect(deniedStatus).toBeGreaterThanOrEqual(400);
+});
+
+test("official tenant: CRM upgrades through the marketplace with an optional field and a renamed label", async () => {
+  test.setTimeout(90_000);
+  await as("rep-1");
+  await crm("Leads");
+  await page.getByRole("button", { name: "New", exact: true }).click();
+  const lead = page.getByRole("dialog");
+  await lead.getByRole("textbox", { name: "Full name" }).fill("升级演练线索");
+  await lead.getByRole("button", { name: "Create", exact: true }).click();
+  await expect(page.getByRole("heading", { name: "升级演练线索", exact: true }).first()).toBeVisible();
+  const record = page.url();
+  await edit(page, "Company");
+  const company = page.getByRole("textbox", { name: "Company", exact: true });
+  await company.fill("升级演练公司");
+  await company.press("Enter");
+  await expect(property(page, "Company")).toContainText("升级演练公司");
+
+  await as("admin-1");
+  await page.goto("/delivery/marketplace");
+  await page.getByRole("button", { name: "More actions", exact: true }).click();
+  await page.getByRole("menuitem", { name: "Install from URL or file", exact: true }).click();
+  const wizard = page.getByRole("dialog", { name: /Install from URL or file/ });
+  const next = fileURLToPath(new URL("../../scripts/frontend-fixtures/crm-official-0.3.2.json", import.meta.url));
+  await wizard.locator('input[type="file"]').setInputFiles({ name: "crm-0.3.2.json", mimeType: "application/json", buffer: readFileSync(next) });
+  await wizard.getByRole("button", { name: "Inspect package", exact: true }).click();
+  await expect(wizard.getByText("crm · 0.3.2", { exact: true })).toBeVisible();
+  await wizard.getByRole("button", { name: "Add to library", exact: true }).click();
+  await expect(wizard.getByRole("button", { name: "Continue", exact: true })).toBeEnabled({ timeout: 30_000 });
+  await wizard.getByRole("button", { name: "Cancel", exact: true }).click();
+  await expect(wizard).toBeHidden();
+
+  const card = page.getByRole("listitem").filter({ hasText: /^CRM/ }).filter({ hasText: "crm · 0.3.2" });
+  await card.getByRole("button", { name: "Upgrade", exact: true }).click();
+  const review = page.getByRole("dialog", { name: /Review and install/ });
+  await expect(review.getByText(/\+ externalref/)).toBeVisible();
+  await expect(review.getByText(/~ company \(Company → Company name\)/)).toBeVisible();
+  const leadDiff = review.getByRole("table", { name: "Changes", exact: true }).filter({ hasText: "externalref" });
+  await expect(leadDiff).toBeVisible();
+  await expect(leadDiff.getByRole("columnheader", { name: "0.3.1", exact: true })).toBeVisible();
+  await expect(leadDiff.getByRole("columnheader", { name: "0.3.2", exact: true })).toBeVisible();
+  await expect(leadDiff.getByRole("row", { name: /externalref.*Added/ })).toBeVisible();
+  await expect(leadDiff.getByRole("row", { name: /company.*Changed.*Company.*Company name/ })).toBeVisible();
+  const extItem = review.getByRole("listitem").filter({ hasText: "crmext.leadext" });
+  await expect(extItem).toContainText("crmext");
+  await expect(extItem).toContainText("Shape compatible");
+  await expect(extItem).toContainText("sourcechannel, verifiednote");
+  await expect(extItem).toContainText("OK");
+  await review.getByRole("button", { name: "Upgrade package", exact: true }).click();
+  await expect(review).toBeHidden({ timeout: 60_000 });
+  await page.goto("/delivery/installations");
+  await expect(page.getByRole("listitem").filter({ hasText: /^CRM/ })).toContainText("0.3.2");
+
+  await as("rep-1");
+  await page.goto(record);
+  await expect(property(page, "Company name")).toContainText("升级演练公司");
+  await edit(page, "External reference");
+  const external = page.getByRole("textbox", { name: "External reference", exact: true });
+  await external.fill("UPGRADE-001");
+  await external.press("Enter");
+  await expect(property(page, "External reference")).toContainText("UPGRADE-001");
+  await page.reload();
+  await expect(property(page, "External reference")).toContainText("UPGRADE-001");
+
+  await page.goto(extensionLead);
+  await expect(property(page, "Source channel")).toContainText("行业峰会");
+  await expect(property(page, "Qualification note")).toContainText("预算与决策链已核实");
+  await page.getByRole("button", { name: "More actions", exact: true }).click();
+  await expect(page.getByRole("menuitem", { name: "Verify qualification", exact: true })).toBeVisible();
+  await page.keyboard.press("Escape");
 });
 
 test("official tenant: a lead keeps its number and revision across snapshot and replay restarts", async () => {
