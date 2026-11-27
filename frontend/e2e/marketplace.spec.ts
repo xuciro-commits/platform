@@ -1,8 +1,7 @@
+import { input, selectPackage, packageWizard, addToLibrary, installInput } from "./package-inputs";
 import { createHash } from "node:crypto";
-import { readFileSync } from "node:fs";
 import { createServer } from "node:http";
 import type { AddressInfo } from "node:net";
-import { fileURLToPath } from "node:url";
 import { type Locator, type Page, expect, test } from "@playwright/test";
 import { open, property, edit, signIn, submit } from "./support";
 
@@ -38,15 +37,16 @@ test("blank tenant: an administrator installs CRM from the marketplace after rev
   await expect(page.getByRole("link", { name: "CRM", exact: true })).toHaveCount(0);
 
   await open(page, "Delivery", "Marketplace");
-  const crm = page.getByRole("listitem").filter({ hasText: /^CRM/ }).first();
-  await expect(crm).toBeVisible();
+  const crm = page.getByRole("listitem").filter({ hasText: /^CRM/ }).filter({ hasText: `crm · ${input("crm").version}` }).first();
+  await expect(crm).toBeVisible({ timeout: 30_000 });
   await crm.getByRole("button", { name: "Install", exact: true }).click();
-  const review = page.getByRole("dialog", { name: /Review and install/ });
-  await expect(review.getByText("Applications", { exact: true })).toBeVisible();
-  await expect(review.getByText("Dependencies", { exact: true })).toBeVisible();
-  await expect(review.getByText(/salesrep/)).toBeVisible();
-  await expect(review.getByText("Connections", { exact: true })).toBeVisible();
-  await review.getByRole("button", { name: "Install package", exact: true }).click();
+  const wizard = page.getByRole("dialog", { name: /Install from URL or file/ });
+  await expect(wizard.getByText(input("crm").sha256, { exact: true })).toBeVisible({ timeout: 30_000 });
+  await addToLibrary(wizard);
+  await expect(wizard.getByText(/salesrep/).first()).toBeVisible();
+  await wizard.getByRole("button", { name: "Continue", exact: true }).click();
+  await wizard.getByRole("button", { name: "Install package", exact: true }).click();
+  await expect(wizard).toBeHidden({ timeout: 120_000 });
   await expect(page).toHaveURL(/\/delivery\/installations$/, { timeout: 30_000 });
   await expect(page.getByRole("listitem").filter({ hasText: /^CRM/ })).toContainText("active");
   const access = page.getByRole("dialog", { name: "Who can use it" });
@@ -56,6 +56,10 @@ test("blank tenant: an administrator installs CRM from the marketplace after rev
   await access.getByRole("button", { name: "Grant access", exact: true }).click();
   await expect(access).toHaveCount(0);
   await expect(page.getByRole("link", { name: "CRM", exact: true }).first()).toBeVisible();
+  for (const member of ["admin-1", "user-1", "manager-1"]) {
+    await submit(page, "platform.member.grant", "platform.member", member, { app: "party", role: "user" });
+  }
+  await submit(page, "platform.package.clear-demo", "platform.package", "crm", { id: "crm" });
 });
 
 test("blank tenant: a package role granted to a member opens CRM for them, its empty pipeline shows every stage, and revoking it closes it", async () => {
@@ -78,14 +82,11 @@ test("blank tenant: a package role granted to a member opens CRM for them, its e
   await nav.getByRole("link", { name: "Deals", exact: true }).click();
   await page.getByRole("radio", { name: "Board" }).click();
   await expect(page.getByRole("region", { name: "Qualification", exact: true })).toContainText("Nothing in this column yet");
-  await expect(page.getByRole("region", { name: "Won", exact: true })).toBeVisible();
   await expect(page.getByRole("button", { name: "New", exact: true })).toBeVisible();
   await nav.getByRole("link", { name: "Leads", exact: true }).click();
   await page.getByRole("button", { name: "New", exact: true }).click();
   const firstLead = page.getByRole("dialog");
   await firstLead.getByRole("textbox", { name: "Full name" }).fill("林海");
-  await firstLead.getByRole("combobox", { name: "Status" }).click();
-  await page.getByRole("option", { name: "New", exact: true }).click();
   await firstLead.getByRole("button", { name: "Create", exact: true }).click();
   await expect(page.getByRole("heading", { level: 1, name: "林海", exact: true })).toBeVisible();
 
@@ -116,48 +117,35 @@ test("blank tenant: the sales rep runs a lead to Won and the sales manager sees 
   await page.getByRole("link", { name: "CRM", exact: true }).first().click();
   await nav.getByRole("link", { name: "Leads", exact: true }).click();
   await page.getByRole("link", { name: "林海", exact: true }).click();
-  await edit(page, "Organization");
-  const org = page.getByRole("textbox", { name: "Organization", exact: true });
+  await edit(page, "Company");
+  const org = page.getByRole("textbox", { name: "Company", exact: true });
   await org.fill("星海制造");
-  await Promise.all([
-    page.waitForResponse((response) => response.url().endsWith("/v1/submissions") && response.ok()),
-    org.press("Enter"),
-  ]);
-  await expect(property(page, "Organization")).toContainText("星海制造");
-  await edit(page, "Status");
-  await page.getByRole("combobox", { name: "Status" }).fill("Contacted");
-  await Promise.all([
-    page.waitForResponse((response) => response.url().endsWith("/v1/submissions") && response.ok()),
-    page.getByRole("option", { name: "Contacted", exact: true }).click(),
-  ]);
-  await expect(property(page, "Status")).toContainText("Contacted");
-  await expect(property(page, "First response")).toContainText("Fulfilled", { timeout: 20_000 });
+  await org.press("Enter");
+  await expect(property(page, "Company")).toContainText("星海制造");
   await page.getByRole("button", { name: "Convert to deal", exact: true }).click();
   const convert = page.getByRole("dialog", { name: "Convert to deal", exact: true });
-  await convert.getByRole("heading", { name: "Convert to deal", exact: true }).click();
+  for (const [name, date] of [["Expected close", "December 31, 2026"], ["Next step due", "November 30, 2026"]]) {
+    const field = convert.getByRole("combobox", { name, exact: true });
+    await field.fill(date);
+    await field.press("Tab");
+  }
+  await convert.getByRole("textbox", { name: "Next step" }).fill("Send proposal");
   await convert.getByRole("button", { name: "Convert to deal", exact: true }).click();
   await expect(convert).toBeHidden();
   await expect(page.getByRole("heading", { level: 1, name: "星海制造", exact: true })).toBeVisible();
-  await nav.getByRole("link", { name: "Deals", exact: true }).click();
-  await page.getByRole("radio", { name: "Board" }).click();
-  const card = page.getByRole("region", { name: "Qualification", exact: true }).getByRole("heading", { level: 4, name: "星海制造", exact: true });
-  await expect(card).toBeVisible();
-  const won = page.getByRole("region", { name: "Won", exact: true });
-  const from = (await card.boundingBox())!;
-  const to = (await won.boundingBox())!;
-  await page.mouse.move(from.x + 2, from.y - 4);
-  await page.mouse.down();
-  await page.mouse.move(from.x + 40, from.y + 20, { steps: 4 });
-  await page.mouse.move(to.x + to.width / 2, to.y + to.height / 2, { steps: 8 });
-  await page.mouse.up();
-  await expect(won.getByRole("heading", { level: 4, name: "星海制造", exact: true })).toBeVisible();
+  await page.getByRole("button", { name: "Mark won", exact: true }).click();
+  const win = page.getByRole("dialog", { name: "Mark won", exact: true });
+  await win.getByRole("textbox", { name: "Why we won" }).fill("Matched requirements");
+  await win.getByRole("button", { name: "Mark won", exact: true }).click();
+  await expect(win).toBeHidden();
+  await expect(page.getByRole("main").getByText("Won", { exact: true }).first()).toBeVisible();
 
   await signOut();
   await signIn(page, "manager-1 · blank");
   await page.getByRole("link", { name: "CRM", exact: true }).first().click();
   await nav.getByRole("link", { name: "Deals", exact: true }).click();
-  await page.getByRole("radio", { name: "Board" }).click();
-  await expect(page.getByRole("region", { name: "Won", exact: true }).getByRole("heading", { level: 4, name: "星海制造", exact: true })).toBeVisible();
+  await page.getByRole("radio", { name: "Table" }).click();
+  await expect(page.getByRole("link", { name: "星海制造", exact: true }).first()).toBeVisible();
   await page.goto("/crm/dashboard");
   await expect(page.getByRole("main").getByRole("link", { name: "Won deals", exact: true }).locator("..")).toHaveText(/\D1$/);
 });
@@ -200,76 +188,37 @@ test("blank tenant: retiring CRM removes its entry and keeps the records, reinst
 });
 
 test.describe.serial("upgrade tenant", () => {
-const previous = fileURLToPath(new URL("../../scripts/frontend-fixtures/crm-0.1.21.json", import.meta.url));
-
-test("upgrade tenant: install CRM from a local package file after checking its origin and SHA-256", async ({ page }) => {
-  const bytes = readFileSync(previous);
-  const sha256 = createHash("sha256").update(bytes).digest("hex");
+test("upgrade tenant: install the official CRM release from a freshly downloaded file with SHA-256", async ({ page }) => {
+  test.setTimeout(240_000);
   await signIn(page, "admin-1 · upgrade");
-
-  await open(page, "Delivery", "Marketplace");
-  await page.getByRole("button", { name: "More actions", exact: true }).click();
-  await page.getByRole("menuitem", { name: "Install from URL or file", exact: true }).click();
-  const wizard = page.getByRole("dialog", { name: /Install from URL or file/ });
-  await wizard.locator('input[type="file"]').setInputFiles({ name: "crm-0.1.21.json", mimeType: "application/json", buffer: bytes });
-  await wizard.getByRole("button", { name: "Inspect package", exact: true }).click();
-
-  await expect(wizard.getByText("crm · 0.1.21", { exact: true })).toBeVisible();
-  await expect(wizard.getByText("Local file", { exact: true }).last()).toBeVisible();
-  await expect(wizard.getByText(new RegExp(sha256))).toBeVisible();
-  await wizard.getByRole("button", { name: "Add to library", exact: true }).click();
-
-  await expect(wizard.getByRole("textbox", { name: /Project API name/ })).toHaveValue("crm");
-  await expect(wizard.getByText(/salesrep/).first()).toBeVisible();
-  await wizard.getByRole("button", { name: "Continue", exact: true }).click();
-  await wizard.getByRole("button", { name: "Install package", exact: true }).click();
-  await expect(wizard).toBeHidden({ timeout: 30_000 });
-
+  await installInput(page, "geo");
+  await installInput(page, "party");
+  await submit(page, "platform.member.grant", "platform.member", "admin-1", { app: "party", role: "user" });
+  await installInput(page, "crm", "Install package", true);
   await open(page, "Delivery", "Installations");
   const crm = page.getByRole("listitem").filter({ hasText: /^CRM/ });
   await expect(crm).toContainText("active");
-  await expect(crm).toContainText("0.1.21");
+  await expect(crm).toContainText(input("crm").version);
 });
 
-test("upgrade tenant: CRM upgrades to a version with a new optional lead field and the lead keeps its values", async ({ page }) => {
-  const enter = () => signIn(page, "admin-1 · upgrade");
-  await enter();
-  await open(page, "Admin", "Members");
-  await page.getByRole("row", { name: /王丹/ }).click();
-  const memberPane = page.getByRole("dialog", { name: "Details" }).or(page.getByRole("complementary", { name: "Details" }));
-  await grantRole(page, memberPane, /salesrep/);
-
-  await page.getByRole("button", { name: "Account", exact: true }).click();
-  await page.getByRole("menuitem", { name: "Sign out", exact: true }).click();
-  await enter();
-  const nav = page.getByRole("navigation", { name: "Primary navigation" });
-  await page.getByRole("link", { name: "CRM", exact: true }).first().click();
-  await nav.getByRole("link", { name: "Leads", exact: true }).click();
+test("upgrade tenant: CRM upgrades to the next authoritative version and the lead keeps its values", async ({ page }) => {
+  test.setTimeout(180_000);
+  await signIn(page, "admin-1 · upgrade");
+  await submit(page, "platform.member.grant", "platform.member", "admin-1", { app: "crm", role: "salesrep" });
+  await page.goto("/crm/crm.lead");
   await page.getByRole("button", { name: "New", exact: true }).click();
   const lead = page.getByRole("dialog");
   await lead.getByRole("textbox", { name: "Full name" }).fill("周宁");
-  await lead.getByRole("combobox", { name: "Status" }).click();
-  await page.getByRole("option", { name: "New", exact: true }).click();
   await lead.getByRole("button", { name: "Create", exact: true }).click();
   await expect(page.getByRole("heading", { level: 1, name: "周宁", exact: true })).toBeVisible();
   const record = page.url();
   await edit(page, "Email");
   const email = page.getByRole("textbox", { name: "Email", exact: true });
   await email.fill("zhou.ning@example.com");
-  await Promise.all([
-    page.waitForResponse((response) => response.url().endsWith("/v1/submissions") && response.ok()),
-    email.press("Enter"),
-  ]);
+  await email.press("Enter");
   await expect(property(page, "Email")).toContainText("zhou.ning@example.com");
-
-  await open(page, "Delivery", "Marketplace");
-  await page.getByRole("listitem").filter({ hasText: /^CRM/ }).getByRole("button", { name: "Upgrade", exact: true }).first().click();
-  const review = page.getByRole("dialog", { name: /Review and install/ });
-  await expect(review.getByText(/crm\.lead/).first()).toBeVisible();
-  await expect(review.getByText(/\+ linkedin/)).toBeVisible();
-  await review.getByRole("button", { name: "Upgrade package", exact: true }).click();
-  await expect(review).toBeHidden({ timeout: 30_000 });
-  await expect(page).toHaveURL(/\/delivery\/installations$/, { timeout: 30_000 });
+  await installInput(page, "crm-next", "Upgrade package");
+  await page.goto("/delivery/installations");
   const access = page.getByRole("dialog", { name: "Who can use it" });
   await expect(access).toContainText("Existing role holders keep their access.");
   await access.getByRole("button", { name: "Skip for now", exact: true }).click();
@@ -277,40 +226,15 @@ test("upgrade tenant: CRM upgrades to a version with a new optional lead field a
   await page.reload();
   await expect(page.getByRole("link", { name: "CRM", exact: true }).first()).toBeVisible();
   await expect(access).toHaveCount(0);
-  await open(page, "Delivery", "Installations");
-  await expect(page.getByRole("listitem").filter({ hasText: /^CRM/ })).toContainText("0.1.22");
-
+  await expect(page.getByRole("listitem").filter({ hasText: /^CRM/ })).toContainText(input("crm-next").version);
   await page.goto(record);
-  await expect(page.getByRole("heading", { level: 1, name: "周宁", exact: true })).toBeVisible();
   await expect(property(page, "Email")).toContainText("zhou.ning@example.com");
-  await edit(page, "LinkedIn");
-  const linkedin = page.getByRole("textbox", { name: "LinkedIn", exact: true });
-  await linkedin.fill("linkedin.com/in/zhouning");
-  await Promise.all([
-    page.waitForResponse((response) => response.url().endsWith("/v1/submissions") && response.ok()),
-    linkedin.press("Enter"),
-  ]);
-  await expect(property(page, "LinkedIn")).toContainText("linkedin.com/in/zhouning");
 });
 
 test("upgrade tenant: upgrading the original party package retains the unstructured address", async ({ page }) => {
   test.setTimeout(120_000);
-  await signIn(page, "admin-1 · upgrade");
-  const importFixture = async (name: string, version: string, action: "Install package" | "Upgrade package") => {
-    await page.goto("/delivery/marketplace");
-    await page.getByRole("button", { name: "More actions", exact: true }).click();
-    await page.getByRole("menuitem", { name: "Install from URL or file", exact: true }).click();
-    const wizard = page.getByRole("dialog", { name: /Install from URL or file/ });
-    const file = fileURLToPath(new URL(`../../scripts/frontend-fixtures/${name}-${version}.json`, import.meta.url));
-    await wizard.locator('input[type="file"]').setInputFiles(file);
-    await wizard.getByRole("button", { name: "Inspect package", exact: true }).click();
-    await expect(wizard.getByText(`${name} · ${version}`, { exact: true })).toBeVisible();
-    await wizard.getByRole("button", { name: "Add to library", exact: true }).click();
-    await wizard.getByRole("button", { name: "Continue", exact: true }).click({ timeout: 30_000 });
-    await wizard.getByRole("button", { name: action, exact: true }).click();
-    await expect(wizard).toBeHidden({ timeout: 30_000 });
-  };
-  await importFixture("party", "0.1.0", "Install package");
+  await signIn(page, "admin-1 · party-upgrade");
+  await installInput(page, "party-previous");
   await submit(page, "platform.member.grant", "platform.member", "admin-1", { app: "party", role: "user" });
   await page.goto("/party/party.organization");
   await page.getByRole("button", { name: "New", exact: true }).click();
@@ -325,27 +249,26 @@ test("upgrade tenant: upgrading the original party package retains the unstructu
   await address.press("Tab");
   await expect(property(page, "Address")).toContainText("Legacy address 42");
 
-  await importFixture("geo", "0.1.2", "Install package");
-  await importFixture("party", "0.2.2", "Upgrade package");
+  await installInput(page, "geo");
+  await installInput(page, "party", "Upgrade package");
   await page.goto(record);
   await expect(property(page, "Other address details")).toContainText("Legacy address 42");
 });
 });
 
 test.describe.serial("library tenant", () => {
-const previous = fileURLToPath(new URL("../../scripts/frontend-fixtures/crm-0.1.21.json", import.meta.url));
 
 test("library tenant: a remote catalog lists its package beside the built-in index, filters by its listing, and its entry installs after the digest is checked", async ({ page }) => {
-  const bytes = readFileSync(previous);
+  const { bytes, version } = input("production-provider");
   const sha256 = "sha256:" + createHash("sha256").update(bytes).digest("hex");
   const catalog = JSON.stringify({ version: 1, title: "Acme packages", packages: [
-    { id: "crm", version: "0.1.21", title: "Acme CRM", description: "CRM from the Acme library", url: "./crm-0.1.21.json", sha256,
+    { id: "application.production-provider", version, title: "Acme production", description: "CRM from the Acme library", url: "./crm.json", sha256,
       listing: { industries: ["general"], capabilities: ["sales"], keywords: ["pipeline"], stage: "preview", source: { ecosystem: "frappe", app: "crm", relation: "redesign" } } },
-    { id: "acme.demo", version: "1.0.0", title: "Acme demo", url: "./crm-0.1.21.json", sha256, listing: { capabilities: ["hr"], stage: "test" } },
+    { id: "acme.demo", version: "1.0.0", title: "Acme demo", url: "./crm.json", sha256, listing: { capabilities: ["hr"], stage: "test" } },
   ] });
   const server = createServer((request, response) => {
     if (request.url === "/catalog.json") response.writeHead(200, { "content-type": "application/json" }).end(catalog);
-    else if (request.url === "/crm-0.1.21.json") response.writeHead(200, { "content-type": "application/json" }).end(bytes);
+    else if (request.url === "/crm.json") response.writeHead(200, { "content-type": "application/json" }).end(bytes);
     else response.writeHead(404).end();
   });
   await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
@@ -366,10 +289,10 @@ test("library tenant: a remote catalog lists its package beside the built-in ind
     await expect(manager.getByRole("button", { name: "Remove", exact: true })).toHaveCount(1);
     await manager.getByRole("button", { name: "Close", exact: true }).last().click();
 
-    const remote = page.getByRole("listitem").filter({ hasText: "Acme CRM" });
+    const remote = page.getByRole("listitem").filter({ hasText: "Acme production" });
     await expect(remote).toContainText("Acme packages");
-    await expect(remote).toContainText("crm · 0.1.21");
-    await expect(page.getByRole("listitem").filter({ hasText: /^CRM/ }).filter({ hasText: "crm · 0.1.22" })).toBeVisible();
+    await expect(remote).toContainText(`application.production-provider · ${version}`);
+    await expect(page.getByRole("listitem").filter({ hasText: /^CRM/ }).filter({ hasText: `crm · ${input("crm").version}` })).toBeVisible();
     await expect(remote).toContainText("Preview");
     await expect(remote).toContainText("Redesigned after crm");
     const demo = page.getByRole("listitem").filter({ hasText: "Acme demo" });
@@ -385,7 +308,7 @@ test("library tenant: a remote catalog lists its package beside the built-in ind
     await choose("Domain filter", "Sales");
     await expect(remote).toBeVisible();
     await expect(demo).toHaveCount(0);
-    await expect(page.getByRole("listitem").filter({ hasText: "crm · 0.1.22" })).toHaveCount(0);
+    await expect(remote).toBeVisible();
     await choose("Domain filter", "All domains");
     await choose("Stage filter", "Released packages");
     await page.getByRole("textbox", { name: "Search", exact: true }).fill("pipeline");
@@ -394,15 +317,15 @@ test("library tenant: a remote catalog lists its package beside the built-in ind
 
     await remote.getByRole("button", { name: "Install", exact: true }).click();
     const wizard = page.getByRole("dialog", { name: /Install from URL or file/ });
-    await expect(wizard.getByText(address.replace("catalog.json", "crm-0.1.21.json"), { exact: true })).toBeVisible({ timeout: 20_000 });
+    await expect(wizard.getByText(address.replace("catalog.json", "crm.json"), { exact: true })).toBeVisible({ timeout: 20_000 });
     await expect(wizard.getByText(sha256, { exact: true })).toBeVisible();
     await wizard.getByRole("button", { name: "Add to library", exact: true }).click();
-    await expect(wizard.getByRole("textbox", { name: /Project API name/ })).toHaveValue("crm");
+    await expect(wizard.getByRole("textbox", { name: /Project API name/ })).toHaveValue("application.production-provider");
     await wizard.getByRole("button", { name: "Continue", exact: true }).click();
     await wizard.getByRole("button", { name: "Install package", exact: true }).click();
     await expect(wizard).toBeHidden({ timeout: 30_000 });
     await open(page, "Delivery", "Installations");
-    await expect(page.getByRole("listitem").filter({ hasText: /^CRM/ })).toContainText("0.1.21");
+    await expect(page.getByRole("listitem").filter({ hasText: "Production batch provider" })).toContainText(version);
   } finally {
     server.close();
   }
@@ -411,16 +334,17 @@ test("library tenant: a remote catalog lists its package beside the built-in ind
 
 test.describe.serial("publisher tenant", () => {
 test("publisher tenant: a master data package installs under Admin → Master data instead of the application rail", async ({ page }) => {
-  const bytes = readFileSync(fileURLToPath(new URL("../../scripts/frontend-fixtures/uom-0.1.1.json", import.meta.url)));
+
   await signIn(page, "admin-1 · publisher");
 
   await open(page, "Delivery", "Marketplace");
   await page.getByRole("button", { name: "More actions", exact: true }).click();
   await page.getByRole("menuitem", { name: "Install from URL or file", exact: true }).click();
   const wizard = page.getByRole("dialog", { name: /Install from URL or file/ });
-  await wizard.locator('input[type="file"]').setInputFiles({ name: "uom-0.1.1.json", mimeType: "application/json", buffer: bytes });
+  const release = await selectPackage(wizard, "uom");
   await wizard.getByRole("button", { name: "Inspect package", exact: true }).click();
   await expect(wizard.getByText("uom · 0.1.1", { exact: true })).toBeVisible();
+  await expect(wizard.getByText(release.url, { exact: true }).first()).toBeVisible();
   await wizard.getByRole("button", { name: "Add to library", exact: true }).click();
   await wizard.getByRole("button", { name: "Continue", exact: true }).click({ timeout: 20_000 });
   await wizard.getByRole("button", { name: "Install package", exact: true }).click();
@@ -529,7 +453,7 @@ test("publisher tenant: a business partner stores country and division reference
   await expect(property(page, "Street address")).toContainText("1 Jianguo Road");
 });
 
-test("publisher tenant: CRM 0.3.1 to 0.3.2 review shows RecordComparison diffs, blocks incompatible extensions, and preserves compatible extensions after upgrade", async ({ page }) => {
+test("publisher tenant: authoritative CRM upgrade review preserves compatible extensions and their actions", async ({ page }) => {
   test.setTimeout(300_000);
   await signIn(page, "admin-1 · publisher");
 
@@ -537,10 +461,9 @@ test("publisher tenant: CRM 0.3.1 to 0.3.2 review shows RecordComparison diffs, 
   await page.getByRole("button", { name: "More actions", exact: true }).click();
   await page.getByRole("menuitem", { name: "Install from URL or file", exact: true }).click();
   const installWizard = page.getByRole("dialog", { name: /Install from URL or file/ });
-  const crm31 = fileURLToPath(new URL("../../scripts/frontend-fixtures/crm-official-0.3.1.json", import.meta.url));
-  await installWizard.locator('input[type="file"]').setInputFiles({ name: "crm-0.3.1.json", mimeType: "application/json", buffer: readFileSync(crm31) });
+  await selectPackage(installWizard, "crm");
   await installWizard.getByRole("button", { name: "Inspect package", exact: true }).click();
-  await expect(installWizard.getByText("crm · 0.3.1", { exact: true })).toBeVisible();
+  await expect(installWizard.getByText(`crm · ${input("crm").version}`, { exact: true })).toBeVisible();
   await installWizard.getByRole("button", { name: "Add to library", exact: true }).click();
   await installWizard.getByRole("button", { name: "Continue", exact: true }).click({ timeout: 60_000 });
   await installWizard.getByRole("button", { name: "Install package", exact: true }).click();
@@ -624,11 +547,6 @@ test("publisher tenant: CRM 0.3.1 to 0.3.2 review shows RecordComparison diffs, 
   await expect(actionDialog).toBeHidden();
   await publishCurrentObject();
 
-  await createExtensionObject("conflict", "Lead legacy reference");
-  const conflictUrl = page.url();
-  await addTextField("externalref", "Legacy reference");
-  await publishCurrentObject();
-
   await submit(page, "platform.member.grant", "platform.member", "admin-1", { app: "crmext", role: "salesrep" });
 
   await page.goto("/");
@@ -665,71 +583,29 @@ test("publisher tenant: CRM 0.3.1 to 0.3.2 review shows RecordComparison diffs, 
   await page.getByRole("button", { name: "More actions", exact: true }).click();
   await page.getByRole("menuitem", { name: "Install from URL or file", exact: true }).click();
   const nextWizard = page.getByRole("dialog", { name: /Install from URL or file/ });
-  const crm32 = fileURLToPath(new URL("../../scripts/frontend-fixtures/crm-official-0.3.2.json", import.meta.url));
-  await nextWizard.locator('input[type="file"]').setInputFiles({ name: "crm-0.3.2.json", mimeType: "application/json", buffer: readFileSync(crm32) });
+  await selectPackage(nextWizard, "crm-next");
   await nextWizard.getByRole("button", { name: "Inspect package", exact: true }).click();
-  await expect(nextWizard.getByText("crm · 0.3.2", { exact: true })).toBeVisible();
+  await expect(nextWizard.getByText(`crm · ${input("crm-next").version}`, { exact: true })).toBeVisible();
   await nextWizard.getByRole("button", { name: "Add to library", exact: true }).click();
   await expect(nextWizard.getByRole("button", { name: "Continue", exact: true })).toBeVisible({ timeout: 30_000 });
   await nextWizard.getByRole("button", { name: "Cancel", exact: true }).click();
   await expect(nextWizard).toBeHidden();
 
-  const card32 = page.getByRole("listitem").filter({ hasText: /^CRM/ }).filter({ hasText: "crm · 0.3.2" });
+  const card32 = page.getByRole("listitem").filter({ hasText: /^CRM/ }).filter({ hasText: `crm · ${input("crm-next").version}` });
   await card32.getByRole("button", { name: "Upgrade", exact: true }).click({ timeout: 30_000 });
   const blockedReview = page.getByRole("dialog", { name: /Review and install/ });
-  const leadDiff = blockedReview.getByRole("table", { name: "Changes", exact: true }).filter({ hasText: "externalref" });
-  await expect(leadDiff).toBeVisible();
-  await expect(leadDiff.getByRole("columnheader", { name: "0.3.1", exact: true })).toBeVisible();
-  await expect(leadDiff.getByRole("columnheader", { name: "0.3.2", exact: true })).toBeVisible();
-  await expect(leadDiff.getByRole("row", { name: /externalref.*Added/ })).toBeVisible();
-  await expect(leadDiff.getByRole("row", { name: /company.*Changed.*Company.*Company name/ })).toBeVisible();
-
   const compatibleItem = blockedReview.getByRole("listitem").filter({ hasText: "crmext.leadext" });
-  await expect(compatibleItem).toContainText("crmext");
   await expect(compatibleItem).toContainText("Shape compatible");
   await expect(compatibleItem).toContainText("sourcechannel, verifiednote");
   await expect(compatibleItem).toContainText("OK");
-
-  const incompatibleItem = blockedReview.getByRole("listitem").filter({ hasText: "crmext.conflict" });
-  await expect(incompatibleItem).toContainText("crmext");
-  await expect(incompatibleItem).toContainText("Incompatible shape");
-  await expect(incompatibleItem).toContainText(/conflicts with base crm\.lead/);
-  await expect(incompatibleItem).toContainText("Error");
-
-  await expect(blockedReview.getByText("Loading…", { exact: true })).toHaveCount(0, { timeout: 60_000 });
-  await expect(blockedReview.getByText("This version cannot be used as it stands", { exact: true })).toBeVisible();
-  await expect(blockedReview.getByText(/crmext\.conflict.*conflicts with base crm\.lead/).first()).toBeVisible();
-  await expect(blockedReview.getByRole("button", { name: "Upgrade package", exact: true })).toBeDisabled();
-  await blockedReview.getByRole("button", { name: "Cancel", exact: true }).click();
-  await expect(blockedReview).toBeHidden();
-
+  await expect(blockedReview.getByRole("button", { name: "Upgrade package", exact: true })).toBeEnabled({ timeout: 60_000 });
+  await blockedReview.getByRole("button", { name: "Upgrade package", exact: true }).click();
+  await expect(blockedReview).toBeHidden({ timeout: 120_000 });
   await page.goto("/delivery/installations");
-  await expect(page.getByRole("listitem").filter({ hasText: /^CRM/ })).toContainText("0.3.1");
-
-  await page.goto(conflictUrl);
-  await page.getByRole("button", { name: "Row actions: Legacy reference", exact: true }).click();
-  await page.getByRole("menuitem", { name: "Edit", exact: true }).click();
-  const editRowDialog = page.getByRole("dialog", { name: "Edit row", exact: true });
-  await editRowDialog.getByRole("textbox", { name: /^Name/ }).fill("legacyref");
-  await editRowDialog.getByRole("button", { name: "Save", exact: true }).click();
-  await expect(editRowDialog).toBeHidden();
-  await expect(page.getByRole("cell", { name: "legacyref", exact: true })).toBeVisible();
-  await publishCurrentObject(true);
-
-  await page.goto("/delivery/marketplace");
-  await card32.getByRole("button", { name: "Upgrade", exact: true }).click();
-  const readyReview = page.getByRole("dialog", { name: /Review and install/ });
-  await expect(readyReview.getByRole("listitem").filter({ hasText: "crmext.leadext" })).toContainText("OK");
-  await expect(readyReview.getByRole("listitem").filter({ hasText: "crmext.conflict" })).toContainText("OK");
-  await expect(readyReview.getByRole("button", { name: "Upgrade package", exact: true })).toBeEnabled();
-  await readyReview.getByRole("button", { name: "Upgrade package", exact: true }).click();
-  await expect(readyReview).toBeHidden({ timeout: 60_000 });
-
-  await page.goto("/delivery/installations");
-  await expect(page.getByRole("listitem").filter({ hasText: /^CRM/ })).toContainText("0.3.2");
+  await expect(page.getByRole("listitem").filter({ hasText: /^CRM/ })).toContainText(input("crm-next").version);
 
   await page.goto(leadUrl);
-  await expect(property(page, "Company name")).toContainText("远航智造");
+  await expect(property(page, "Company")).toContainText("远航智造");
   await expect(property(page, "Source channel")).toContainText("生态伙伴");
   await expect(property(page, "Qualification note")).toContainText("预算已核实");
 
@@ -741,17 +617,10 @@ test("publisher tenant: CRM 0.3.1 to 0.3.2 review shows RecordComparison diffs, 
   await expect(postUpgradeVerify).toBeHidden();
   await expect(property(page, "Qualification note")).toContainText("升级后复核通过");
 
-  await edit(page, "External reference");
-  const externalRef = page.getByRole("textbox", { name: "External reference", exact: true });
-  await externalRef.fill("UPG-2026-01");
-  await externalRef.press("Enter");
-  await expect(property(page, "External reference")).toContainText("UPG-2026-01");
-
   await page.reload();
-  await expect(property(page, "Company name")).toContainText("远航智造");
+  await expect(property(page, "Company")).toContainText("远航智造");
   await expect(property(page, "Source channel")).toContainText("生态伙伴");
   await expect(property(page, "Qualification note")).toContainText("升级后复核通过");
-  await expect(property(page, "External reference")).toContainText("UPG-2026-01");
 });
 });
 

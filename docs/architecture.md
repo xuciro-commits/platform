@@ -30,7 +30,7 @@
 | `capabilities/server` | 宿主的 Go 代码：`kernel`、`platform`、`capability`、`expr`、`services/*`、`host`、`cmd/*` | 在用 |
 | `contract/` | 内核协议（protobuf）与生成代码 | 在用 |
 | `frontend/` | 前端：界面运行时 | 在用，唯一的前端 |
-| `deploy/packages` | 产品包的作者态源与生成的制品 | 在用 |
+| 独立 `platform-packages` 仓库 | 业务包及验收夹具；平台只消费固定版本 | 在用 |
 | `deploy/local`、`deploy/dev`、`deploy/templates` | 本地运行、开发环境、部署模板 | 在用 |
 | `scripts/` | 检查、生成、打包、夹具种子、外部定义的读入器 | 在用 |
 | `docs/` | 本套文档 | 在用 |

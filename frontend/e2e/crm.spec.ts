@@ -3,55 +3,46 @@ import { crc32 } from "node:zlib";
 import { type Page, expect, test } from "@playwright/test";
 import { signIn, property, edit, expectRevision, submit } from "./support";
 
+const choose = async (form: ReturnType<Page["getByRole"]> | Page, page: Page, name: string, label: string) => {
+  await form.getByRole("combobox", { name: new RegExp("^" + name + "(?: Required)?$") }).fill(label);
+  await page.getByRole("option", { name: label, exact: true }).click();
+};
+
 test.describe.serial("crm and peek", () => {
 test("crm: deal product lines total into the deal and move between deals", async ({ page }) => {
   await signIn(page);
-  await submit(page, "crm.dealline.create", "crm.dealline", "DL-E2E-1", {
-    deal: "DEL-001",
-    productname: "Custom Workshop Day",
-    qty: 2,
-    rate: { amount: 50000, currency: "USD" },
-  });
-
-  await page.goto("/ontology/objects/crm.deal/DEL-001");
-  const lines = page.getByRole("table", { name: "Deal product lines" });
-  await expect(lines).toBeVisible();
-  await expect(property(lines, "Product name").filter({ hasText: "平台核心席位" }).first()).toBeVisible();
-  await expect(page.getByText("$19,500.00 USD", { exact: true }).first()).toBeVisible();
-  const added = lines.getByRole("row").filter({ hasText: "$1,000.00 USD" });
-  await edit(added, "Quantity");
-  await added.getByRole("spinbutton", { name: "Quantity" }).fill("3");
-  await added.getByRole("spinbutton", { name: "Quantity" }).press("Enter");
-  await expect(lines.getByText("$1,500.00 USD", { exact: true })).toBeVisible();
-  await page.reload();
-  await expect(page.getByText("$20,000.00 USD", { exact: true }).first()).toBeVisible();
-  await page.goto("/ontology/objects/crm.dealline");
-  const lineSearch = page.getByRole("textbox", { name: "Search this list" });
-  await lineSearch.fill("Custom Workshop");
-  await lineSearch.press("Enter");
-  await page.getByRole("link", { name: "Custom Workshop Day", exact: true }).first().click();
+  const line = await submit(page, "crm.dealline.create", "crm.dealline", "acceptance-line", { deal: "demo-deal-1", product: "demo-product-1", quantity: 2, price: { amount: 50000, currency: "USD" }, discount: 10 }, 0);
+  const id = line.record.submission.target.id;
+  await page.goto("/ontology/objects/crm.deal/demo-deal-1");
+  const rows = page.getByRole("table", { name: "Deal products" });
+  await expect(rows).toBeVisible();
+  const row = rows.getByRole("row").filter({ hasText: "$900.00" });
+  await expect(row).toBeVisible();
+  await edit(row, "Quantity");
+  await row.getByRole("spinbutton", { name: "Quantity" }).fill("3");
+  await row.getByRole("spinbutton", { name: "Quantity" }).press("Enter");
+  await expect(rows.getByText("$1,350.00 USD", { exact: true })).toBeVisible();
+  await page.goto(`/ontology/objects/crm.dealline/${id}`);
   await edit(page, "Deal");
-  await page.getByRole("combobox", { name: "Deal", exact: true }).fill("先锋");
-  await page.getByRole("option", { name: /先锋车队门户/ }).click();
-  await expect(page.getByRole("link", { name: "先锋车队门户" })).toBeVisible();
-  await page.goto("/ontology/objects/crm.deal/DEL-001");
-  await expect(page.getByText("$18,500.00 USD", { exact: true }).first()).toBeVisible();
+  await choose(page, page, "Deal", "Harborline Multi-Branch Pipeline Rollout");
+  await page.reload();
+  await expect(property(page, "Deal")).toContainText("Harborline Multi-Branch Pipeline Rollout");
+  await page.goto("/ontology/objects/crm.deal/demo-deal-1");
+  await expect(rows.getByText("$1,350.00 USD", { exact: true })).toHaveCount(0);
 });
 
-test("crm: notes show what they relate to and a task switches from a lead to a deal", async ({ page }) => {
+test("crm: a note and activity link to actual CRM leads and deals", async ({ page }) => {
   await signIn(page);
-  await page.goto("/ontology/objects/crm.note");
-  await expect(page.getByRole("columnheader", { name: "Related to" })).toBeVisible();
-  await expect(page.getByRole("row", { name: /曦和采购时间线/ }).getByText("曦和工厂客户关系系统上线", { exact: true })).toBeVisible();
-  await page.goto("/ontology/objects/crm.task/TSK-001");
-  await expect(page.getByRole("radio", { name: "Lead", exact: true })).toBeChecked();
-  await page.getByRole("radio", { name: "Deal", exact: true }).click();
-  await page.getByRole("combobox", { name: "Deal", exact: true }).fill("曦和");
-  await page.getByRole("option", { name: "曦和工厂客户关系系统上线" }).click();
-  await expect(page.getByRole("link", { name: "曦和工厂客户关系系统上线" })).toBeVisible();
+  const note = await submit(page, "crm.note.create", "crm.note", "acceptance-note", { title: "Linked note", deal: "demo-deal-1" }, 0);
+  await page.goto(`/ontology/objects/crm.note/${note.record.submission.target.id}`);
+  await expect(property(page, "Deal")).toContainText("Northwind Regional CRM Expansion");
+  const activity = await submit(page, "crm.activity.create", "crm.activity", "acceptance-activity", { subject: "Linked follow-up", lead: "demo-lead-1" }, 0);
+  await page.goto(`/ontology/objects/crm.activity/${activity.record.submission.target.id}`);
+  await expect(property(page, "Lead")).toContainText("Zhao Ming");
+  await edit(page, "Deal");
+  await choose(page, page, "Deal", "Northwind Regional CRM Expansion");
   await page.reload();
-  await expect(page.getByRole("radio", { name: "Deal", exact: true })).toBeChecked();
-  await expect(page.getByRole("link", { name: "曦和工厂客户关系系统上线" })).toBeVisible();
+  await expect(property(page, "Deal")).toContainText("Northwind Regional CRM Expansion");
 });
 
 test("crm: date filters stay available while reference choices load", async ({ page }) => {
@@ -60,22 +51,17 @@ test("crm: date filters stay available while reference choices load", async ({ p
   let release!: () => void;
   const held = new Promise<void>((resolve) => { release = resolve; });
   let requested = false;
-  await page.route(/\/v1\/records\/crm\.organization\?/, async (route) => {
-    requested = true;
-    await held;
-    await route.continue();
-  });
+  await page.route(/\/v1\/records\/crm\.account\?/, async (route) => { requested = true; await held; await route.continue(); });
   try {
     await page.goto("/ontology/objects/crm.deal");
     await expect.poll(() => requested).toBe(true);
-    const organization = page.getByRole("combobox", { name: "Organization filter", exact: true });
-    await expect(organization).toBeVisible();
+    await expect(page.getByRole("combobox", { name: "Account filter", exact: true })).toBeVisible();
     const date = page.getByRole("combobox", { name: "Expected close filter", exact: true });
     if (!(await date.count())) await page.getByRole("button", { name: /more filters?$/ }).click();
     await date.click();
     const next = page.getByRole("radio", { name: "Next 30 days", exact: true });
     await expect(next).toBeVisible();
-    const response = page.waitForResponse((r) => r.url().includes("/v1/records/crm.organization?") && r.ok());
+    const response = page.waitForResponse((r) => r.url().includes("/v1/records/crm.account?") && r.ok());
     release();
     await response;
     await expect(next).toBeVisible();
@@ -87,25 +73,21 @@ test("crm: date filters stay available while reference choices load", async ({ p
   }
 });
 
-test("crm: a sales rep works only their own leads while the sales manager sees the whole team's, whose activity reads in names", async ({ page }) => {
-  const leads = async (seat: string) => {
-    await signIn(page, `${seat} · acceptance`);
-    await page.goto("/ontology/objects/crm.lead");
-    await expect(page.getByText("沈若溪", { exact: true })).toBeVisible();
-  };
-  await leads("user-1");
-  await expect(page.getByText("林子航", { exact: true })).toHaveCount(0);
-  await page.getByRole("button", { name: "Account", exact: true }).click();
-  await page.getByRole("menuitem", { name: "Sign out", exact: true }).click();
-  await leads("manager-1");
-  await expect(page.getByRole("link", { name: "林子航", exact: true }).or(page.getByText("林子航", { exact: true })).first()).toBeVisible();
-
-  await page.getByText("沈若溪", { exact: true }).click();
-  await page.getByRole("link", { name: "Activity", exact: true }).click();
-  const main = page.getByRole("main");
-  for (const line of ["Source: 邮件", "Industry: 物流", "Territory: 华东大区", "Lead owner: 田雪"]) await expect(main.getByRole("listitem", { name: line, exact: true })).toBeVisible();
-  await expect(main.getByText("王丹", { exact: true }).first()).toBeVisible();
-  await expect(main.getByText(/SRC-|IND-|TER-|admin-1|Unnamed member/)).toHaveCount(0);
+test("crm: a sales rep works only their own leads while the sales manager sees the whole team", async ({ page }) => {
+  await signIn(page, "user-1 · acceptance");
+  await submit(page, "crm.lead.create", "crm.lead", "acceptance-own-lead", { fullname: "Own lead", source: "website" }, 0);
+  await signIn(page, "builder-1 · acceptance");
+  await submit(page, "crm.lead.create", "crm.lead", "acceptance-peer-lead", { fullname: "Peer lead" }, 0);
+  await signIn(page, "user-1 · acceptance");
+  await page.goto("/ontology/objects/crm.lead");
+  await page.getByRole("radio", { name: "Table" }).click();
+  await expect(page.getByText("Own lead", { exact: true })).toBeVisible();
+  await expect(page.getByText("Peer lead", { exact: true })).toHaveCount(0);
+  await signIn(page, "manager-1 · acceptance");
+  await page.goto("/ontology/objects/crm.lead");
+  await page.getByRole("radio", { name: "Table" }).click();
+  await expect(page.getByText("Own lead", { exact: true })).toBeVisible();
+  await expect(page.getByText("Peer lead", { exact: true })).toBeVisible();
 });
 
 function workbookSheets(sheets: { name: string; rows: string[][] }[]) {

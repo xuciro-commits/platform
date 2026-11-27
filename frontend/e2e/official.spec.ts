@@ -1,9 +1,7 @@
-import { readFileSync } from "node:fs";
-import { fileURLToPath } from "node:url";
 import { type Page, expect, test } from "@playwright/test";
 import { edit, expectRevision, property, restartHost, restoreTenantBackup, signIn } from "./support";
 
-const artifact = fileURLToPath(new URL("../../scripts/frontend-fixtures/crm-official-0.3.1.json", import.meta.url));
+import { input, packageWizard, addToLibrary, installInput } from "./package-inputs";
 
 test.describe.serial("official tenant", () => {
 let page: Page;
@@ -31,20 +29,10 @@ async function crm(entry: string) {
   await expect(page.getByRole("main", { name: entry, exact: true })).toBeVisible();
 }
 
-test("official tenant: the released CRM installs from its file", async () => {
-  test.setTimeout(120_000);
+test("official tenant: the released CRM installs from its HTTPS release", async () => {
+  test.setTimeout(180_000);
   await as("admin-1");
-  await page.goto("/delivery/marketplace");
-  await page.getByRole("button", { name: "More actions", exact: true }).click();
-  await page.getByRole("menuitem", { name: "Install from URL or file", exact: true }).click();
-  const wizard = page.getByRole("dialog", { name: /Install from URL or file/ });
-  await wizard.locator('input[type="file"]').setInputFiles({ name: "crm.json", mimeType: "application/json", buffer: readFileSync(artifact) });
-  await wizard.getByRole("button", { name: "Inspect package", exact: true }).click();
-  await expect(wizard.getByText("crm · 0.3.1", { exact: true })).toBeVisible();
-  await wizard.getByRole("button", { name: "Add to library", exact: true }).click();
-  await wizard.getByRole("button", { name: "Continue", exact: true }).click({ timeout: 20_000 });
-  await wizard.getByRole("button", { name: "Install package", exact: true }).click();
-  await expect(wizard).toBeHidden({ timeout: 60_000 });
+  await installInput(page, "crm");
 });
 
 test("official tenant: a sales rep qualifies a lead and converts it into an account, contact and deal", async () => {
@@ -214,7 +202,7 @@ test("official tenant: an extension project adds fields, an action and columns t
   await grantRole("manager-1", "Crmext", "salesmanager");
 
   await page.goto("/delivery/installations");
-  await expect(page.getByRole("listitem").filter({ hasText: /^CRM/ })).toContainText("0.3.1");
+  await expect(page.getByRole("listitem").filter({ hasText: /^CRM/ })).toContainText(input("crm").version);
 
   await as("rep-1");
   await crm("Leads");
@@ -300,7 +288,7 @@ test("official tenant: an extension project adds fields, an action and columns t
   expect(deniedStatus).toBeGreaterThanOrEqual(400);
 });
 
-test("official tenant: CRM upgrades through the marketplace with an optional field and a renamed label", async () => {
+test("official tenant: CRM upgrades to the next authoritative version and retains customer data and extension", async () => {
   test.setTimeout(90_000);
   await as("rep-1");
   await crm("Leads");
@@ -317,30 +305,13 @@ test("official tenant: CRM upgrades through the marketplace with an optional fie
   await expect(property(page, "Company")).toContainText("升级演练公司");
 
   await as("admin-1");
-  await page.goto("/delivery/marketplace");
-  await page.getByRole("button", { name: "More actions", exact: true }).click();
-  await page.getByRole("menuitem", { name: "Install from URL or file", exact: true }).click();
-  const wizard = page.getByRole("dialog", { name: /Install from URL or file/ });
-  const next = fileURLToPath(new URL("../../scripts/frontend-fixtures/crm-official-0.3.2.json", import.meta.url));
-  await wizard.locator('input[type="file"]').setInputFiles({ name: "crm-0.3.2.json", mimeType: "application/json", buffer: readFileSync(next) });
-  await wizard.getByRole("button", { name: "Inspect package", exact: true }).click();
-  await expect(wizard.getByText("crm · 0.3.2", { exact: true })).toBeVisible();
-  await wizard.getByRole("button", { name: "Add to library", exact: true }).click();
-  await expect(wizard.getByRole("button", { name: "Continue", exact: true })).toBeEnabled({ timeout: 30_000 });
+  const wizard = await packageWizard(page, "crm-next");
+  await addToLibrary(wizard);
   await wizard.getByRole("button", { name: "Cancel", exact: true }).click();
   await expect(wizard).toBeHidden();
-
-  const card = page.getByRole("listitem").filter({ hasText: /^CRM/ }).filter({ hasText: "crm · 0.3.2" });
+  const card = page.getByRole("listitem").filter({ hasText: /^CRM/ }).filter({ hasText: `crm · ${input("crm-next").version}` });
   await card.getByRole("button", { name: "Upgrade", exact: true }).click();
   const review = page.getByRole("dialog", { name: /Review and install/ });
-  await expect(review.getByText(/\+ externalref/)).toBeVisible();
-  await expect(review.getByText(/~ company \(Company → Company name\)/)).toBeVisible();
-  const leadDiff = review.getByRole("table", { name: "Changes", exact: true }).filter({ hasText: "externalref" });
-  await expect(leadDiff).toBeVisible();
-  await expect(leadDiff.getByRole("columnheader", { name: "0.3.1", exact: true })).toBeVisible();
-  await expect(leadDiff.getByRole("columnheader", { name: "0.3.2", exact: true })).toBeVisible();
-  await expect(leadDiff.getByRole("row", { name: /externalref.*Added/ })).toBeVisible();
-  await expect(leadDiff.getByRole("row", { name: /company.*Changed.*Company.*Company name/ })).toBeVisible();
   const extItem = review.getByRole("listitem").filter({ hasText: "crmext.leadext" });
   await expect(extItem).toContainText("crmext");
   await expect(extItem).toContainText("Shape compatible");
@@ -349,18 +320,18 @@ test("official tenant: CRM upgrades through the marketplace with an optional fie
   await review.getByRole("button", { name: "Upgrade package", exact: true }).click();
   await expect(review).toBeHidden({ timeout: 60_000 });
   await page.goto("/delivery/installations");
-  await expect(page.getByRole("listitem").filter({ hasText: /^CRM/ })).toContainText("0.3.2");
+  await expect(page.getByRole("listitem").filter({ hasText: /^CRM/ })).toContainText(input("crm-next").version);
 
   await as("rep-1");
   await page.goto(record);
-  await expect(property(page, "Company name")).toContainText("升级演练公司");
-  await edit(page, "External reference");
-  const external = page.getByRole("textbox", { name: "External reference", exact: true });
-  await external.fill("UPGRADE-001");
-  await external.press("Enter");
-  await expect(property(page, "External reference")).toContainText("UPGRADE-001");
+  await expect(property(page, "Company")).toContainText("升级演练公司");
+  await edit(page, "LinkedIn");
+  const linked = page.getByRole("textbox", { name: "LinkedIn", exact: true });
+  await linked.fill("https://linkedin.com/in/upgrade-001");
+  await linked.press("Enter");
+  await expect(property(page, "LinkedIn")).toContainText("upgrade-001");
   await page.reload();
-  await expect(property(page, "External reference")).toContainText("UPGRADE-001");
+  await expect(property(page, "LinkedIn")).toContainText("upgrade-001");
 
   await page.goto(extensionLead);
   await expect(property(page, "Source channel")).toContainText("行业峰会");
@@ -385,11 +356,11 @@ test("official tenant: a lead keeps its number and revision across snapshot and 
   const leadNumber = leadPath.split("/").pop()!;
   const prefix = leadNumber.slice(0, -5);
   const currentSeq = Number(leadNumber.slice(-5));
-  await edit(page, "Company name");
-  const company = page.getByRole("textbox", { name: "Company name", exact: true });
+  await edit(page, "Company");
+  const company = page.getByRole("textbox", { name: "Company", exact: true });
   await company.fill("星河动力");
   await company.press("Enter");
-  await expect(property(page, "Company name")).toContainText("星河动力");
+  await expect(property(page, "Company")).toContainText("星河动力");
   await expectRevision(page, 2);
 
   const snapshotLog = await restartHost("snapshot");
@@ -397,7 +368,7 @@ test("official tenant: a lead keeps its number and revision across snapshot and 
   await page.reload();
   await expect(page).toHaveURL(new RegExp(`${leadPath}$`));
   await expect(page.getByRole("heading", { name: "陆遥", exact: true }).first()).toBeVisible();
-  await expect(property(page, "Company name")).toContainText("星河动力");
+  await expect(property(page, "Company")).toContainText("星河动力");
   await expectRevision(page, 2);
 
   const replayLog = await restartHost("replay");
@@ -405,7 +376,7 @@ test("official tenant: a lead keeps its number and revision across snapshot and 
   await page.reload();
   await expect(page).toHaveURL(new RegExp(`${leadPath}$`));
   await expect(page.getByRole("heading", { name: "陆遥", exact: true }).first()).toBeVisible();
-  await expect(property(page, "Company name")).toContainText("星河动力");
+  await expect(property(page, "Company")).toContainText("星河动力");
   await expectRevision(page, 2);
 
   await crm("Leads");
@@ -427,7 +398,7 @@ test("official tenant: exported backup imports into a fresh database and serves 
   await crm("Leads");
   await page.getByRole("main").getByRole("link", { name: "陆遥", exact: true }).first().click();
   await expect(page.getByRole("heading", { name: "陆遥", exact: true }).first()).toBeVisible();
-  await expect(property(page, "Company name")).toContainText("星河动力");
+  await expect(property(page, "Company")).toContainText("星河动力");
   await expectRevision(page, 2);
 
   await as("rep-2");

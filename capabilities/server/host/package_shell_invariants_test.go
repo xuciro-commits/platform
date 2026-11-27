@@ -26,7 +26,7 @@ func TestInvariantK24InstalledPackageContributesOnlyActiveAuthorizedNavigationAn
 		protocol.Seat{Subjects: []string{"auditor"}, Member: platform.Member{ID: "auditor"}},
 	)
 	const name, typ, schema = "productionprovider", "build.batchproviderorder", "build.batchproviderorder.start"
-	raw, err := os.ReadFile("../../../deploy/packages/production-provider.json")
+	raw, err := os.ReadFile(fixturePath(t, "production-provider"))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -163,7 +163,7 @@ func TestInvariantK24PackageDemoSeedInstallAndClear(t *testing.T) {
 		protocol.Seat{Subjects: []string{"admin"}, Member: platform.Member{ID: "admin", Roles: map[string]string{"platform": "admin", build.ID: ontology.BuilderRole}}},
 	)
 	const name, typ = "productionprovider", "build.batchproviderorder"
-	raw, err := os.ReadFile("../../../deploy/packages/production-provider.json")
+	raw, err := os.ReadFile(fixturePath(t, "production-provider"))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -476,7 +476,7 @@ func TestInvariantK24PackageReferenceReadiness(t *testing.T) {
 		protocol.Seat{Subjects: []string{"admin"}, Member: platform.Member{ID: "admin", Roles: map[string]string{"platform": "admin", build.ID: ontology.BuilderRole}}},
 		protocol.Seat{Subjects: []string{"other"}, Member: platform.Member{ID: "other", Roles: map[string]string{build.ID: ontology.UserRole}}},
 	)
-	raw, err := os.ReadFile("../../../scripts/frontend-fixtures/party-0.1.0.json")
+	raw, err := os.ReadFile(fixturePath(t, "party-previous"))
 	if err != nil {
 		t.Fatal(err)
 	}

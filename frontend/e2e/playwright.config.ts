@@ -1,4 +1,4 @@
-import { copyFileSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
+import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { defineConfig } from "@playwright/test";
 
@@ -11,21 +11,21 @@ const work = process.env.PLATFORM_TRUNK_HOST_PORT ? `${root}.build/trunk-${hostP
 const host = `http://127.0.0.1:${hostPort}`;
 const page = `http://localhost:${pagePort}`;
 
-const SPEC_SEEDS: Record<string, { tenants: string[]; legacyCrm?: boolean }> = {
+const SPEC_SEEDS: Record<string, { tenants: string[]; acceptanceCrm?: boolean }> = {
   "tenant-security": { tenants: [] },
   records: { tenants: ["acceptance"] },
   gantt: { tenants: ["acceptance"] },
   connector: { tenants: ["acceptance"] },
   workspace: { tenants: ["acceptance"] },
-  builder: { tenants: ["acceptance"], legacyCrm: true },
+  builder: { tenants: ["acceptance"], acceptanceCrm: true },
   official: { tenants: ["official"] },
   phone: { tenants: ["phone"] },
   "i18n-grouping": { tenants: ["acceptance", "phone"] },
   rebac: { tenants: ["acceptance", "rebac", "crm"] },
-  crm: { tenants: ["acceptance", "crm"], legacyCrm: true },
-  marketplace: { tenants: ["blank", "upgrade", "publisher"] },
+  crm: { tenants: ["acceptance", "crm"], acceptanceCrm: true },
+  marketplace: { tenants: ["blank", "upgrade", "publisher", "library", "party-upgrade"] },
 };
-const ALL_E2E_TENANTS = ["acceptance", "blank", "rebac", "upgrade", "publisher", "official", "phone", "crm"];
+const ALL_E2E_TENANTS = ["acceptance", "blank", "rebac", "upgrade", "publisher", "official", "phone", "crm", "library", "party-upgrade"];
 
 const cliArgs = process.argv.slice(2);
 const cliFiles = cliArgs.filter((arg, i) => !arg.startsWith("-") && cliArgs[i - 1] !== "-c" && cliArgs[i - 1] !== "--grep" && arg !== "test");
@@ -34,15 +34,11 @@ const scoped = pickedSpecs.length > 0 && pickedSpecs.every((name) => Boolean(SPE
 const seedTenants = scoped
   ? [...new Set(pickedSpecs.flatMap((name) => SPEC_SEEDS[name].tenants))]
   : ALL_E2E_TENANTS;
-const needLegacyCrm = scoped ? pickedSpecs.some((name) => Boolean(SPEC_SEEDS[name].legacyCrm)) : true;
+const needAcceptanceCrm = scoped ? pickedSpecs.some((name) => Boolean(SPEC_SEEDS[name].acceptanceCrm)) : true;
 
 if (process.env.TEST_WORKER_INDEX === undefined) {
   process.env.TRUNK_SPLIT_OFFICIAL = Boolean(process.env.TRUNK_DATABASE) && (cliFiles.length === 0 || (cliFiles.some((f) => f.includes("official")) && cliFiles.some((f) => !f.includes("official")))) ? "1" : "0";
   mkdirSync(work, { recursive: true });
-  const packageDir = mkdtempSync(work + "/packages-");
-  for (const source of [root + "deploy/packages", root + "deploy/test-packages"]) {
-    for (const name of readdirSync(source).filter((entry) => entry.endsWith(".json"))) copyFileSync(source + "/" + name, packageDir + "/" + name);
-  }
   const tenants = JSON.parse(readFileSync(`${root}scripts/frontend-tenants.json`, "utf8"));
   const securityTenants = JSON.parse(readFileSync(`${root}scripts/frontend-security-tenants.json`, "utf8"));
   writeFileSync(`${work}/tenants.json`, JSON.stringify([...tenants, ...securityTenants]));
@@ -59,7 +55,6 @@ const cwd = ${JSON.stringify(`${root}capabilities/server`)};
 const tenantsFile = ${JSON.stringify(`${work}/tenants.json`)};
 const logFile = ${JSON.stringify(`${work}/host.log`)};
 const backupDir = ${JSON.stringify(work)};
-const packageDir = ${JSON.stringify(packageDir)};
 
 let currentDatabase = process.env.TRUNK_DATABASE ?? "";
 let child = null;
@@ -72,7 +67,6 @@ async function startHost(snapshotEvery) {
   const args = [
     "-addr", "127.0.0.1:${hostPort}",
     "-tenants", tenantsFile,
-    "-packages", packageDir,
     "-host-admins", "admin,root",
     "-allow-loopback-packages",
     ...(currentDatabase ? ["-database", currentDatabase] : []),
@@ -140,7 +134,7 @@ const control = createServer((req, res) => {
       const tenant = String(body.tenant ?? "");
       const backupFile = \`\${backupDir}/\${tenant}.backup.gz\`;
       await stopHost();
-      execFileSync(bin, ["-database", currentDatabase, "-tenants", tenantsFile, "-packages", packageDir, "-export-tenant", tenant, "-backup", backupFile], { cwd });
+      execFileSync(bin, ["-database", currentDatabase, "-tenants", tenantsFile, "-export-tenant", tenant, "-backup", backupFile], { cwd });
       if ((statSync(backupFile).mode & 0o777) !== 0o600) {
         throw new Error("backup file mode is not 0600");
       }
@@ -207,7 +201,7 @@ export default defineConfig({
       reuseExistingServer: false,
       env: {
         PLATFORM_HOST: host,
-        PLATFORM_LEGACY_CRM_FIXTURE: needLegacyCrm ? "1" : "0",
+        PLATFORM_ACCEPTANCE_CRM: needAcceptanceCrm ? "1" : "0",
         PLATFORM_SEED_TENANTS: seedTenants.length ? seedTenants.join(",") : "none",
       },
     },

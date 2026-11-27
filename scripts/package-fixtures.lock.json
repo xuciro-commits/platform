@@ -1,0 +1,77 @@
+{
+  "repository": "https://github.com/xuciro-commits/platform-packages.git",
+  "revision": "a2d2d330db7d0ef7912089f6d1a1913a4ac03736",
+  "packages": {
+    "crm": {
+      "id": "crm",
+      "version": "0.3.0",
+      "url": "https://github.com/xuciro-commits/platform-packages/releases/download/crm/v0.3.0/crm.json",
+      "sha256": "sha256:a872d5ccae39740b0c1f2ab9d6acc883f87bf8620efb6a519453c488080ab84b"
+    },
+    "geo": {
+      "id": "geo",
+      "version": "0.1.1",
+      "url": "https://github.com/xuciro-commits/platform-packages/releases/download/geo/v0.1.1/geo.json",
+      "sha256": "sha256:3a4965e64c89cc6b6c873190266ebab459597fb85f6287db30040c4283bb8b8f"
+    },
+    "party": {
+      "id": "party",
+      "version": "0.2.1",
+      "url": "https://github.com/xuciro-commits/platform-packages/releases/download/party/v0.2.1/party.json",
+      "sha256": "sha256:c1ea1433631fb2403b21874845d6f6447089e3dc05694dd365a00573fc2c3917"
+    },
+    "projects": {
+      "id": "projects",
+      "version": "0.1.0",
+      "url": "https://github.com/xuciro-commits/platform-packages/releases/download/projects/v0.1.0/projects.json",
+      "sha256": "sha256:95b9805dd63444cafcd8541b9a2833f47dffa3fd4e663e711a202026c362065a"
+    },
+    "uom": {
+      "id": "uom",
+      "version": "0.1.1",
+      "url": "https://github.com/xuciro-commits/platform-packages/releases/download/uom/v0.1.1/uom.json",
+      "sha256": "sha256:e3af0f90086f6b8a2f411eb6fdc662fabdead90566b3c94a182fce4563b992e1"
+    },
+    "party-previous": {
+      "id": "party",
+      "version": "0.1.0",
+      "url": "https://github.com/xuciro-commits/platform-packages/releases/download/party/v0.1.0/party.json",
+      "sha256": "sha256:f45bae3bd7c3cfb012b672f1e4fbe73d6c220f90f4e240c8b889434e95602e47"
+    },
+    "crm-next": {
+      "id": "crm",
+      "version": "0.3.5",
+      "source": "crm"
+    },
+    "assets": {
+      "id": "assets",
+      "version": "0.1.1",
+      "source": "assets"
+    },
+    "call": {
+      "id": "call",
+      "version": "0.1.0",
+      "source": "call"
+    },
+    "phone": {
+      "id": "phone",
+      "version": "0.1.1",
+      "source": "phone"
+    },
+    "production-provider": {
+      "id": "application.production-provider",
+      "version": "0.1.5",
+      "source": "application.production-provider"
+    },
+    "connectortrial": {
+      "id": "connectortrial",
+      "version": "0.1.0",
+      "source": "connectortrial"
+    },
+    "connectortrial-contract": {
+      "id": "connectortrial-contract",
+      "version": "0.1.0",
+      "source": "connectortrial-contract"
+    }
+  }
+}

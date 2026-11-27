@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 import { randomUUID } from "node:crypto";
 import { readFileSync } from "node:fs";
+import { packageRequest } from "./package-fixtures.mjs";
 import { enterpriseRosterSteps, resolveMemberProfile } from "./demo-roster.mjs";
 
 const host = process.env.PLATFORM_HOST ?? "http://127.0.0.1:18511";
@@ -8,7 +9,7 @@ const rawSeedTenants = process.env.PLATFORM_SEED_TENANTS;
 if (rawSeedTenants === "none") process.exit(0);
 const requestedTenants = rawSeedTenants ? new Set(rawSeedTenants.split(",").map((s) => s.trim()).filter(Boolean)) : null;
 
-const defaultFiles = ["./frontend-seed.json", ...(process.env.PLATFORM_LEGACY_CRM_FIXTURE === "1" ? ["./crm-project.json"] : [])];
+const defaultFiles = ["./frontend-seed.json"];
 const files = process.argv.slice(2).length ? process.argv.slice(2) : defaultFiles;
 
 async function connect(tenant, subject = "admin") {
@@ -58,12 +59,11 @@ async function connect(tenant, subject = "admin") {
 }
 
 async function importPackage(session, path) {
-  const content = JSON.parse(readFileSync(new URL(path, import.meta.url), "utf8"));
-  const inspected = await session.call("/v1/packages/inspect", { content });
+  const inspected = await session.call("/v1/packages/inspect", packageRequest(path));
   const id = inspected.descriptor.id;
   const accepted = await session.submit("platform.package", id, "import", { id, digest: inspected.digest }, "platform", session.packageRevisions.get(id) ?? 0);
   session.packageRevisions.set(id, accepted.revision);
-  return content;
+  return inspected.descriptor;
 }
 
 async function installPackage(session, path) {
@@ -71,10 +71,15 @@ async function installPackage(session, path) {
   const id = descriptor.id;
   const installed = await session.submit("platform.package", id, "install", { id, version: descriptor.version }, "platform", session.packageRevisions.get(id) ?? 0);
   session.packageRevisions.set(id, installed.revision);
+  const deadline = Date.now() + 120_000;
+  while (!(await session.call(`/v1/packages/${descriptor.id}/readiness?version=${descriptor.version}`)).ready) {
+    if (Date.now() >= deadline) throw Error(`Package references not ready: ${descriptor.id}@${descriptor.version}`);
+    await new Promise((resolve) => setTimeout(resolve, 250));
+  }
   return descriptor;
 }
 
-const partyPackages = ["./frontend-fixtures/geo-0.1.2.json", "./frontend-fixtures/party-0.2.2.json"];
+const partyPackages = ["geo", "party"];
 
 async function members(session, sample) {
   for (const [id, entry] of Object.entries(sample.members ?? {})) {
@@ -210,7 +215,7 @@ if (!requestedTenants || requestedTenants.has("acceptance")) {
     const written = await records(main, sample);
 
     if (sample.project.name === "sales") {
-      for (const path of ["./frontend-fixtures/production-provider-0.1.4.json", "../deploy/packages/production-provider.json"]) await importPackage(main, path);
+      await importPackage(main, "production-provider");
     }
 
     const steps = sample.project.name === "sales" ? [...(sample.steps ?? []), ...enterpriseRosterSteps()] : (sample.steps ?? []);
@@ -254,8 +259,20 @@ if (!requestedTenants || requestedTenants.has("acceptance")) {
 }
 
 const tenantPackages = {
+  ...(process.env.PLATFORM_ACCEPTANCE_CRM === "0" ? {} : {
+    acceptance: {
+      packages: [...partyPackages, "crm"],
+      grants: {
+        "admin-1": [["party", "user"], ["crm", "salesmanager"]],
+        "builder-1": [["party", "user"]],
+        "user-1": [["party", "user"]],
+        "manager-1": [["party", "user"]],
+      },
+      verifyDemo: true,
+    },
+  }),
   crm: {
-    packages: [...partyPackages, "./frontend-fixtures/crm-official-0.3.0.json"],
+    packages: [...partyPackages, "crm"],
     grants: {},
     verifyDemo: true,
     verifyDemoAs: "manager",
@@ -264,22 +281,22 @@ const tenantPackages = {
   official: { packages: partyPackages, grants: {} },
   sim: {
     packages: partyPackages,
-    imports: ["./frontend-fixtures/crm-official-0.3.1.json", "./frontend-fixtures/crm-official-0.3.2.json"],
+    imports: ["crm", "crm-next"],
     grants: {},
   },
   phone: {
-    packages: [...partyPackages, "./frontend-fixtures/call-0.1.0.json", "./frontend-fixtures/phone-0.1.1.json", "./frontend-fixtures/crm-official-0.3.3.json"],
+    packages: [...partyPackages, "call", "phone", "crm-next"],
     grants: { "user-1": [["party", "user"], ["phone", "agent"], ["crm", "salesrep"]], "manager-1": [["party", "user"], ["phone", "gateway"]] },
     bind: ["call/1"],
   },
   publisher: {
     verifyDemo: true,
-    packages: [...partyPackages, "./frontend-fixtures/projects-0.1.1.json", "./frontend-fixtures/assets-0.1.0.json"],
+    packages: [...partyPackages, "projects", "assets"],
     grants: { "admin-1": [["party", "user"], ["projects", "manager"], ["assets", "custodian"]], "user-1": [["party", "user"], ["projects", "member"], ["assets", "staff"]] },
   },
 };
 
-const targetExtraTenants = ["blank", "rebac", "upgrade", "publisher", "official", "phone", "sim", "crm"]
+const targetExtraTenants = ["acceptance", "blank", "rebac", "upgrade", "publisher", "official", "phone", "sim", "crm", "library", "party-upgrade"]
   .filter((name) => !requestedTenants || requestedTenants.has(name));
 
 await Promise.all(targetExtraTenants.map(async (name) => {

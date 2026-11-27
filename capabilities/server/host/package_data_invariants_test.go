@@ -18,7 +18,7 @@ func TestInvariantK42PackageDataFillsInBatchesAndOutlivesDemoData(t *testing.T) 
 	admin := protocol.Seat{Subjects: []string{"admin"}, Member: platform.Member{ID: "admin", Roles: map[string]string{"platform": "admin", build.ID: ontology.BuilderRole}}}
 	live := newInvariantTenant(t, "invariant-k42", admin)
 	const typ = "build.batchproviderorder"
-	raw, err := os.ReadFile("../../../deploy/packages/production-provider.json")
+	raw, err := os.ReadFile(fixturePath(t, "production-provider"))
 	if err != nil {
 		t.Fatal(err)
 	}

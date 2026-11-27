@@ -86,7 +86,7 @@
 | 主干验收 | `make trunk SPEC=crm`：动态分配空闲端口、按 SPEC 仅灌目标租户种子；`make trunk-changed` 按改动映射运行 |
 | 发版验收 | `make verify`：依次执行全量 `make test-pg` 与严格 `make trunk-pg`，不再跑内存全量；`make load-sql` 等专项按需 |
 | 宿主类型与契约 | `make contract`（改了宿主类型之后） |
-| 产品包 | `make packages`（刷新作者态源的锁文件，并把夹具一起装进内存租户检查；顶层制品是发布快照，不重建）；试跑动作用 `pkg try` |
+| 产品包 | `make packages`（只读校验外部验收夹具并装进内存租户检查；不修改独立包库）；试跑动作用 `pkg try` |
 
 验收以 [三档验收](docs/README.md#三档验收) 为唯一规则：日常定点、提交快速检查、GitHub 轻量 CI、发版前本地一次 `make verify`。
 同一改动不重复执行已通过的检查；语音竞态、容量压测和额外恢复演练仅按需。

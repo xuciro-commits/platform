@@ -229,8 +229,8 @@
 | 运行、接受结果、审计 | 保留 | 保留 | 默认不删 |
 | 客户扩展、客户项目、连接地址、凭据引用、授权 | 保留 | 保留，需确认配置 | 不随包删除 |
 
-作者态源：每个包在 `deploy/packages/<id>/`，YAML，一个资源一个文件；依赖、能力与模式历史由 `cmd/pkg` 用宿主的同一实现算出，不进源。
-顶层的 `deploy/packages/*.json` 是已发布版本的快照，不手改、不重建；`make check` 核对源与同版本快照等价。格式与各包的边界在 `deploy/packages/README.md`。
+作者态源统一在独立 `platform-packages/packages/<id>/`，YAML，一个资源一个文件；依赖、能力与模式历史由 `cmd/pkg` 用宿主的同一实现算出，不进源。
+正式包从不可变 Release 下载并核对 SHA-256；未发布候选及验收包从 `scripts/package-fixtures.lock.json` 固定的外部包库提交现场构建。正式宿主不默认加载验收包；测试临时制品不进入 Git，发布制品不可原地重建。
 
 读外部定义（Frappe 应用）的工具在官方包库的 `scripts/frappe-read.mjs`，是作者的构建工具，不是租户里的能力：
 

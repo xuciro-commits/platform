@@ -61,7 +61,7 @@ pnpm --dir frontend dev
 capabilities/server   宿主：内核、服务、HTTP 入口（Go）
 contract              内核协议（protobuf）
 frontend              前端：由类型生成界面（React、Astryx）
-deploy/packages       产品包的源与制品
+platform-packages     独立仓库：业务包、版本制品与平台验收夹具
 deploy                本地、容器与无 Docker 的部署
 scripts               检查、生成、打包
 docs                  十份文档

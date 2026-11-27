@@ -147,7 +147,7 @@ func TestI18nGatePackagesPermissionsAndWordsEndToEnd(t *testing.T) {
 
 	installFixture := func(rel string) platform.PackageDescriptor {
 		t.Helper()
-		raw, err := os.ReadFile("../../../scripts/frontend-fixtures/" + rel)
+		raw, err := os.ReadFile(fixturePath(t, rel))
 		if err != nil {
 			t.Fatalf("read fixture %s: %v", rel, err)
 		}
@@ -188,10 +188,10 @@ func TestI18nGatePackagesPermissionsAndWordsEndToEnd(t *testing.T) {
 		return preview.Descriptor
 	}
 
-	installFixture("geo-0.1.2.json")
-	installFixture("party-0.2.2.json")
-	installFixture("call-0.1.0.json")
-	installFixture("phone-0.1.1.json")
+	installFixture("geo")
+	installFixture("party")
+	installFixture("call")
+	installFixture("phone")
 
 	rawPkgs, refusal := tn.read(adminMember, "packages")
 	if refusal != nil {

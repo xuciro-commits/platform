@@ -40,7 +40,7 @@ func run(args []string, out io.Writer) error {
 	}
 	flags := flag.NewFlagSet(args[0], flag.ContinueOnError)
 	flags.SetOutput(io.Discard)
-	root := flags.String("packages", "deploy/packages", "directory holding package sources")
+	root := flags.String("packages", "", "directory holding package sources")
 	output := flags.String("o", "", "artifact file to write")
 	title := flags.String("title", "", "catalog title")
 	prefix := flags.String("url", "./", "address template of each artifact in the catalog")
@@ -120,6 +120,9 @@ func run(args []string, out io.Writer) error {
 			step, verb = check, "checked"
 		case "diff":
 			step, verb = func(dir string) (built, error) { return diff(dir, out) }, "reviewed"
+		}
+		if *root == "" && flags.NArg() == 0 {
+			return errors.New("specify -packages or package directories")
 		}
 		dirs, err := sources(*root, flags.Args())
 		if err != nil {
