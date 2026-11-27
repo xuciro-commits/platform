@@ -41,7 +41,7 @@
 | 记录：列表、记录页、行内编辑、视图 | 产品级 | `pages/RecordList.tsx`、`RecordPage.tsx`；records 33 项 | — |
 | CRM 包 | 产品级 | crm 17 项、official 8 项 | — |
 | 宿主：接受路径、重放、内存与文件存储 | 能用 | `capabilities/server/kernel`；十三组内核不变量；official 停机重启、备份恢复 | — |
-| PostgreSQL 存储 | 能用 | 3.1a–f；crm 与 official trunk-pg 全过 | 全量 trunk-pg 验收卡在提交长时间占住租户处理通道：一（3.1f，#12） |
+| PostgreSQL 存储 | 能用 | 3.1a–f；提交热路径优化已合入（d26004e9d），official 与 blank 重装已过 | 空载补跑干净提交全量 make verify（119 项）与万行压测：一（3.1f，#12） |
 | 格式纪元冻结 | 产品级 | `kernel/store/migration.go`、`scripts/check-epoch.mjs`；K1 纪元拒绝、备份纪元拒绝 | — |
 | 构建：类型、字段、状态、动作、发布 | 能用 | `services/ontology`；builder 14 项 | — |
 | 条件与表达式编辑器 | 能用 | `pages/ConditionBuilder.tsx`、`ExpressionEditor.tsx`；builder “a condition picked”、“a formula written” | — |
@@ -80,11 +80,9 @@
   改为一次扫描内同一流程版本与起始发布只绑一次，全新 PG 上 :513 单跑 2.5 分钟通过。
   Flows.Listen 启动每个流程仍各建一次登记表，留作性能项。
   rebac.spec.ts:5 每次都挂已查清：它和市场用例共用 blank 租户，市场用例给 user-1 授了 CRM 角色；已改用独立 rebac 租户（69045ec88）。
-  验收未过，卡在提交长时间占住租户处理通道：11-26 全新 PG 上两轮全量分别 77 过、3 挂、42 未跑与 84 过、6 挂、32 未跑，两轮失败互不重合，多为等按钮、对话框或页面结果超时。
-  服务端日志：单次提交最长占住 publisher 24 秒（与 :513 超时同一时段），phone 8.8 秒、crm 8.3 秒、acceptance 6.4 秒；第二轮提交超 200ms 预算 29 次共 65.6 秒，后台 work 98 次共 78 秒；无 panic、无报错。
-  下一步：在"lane held"日志里带上提交的 schema 名，跑一轮全量定位最慢的几种提交，逐个修，再跑全量验收。
-  11-26 两轮全量与一次演练里挂过、别轮能过的用例：records :191；builder :67、:337；marketplace :159、:223、:513；connector :29（点击超时）；crm :187；rebac :5（审批后无提示）。
-  其中两条不像单纯超时，修完慢提交后先单跑：crm :374 收件箱"Open full page"到了 `/ontology/objects/crm.activity/…` 而不是 `/crm/…`；rebac :95 自定义角色的"Save role"一直禁用。
+  提交热路径与恢复闭环已合入（d26004e9d）：复用已解码记录、消掉 PG 审计多余事务往返与双构 Delta、慢锁日志带上 schema 名；BenchmarkBuildSubmit-12 中位耗时 2.67ms → 2.11ms，普通提交已不再触发 200ms 慢锁。
+  同期补齐未绑定流程升级/重启闭包保留（K9、official 8/8 含停机重启与空库恢复）、已退役包重装保留 DemoRecords 并守住 K24 种子冲突，以及同名扩展目标应用消歧；crm :374 与 rebac :95 已在前置全量中通过。
+  待收口：空载补跑干净提交的全量 make verify（test-pg 150 项 + trunk-pg 119 项）与 make load-sql 万行导入基线。
 
 ### 3.2 客户扩展
 
