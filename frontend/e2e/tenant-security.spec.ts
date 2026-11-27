@@ -100,6 +100,8 @@ test("tenant isolation: an existing bearer and live subscription lose record, ex
   try {
     const reader = await other.newPage();
     await signIn(reader, "user-1 · audit-a");
+    await reader.goto("/ontology/objects/" + type + "/" + id);
+    await expect(reader.getByRole("heading", { name: note, exact: true }).first()).toBeVisible();
     const old = await sessionHeaders(reader);
     const record = "/v1/records/" + type + "/" + id;
     const csv = "/v1/export/" + type;
@@ -147,6 +149,7 @@ test("tenant isolation: an existing bearer and live subscription lose record, ex
     const revoked = await page.request.get(memberPath, { headers: adminHeaders });
     expect(revoked.status()).toBe(200);
     expect((await revoked.json()).find((entry: { id: string }) => entry.id === "user-1").roles?.[project]).toBeUndefined();
+    await expect(reader.getByText(note, { exact: true })).toHaveCount(0);
     for (const path of [record, download]) {
       const denied = await reader.request.get(path, { headers: old });
       expect([403, 404], path).toContain(denied.status());
