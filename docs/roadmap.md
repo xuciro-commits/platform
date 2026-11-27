@@ -109,6 +109,10 @@
   挡路一项已修：official 与别的用例同选时会带上整个 trunk，连接器 HTTPS 夹具却没起，connector.spec.ts:29 拿不到地址。
   模拟客户第 1 天（11-26）：租户切换里没有 sim——夹具宿主是改租户表之前起的，重启后已有（运维，不改代码）；
   租户切换的“新建工作区”跳到 `/host/tenants`，那里只有列表，没有创建入口——已修：列表页加“新建工作区”对话框（标识、名称、模板、首位管理员），经 `POST /v1/host/tenants` 创建；workspace “a host administrator creates a workspace”。
+  第 3、6 天挡路已修：扩展项目页无附属对象入口且暴露不可填 JSON 的“保存资源”，创建动作不能按宿主记录阶段设前置条件——过滤必填不可填参数的原始动作，项目页列出归属对象并提供“扩展对象”，`ActionTypeDialog` 支持按自身或 `base.<field>` 生成 `Guard`；builder “extension project”。
+  待修（第 1、2、11 天）：`Delivery` 默认落未发布的 `Products`、`Admin` 默认落需企业权限的 `Organization`；`RecordList` 把行级 `edit` 混进 `createAllowed` 导致日历页藏掉“新建”；`sim` 包库预导入 `CRM 0.3.1` 与 `0.3.2` 供升级。
+  待修（第 1 天导入）：导入引用字段填当前语言显示名（如“网站”）匹配不到原始英文记录，且非法选项与无权读取引用共用报错——支持按当前语言译文解析引用并区分非法选项报错。
+  待修（第 5 天评论提及）：记录活动评论框输入 `@` 无成员候选弹出——支持输入 `@` 检索并插入工作区成员账号。
 
 ## 二、能力底座与受管服务（[#13](https://github.com/xuciro-commits/platform/issues/13)）
 

@@ -78,7 +78,8 @@ export function describe(entity: Api.EntityInfo, actions: Api.Action[]): Describ
     return action ? [{ transition, action }] : [];
   });
   const stepping = new Set(steps.map((step) => step.action.schema));
-  const other = own.filter((action) => action !== create && action !== edit && !stepping.has(action.schema));
+  const other = own.filter((action) => action !== create && action !== edit && !stepping.has(action.schema) &&
+    !action.payload.some((parameter) => parameter.required && !enterable(parameter)));
   const editable = new Set(edit ? edit.payload.filter(enterable).map((parameter) => parameter.name) : []);
   const fields = entity.fields.filter((field) => field.name !== lifecycle?.field && leads(field));
   const aside = fields.filter((field) => field.aside);

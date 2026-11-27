@@ -9,11 +9,13 @@ import { SegmentedControl, SegmentedControlItem } from "@astryxdesign/core/Segme
 import { Selector } from "@astryxdesign/core/Selector";
 import { Text } from "@astryxdesign/core/Text";
 import { TextInput } from "@astryxdesign/core/TextInput";
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { type Api, request, useRead } from "../host";
 import { t } from "../i18n";
 import { reasonOf, send } from "./act";
-import type { Values } from "./describe";
+import { ConditionBuilder, type ConditionSource, conditionSources } from "./ConditionBuilder";
+import { describe, type Values } from "./describe";
+import { useOptions } from "./options";
 
 export type ActionTypeRow = {
   id: string;
@@ -38,6 +40,47 @@ function exprKindOf(type?: string) {
   if (type === "choice") return "choice";
   if (type === "reference" || type === "member") return "reference";
   return "text";
+}
+
+function buildActionGuard(
+  when: string,
+  fields: DefinitionRow[],
+  baseEntity: Api.EntityInfo | undefined,
+  sources: ConditionSource[],
+): { guard: Api.Expr; message: string } | undefined {
+  const at = when.indexOf("=");
+  if (at < 0) return undefined;
+  const key = when.slice(0, at).trim();
+  const rawValues = when.slice(at + 1).split(",").map((item) => item.trim()).filter(Boolean);
+  if (!key || rawValues.length === 0) return undefined;
+  const isBase = key.startsWith("base.");
+  const fieldName = isBase ? key.slice(5) : key;
+  const fieldType = isBase
+    ? (fieldName === "state" ? "choice" : baseEntity?.fields.find((field) => field.name === fieldName)?.type)
+    : fields.find((field) => field.name === fieldName)?.type;
+  const kind = fieldType === "boolean"
+    ? "boolean"
+    : fieldType === "choice"
+      ? "choice"
+      : fieldType === "reference"
+        ? "reference"
+        : "text";
+  const left: Api.Expr = isBase
+    ? { op: "path", kind, args: [{ op: "", ref: "base", kind: "reference" }], path: [fieldName] }
+    : { op: "", ref: fieldName, kind };
+  const comparisons: Api.Expr[] = rawValues.map((val) => ({
+    op: "=",
+    kind: "boolean",
+    args: [
+      left,
+      { op: "", kind, lit: { value: kind === "boolean" ? val === "true" : val } },
+    ],
+  }));
+  const guard = comparisons.reduce((acc, next) => ({ op: "or", kind: "boolean", args: [acc, next] }));
+  const matchedSource = sources.find((src) => src.name === key);
+  const valueLabels = rawValues.map((val) => matchedSource?.values.find((opt) => opt.value === val)?.label ?? val);
+  const message = `${matchedSource?.title ?? key}: ${valueLabels.join(", ")}`;
+  return { guard, message };
 }
 
 export function TransitionDialog({ subject, objectId, objectRevision, states, catalog, close, done }: {
@@ -153,11 +196,13 @@ export function TransitionDialog({ subject, objectId, objectRevision, states, ca
   );
 }
 
-export function ActionTypeDialog({ subject, fields, states, access, catalog, close, done }: {
+export function ActionTypeDialog({ subject, fields, states, access, extendsType, entities = [], catalog, close, done }: {
   subject: string;
   fields: DefinitionRow[];
   states: DefinitionRow[];
   access: DefinitionRow[];
+  extendsType?: string;
+  entities?: Api.EntityInfo[];
   catalog: Api.Action[];
   close: () => void;
   done: () => void;
@@ -170,6 +215,7 @@ export function ActionTypeDialog({ subject, fields, states, access, catalog, clo
   const [fixedValue, setFixedValue] = useState("");
   const [roles, setRoles] = useState<string[]>([]);
   const [from, setFrom] = useState<string[]>(() => states.flatMap((state) => (state.name ? [state.name] : [])));
+  const [when, setWhen] = useState("");
   const [failure, setFailure] = useState("");
   const [busy, setBusy] = useState(false);
 
@@ -178,6 +224,37 @@ export function ActionTypeDialog({ subject, fields, states, access, catalog, clo
   const chosenField = writableFields.find((field) => field.name === targetField) ?? writableFields[0];
   const roleOptions = access.flatMap((entry) => (entry.role ? [{ value: String(entry.role), label: String(entry.role) }] : []));
   const stateOptions = states.flatMap((state) => (state.name ? [{ value: state.name, label: t(state.title ?? state.name) }] : []));
+  const baseEntity = useMemo(
+    () => (extendsType ? entities.find((entity) => entity.type === extendsType) : undefined),
+    [entities, extendsType],
+  );
+  const baseDescribed = useMemo(
+    () => (baseEntity ? describe(baseEntity, catalog) : undefined),
+    [baseEntity, catalog],
+  );
+  const baseReferenceFields = useMemo(
+    () => (baseDescribed ? baseDescribed.lanes.filter((field) => field.type === "reference").map((field) => field.name) : []),
+    [baseDescribed],
+  );
+  const baseReferenceOptions = useOptions(baseDescribed, baseReferenceFields);
+
+  const whenSources = useMemo<ConditionSource[]>(() => {
+    const ownSources = conditionSources(fields, [], undefined);
+    if (!baseEntity) return ownSources;
+    const baseChoiceSources = conditionSources(baseEntity.fields, baseEntity.lifecycle?.states ?? [], undefined).map((source) => ({
+      name: `base.${source.name}`,
+      title: `${t(baseEntity.title)} · ${source.title}`,
+      values: source.values,
+    }));
+    const baseLaneSources: ConditionSource[] = (baseDescribed?.lanes ?? [])
+      .filter((field) => field.type === "reference" && (baseReferenceOptions[field.name]?.length ?? 0) > 0)
+      .map((field) => ({
+        name: `base.${field.name}`,
+        title: `${t(baseEntity.title)} · ${t(field.title)}`,
+        values: (baseReferenceOptions[field.name] ?? []).map((opt) => ({ value: opt.value, label: opt.label })),
+      }));
+    return [...ownSources, ...baseLaneSources, ...baseChoiceSources];
+  }, [baseDescribed, baseEntity, baseReferenceOptions, fields]);
 
   const missing = !createAction || !publishAction || !name || !title.trim() || !chosenField?.name ||
     (mode === "fixed" && !fixedValue.trim()) || (states.length > 0 && from.length === 0);
@@ -205,6 +282,7 @@ export function ActionTypeDialog({ subject, fields, states, access, catalog, clo
       const change = mode === "input"
         ? { field: fieldName, from: fieldName }
         : { field: fieldName, expr: { op: "", kind: exprKindOf(fieldType), lit: { value: parsedLiteral } } };
+      const guardSpec = when ? buildActionGuard(when, fields, baseEntity, whenSources) : undefined;
       const definition: Record<string, unknown> = {
         name,
         title: title.trim(),
@@ -213,6 +291,7 @@ export function ActionTypeDialog({ subject, fields, states, access, catalog, clo
         ...(roles.length > 0 ? { roles } : {}),
         transaction: {
           subject,
+          ...(guardSpec ? { guard: guardSpec.guard, message: guardSpec.message } : {}),
           steps: [{
             name,
             kind: "update",
@@ -263,6 +342,9 @@ export function ActionTypeDialog({ subject, fields, states, access, catalog, clo
               )}
               {states.length > 0 && (
                 <MultiSelector label={t("From states")} options={stateOptions} value={from} onChange={setFrom} />
+              )}
+              {whenSources.length > 0 && (
+                <ConditionBuilder label={t("Available when")} value={when} sources={whenSources} onChange={setWhen} />
               )}
               {roleOptions.length > 0 && (
                 <MultiSelector

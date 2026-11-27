@@ -400,5 +400,9 @@
   "Values": "取值",
   "Edit with fields": "按字段编辑",
   "Edit as text": "按文本编辑",
-  "Another field and the values that make this field apply, as field=value,value": "另一个字段，以及让本字段生效的取值，写作 字段=值,值"
+  "Another field and the values that make this field apply, as field=value,value": "另一个字段，以及让本字段生效的取值，写作 字段=值,值",
+  "Available when": "可用条件",
+  "Extend an object": "扩展对象",
+  "No extension objects yet. Extend an object from the target application to add custom fields and actions.": "还没有扩展对象。选择目标应用的对象进行扩展，即可添加自定义字段和动作。",
+  "No object types in this project yet.": "该项目还没有对象类型。"
 }

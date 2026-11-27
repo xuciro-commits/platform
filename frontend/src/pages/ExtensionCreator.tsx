@@ -3,18 +3,23 @@ import { Button } from "@astryxdesign/core/Button";
 import { Dialog, DialogHeader } from "@astryxdesign/core/Dialog";
 import { FormLayout } from "@astryxdesign/core/FormLayout";
 import { HStack, Layout, LayoutContent, LayoutFooter, StackItem, VStack } from "@astryxdesign/core/Layout";
+import { List, ListItem } from "@astryxdesign/core/List";
 import { SegmentedControl, SegmentedControlItem } from "@astryxdesign/core/SegmentedControl";
 import { Selector } from "@astryxdesign/core/Selector";
-import { Text } from "@astryxdesign/core/Text";
+import { Skeleton } from "@astryxdesign/core/Skeleton";
+import { Heading, Text } from "@astryxdesign/core/Text";
 import { TextInput } from "@astryxdesign/core/TextInput";
 import { type KeyboardEvent, useEffect, useMemo, useRef, useState } from "react";
 import { type Api, useRead } from "../host";
 import { t } from "../i18n";
+import { navigate } from "../router";
+import { StatusValue } from "../semantic";
 import { reasonOf, send } from "./act";
 import { motionStyles } from "./motion";
 
 type CreatorProps = { onClose: () => void; onDone: (id: string) => void };
 type ProjectRow = { id: string; title: string; name?: string; extends?: Api.AssetRef };
+type ObjectDraftRow = { id: string; title?: string; name?: string; namespace?: string; extends?: string; state?: string; archived?: boolean };
 
 const cleanName = (raw: string) => raw.toLowerCase().replace(/[^a-z0-9]+/g, "");
 
@@ -139,13 +144,13 @@ export function ProjectCreator({ onClose, onDone }: CreatorProps) {
   );
 }
 
-export function ObjectCreator({ onClose, onDone }: CreatorProps) {
+export function ObjectCreator({ onClose, onDone, initialProject }: CreatorProps & { initialProject?: string }) {
   const catalog = useRead<Api.Action[]>("/v1/actions");
   const projects = useRead<Api.RecordPage>("/v1/records/build.app?limit=200");
   const entities = useRead<Api.EntityInfo[]>("/v1/entities");
   const formRef = useRef<HTMLDivElement>(null);
 
-  const [project, setProject] = useState("");
+  const [project, setProject] = useState(initialProject ?? "");
   const [name, setName] = useState("");
   const [title, setTitle] = useState("");
   const [extendsType, setExtendsType] = useState("");
@@ -156,9 +161,9 @@ export function ObjectCreator({ onClose, onDone }: CreatorProps) {
   const projectList = projects.status === "ready" ? (projects.data.records as ProjectRow[]) : [];
   const singleProject = projectList.length === 1 ? projectList[0] : undefined;
   useEffect(() => {
-    if (singleProject && !project) setProject(singleProject.id);
-  }, [singleProject, project]);
-  const effectiveProject = singleProject ? singleProject.id : project;
+    if (!initialProject && singleProject && !project) setProject(singleProject.id);
+  }, [initialProject, singleProject, project]);
+  const effectiveProject = initialProject || (singleProject ? singleProject.id : project);
   const currentProject = projectList.find((entry) => entry.id === effectiveProject);
   const targetSpace = currentProject?.extends?.name ?? "";
 
@@ -230,13 +235,13 @@ export function ObjectCreator({ onClose, onDone }: CreatorProps) {
       <Layout
         height="fill"
         padding={4}
-        header={<DialogHeader title={t(createAction?.title || "New object type")} onOpenChange={onClose} />}
+        header={<DialogHeader title={t(targetSpace ? "Extend an object" : (createAction?.title || "New object type"))} onOpenChange={onClose} />}
         content={
           <LayoutContent>
             <VStack ref={formRef} onKeyDown={onKeyDown}>
               <FormLayout defaultOptionality="optional">
                 {failure && <VStack xstyle={[motionStyles.bannerEnter, motionStyles.shakeError]}><Banner status="error" title={t("Not saved")} description={failure} /></VStack>}
-                {!singleProject && (
+                {!initialProject && !singleProject && (
                   <Selector
                     label={t("Project")}
                     isRequired
@@ -283,5 +288,77 @@ export function ObjectCreator({ onClose, onDone }: CreatorProps) {
         }
       />
     </Dialog>
+  );
+}
+
+export function ProjectObjectsSection({ projectId, projectName, extendsRef, catalog }: { projectId: string; projectName?: string; extendsRef?: Api.AssetRef; catalog: Api.Action[] }) {
+  const objects = useRead<Api.RecordPage>("/v1/records/build.object?limit=500");
+  const [creating, setCreating] = useState(false);
+  const canCreate = catalog.some((action) => action.schema === "build.object.create");
+  const targetSpace = projectName || projectId;
+  const rows = objects.status === "ready"
+    ? (objects.data.records as ObjectDraftRow[]).filter((row) => !row.archived && (row.namespace || "workspace") === targetSpace)
+    : [];
+
+  return (
+    <VStack gap={3}>
+      <HStack gap={2} vAlign="center">
+        <StackItem size="fill">
+          <Heading level={3}>{t("Object types")}</Heading>
+        </StackItem>
+        {canCreate && (
+          <Button
+            label={extendsRef ? t("Extend an object") : t("New object type")}
+            variant="secondary"
+            onClick={() => setCreating(true)}
+          />
+        )}
+      </HStack>
+      {objects.status === "loading" && <Skeleton height={28} />}
+      {(objects.status === "error" || objects.status === "refused") && (
+        <Text type="supporting" color="secondary">{objects.reason}</Text>
+      )}
+      {objects.status === "ready" && rows.length === 0 && (
+        <Text type="supporting" color="secondary">
+          {extendsRef
+            ? t("No extension objects yet. Extend an object from the target application to add custom fields and actions.")
+            : t("No object types in this project yet.")}
+        </Text>
+      )}
+      {objects.status === "ready" && rows.length > 0 && (
+        <List density="compact" edge="flush" hasDividers>
+          {rows.map((row) => {
+            const qualified = row.namespace && row.namespace !== "workspace" ? `${row.namespace}.${row.name ?? row.id}` : String(row.name ?? row.id);
+            const published = row.state === "published";
+            return (
+              <ListItem
+                key={row.id}
+                label={row.title || qualified}
+                description={row.extends ? `${qualified} · ${t("Extends")} ${row.extends}` : qualified}
+                href={`/ontology/object-types/${encodeURIComponent(row.id)}`}
+                endContent={
+                  <StatusValue
+                    label={t(published ? "Published" : "Draft")}
+                    tone={published ? "success" : "warning"}
+                    size="sm"
+                    appearance="pill"
+                  />
+                }
+              />
+            );
+          })}
+        </List>
+      )}
+      {creating && (
+        <ObjectCreator
+          initialProject={projectId}
+          onClose={() => setCreating(false)}
+          onDone={(createdId) => {
+            setCreating(false);
+            void navigate(`/ontology/object-types/${encodeURIComponent(createdId)}`);
+          }}
+        />
+      )}
+    </VStack>
   );
 }

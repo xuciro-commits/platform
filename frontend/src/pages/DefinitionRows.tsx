@@ -66,7 +66,8 @@ export function DefinitionRows({ described, source, entities, catalog, id, revis
   const states = rowsOf(source, "states");
   const access = rowsOf(source, "access");
   const bound = Array.isArray(source.actionTypes) && source.actionTypes.length > 0;
-  const isExtension = Boolean(source.extends);
+  const extendsType = typeof source.extends === "string" ? source.extends : undefined;
+  const isExtension = Boolean(extendsType);
   const edit = described.edit;
   return slots.map((slot) => {
     const field = described.field(slot);
@@ -75,7 +76,7 @@ export function DefinitionRows({ described, source, entities, catalog, id, revis
     return (
       <DefinitionTable key={slot} slot={slot} field={field} rows={rowsOf(source, slot)} fields={fields} states={states} access={access}
         entities={entities} subject={`${String(source.namespace || "build")}.${source.name}`}
-        bound={slot === "actions" && bound} isExtension={isExtension}
+        bound={slot === "actions" && bound} isExtension={isExtension} extendsType={extendsType}
         catalog={catalog}
         objectId={id}
         objectRevision={revision}
@@ -92,9 +93,9 @@ export function DefinitionRows({ described, source, entities, catalog, id, revis
 type SavedRows = Promise<void>;
 type SaveRows = (rows: DefinitionRow[]) => SavedRows;
 
-function DefinitionTable({ slot, field, rows, fields: objectFields, states, access, entities, subject, bound, isExtension, catalog, objectId, objectRevision, refreshing, save }: {
+function DefinitionTable({ slot, field, rows, fields: objectFields, states, access, entities, subject, bound, isExtension, extendsType, catalog, objectId, objectRevision, refreshing, save }: {
   slot: Slot; field: Api.FieldInfo; rows: DefinitionRow[]; fields: DefinitionRow[]; states: DefinitionRow[]; access: DefinitionRow[];
-  entities: Api.EntityInfo[]; subject: string; bound: boolean; isExtension: boolean; catalog: Api.Action[];
+  entities: Api.EntityInfo[]; subject: string; bound: boolean; isExtension: boolean; extendsType?: string; catalog: Api.Action[];
   objectId: string; objectRevision: number; refreshing: boolean; save?: SaveRows;
 }) {
   const schema = metadata[slot];
@@ -259,6 +260,8 @@ function DefinitionTable({ slot, field, rows, fields: objectFields, states, acce
           fields={objectFields}
           states={states}
           access={access}
+          extendsType={extendsType}
+          entities={entities}
           catalog={catalog}
           close={() => setCreatingAction(false)}
           done={() => {

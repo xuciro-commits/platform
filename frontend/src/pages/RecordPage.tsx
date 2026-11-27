@@ -18,6 +18,7 @@ import { useCommandSearch } from "../shell/CommandSearch";
 import { PageTitle, useGutter } from "./frame";
 import { DefinitionRows, stateProblem } from "./DefinitionRows";
 import { describe, type Described, headerStatus, statusField, type Values, withRestrictedFields } from "./describe";
+import { ProjectObjectsSection } from "./ExtensionCreator";
 import { KeyboardHelp } from "./KeyboardHelp";
 import { type Editor, FieldGroup, useEditor } from "./RecordFields";
 import { RecordFiles, RecordLinks, relatedGroups } from "./RecordAttachments";
@@ -305,6 +306,14 @@ export function RecordPage({ described, id, listPath, listTitle, instances, enti
                   {editor.stale && <VStack xstyle={motionStyles.bannerEnter}><Banner status="info" title={t("This record has new changes")} /></VStack>}
                   {refusal && <VStack xstyle={motionStyles.bannerEnter}><Banner status="error" title={t("Not done")} description={refusal} /></VStack>}
                   <FieldGroup described={detail} editor={editor} sections={body.sections} direction="horizontal-labels" focusEmpty={fresh} fold={!fresh} refs={refs} restricted={restricted} />
+                  {isProjectRecord && (
+                    <ProjectObjectsSection
+                      projectId={id}
+                      projectName={String(values.name || id)}
+                      extendsRef={(kept as unknown as { extends?: Api.AssetRef }).extends}
+                      catalog={catalog}
+                    />
+                  )}
                   {extensions.length > 0 && (
                     <ExtensionHost extensions={extensions} baseId={id} catalog={catalog} showFields onActions={onExtensionActions} />
                   )}
