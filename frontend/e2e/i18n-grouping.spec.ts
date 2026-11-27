@@ -51,8 +51,11 @@ test.describe("i18n completeness, two-level grouping and full-width layout", () 
     await expect(page.getByRole("row", { name: /^折叠分组 地点/ })).toBeVisible();
     await expect(page.getByRole("row", { name: /Places/ })).toHaveCount(0);
     const countyRow = page.getByRole("row", { name: /^county / });
-    await expect(countyRow).toContainText("县级");
-    await expect(countyRow).toContainText("应用或产品包");
+    await expect(countyRow.first()).toBeVisible();
+    for (const row of await countyRow.all()) {
+      await expect(row).toContainText("县级");
+      await expect(row).toContainText("应用或产品包");
+    }
     await page.getByRole("button", { name: "清除全部" }).click();
 
     // Verify zero right-side empty void: rightmost header cell aligns with right edge of table (> 94% width)

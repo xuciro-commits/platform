@@ -1,6 +1,6 @@
 import { createHash } from "node:crypto";
 import { execFile, execFileSync, spawn } from "node:child_process";
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, renameSync, rmSync, writeFileSync } from "node:fs";
 import { join, resolve } from "node:path";
 import { tmpdir } from "node:os";
 import { fileURLToPath } from "node:url";
@@ -72,25 +72,58 @@ function downloadSyncWithRetry(url, file, attempts = 4) {
   throw lastError;
 }
 
+// All trunk workers share one lazy fixture root. Publish only complete,
+// verified bytes, and serialize source checkout and tool construction.
+function withMaterializationLock(root, work) {
+  const lockDir = join(root, ".materialize.lock");
+  const deadline = Date.now() + 240_000;
+  while (true) {
+    try {
+      mkdirSync(lockDir);
+      break;
+    } catch (error) {
+      if (error.code !== "EEXIST") throw error;
+      if (Date.now() >= deadline) throw Error("Timed out waiting for package materialization");
+      Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 100);
+    }
+  }
+  try { return work(); }
+  finally { rmSync(lockDir, { recursive: true, force: true }); }
+}
+
 function materializeOne(root, name) {
   const spec = lock.packages[name];
   if (!spec) throw Error("Unknown package input " + name);
-  const file = join(root, name + ".json");
-  if (!existsSync(file)) {
-    if (spec.url) {
-      measure("按需下载包 " + name, () => downloadSyncWithRetry(spec.url, file));
-    } else {
-      const source = existsSync(join(root, "source")) ? join(root, "source") : measure("拉取锁定包源码", () => checkout(root));
-      const pkg = join(root, "pkg");
-      if (!existsSync(pkg)) measure("编译包工具", () => command(process.env.GO || "go", ["build", "-o", pkg, "./cmd/pkg"], join(platform, "capabilities/server")));
-      measure("按需构建包 " + name, () => command(pkg, ["build", "-o", file, join(source, "packages", spec.source)]));
-    }
-  }
-  const bytes = readFileSync(file), checksum = sha(bytes), descriptor = JSON.parse(bytes);
-  if (descriptor.id !== spec.id || descriptor.version !== spec.version || (spec.sha256 && spec.sha256 !== checksum)) {
-    throw Error("Test package identity or digest mismatch: " + name);
-  }
-  return { ...spec, sha256: checksum, file, bytes };
+  return withMaterializationLock(root, () => {
+    const file = join(root, name + ".json");
+    const validate = path => {
+      const bytes = readFileSync(path), checksum = sha(bytes), descriptor = JSON.parse(bytes);
+      if (descriptor.id !== spec.id || descriptor.version !== spec.version || (spec.sha256 && spec.sha256 !== checksum)) {
+        throw Error("Test package identity or digest mismatch: " + name);
+      }
+      return { ...spec, sha256: checksum, file, bytes };
+    };
+    if (existsSync(file)) return validate(file);
+    const pending = file + ".pending";
+    try {
+      if (spec.url) {
+        measure("按需下载包 " + name, () => downloadSyncWithRetry(spec.url, pending));
+      } else {
+        const source = existsSync(join(root, "source", ".fixture-ready"))
+          ? join(root, "source") : measure("拉取锁定包源码", () => {
+              const dir = checkout(root);
+              writeFileSync(join(dir, ".fixture-ready"), lock.revision);
+              return dir;
+            });
+        const pkg = join(root, "pkg");
+        if (!existsSync(pkg)) measure("编译包工具", () => command(process.env.GO || "go", ["build", "-o", pkg, "./cmd/pkg"], join(platform, "capabilities/server")));
+        measure("按需构建包 " + name, () => command(pkg, ["build", "-o", pending, join(source, "packages", spec.source)]));
+      }
+      const entry = validate(pending);
+      renameSync(pending, file);
+      return entry;
+    } finally { rmSync(pending, { force: true }); }
+  });
 }
 
 export function packageInput(name) {

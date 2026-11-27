@@ -162,7 +162,7 @@ test("roles & object ReBAC matrix, custom roles, unit inspection, project access
 });
 
 test("custom role draft survives a real permissions refresh", async ({ page }) => {
-  await signIn(page, "admin-1 · audit-a");
+  await signIn(page, "admin-1 · rebac");
   await open(page, "Admin", "Roles & permissions");
   await page.getByRole("tab", { name: /Custom roles/ }).click();
   await page.getByRole("button", { name: "Define custom role", exact: true }).first().click();
