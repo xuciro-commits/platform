@@ -21,7 +21,7 @@ const rules = [
   [/^frontend\/src\/apps\/(home|ai|data|operations|host)\//, ["workspace"]],
   [/^frontend\/src\/pages\/(Package[A-Za-z]*|FormWizard|MemberRoles)\.tsx$/, ["builder", "marketplace"]],
   [/^frontend\/src\/pages\/(CalendarView|AppDashboard|DashboardPage|ImportWizard)\.tsx$/, ["crm", "workspace"]],
-  [/^deploy\/packages\/crm\.json$/, ["crm", "marketplace"]],
+  [/^deploy\/test-packages\/crm(?:\.json|\/)/, ["crm", "marketplace"]],
   [/^scripts\/frontend-fixtures\/(crm-official|geo|party)-[^/]+\.json$/, ["official", "crm", "marketplace"]],
   [/^scripts\/frontend-fixtures\/(projects|assets)-[^/]+\.json$/, ["marketplace"]],
   [/^frontend\/src\/pages\/(SettingsTables|RecordFollowUps|RecordActivity|BoardView|DotMark)\.tsx$/, ["crm", "official"]],

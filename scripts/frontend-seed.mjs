@@ -4,11 +4,11 @@ import { readFileSync } from "node:fs";
 import { enterpriseRosterSteps, resolveMemberProfile } from "./demo-roster.mjs";
 
 const host = process.env.PLATFORM_HOST ?? "http://127.0.0.1:18511";
-const defaultFiles = ["./frontend-seed.json", "./crm-project.json"];
+const defaultFiles = ["./frontend-seed.json", ...(process.env.PLATFORM_LEGACY_CRM_FIXTURE === "1" ? ["./crm-project.json"] : [])];
 const files = process.argv.slice(2).length ? process.argv.slice(2) : defaultFiles;
 
-async function connect(tenant) {
-  const headers = { authorization: "Bearer admin", "platform-tenant": tenant, "content-type": "application/json" };
+async function connect(tenant, subject = "admin") {
+  const headers = { authorization: "Bearer " + subject, "platform-tenant": tenant, "content-type": "application/json" };
   const call = async (path, body) => {
     const response = await fetch(host + path, { method: body ? "POST" : "GET", headers, body: body ? JSON.stringify(body) : undefined, signal: AbortSignal.timeout(120000) });
     const answer = await response.json();
@@ -247,6 +247,13 @@ for (const file of files) {
 }
 
 const tenantPackages = {
+  crm: {
+    packages: [...partyPackages, "./frontend-fixtures/crm-official-0.3.0.json"],
+    grants: {},
+    verifyDemo: true,
+    verifyDemoAs: "manager",
+    profiles: { root: "系统管理员", "admin-1": "王丹", "builder-1": "韩奥", "manager-1": "赵敏", "user-1": "田雪" },
+  },
   official: { packages: partyPackages, grants: {} },
   sim: { packages: partyPackages, grants: {} },
   phone: {
@@ -261,9 +268,11 @@ const tenantPackages = {
   },
 };
 
-await Promise.all(["blank", "rebac", "upgrade", "publisher", "official", "phone", "sim"].map(async (name) => {
+await Promise.all(["blank", "rebac", "upgrade", "publisher", "official", "phone", "sim", "crm"].map(async (name) => {
   const empty = await connect(name).catch(() => undefined);
   if (!empty) return;
+  const plan = tenantPackages[name];
+  if (plan?.profiles) await members(empty, { members: plan.profiles });
   const existing = await empty.call("/v1/members");
   for (const entry of existing) {
     if (!entry.profile?.displayName || !entry.profile?.avatar) {
@@ -271,7 +280,6 @@ await Promise.all(["blank", "rebac", "upgrade", "publisher", "official", "phone"
       if (profile.displayName) await empty.submit("platform.profile", entry.id, "update", profile, "platform");
     }
   }
-  const plan = tenantPackages[name];
   if (!plan) return;
   const installed = [];
   for (const path of plan.packages) installed.push(await installPackage(empty, path));
@@ -288,6 +296,9 @@ await Promise.all(["blank", "rebac", "upgrade", "publisher", "official", "phone"
     if (providers.length !== 1) throw new Error(`${name}: ${protocol} has ${providers.length} providers, expected one`);
     await empty.submit("platform.protocol", protocol, "bind", { provider: providers[0] }, "platform");
   }
-  if (plan.verifyDemo) for (const descriptor of installed) await filledDemo(empty, descriptor);
+  if (plan.verifyDemo) {
+    const viewer = plan.verifyDemoAs ? await connect(name, plan.verifyDemoAs) : empty;
+    for (const descriptor of installed) await filledDemo(viewer, descriptor);
+  }
   console.log(`frontend-seed: installed ${installed.map((descriptor) => descriptor.id).join(", ")} in tenant ${name}`);
 }));
