@@ -1,11 +1,10 @@
 import { VStack } from "@astryxdesign/core/Layout";
 import { useEffect, useMemo, useRef } from "react";
-import { type Api, reread, useRead } from "../host";
+import { type Api, reread, useRead, send } from "../host";
 import { t } from "../i18n";
-import { send } from "./act";
 import { describe, type Described, numeric, type Section, type Values, withRestrictedFields } from "./describe";
 import type { ListColumn } from "./ListPage";
-import { enterable } from "./ParameterInput";
+import { enterable } from "./fieldRules";
 import { FieldGroup, useEditor } from "./RecordFields";
 import { money, plain, present } from "./values";
 

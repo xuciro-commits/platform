@@ -1,6 +1,5 @@
-import type { Api } from "../../host";
+import { type Api, reasonOf, send } from "../../host";
 import { t } from "../../i18n";
-import { reasonOf, send } from "../../pages/act";
 import { listPage } from "../../pages/ListEntry";
 import type { Dot } from "../../pages/Transitions";
 

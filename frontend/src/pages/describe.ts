@@ -1,5 +1,5 @@
 import type { Api } from "../host";
-import { enterable } from "./ParameterInput";
+import { enterable } from "./fieldRules";
 import { shown } from "./values";
 
 export type Values = Record<string, unknown>;

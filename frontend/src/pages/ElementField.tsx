@@ -5,7 +5,7 @@ import { type Api, useRead } from "../host";
 import { t } from "../i18n";
 import { ReferenceValue } from "../semantic";
 import { elementType, findElements } from "./enterprise";
-import type { InputStatus } from "./ParameterInput";
+import type { InputStatus } from "./fieldRules";
 
 type ElementInputProps = {
   control?: StyleXStyles;

@@ -10,9 +10,8 @@ import {
   GlobeAltIcon, HashtagIcon, InboxIcon, LanguageIcon, MoonIcon, PaintBrushIcon, PhoneIcon, TagIcon, UserIcon,
 } from "@heroicons/react/24/outline";
 import { useState } from "react";
-import { type Api, request, reread, useRead } from "../../host";
+import { type Api, request, reread, useRead, reasonOf } from "../../host";
 import { dateText, t } from "../../i18n";
-import { reasonOf } from "../../pages/act";
 import { AvatarPicker } from "../../pages/AvatarPicker";
 import { type ProfileValues, useAccount } from "../account";
 import { controlWidth, SettingsCard, SettingsRow, TextSetting, ThemeChoiceCards } from "../../pages/SettingsRows";

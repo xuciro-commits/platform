@@ -4,7 +4,7 @@ import { HStack } from "@astryxdesign/core/Layout";
 import { MoreMenu } from "@astryxdesign/core/MoreMenu";
 import type { Api } from "../host";
 import { t } from "../i18n";
-import { usePageCommands } from "../shell/CommandSearch";
+import { usePageCommands } from "../commandScope";
 import { isDangerAction, stepIntent, useAct } from "./act";
 import type { Described, Step, Values } from "./describe";
 import type { ContributedAction } from "./RecordExtensions";

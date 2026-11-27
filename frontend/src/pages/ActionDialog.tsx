@@ -6,13 +6,14 @@ import { HStack, Layout, LayoutContent, LayoutFooter, StackItem, VStack } from "
 import { Selector } from "@astryxdesign/core/Selector";
 import { Text } from "@astryxdesign/core/Text";
 import { type KeyboardEvent, useEffect, useRef, useState } from "react";
-import { type Api, useRead } from "../host";
+import { type Api, useRead, reasonOf, send } from "../host";
 import { t } from "../i18n";
-import { reasonOf, send } from "./act";
 import { motionStyles } from "./motion";
-import { ParameterInput, enterable, missingValue } from "./ParameterInput";
+import { ParameterInput } from "./ParameterInput";
+import { enterable, missingValue } from "./fieldRules";
 import { OneOfInput } from "./ReferenceField";
 import { grouped } from "./describe";
+import type { ReferenceCreationProps } from "./referenceCreation";
 
 type Values = Record<string, unknown>;
 type Applied = Promise<void>;
@@ -228,4 +229,8 @@ export function ActionDialog({ action, described, heading, confirm, id, revision
       />
     </Dialog>
   );
+}
+
+export function CreateReferenceDialog({ action, described, onClose, onDone }: ReferenceCreationProps) {
+  return <ActionDialog action={action} described={described} heading={t(action.title)} confirm={t("Create")} revision={0} quick onClose={onClose} onDone={onDone} />;
 }

@@ -9,9 +9,8 @@ import { Text } from "@astryxdesign/core/Text";
 import { TextInput } from "@astryxdesign/core/TextInput";
 import { useToast } from "@astryxdesign/core/Toast";
 import { useMemo, useState } from "react";
-import { type Api, reread, useRead } from "../host";
+import { type Api, reread, useRead, reasonOf, send } from "../host";
 import { t } from "../i18n";
-import { reasonOf, send } from "./act";
 import { roleTitle } from "./rebac/shared";
 
 function normalizeAccount(raw: string): { subject: string; email: string; slug: string } {

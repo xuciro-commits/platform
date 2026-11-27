@@ -10,9 +10,8 @@ import { TextInput } from "@astryxdesign/core/TextInput";
 import { Token } from "@astryxdesign/core/Token";
 import { useToast } from "@astryxdesign/core/Toast";
 import { useMemo, useState } from "react";
-import { type Api, reread, useRead } from "../../host";
+import { type Api, reread, useRead, reasonOf, send } from "../../host";
 import { t } from "../../i18n";
-import { reasonOf, send } from "../act";
 import { SettingsCard } from "../SettingsRows";
 import { RequestAccessDialog } from "./RequestAccessDialog";
 import {

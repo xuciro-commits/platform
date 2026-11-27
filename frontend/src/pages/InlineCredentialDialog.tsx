@@ -7,9 +7,8 @@ import { SegmentedControl, SegmentedControlItem } from "@astryxdesign/core/Segme
 import { Text } from "@astryxdesign/core/Text";
 import { TextInput } from "@astryxdesign/core/TextInput";
 import { useState } from "react";
-import { type Api, request, reread } from "../host";
+import { type Api, request, reread, reasonOf, send } from "../host";
 import { t } from "../i18n";
-import { reasonOf, send } from "./act";
 
 export function InlineCredentialDialog({
   saveAction,

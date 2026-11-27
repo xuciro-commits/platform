@@ -8,9 +8,8 @@ import { Text } from "@astryxdesign/core/Text";
 import { TextInput } from "@astryxdesign/core/TextInput";
 import { useToast } from "@astryxdesign/core/Toast";
 import { useState } from "react";
-import { type Api, reread, request, useRead } from "../host";
+import { type Api, reread, request, useRead, reasonOf } from "../host";
 import { t } from "../i18n";
-import { reasonOf } from "./act";
 
 const validId = /^[a-z][a-z0-9-]{1,31}$/;
 

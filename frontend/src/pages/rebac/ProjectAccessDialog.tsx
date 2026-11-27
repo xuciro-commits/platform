@@ -10,9 +10,8 @@ import { Text } from "@astryxdesign/core/Text";
 import { Token } from "@astryxdesign/core/Token";
 import { useToast } from "@astryxdesign/core/Toast";
 import { useState } from "react";
-import { type Api, reread, useRead } from "../../host";
+import { type Api, reread, useRead, reasonOf, send } from "../../host";
 import { t } from "../../i18n";
-import { reasonOf, send } from "../act";
 import { RequestAccessDialog } from "./RequestAccessDialog";
 import { addDaysISO, asIsoDate, roleTitle, todayISO } from "./shared";
 

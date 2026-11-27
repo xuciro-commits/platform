@@ -10,10 +10,9 @@ import { Token } from "@astryxdesign/core/Token";
 import { colorVars, radiusVars } from "@astryxdesign/core/theme/tokens.stylex";
 import * as stylex from "@stylexjs/stylex";
 import { useMemo, useState } from "react";
-import { type Api, reread, useRead } from "../host";
+import { type Api, reread, useRead, reasonOf, send } from "../host";
 import { t } from "../i18n";
 import { navigate } from "../router";
-import { reasonOf, send } from "./act";
 
 const styles = stylex.create({
   panel: {

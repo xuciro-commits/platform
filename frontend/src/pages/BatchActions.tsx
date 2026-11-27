@@ -5,14 +5,14 @@ import { HStack, VStack } from "@astryxdesign/core/Layout";
 import { Card } from "@astryxdesign/core/Card";
 import { Text } from "@astryxdesign/core/Text";
 import { useRef, useState } from "react";
-import type { Api } from "../host";
+import { type Api, type BatchRow, sendBatch } from "../host";
 import { t } from "../i18n";
-import { usePageCommands } from "../shell/CommandSearch";
+import { usePageCommands } from "../commandScope";
 import { ActionDialog } from "./ActionDialog";
-import { type BatchRow, isDangerAction, sendBatch } from "./act";
+import { isDangerAction } from "./act";
 import type { Described, Values } from "./describe";
 import { motionStyles, motionTimings, usePresence } from "./motion";
-import { enterable } from "./ParameterInput";
+import { enterable } from "./fieldRules";
 
 type Batch = { action: Api.Action; rows: BatchRow[]; danger: boolean };
 

@@ -1,3 +1,4 @@
+import { t } from "../i18n";
 import { currentSession, endSession } from "./session";
 
 export class HostRefusal extends Error {
@@ -73,4 +74,8 @@ export async function request<Answer>(path: string, options: Options = {}): Prom
 
 export async function requestBlob(path: string, signal?: AbortSignal) {
   return (await respond(path, { signal })).blob();
+}
+
+export function reasonOf(problem: unknown) {
+  return (problem instanceof Error && problem.message) || t("The platform did not accept this change.");
 }

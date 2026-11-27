@@ -10,10 +10,10 @@ import { useId, useMemo, useRef, useState } from "react";
 import { type Api, request, useRead } from "../host";
 import { t } from "../i18n";
 import { ReferenceValue, type SemanticSize } from "../semantic";
-import { ActionDialog } from "./ActionDialog";
+import { useReferenceCreation } from "./referenceCreation";
 import { ElementInput } from "./ElementField";
 import { elementType, stereotypesOf } from "./enterprise";
-import { enterable, type InputStatus } from "./ParameterInput";
+import { enterable, type InputStatus } from "./fieldRules";
 import { plain, shown } from "./values";
 
 type Reference = { id: string; label: string };
@@ -47,6 +47,7 @@ export function ReferenceInput(props: ReferenceInputProps) {
 }
 
 function RecordReferenceInput({ type, id, name, label, description, required, focused, labelHidden, status, onChange, control }: ReferenceInputProps) {
+  const CreateReference = useReferenceCreation();
   const [picked, setPicked] = useState<Reference>();
   const [creating, setCreating] = useState(false);
   const [searchFailed, setSearchFailed] = useState(false);
@@ -142,13 +143,9 @@ function RecordReferenceInput({ type, id, name, label, description, required, fo
         </InputGroup>
       ) : input}
       {creating && create && target && (
-        <ActionDialog
+        <CreateReference
           action={create}
           described={target}
-          heading={t(create.title)}
-          confirm={t("Create")}
-          revision={0}
-          quick
           onClose={() => setCreating(false)}
           onDone={(createdId) => void handleCreated(createdId)}
         />

@@ -23,16 +23,15 @@ import { VisuallyHidden } from "@astryxdesign/core/VisuallyHidden";
 import { ArrowLeftIcon, ArrowPathIcon, CheckIcon, EnvelopeIcon, XMarkIcon } from "@heroicons/react/24/outline";
 import * as stylex from "@stylexjs/stylex";
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
-import { type Api, reread, useRead } from "../host";
+import { type Api, reread, useRead, reasonOf, send } from "../host";
 import { t } from "../i18n";
 import { PageTitle, useGutter } from "./frame";
 import { usePath } from "../router";
 import { useIsDark } from "../shell/appearance";
-import { reasonOf, send } from "./act";
 import { type InboxItem, type InboxTab, inTab, inboxTabs, useInbox } from "./inbox";
 import { motionEases, motionStyles, motionTimings, prefersReducedMotion } from "./motion";
 import { ReferenceLink } from "./ReferenceField";
-import { useRecordHref } from "../apps/entries";
+import { useRecordHref } from "../recordRoutes";
 import { AccessRequestDecisionCard } from "./rebac/AccessRequestDecisionCard";
 import { todayISO, useMemberDirectoryMap, useUnitChoices } from "./rebac/shared";
 

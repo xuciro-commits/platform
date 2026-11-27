@@ -44,7 +44,20 @@ func TestInvariantK13ConsoleForksRetainMembersProfilesAndDelegations(t *testing.
 	live.accept(t, "build.object.create", build.ObjectType, "OBJECT", invariantObject("alpha", "Alpha"))
 	live.accept(t, "build.object.publish", build.ObjectType, "OBJECT", map[string]any{})
 	live.accept(t, "invariantproject.alpha.create", "invariantproject.alpha", "A1", map[string]any{"note": "retained"})
-	submit("admin", controlowner.SchemaProfileUpdate, controlowner.ProfileType, "member", map[string]any{"displayName": "Before"})
+	console := live.App(controlowner.PlatformApp).(*controlowner.Console)
+	if got := console.Account("member").Effective.Avatar; got != "default/global/gl-008" {
+		t.Fatalf("member default avatar changed: %s", got)
+	}
+	admin, _ := live.Member("admin")
+	bad := live.submission(controlowner.SchemaProfileUpdate, controlowner.ProfileType, "member", map[string]any{"avatar": "default/../bad"})
+	bad.PrincipalId, bad.Authority = admin.ID, controlowner.PlatformApp
+	if _, refusal := live.Submit(admin, bad, invariantClock); refusal == nil {
+		t.Fatal("invalid member avatar must be refused")
+	}
+	submit("admin", controlowner.SchemaProfileUpdate, controlowner.ProfileType, "member", map[string]any{"displayName": "Before", "avatar": "default/01"})
+	if got := console.Account("member").Effective.Avatar; got != "default/01" {
+		t.Fatalf("legacy member avatar must be retained: %s", got)
+	}
 	submit("departing", protocol.SchemaDelegate, controlowner.MemberType, "delegatee", map[string]any{"app": build.ID, "until": "2099-01-01"})
 	image := live.readImage.Load()
 	left, err := image.state.forkReadState(t.Context())

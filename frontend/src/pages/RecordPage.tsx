@@ -14,7 +14,7 @@ import { type ReactNode, useCallback, useEffect, useMemo, useState } from "react
 import { type Api, useRead } from "../host";
 import { t } from "../i18n";
 import { originOf, usePath, useSearch } from "../router";
-import { useCommandSearch } from "../shell/CommandSearch";
+import { useCommandSearch } from "../commandScope";
 import { PageTitle, useGutter } from "./frame";
 import { DefinitionRows, stateProblem } from "./DefinitionRows";
 import { describe, type Described, headerStatus, statusField, type Values, withRestrictedFields } from "./describe";
@@ -28,7 +28,7 @@ import { type ContributedAction, ExtensionHost, extensionsOf } from "./RecordExt
 import { RecordLines } from "./RecordLines";
 import { ObjectPreview } from "./ObjectPreview";
 import { useOptions } from "./options";
-import { enterable } from "./ParameterInput";
+import { enterable } from "./fieldRules";
 import { CodeValue, PersonLabel, StatusValue, TemporalValue } from "../semantic";
 import { motionStyles } from "./motion";
 import { PropertyField } from "./PropertyField";

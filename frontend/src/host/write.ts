@@ -1,6 +1,7 @@
 import type { Api } from "./contract";
 import { changed, changedScopes } from "./read";
-import { refusal, request } from "./request";
+import { reasonOf, refusal, request } from "./request";
+import { t } from "../i18n";
 import { currentSession } from "./session";
 
 type Identity = { tenantId: string; principalId: string };
@@ -24,7 +25,7 @@ function sessionMeta() {
   return Promise.all([cachedIdentity, cachedDeclarations]);
 }
 
-export async function submit(action: Api.Action, id: string, payload: Record<string, unknown>, expectedRevision: number | undefined, idempotencyKey: string) {
+async function submit(action: Api.Action, id: string, payload: Record<string, unknown>, expectedRevision: number | undefined, idempotencyKey: string) {
   let [identity, declarations] = await sessionMeta();
   let authority = declarations.find((declaration) => declaration.dataClass === action.target)?.authorityId ?? "";
   if (!authority) {
@@ -54,4 +55,39 @@ export async function submit(action: Api.Action, id: string, payload: Record<str
   else if (action.target || scopes.length > 0) changedScopes(action.target ? [action.target] : undefined, scopes);
   else changed();
   return { ...answer.record, id: answer.record.submission?.target?.id || id };
+}
+
+const attempts = 3;
+
+export async function send(action: Api.Action, id: string, payload: Record<string, unknown>, revision?: number) {
+  const key = crypto.randomUUID();
+  for (let attempt = 1; ; attempt += 1) {
+    try {
+      return await submit(action, id, payload, revision, key);
+    } catch (problem) {
+      if (!(problem instanceof TypeError) || attempt === attempts) throw problem;
+    }
+  }
+}
+
+export type BatchRow = { id: string; name: string; revision: number; reason?: string };
+
+export async function sendBatch(action: Api.Action, rows: BatchRow[], payload: Record<string, unknown>, retry: boolean) {
+  const results: BatchRow[] = [];
+  for (const row of rows) {
+    try {
+      let revision = row.revision;
+      if (retry) {
+        const current = await request<Api.RecordView>(`/v1/records/${action.target}/${encodeURIComponent(row.id)}`);
+        const choice = current.actions?.find((candidate) => candidate.schema === action.schema);
+        if (!choice?.allowed) throw new Error(choice?.reason || t("This action is no longer available."));
+        revision = (current.record as { revision: number }).revision;
+      }
+      await send(action, row.id, payload, revision);
+      results.push({ ...row, reason: undefined });
+    } catch (problem) {
+      results.push({ ...row, reason: reasonOf(problem) });
+    }
+  }
+  return results;
 }

@@ -105,6 +105,31 @@ for (const path of walk(src)) {
   if (vendored(file) || !/\.(ts|tsx)$/.test(file) || file.endsWith(".d.ts")) continue;
   const content = readFileSync(path, "utf8");
   const lines = content.split("\n");
+  for (const match of content.matchAll(/\b(?:from\s*|import\s*\(?\s*)["'](\.[^"']+)["']/g)) {
+    const target = relative(src, resolve(dirname(path), match[1]));
+    const line = content.slice(0, match.index).split("\n").length;
+    if (/^apps\/entries(?:\.ts)?$/.test(target) && !["main.tsx", "shell/Shell.tsx", "shell/CommandSearch.tsx"].includes(file)) {
+      report(file, line, "the entry registry belongs to application assembly; use recordRoutes for record links.");
+    }
+    if (/^shell\/CommandSearch(?:\.tsx)?$/.test(target) && file !== "shell/Shell.tsx") {
+      report(file, line, "use commandScope for page commands instead of importing the command palette.");
+    }
+    if (file.startsWith("host/") && /^(?:apps(?:\/|\.ts$)|pages\/|semantic\/|shell\/)/.test(target)) {
+      report(file, line, "host contracts and transport cannot depend on presentation or application assembly.");
+    }
+    if (file === "pages/fieldRules.ts" && target !== "host") {
+      report(file, line, "field rules depend only on the host contract, not on input components.");
+    }
+    if (file.startsWith("semantic/") && /^pages\/(?:act|ParameterInput|RecordPeek)(?:\.tsx)?$/.test(target)) {
+      report(file, line, "semantic values use host actions and peekScope, not action or record editing screens.");
+    }
+    if (file === "i18n.ts" && !/^i18n\/[^/]+\.json$/.test(target)) {
+      report(file, line, "i18n is a leaf: import only its translation dictionaries and external libraries.");
+    }
+    if (file !== "i18n.ts" && /^i18n\//.test(target)) {
+      report(file, line, "translation dictionaries are private to i18n.ts; use its public API.");
+    }
+  }
   const entry = file.match(/^apps\/([^/]+\/[^/]+)\.tsx?$/);
   if (entry && !menu.has(entry[1])) {
     report(file, 1, `"${entry[1]}" is not an entry in src/apps.ts. Name the file after the entry on your task card (apps/<app>/<entry>.ts); put helper files in a subfolder.`);

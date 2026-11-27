@@ -17,15 +17,14 @@ import { kindOf, MediaPreview } from "./MediaPreview";
 import { colorVars } from "@astryxdesign/core/theme/tokens.stylex";
 import * as stylex from "@stylexjs/stylex";
 import { type ComponentProps, useId, useState } from "react";
-import { type Api, request, requestBlob, useRead } from "../host";
+import { type Api, request, requestBlob, useRead, reasonOf, send } from "../host";
 import { currentCurrency, t, useFormatConfig } from "../i18n";
-import { reasonOf, send } from "./act";
 import { MemberInput } from "./MemberField";
 import { currencyMeta, formatTenantNumber, parseMoney, parseQuantity, PersonAvatar } from "../semantic";
 import { ReferenceInput } from "./ReferenceField";
 import { stereotypesOf } from "./enterprise";
+import { type InputStatus, isNumericParameter, isMultipleParameter } from "./fieldRules";
 
-export type InputStatus = { type: "error" | "success"; message?: string };
 type ParameterInputProps = {
   parameter: Api.Field;
   described?: Api.EntityInfo;
@@ -40,28 +39,7 @@ type ParameterInputProps = {
   quiet?: boolean;
 };
 
-const typed = new Set(["string", "longtext", "date", "datetime", "entity", "reference", "choice", "member"]);
-const numeric = new Set(["integer", "number", "money"]);
-const multiple = new Set(["member[]", "action[]"]);
 type Attachment = { mediaSet?: string; item?: string };
-
-export function enterable(parameter: Api.Field): boolean {
-  if (parameter.type === "lines") return Boolean(parameter.fields?.length && parameter.fields.every(enterable));
-  return Boolean(parameter.choices) || parameter.type === "boolean" || parameter.type === "attachment" || typed.has(parameter.type) || numeric.has(parameter.type) || multiple.has(parameter.type);
-}
-
-export function settles(parameter: Api.Field, field?: Api.FieldInfo) {
-  return Boolean(parameter.ref || parameter.choices) || field?.type === "reference" || field?.type === "member" || parameter.type === "member" || parameter.type === "reference" || parameter.type === "boolean" || parameter.type === "attachment" || numeric.has(parameter.type) || multiple.has(parameter.type);
-}
-
-export function missingValue(parameter: Api.Field, value: unknown): boolean {
-  if (value == null || value === "") return Boolean(parameter.required);
-  if (parameter.type === "lines" && Array.isArray(value)) {
-    return (Boolean(parameter.required) && value.length === 0) ||
-      value.some((row) => parameter.fields?.some((field) => missingValue(field, row[field.name])));
-  }
-  return parameter.type === "action[]" && Boolean(parameter.required) && Array.isArray(value) && value.length === 0;
-}
 
 function MultipleInput({ parameter, value, form, label, description, status, onChange, labelHidden, control }: ParameterInputProps & {
   label: string;
@@ -306,7 +284,7 @@ export function ParameterInput({ parameter, described, value, form, status, onCh
   const field = described?.fields.find((candidate) => candidate.name === parameter.name);
   const label = t(parameter.label || field?.title || parameter.name);
   const description = field?.help ?? (parameter.label && parameter.description !== parameter.label ? t(parameter.description) : undefined);
-  if (multiple.has(parameter.type)) {
+  if (isMultipleParameter(parameter.type)) {
     return <MultipleInput parameter={parameter} value={value} form={form} label={label} description={description ?? t(parameter.description)}
       status={status} onChange={onChange} labelHidden={labelHidden} control={control} />;
   }
@@ -389,7 +367,7 @@ export function ParameterInput({ parameter, described, value, form, status, onCh
     return <MoneyInput parameter={parameter} value={value} label={label} description={description} status={status} onChange={onChange}
       onEnter={onEnter} labelHidden={labelHidden} control={control} focused={focused} />;
   }
-  if (numeric.has(parameter.type)) {
+  if (isNumericParameter(parameter.type)) {
     return (
       <NumberInput
         isIntegerOnly={parameter.type === "integer"}

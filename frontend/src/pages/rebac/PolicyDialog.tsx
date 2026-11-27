@@ -11,9 +11,8 @@ import { Text } from "@astryxdesign/core/Text";
 import { TextInput } from "@astryxdesign/core/TextInput";
 import { useToast } from "@astryxdesign/core/Toast";
 import { useEffect, useMemo, useState } from "react";
-import { type Api, reread } from "../../host";
+import { type Api, reread, reasonOf, send } from "../../host";
 import { t } from "../../i18n";
-import { reasonOf, send } from "../act";
 import { asIsoDate } from "./shared";
 
 function slugPolicyId(input: string): string {

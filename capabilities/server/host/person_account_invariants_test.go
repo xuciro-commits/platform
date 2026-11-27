@@ -52,6 +52,14 @@ func TestInvariantK37AnAccountSignsInAsOnePersonAndActsThroughTheirOrganisation(
 	}
 	must(org(enterprisemodel.SchemaElementAdd, enterprisemodel.ElementType, "P-LI", map[string]any{"stereotype": enterprisemodel.Person, "name": "Li Na"}))
 	must(org(enterprisemodel.SchemaElementAdd, enterprisemodel.ElementType, "P-WU", map[string]any{"stereotype": enterprisemodel.Person, "name": "Wu Lei"}))
+	model := live.App(enterprisemodel.ID).(*enterprisemodel.Enterprise).Model()
+	if person := model.ElementOf("P-LI"); person == nil || person.Avatar != "default/global/gl-003" {
+		t.Fatalf("person default avatar changed: %+v", person)
+	}
+	if refusal := org(enterprisemodel.SchemaElementAdd, enterprisemodel.ElementType, "BAD-AVATAR", map[string]any{"stereotype": enterprisemodel.Person, "name": "Invalid", "avatar": "default/../bad"}); refusal == nil {
+		t.Fatal("invalid person avatar must be refused")
+	}
+	must(org(enterprisemodel.SchemaElementEdit, enterprisemodel.ElementType, "P-WU", map[string]any{"avatar": "default/01"}))
 	relate := func(id, stereotype, source, target, role string) *platform.Error {
 		return org(enterprisemodel.SchemaRelationshipAdd, enterprisemodel.RelationshipType, id, map[string]any{"stereotype": stereotype, "source": source, "target": target, "role": role})
 	}

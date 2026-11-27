@@ -14,9 +14,8 @@ import { BookmarkSquareIcon, ChevronDoubleLeftIcon, TrashIcon } from "@heroicons
 import * as stylex from "@stylexjs/stylex";
 import { useState } from "react";
 import { type App, type NavItem, pathOf } from "../apps";
-import { type Api, reread, useRead } from "../host";
+import { type Api, reread, useRead, reasonOf, send } from "../host";
 import { t } from "../i18n";
-import { reasonOf, send } from "../pages/act";
 import { navigate, useSearch } from "../router";
 import { TenantSwitcher } from "./TenantSwitcher";
 
