@@ -23,6 +23,9 @@ func ProvidedContracts(p platform.PackageDescriptor) ([]string, error) {
 		case platform.AssetObject:
 			var body struct {
 				Protocols []protocol.ProtocolBinding `json:"protocols"`
+				Balances  []struct {
+					Protocols []protocol.ProtocolBinding `json:"protocols"`
+				} `json:"balances"`
 			}
 			if err := json.Unmarshal(asset.Body, &body); err != nil {
 				return nil, err
@@ -30,6 +33,12 @@ func ProvidedContracts(p platform.PackageDescriptor) ([]string, error) {
 			for _, binding := range body.Protocols {
 				key := platform.Protocol{Name: binding.Name, Version: binding.Version}.ID()
 				ids[key] = true
+			}
+			for _, b := range body.Balances {
+				for _, binding := range b.Protocols {
+					key := platform.Protocol{Name: binding.Name, Version: binding.Version}.ID()
+					ids[key] = true
+				}
 			}
 		case protocol.AssetImplementation:
 			var body protocol.ProtocolImplementation

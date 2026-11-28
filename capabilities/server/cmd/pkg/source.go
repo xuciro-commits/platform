@@ -493,6 +493,9 @@ func requiredTypes(dir string, requires []string) (map[string]map[string]exprFie
 			if r.ref.Kind == "object" {
 				out[r.ref.Name] = objectFields(asObject(r.body))
 			}
+			if r.ref.Kind == "contract" {
+				registerContractTypes(asObject(r.body), out)
+			}
 		}
 	}
 	return out, nil
@@ -968,4 +971,41 @@ func catalogEntry(b built, url string) protocol.PackageCatalogEntry {
 		}
 	}
 	return protocol.PackageCatalogEntry{ID: b.id, Version: b.version, Title: b.title, Description: b.description, URL: url, Sha256: b.lock.Artifact, Listing: listing, Locales: locales}
+}
+
+func registerContractTypes(body *object, out map[string]map[string]exprField) {
+	if body == nil {
+		return
+	}
+	major := 1
+	if m, ok := body.values["major"].(float64); ok && m > 0 {
+		major = int(m)
+	}
+	id := fmt.Sprintf("%s/%d", text(body, "name"), major)
+	schemas := asObject(body.values["readSchemas"])
+	if schemas == nil {
+		return
+	}
+	for _, readName := range schemas.order() {
+		list, _ := schemas.values[readName].([]any)
+		fields := map[string]exprField{"id": {kind: "text"}}
+		for _, item := range list {
+			f := asObject(item)
+			if f == nil {
+				continue
+			}
+			t := text(f, "type")
+			switch t {
+			case "string":
+				t = "text"
+				if text(f, "ref") != "" {
+					t = "reference"
+				}
+			case "number":
+				t = "decimal"
+			}
+			fields[text(f, "name")] = exprField{kind: fieldKind(t), ref: text(f, "ref")}
+		}
+		out["protocol:"+id+"#"+readName] = fields
+	}
 }

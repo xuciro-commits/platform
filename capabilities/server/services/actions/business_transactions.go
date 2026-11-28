@@ -428,6 +428,12 @@ func (b *Runtime) transactAttempt(c platform.Caller, receipt *pb.ChangeRecord, t
 				}
 				continue
 			}
+			if step.Propagate != nil {
+				if err := b.txnPropagate(c, receipt, *step.Propagate, scope, subject, facts, stepKey, &iterations, now, proposal, reserve); err != nil {
+					return err
+				}
+				continue
+			}
 			if step.Post != nil {
 				id, err := b.txnPost(c, receipt, step, scope, subject, facts, now, reserve)
 				if err != nil {
@@ -605,6 +611,8 @@ func (b *Runtime) transactAttempt(c platform.Caller, receipt *pb.ChangeRecord, t
 				id = ref.ID
 				if step.Kind == "archive" {
 					verb = "archive"
+				} else if step.Kind == "reverse" {
+					verb = "reverse"
 				}
 			}
 			if err := reserve(entity.Type + "/" + id); err != nil {

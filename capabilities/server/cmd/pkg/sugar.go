@@ -115,6 +115,37 @@ func expandCollections(body *object) {
 		if spec == nil {
 			continue
 		}
+		read := &object{}
+		read.set("app", "build")
+		read.set("policy", "complete")
+		if proto := text(spec, "protocol"); proto != "" {
+			read.set("protocol", proto)
+			if fieldsVal, hasFields := spec.get("fields"); hasFields {
+				read.set("fields", fieldsVal)
+			}
+			read.set("object", "protocol:"+proto)
+			read.set("query", "")
+			read.set("version", float64(0))
+			collections.set(name, read)
+			continue
+		}
+		if queryName := text(spec, "query"); queryName != "" {
+			read.set("object", text(spec, "object"))
+			read.set("query", queryName)
+			ver := float64(1)
+			if v, ok := spec.values["version"].(float64); ok && v > 0 {
+				ver = v
+			}
+			read.set("version", ver)
+			if of := text(spec, "of"); of != "" {
+				if of != "$subject" && !strings.HasPrefix(of, "$subject.") && !strings.HasPrefix(of, "input.") {
+					of = "$subject." + of
+				}
+				read.set("of", of)
+			}
+			collections.set(name, read)
+			continue
+		}
 		setName := text(spec, "set")
 		if setName == "" {
 			setName = name
@@ -123,13 +154,10 @@ func expandCollections(body *object) {
 		if of != "" && of != "$subject" && !strings.HasPrefix(of, "$subject.") && !strings.HasPrefix(of, "input.") {
 			of = "$subject." + of
 		}
-		read := &object{}
-		read.set("app", "build")
 		read.set("object", text(spec, "object"))
 		if of != "" {
 			read.set("of", of)
 		}
-		read.set("policy", "complete")
 		read.set("query", "")
 		read.set("set", setName)
 		read.set("version", float64(0))
@@ -150,7 +178,12 @@ func setNames(body *object) map[string]string {
 		if cols := asObject(reads.values["collections"]); cols != nil {
 			for _, name := range cols.order() {
 				if col := asObject(cols.values[name]); col != nil {
-					out[name] = text(col, "object")
+					target := text(col, "object")
+					if proto := text(col, "protocol"); proto != "" {
+						target = "protocol:" + proto
+						col.set("object", "")
+					}
+					out[name] = target
 				}
 			}
 		}
@@ -165,6 +198,39 @@ func expandObject(body *object, path string, definitions map[string]*object, typ
 	}
 	expandSets(body)
 	expandCollections(body)
+	if reads := asObject(body.values["reads"]); reads != nil {
+		if cols := asObject(reads.values["collections"]); cols != nil {
+			for _, cname := range cols.order() {
+				col := asObject(cols.values[cname])
+				proto := text(col, "protocol")
+				if col != nil && proto != "" && !col.has("fields") {
+					if pfields, ok := types["protocol:"+proto]; ok {
+						flist := []any{}
+						fnames := make([]string, 0, len(pfields))
+						for fn := range pfields {
+							if fn != "id" {
+								fnames = append(fnames, fn)
+							}
+						}
+						slices.Sort(fnames)
+						for _, fn := range fnames {
+							pf := pfields[fn]
+							fo := &object{}
+							fo.set("name", fn)
+							fo.set("readOnly", true)
+							fo.set("title", fn)
+							fo.set("type", pf.kind)
+							if pf.ref != "" {
+								fo.set("ref", pf.ref)
+							}
+							flist = append(flist, fo)
+						}
+						col.set("fields", flist)
+					}
+				}
+			}
+		}
+	}
 	s := exprScope{objects: types, self: self, sets: setNames(body)}
 	var priorBals map[string]map[string]string
 	if isLedger, _ := body.values["ledger"].(bool); isLedger {
@@ -391,6 +457,54 @@ func expandAction(action *object, base exprScope, at string) error {
 	if !txn.has("subject") {
 		txn.set("subject", s.self)
 	}
+	expandCollections(txn)
+	if reads := asObject(txn.values["reads"]); reads != nil {
+		if cols := asObject(reads.values["collections"]); cols != nil {
+			if s.sets == nil {
+				s.sets = map[string]string{}
+			}
+			cloned := map[string]string{}
+			for k, v := range s.sets {
+				cloned[k] = v
+			}
+			for _, cname := range cols.order() {
+				if col := asObject(cols.values[cname]); col != nil {
+					target := text(col, "object")
+					if proto := text(col, "protocol"); proto != "" {
+						target = "protocol:" + proto
+						col.set("object", "")
+						if !col.has("fields") {
+							if pfields, ok := s.objects[target]; ok {
+								flist := []any{}
+								fnames := make([]string, 0, len(pfields))
+								for fn := range pfields {
+									if fn != "id" {
+										fnames = append(fnames, fn)
+									}
+								}
+								slices.Sort(fnames)
+								for _, fn := range fnames {
+									pf := pfields[fn]
+									fo := &object{}
+									fo.set("name", fn)
+									fo.set("readOnly", true)
+									fo.set("title", fn)
+									fo.set("type", pf.kind)
+									if pf.ref != "" {
+										fo.set("ref", pf.ref)
+									}
+									flist = append(flist, fo)
+								}
+								col.set("fields", flist)
+							}
+						}
+					}
+					cloned[cname] = target
+				}
+			}
+			s.sets = cloned
+		}
+	}
 	if guard, ok := txn.get("guard"); ok {
 		compiled, err := compileAt(guard, s, "boolean", at+" guard")
 		if err != nil {
@@ -452,6 +566,46 @@ func expandSteps(steps []any, s *exprScope, at string) error {
 		if use, ok := step.values["request"].(string); ok {
 			if err := expandRequest(step, use, *s, at); err != nil {
 				return err
+			}
+			continue
+		}
+		if prop := asObject(step.values["propagate"]); prop != nil {
+			if !step.has("name") {
+				step.set("name", "propagate")
+			}
+			step.set("kind", "propagate")
+			for _, key := range []string{"branch", "leaf"} {
+				tgt := asObject(prop.values[key])
+				if tgt == nil {
+					continue
+				}
+				tgtType := text(tgt, "type")
+				if setObj := asObject(tgt.values["set"]); setObj != nil {
+					changes := []any{}
+					for _, field := range setObj.order() {
+						ch := &object{}
+						ch.set("field", field)
+						if src, _ := setObj.values[field].(string); src == "$subject" {
+							ch.set("from", "$subject")
+						} else if strings.ReplaceAll(src, " ", "") == "me()" {
+							ch.set("from", "$me")
+						} else {
+							want := s.objects[tgtType][field].kind
+							raw := setObj.values[field]
+							if _, isText := raw.(string); !isText {
+								raw = literalSource(raw)
+							}
+							compiled, err := compileAt(raw, *s, want, at+" step "+text(step, "name")+" "+key+" "+field)
+							if err != nil {
+								return err
+							}
+							ch.set("expr", compiled)
+						}
+						changes = append(changes, ch)
+					}
+					tgt.remove("set")
+					tgt.set("changes", changes)
+				}
 			}
 			continue
 		}
@@ -571,14 +725,13 @@ func stepTarget(step *object, s exprScope) (string, error) {
 				return "", fmt.Errorf("%s is not a reference of %s", via, s.self)
 			}
 			target.set("type", f.ref)
-			target.set("id", "$subject")
 			target.set("via", via)
 		default:
 			target.set("type", raw)
 		}
 		step.set("target", target)
 		if !step.has("kind") {
-			if target.has("id") {
+			if target.has("id") || target.has("via") {
 				step.set("kind", "update")
 			} else {
 				step.set("kind", "create")
@@ -714,6 +867,9 @@ func expand(dir string, manifest *object, resources []resource, released bool, e
 			definitions[objectDir][verb] = asObject(r.body)
 			continue
 		}
+		if r.ref.Kind == "contract" {
+			registerContractTypes(asObject(r.body), types)
+		}
 		if r.ref.Kind == "object" {
 			types[r.ref.Name] = objectFields(asObject(r.body))
 			body := asObject(r.body)
@@ -745,6 +901,38 @@ func expand(dir string, manifest *object, resources []resource, released bool, e
 						}
 					}
 					types[r.ref.Name+"."+text(b, "name")] = projected
+				}
+			}
+			if protos, ok := body.values["protocols"].([]any); ok {
+				for _, pElem := range protos {
+					pb := asObject(pElem)
+					if pb == nil || !pb.has("inFlight") {
+						continue
+					}
+					inf := asObject(pb.values["inFlight"])
+					projected := map[string]exprField{
+						"id":     {kind: "text"},
+						"action": {kind: "text"},
+						"state":  {kind: "choice"},
+						"error":  {kind: "text"},
+					}
+					for k, v := range types[r.ref.Name] {
+						projected[k] = v
+					}
+					objectDir := strings.Split(filepath.ToSlash(r.path), "/")[1]
+					for _, actBody := range definitions[objectDir] {
+						if inList, ok := actBody.values["inputs"].([]any); ok {
+							for _, inElem := range inList {
+								if inObj := asObject(inElem); inObj != nil {
+									projected[text(inObj, "name")] = exprField{kind: fieldKind(text(inObj, "type")), ref: text(inObj, "ref")}
+								}
+							}
+						}
+					}
+					if inf != nil && text(inf, "by") != "" && text(inf, "ref") != "" {
+						projected[text(inf, "by")] = exprField{kind: "reference", ref: text(inf, "ref"), inverse: text(inf, "inverse")}
+					}
+					types[r.ref.Name+".inflight"] = projected
 				}
 			}
 		}

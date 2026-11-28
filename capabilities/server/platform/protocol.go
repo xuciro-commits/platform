@@ -366,11 +366,12 @@ func (c Caller) Emit(kind, key, entity string, data any, now time.Time) (int, *E
 }
 
 type Protocol struct {
-	Name    string
-	Version int
-	Actions []Action
-	Reads   []string
-	Events  []ProtocolEvent
+	Name        string
+	Version     int
+	Actions     []Action
+	Reads       []string
+	ReadSchemas map[string][]Field `json:"readSchemas,omitempty"`
+	Events      []ProtocolEvent
 }
 
 type ProtocolEvent struct {

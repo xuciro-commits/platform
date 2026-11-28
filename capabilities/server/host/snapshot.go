@@ -87,7 +87,7 @@ func (t *Tenant) captureServices(s *runtimekernel.TenantImage[automation.Task, a
 	s.ActiveRelease, s.Sealed, s.ReleaseOrigins = releaseState.ActiveRelease, releaseState.Sealed, releaseState.ReleaseOrigins
 	t.opsMu.Lock()
 	s.Acted, s.Failed = t.acted, []string{}
-	maps.Copy(s.Bindings, t.bindings.All())
+	maps.Copy(s.Bindings, t.bindings.Snapshot())
 	if err := s.CaptureOperations(&t.Sequence); err != nil {
 		t.opsMu.Unlock()
 		return nil, err

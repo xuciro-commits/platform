@@ -362,12 +362,20 @@ func (b *Build) normalizeObjectRules(o *ontology.Object) error {
 			f.Formula = ""
 		}
 	}
+	b.populateProtocolCollections(o.Reads)
+	for i := range o.Constraints {
+		b.populateProtocolCollections(o.Constraints[i].Reads)
+	}
 	for i := range o.Actions {
+		if o.Actions[i].Transaction != nil {
+			b.populateProtocolCollections(o.Actions[i].Transaction.Reads)
+		}
 		if err := ontology.NormalizeTransaction(*o, &o.Actions[i], lookup); err != nil {
 			return err
 		}
 	}
 	if o.CreateTransaction != nil {
+		b.populateProtocolCollections(o.CreateTransaction.Reads)
 		action := ontology.Action{Name: "creation", Transaction: o.CreateTransaction}
 		for _, field := range o.Fields {
 			action.Inputs = append(action.Inputs, ontology.Input{Name: field.Name, Title: field.Title, Type: field.Type, Ref: field.Ref, Choices: field.Choices})
@@ -436,8 +444,49 @@ func (b *Build) checkObjectRules(o ontology.Object, engines ...platform.RuleEngi
 	return checkDepletionRules(b, o, lookup, engines...)
 }
 
+func (b *Build) resolveProtocolContract(id string) (platform.Protocol, bool) {
+	if contract, declared := b.installedContract(id); declared {
+		return contract.Protocol(), true
+	}
+	if b.host != nil {
+		return b.host.ProtocolContract(id)
+	}
+	return platform.Protocol{}, false
+}
+
+func (b *Build) populateProtocolCollections(s *platform.RuleReadSpec) {
+	if s == nil {
+		return
+	}
+	for name, set := range s.Collections {
+		if set.Protocol == "" || len(set.Fields) > 0 {
+			continue
+		}
+		protoID, readName, ok := strings.Cut(set.Protocol, "#")
+		if !ok {
+			continue
+		}
+		if contract, found := b.resolveProtocolContract(protoID); found && len(contract.ReadSchemas[readName]) > 0 {
+			set.Fields = ruleprotocol.ContractFieldInfos(contract.ReadSchemas[readName])
+			s.Collections[name] = set
+		}
+	}
+}
+
 func (b *Build) checkRuleCollections(s platform.RuleReadSpec, where string, lookup func(string) (platform.RecordTypeInfo, bool)) error {
 	for name, set := range s.Collections {
+		if set.Protocol != "" {
+			protoID, readName, ok := strings.Cut(set.Protocol, "#")
+			if !ok || protoID == "" || readName == "" || set.Set != "" || set.Query != "" || set.Of != "" || len(set.Fields) == 0 {
+				return fmt.Errorf("%s collection %s needs a declared contract read with schema fields", where, name)
+			}
+			if contract, found := b.resolveProtocolContract(protoID); found {
+				if !slices.Contains(contract.Reads, readName) || len(contract.ReadSchemas[readName]) == 0 {
+					return fmt.Errorf("%s collection %s contract %s does not declare read schema %s", where, name, protoID, readName)
+				}
+			}
+			continue
+		}
 		if set.Set != "" {
 			info, ok := lookup(s.Object)
 			owner := info

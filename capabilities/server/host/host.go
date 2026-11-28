@@ -100,6 +100,7 @@ func NewTenantWithCapabilities(id string, services runtimeprotocol.RuntimeCapabi
 	t.services = services
 	t.Claims = runtimekernel.NewSourceClaims()
 	t.Projection.SetRules(services.Rules)
+	t.outbound.OnChange = func(q []actions.Queued) { actions.SyncInFlight(t.Projection, q) }
 	t.staged = compute.NewChannel(id, t.files)
 	t.i18n = t.translator()
 	for i, a := range apps {

@@ -158,6 +158,7 @@ type TxnStep struct {
 	Request   *TxnRequest   `json:"request,omitempty"`
 	ForEach   *TxnForEach   `json:"forEach,omitempty"`
 	Intervals *TxnIntervals `json:"intervals,omitempty"`
+	Propagate *TxnPropagate `json:"propagate,omitempty"`
 	Refusals  []Refusal     `json:"refusals,omitempty"`
 }
 
@@ -254,6 +255,19 @@ type TxnForEach struct {
 	Set   string    `json:"set,omitempty"`
 	Range *TxnRange `json:"range,omitempty"`
 	Steps []TxnStep `json:"steps"`
+}
+
+type TxnPropagate struct {
+	Nodes, Offset    string
+	Edges            TxnPropagateEdges
+	Demands, Credits []TxnPropagateInput
+	Branch, Leaf     *TxnPropagateTarget
+}
+type TxnPropagateEdges struct{ Set, Parent, Child, Ratio, Loss string }
+type TxnPropagateInput struct{ Set, Node, Quantity, Due, SourceType, SourceField, Label string }
+type TxnPropagateTarget struct {
+	Type, Node, Quantity, Due, Start, Level, Origin, Trace, SourceType, SourceID string
+	Changes                                                                      []TxnSet `json:"changes,omitempty"`
 }
 
 type TxnRange struct {

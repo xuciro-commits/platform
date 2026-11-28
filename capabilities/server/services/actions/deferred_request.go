@@ -3,10 +3,14 @@ package actions
 import (
 	"encoding/json"
 	"fmt"
+	"reflect"
+	"slices"
+	"strings"
 	"time"
 
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
 	"platformserver/kernel/protocol"
+	"platformserver/kernel/records"
 	"platformserver/platform"
 )
 
@@ -45,7 +49,11 @@ func (r Router) PlanDeferredRequest(c platform.Caller, record *pb.ChangeRecord, 
 		return platform.Effect{}, platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "Invalid deferred capability request")
 	}
 	at := record.GetRecordedTime().AsTime()
-	return platform.Effect{ID: fmt.Sprintf("%s:%s:capability-request:%s:%s", r.Tenant, c.App, key, DeferredRequestEndpoint), Endpoint: DeferredRequestEndpoint, Event: c.App + "/capability-request", App: c.App, Key: key, Target: record.GetSubmission().GetTarget().GetType() + "/" + record.GetSubmission().GetTarget().GetId(), At: at, Due: at, State: "pending", Body: string(body)}, nil
+	state := "pending"
+	if r.Bindings != nil && r.Bindings.Paused(q.Protocol) {
+		state = "held"
+	}
+	return platform.Effect{ID: fmt.Sprintf("%s:%s:capability-request:%s:%s", r.Tenant, c.App, key, DeferredRequestEndpoint), Endpoint: DeferredRequestEndpoint, Event: c.App + "/capability-request", App: c.App, Key: key, Target: record.GetSubmission().GetTarget().GetType() + "/" + record.GetSubmission().GetTarget().GetId(), At: at, Due: at, State: state, Body: string(body)}, nil
 }
 
 func (r Router) DeliverDeferredRequest(x platform.Effect, now time.Time, member func(string) (platform.Member, bool), prior func(platform.Service, *pb.Submission) (*pb.ChangeRecord, *platform.Error, bool), submit func(platform.Member, *pb.Submission, time.Time) (*pb.ChangeRecord, *platform.Error), readProvider func(func(Router) bool) (bool, *platform.Error)) platform.Outcome {
@@ -100,4 +108,62 @@ func (r Router) DeliverDeferredRequest(x platform.Effect, now time.Time, member 
 
 func DeferredRequestEndpoints(endpoints []Endpoint) []Endpoint {
 	return append([]Endpoint{{ID: DeferredRequestEndpoint, Kind: DeferredRequestEndpoint}}, endpoints...)
+}
+
+func SyncInFlight(store *records.Store, queued []Queued) {
+	if store == nil {
+		return
+	}
+	for _, et := range store.SortedTypes() {
+		info := et.Info()
+		if info.InFlight == "" {
+			continue
+		}
+		ownerType := strings.TrimSuffix(info.Type, ".inflight")
+		var entries []records.Entry[*records.Row]
+		seen := map[string]bool{}
+		for _, q := range queued {
+			if q.Endpoint != DeferredRequestEndpoint || protocol.EffectSettled(q.State) {
+				continue
+			}
+			var req deferredRequest
+			if json.Unmarshal([]byte(q.Body), &req) != nil || req.Submission == nil || req.Protocol != info.InFlight || !strings.HasSuffix(req.Provider, "/"+ownerType) {
+				continue
+			}
+			var fields map[string]json.RawMessage
+			if json.Unmarshal(req.Submission.GetPayload(), &fields) != nil || fields == nil {
+				fields = map[string]json.RawMessage{}
+			}
+			rowID := strings.NewReplacer("/", "-", ":", "-").Replace(q.Key)
+			if rowID == "" {
+				rowID = strings.NewReplacer("/", "-", ":", "-").Replace(q.ID)
+			}
+			if seen[rowID] {
+				continue
+			}
+			seen[rowID] = true
+			reason := q.PublicMessage
+			if reason == "" {
+				reason = q.Error
+			}
+			fields["id"] = platform.Raw(rowID)
+			fields["action"] = platform.Raw(req.Action)
+			fields["state"] = platform.Raw(q.State)
+			if reason != "" {
+				fields["error"] = platform.Raw(reason)
+			}
+			val := reflect.New(info.Go).Elem()
+			if json.Unmarshal(platform.Raw(fields), val.Addr().Interface()) != nil {
+				continue
+			}
+			changedAt := q.Last
+			if changedAt.IsZero() {
+				changedAt = q.At
+			}
+			val.Field(0).Set(reflect.ValueOf(platform.Record{ID: rowID, Revision: 1, Created: platform.Stamp{At: q.At}, Changed: platform.Stamp{At: changedAt}}))
+			entries = append(entries, records.Entry[*records.Row]{Key: rowID, Value: &records.Row{Value: val}})
+		}
+		slices.SortFunc(entries, func(a, b records.Entry[*records.Row]) int { return strings.Compare(a.Key, b.Key) })
+		_ = store.SetProjectionRows(info.Type, entries)
+	}
 }

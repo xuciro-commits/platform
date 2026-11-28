@@ -12,17 +12,15 @@ import (
 )
 
 func (t *Tenant) router() actions.Router {
-	return actions.Router{Host: t, Bindings: t.bindings, Tenant: t.ID, AssetActive: func(ref platform.AssetRef) bool { return build.StoreProtocolAssetActive(t.Projection, t.ID, ref) }}
+	return actions.Router{Host: t, Bindings: t.bindings, Outbox: &t.outbound, Tenant: t.ID, AssetActive: func(ref platform.AssetRef) bool { return build.StoreProtocolAssetActive(t.Projection, t.ID, ref) }}
 }
 
 func (t *Tenant) StageSubmission(c platform.Caller, s *pb.Submission, now time.Time) (*pb.ChangeRecord, *platform.Error) {
 	return (hostView{t: t}).Submit(c, s, now)
 }
-
 func (t *Tenant) ProtocolProvider(protocol string) (string, bool) {
 	return t.router().ProtocolProvider(protocol)
 }
-
 func (h hostView) IsBoundConnector(protocol, implementation string) bool {
 	return h.t.router().IsBoundConnector(protocol, implementation)
 }

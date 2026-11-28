@@ -24,23 +24,34 @@ type Queued struct {
 }
 
 type Outbox struct {
-	mu  sync.Mutex
-	all []*Queued
+	mu       sync.Mutex
+	notifyMu sync.Mutex
+	all      []*Queued
+	OnChange func([]Queued)
+}
+
+func (o *Outbox) notify() {
+	if o.OnChange != nil {
+		o.notifyMu.Lock()
+		defer o.notifyMu.Unlock()
+		o.OnChange(o.Select(nil))
+	}
 }
 
 func (o *Outbox) Add(span trace.SpanContext, effects ...platform.Effect) {
 	o.mu.Lock()
-	defer o.mu.Unlock()
 	for _, x := range effects {
 		o.all = append(o.all, &Queued{Effect: x, Span: span})
 	}
 	for len(o.all) > effectsKept {
 		i := slices.IndexFunc(o.all, func(x *Queued) bool { return protocol.EffectSettled(x.State) })
 		if i < 0 {
-			return
+			break
 		}
 		o.all = slices.Delete(o.all, i, i+1)
 	}
+	o.mu.Unlock()
+	o.notify()
 }
 
 func (o *Outbox) Get(id string) (Queued, bool) {
@@ -80,26 +91,28 @@ func (o *Outbox) Select(match func(Queued) bool) []Queued {
 
 func (o *Outbox) Update(id string, change func(*Queued)) bool {
 	o.mu.Lock()
-	defer o.mu.Unlock()
 	i := slices.IndexFunc(o.all, func(x *Queued) bool { return x.ID == id })
 	if i < 0 {
+		o.mu.Unlock()
 		return false
 	}
 	change(o.all[i])
+	o.mu.Unlock()
+	o.notify()
 	return true
 }
 
 func (o *Outbox) UpdateAll(change func(*Queued)) {
 	o.mu.Lock()
-	defer o.mu.Unlock()
 	for _, x := range o.all {
 		change(x)
 	}
+	o.mu.Unlock()
+	o.notify()
 }
 
 func (o *Outbox) Restore(items []Queued) {
 	o.mu.Lock()
-	defer o.mu.Unlock()
 	existing := map[string]*Queued{}
 	for _, x := range o.all {
 		existing[x.ID] = x
@@ -111,6 +124,8 @@ func (o *Outbox) Restore(items []Queued) {
 		}
 		o.all = append(o.all, &item)
 	}
+	o.mu.Unlock()
+	o.notify()
 }
 
 func (o *Outbox) Claim(endpoint string, now time.Time) (Queued, bool) {

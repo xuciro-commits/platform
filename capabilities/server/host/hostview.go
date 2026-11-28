@@ -26,17 +26,14 @@ type hostView struct {
 }
 
 func (h hostView) ProtocolContract(id string) (platform.Protocol, bool) {
-	if provider, ok := h.t.router().Resolve(id); ok {
-		return provider.Provision.Protocol, true
-	}
-	return platform.Protocol{}, false
+	return h.t.router().ProtocolContract(id)
 }
 func (h hostView) ReadProtocolRecords(c platform.Caller, typ string) ([]any, *platform.Error) {
 	store := h.t.Projection
 	if h.decision != nil {
 		store = h.decision.Records
 	}
-	return objects.ProtocolRecords(h.t.objectOwner(store).RecordsFrom(store, c.Member, typ, platform.Query{Limit: 200}, time.Now()))
+	return objects.ProtocolRecords(h.t.objectOwner(store).RecordsFrom(store, c.Member, typ, platform.Query{Limit: 2000}, time.Now()))
 }
 func (h hostView) Install(c platform.Caller, e platform.RecordType, actions []platform.Action, pages ...platform.Page) error {
 	if c.Staging() {

@@ -96,6 +96,32 @@ func NormalizeTransaction(object Object, action *Action, lookup func(string) (pl
 				}
 				continue
 			}
+			if step.Propagate != nil {
+				for _, tgt := range []*platform.TxnPropagateTarget{step.Propagate.Branch, step.Propagate.Leaf} {
+					if tgt == nil {
+						continue
+					}
+					info, ok := lookup(tgt.Type)
+					if !ok {
+						return fmt.Errorf("propagate target %s is unavailable", tgt.Type)
+					}
+					for k := range tgt.Changes {
+						a := &tgt.Changes[k]
+						if a.Expr != nil && a.From == "" {
+							continue
+						}
+						f, ok := info.Field(a.Field)
+						if !ok {
+							return fmt.Errorf("propagate target field %s is unavailable", a.Field)
+						}
+						expr, err := AssignmentExpr(f.Type, *a, scope)
+						if err != nil {
+							return err
+						}
+						*a = platform.TxnSet{Field: a.Field, Expr: &expr}
+					}
+				}
+			}
 			if len(step.Changes) > 0 {
 				if platform.OwnerOfType(step.Target.Type) != AppID {
 					return fmt.Errorf("transaction cannot change another application")

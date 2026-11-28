@@ -35,12 +35,7 @@ func (b *Build) checkObjectProtocols(object ontology.Object) error {
 			if b.host == nil {
 				return platform.Protocol{}, false
 			}
-			if host, ok := b.host.(interface {
-				ProtocolContract(string) (platform.Protocol, bool)
-			}); ok {
-				return host.ProtocolContract(id)
-			}
-			return platform.Protocol{}, false
+			return b.host.ProtocolContract(id)
 		},
 		CheckProcess: func(value ontology.Object) error {
 			return ontology.CheckProcess(value, ID, value.Type(), Builder, User, protocol.FunctionCallType, b.conditionLookup)
@@ -54,9 +49,34 @@ func (b *Build) consumedProtocols() []platform.Consumption {
 		out = b.host.BuildProcessConsumptions()
 	}
 
+	addConsumed := func(spec *platform.RuleReadSpec) {
+		if spec == nil {
+			return
+		}
+		for _, col := range spec.Collections {
+			if col.Protocol == "" {
+				continue
+			}
+			protoID, _, _ := strings.Cut(col.Protocol, "#")
+			if protoID != "" && !slices.ContainsFunc(out, func(c platform.Consumption) bool { return c.Protocol == protoID }) {
+				out = append(out, platform.Consumption{Protocol: protoID, Optional: true})
+			}
+		}
+	}
 	for _, entity := range b.installed {
+		addConsumed(entity.LiveReads)
+		if entity.CreateTxn != nil {
+			addConsumed(entity.CreateTxn.Reads)
+		}
 		if entity.Lifecycle == nil {
 			continue
+		}
+		for _, action := range entity.Lifecycle.Actions {
+			for _, rule := range action.Rules {
+				if rule.Transaction != nil && rule.Transaction.Spec != nil {
+					addConsumed(rule.Transaction.Spec.Reads)
+				}
+			}
 		}
 		for _, action := range entity.Lifecycle.Actions {
 			for _, rule := range action.Rules {

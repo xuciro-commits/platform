@@ -38,17 +38,36 @@ func (b Binding) EntityType() string {
 			return a.Target
 		}
 	}
+	for _, read := range b.Provision.Reads {
+		if rest, ok := strings.CutPrefix(read, "protocol:"); ok {
+			if typ, _, ok := strings.Cut(rest, ":"); ok {
+				return typ
+			}
+		}
+	}
 	return ""
 }
 
 type Bindings struct {
 	mu        sync.Mutex
 	providers map[string]string
+	paused    map[string]bool
 	epoch     uint64
 }
 
 func NewBindings(providers map[string]string) *Bindings {
-	return &Bindings{providers: maps.Clone(providers)}
+	p := map[string]string{}
+	hold := map[string]bool{}
+	for k, v := range providers {
+		if proto, ok := strings.CutPrefix(k, "paused:"); ok {
+			if v == "true" {
+				hold[proto] = true
+			}
+			continue
+		}
+		p[k] = v
+	}
+	return &Bindings{providers: p, paused: hold}
 }
 
 func (b *Bindings) All() map[string]string {
@@ -57,10 +76,25 @@ func (b *Bindings) All() map[string]string {
 	return maps.Clone(b.providers)
 }
 
+func (b *Bindings) Snapshot() map[string]string {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	out := maps.Clone(b.providers)
+	if out == nil {
+		out = map[string]string{}
+	}
+	for k, v := range b.paused {
+		if v {
+			out["paused:"+k] = "true"
+		}
+	}
+	return out
+}
+
 func (b *Bindings) Clone() *Bindings {
-	clone := NewBindings(b.All())
-	clone.epoch = b.Epoch()
-	return clone
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	return &Bindings{providers: maps.Clone(b.providers), paused: maps.Clone(b.paused), epoch: b.epoch}
 }
 
 func (b *Bindings) Epoch() uint64 {
@@ -90,6 +124,26 @@ func (b *Bindings) unset(protocol string) {
 	b.mu.Lock()
 	defer b.mu.Unlock()
 	delete(b.providers, protocol)
+	b.epoch++
+}
+
+func (b *Bindings) Paused(protocol string) bool {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	return b.paused[protocol]
+}
+
+func (b *Bindings) SetPaused(protocol string, paused bool) {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	if b.paused == nil {
+		b.paused = map[string]bool{}
+	}
+	if paused {
+		b.paused[protocol] = true
+	} else {
+		delete(b.paused, protocol)
+	}
 	b.epoch++
 }
 
@@ -127,16 +181,44 @@ type ProtocolHost interface {
 type Router struct {
 	Host        ProtocolHost
 	Bindings    *Bindings
+	Outbox      *Outbox
 	Tenant      string
 	AssetActive func(platform.AssetRef) bool
 }
 
-func (r Router) DecideBinding(_ platform.Caller, s *pb.Submission, _ time.Time) (func(*pb.ChangeRecord), *platform.Error) {
+func (r Router) applyPause(id string, paused *bool, now time.Time) {
+	if paused == nil {
+		return
+	}
+	r.Bindings.SetPaused(id, *paused)
+	if _, bound := r.Resolve(id); !*paused && bound && r.Outbox != nil {
+		r.Outbox.UpdateAll(func(q *Queued) {
+			if q.Endpoint != DeferredRequestEndpoint || q.State != "held" {
+				return
+			}
+			var req deferredRequest
+			if json.Unmarshal([]byte(q.Body), &req) == nil && req.Protocol == id {
+				q.State, q.Due = "pending", now
+			}
+		})
+	}
+}
+
+func (r Router) DecideBinding(_ platform.Caller, s *pb.Submission, now time.Time) (func(*pb.ChangeRecord), *platform.Error) {
 	id := s.GetTarget().GetId()
-	var p struct{ Provider string }
+	var p struct {
+		Provider string
+		Paused   *bool
+	}
 	json.Unmarshal(s.GetPayload(), &p)
 	if p.Provider == "" {
-		return func(*pb.ChangeRecord) { r.Bindings.unset(id) }, nil
+		if p.Paused != nil {
+			return func(*pb.ChangeRecord) { r.applyPause(id, p.Paused, now) }, nil
+		}
+		return func(*pb.ChangeRecord) {
+			r.Bindings.unset(id)
+			r.Bindings.SetPaused(id, false)
+		}, nil
 	}
 	if app, name, named := runtimeprotocol.SplitImplementationIdentity(p.Provider); named {
 		if !r.AssetActive(platform.AssetRef{App: app, Kind: runtimeprotocol.AssetImplementation, Name: name}) {
@@ -157,14 +239,20 @@ func (r Router) DecideBinding(_ platform.Caller, s *pb.Submission, _ time.Time) 
 				return nil, &platform.Error{Code: pb.ErrorCode_ERROR_CODE_CONFLICT, Message: err.Error()}
 			}
 			provider := p.Provider
-			return func(*pb.ChangeRecord) { r.Bindings.set(id, provider) }, nil
+			return func(*pb.ChangeRecord) {
+				r.Bindings.set(id, provider)
+				r.applyPause(id, p.Paused, now)
+			}, nil
 		}
 		return nil, &platform.Error{Code: pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT}
 	}
 	if !slices.ContainsFunc(r.Providers(id), func(b Binding) bool { return b.ID() == p.Provider }) {
 		return nil, &platform.Error{Code: pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT}
 	}
-	return func(*pb.ChangeRecord) { r.Rebind(id, p.Provider) }, nil
+	return func(*pb.ChangeRecord) {
+		r.Rebind(id, p.Provider)
+		r.applyPause(id, p.Paused, now)
+	}, nil
 }
 
 func (r Router) Bound(protocol string) (Binding, bool) {
@@ -291,6 +379,10 @@ func (r Router) ProtocolProvider(protocol string) (string, bool) {
 }
 
 func (r Router) Rebind(protocol, provider string) bool {
+	if proto, ok := strings.CutPrefix(protocol, "paused:"); ok && provider == "true" {
+		r.Bindings.SetPaused(proto, true)
+		return true
+	}
 	if app, name, named := runtimeprotocol.SplitImplementationIdentity(provider); named {
 		if !slices.ContainsFunc(r.implementations()[app], func(i runtimeprotocol.ProtocolImplementation) bool { return i.Name == name && i.Contract == protocol }) {
 			return false
@@ -446,7 +538,13 @@ func (r Router) Query(c platform.Caller, protocol, read string, provider ...stri
 		return nil, &platform.Error{Code: pb.ErrorCode_ERROR_CODE_POLICY_DENIED}
 	}
 	all := r.Providers(protocol)
-	if b, ok := r.Bound(protocol); ok {
+	if len(provider) == 0 && r.Declared(protocol) {
+		b, ok := r.Resolve(protocol)
+		if !ok {
+			return nil, nil
+		}
+		all = []Binding{b}
+	} else if b, ok := r.Bound(protocol); ok {
 		first := func(x Binding) int { return map[bool]int{true: 0, false: 1}[x.ID() == b.ID()] }
 		slices.SortStableFunc(all, func(x, y Binding) int { return first(x) - first(y) })
 	}
@@ -691,4 +789,16 @@ func (r Router) ContractTitle(protocol string) string {
 		}
 	}
 	return protocol
+}
+
+func (r Router) ProtocolContract(id string) (platform.Protocol, bool) {
+	for _, info := range r.Protocols() {
+		if info.ID == id && info.Contract != nil {
+			return *info.Contract, true
+		}
+	}
+	if provider, ok := r.Resolve(id); ok {
+		return provider.Provision.Protocol, true
+	}
+	return platform.Protocol{}, false
 }

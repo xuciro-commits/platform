@@ -282,7 +282,7 @@ func (t *Tenant) captureControl() (map[string]json.RawMessage, error) {
 		defer t.work.Unlock()
 		return t.work.ControlImage()
 	}, func() map[string]any {
-		return map[string]any{"settings": t.settings.Snapshot(), "bindings": t.bindings.All(),
+		return map[string]any{"settings": t.settings.Snapshot(), "bindings": t.bindings.Snapshot(),
 			"endpoints": t.endpoints.Saved(), "effects": t.outbound.States(), "words": t.words.Clone()}
 	})
 }

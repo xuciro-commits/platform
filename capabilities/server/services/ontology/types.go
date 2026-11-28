@@ -58,9 +58,10 @@ type Object struct {
 
 type Balance struct {
 	platform.LedgerBalance
-	Title  string   `json:"title"`
-	Fields []Field  `json:"fields,omitempty"`
-	Access []Access `json:"access,omitempty"`
+	Title     string                     `json:"title"`
+	Fields    []Field                    `json:"fields,omitempty"`
+	Access    []Access                   `json:"access,omitempty"`
+	Protocols []protocol.ProtocolBinding `json:"protocols,omitempty"`
 }
 
 type LedgerDepletion struct {
@@ -214,6 +215,7 @@ type Input struct {
 	Range       *platform.DateRange        `json:"range,omitempty"`
 	Group       string                     `json:"group,omitempty"`
 	Ref         string                     `json:"ref,omitempty" title:"Reference object"`
+	RefType     string                     `json:"refType,omitempty" title:"Target type field"`
 	Stereotype  string                     `json:"stereotype,omitempty" title:"Element type" help:"Enterprise element type"`
 	Stereotypes []string                   `json:"stereotypes,omitempty" title:"Element types" help:"Enterprise element types"`
 	MinLength   *int                       `json:"minLength,omitempty" title:"Minimum length"`
@@ -237,7 +239,7 @@ func (in Input) Field() platform.Field {
 	if in.Help != "" {
 		description = in.Help
 	}
-	return platform.Field{Name: in.Name, Type: ValueInputTypes[in.Type], Ref: in.Ref, Stereotype: in.Stereotype, Stereotypes: in.Stereotypes, Required: in.Required, Label: in.Title, Description: description, Choices: ValueChoices(in.Choices), Constraints: &c, Range: in.Range, Group: in.Group}
+	return platform.Field{Name: in.Name, Type: ValueInputTypes[in.Type], Ref: in.Ref, RefType: in.RefType, Stereotype: in.Stereotype, Stereotypes: in.Stereotypes, Required: in.Required, Label: in.Title, Description: description, Choices: ValueChoices(in.Choices), Constraints: &c, Range: in.Range, Group: in.Group}
 }
 
 type Set = platform.TxnSet

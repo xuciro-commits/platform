@@ -6,6 +6,7 @@ import (
 	"platformserver/platform"
 	"platformserver/services/resources/publication"
 	"slices"
+	"strings"
 	"time"
 )
 
@@ -151,12 +152,12 @@ func CheckLedgerCloseSource(o Object, lookup func(string) (platform.RecordTypeIn
 
 // LedgerBalances compiles generated read-only types, not user-writable objects.
 func LedgerBalances(o Object) []platform.RecordType {
-	if !o.Ledger {
-		return nil
-	}
 	var out []platform.RecordType
+	if !o.Ledger {
+		return append(out, InFlightProjections(o)...)
+	}
 	for _, b := range o.Balances {
-		shape := Object{Name: o.Name + "." + b.Name, Namespace: o.Namespace, Title: b.Title, Access: b.Access}
+		shape := Object{Name: o.Name + "." + b.Name, Namespace: o.Namespace, Title: b.Title, Access: b.Access, Protocols: slices.Clone(b.Protocols)}
 		for _, name := range append(slices.Clone(b.Keys), b.Measures...) {
 			i := slices.IndexFunc(o.Fields, func(f Field) bool { return f.Name == name })
 			if i < 0 {
@@ -179,7 +180,85 @@ func LedgerBalances(o Object) []platform.RecordType {
 		}
 		model := CompileObjectShape(shape, AppID, BuilderRole)
 		_, model.Scope, _ = CompileAccess(shape, BuilderRole, UserRole)
+		model.Protocols = ObjectProvisions(shape, model, nil)
 		model.BalanceOf = o.Type()
+		out = append(out, model)
+	}
+	return append(out, InFlightProjections(o)...)
+}
+
+func InFlightProjections(o Object) []platform.RecordType {
+	var out []platform.RecordType
+	for _, decl := range o.Protocols {
+		if decl.InFlight == nil {
+			continue
+		}
+		var fields []Field
+		seen := map[string]bool{}
+		addField := func(f Field) {
+			if f.Name == "" || seen[f.Name] {
+				return
+			}
+			seen[f.Name] = true
+			f.Required, f.ReadOnly = false, true
+			f.From, f.FormulaExpr, f.Live = nil, nil, nil
+			f.Formula, f.Default, f.When, f.OneOf = "", "", "", ""
+			f.Write = nil
+			if decl.InFlight.By != "" && f.Name == decl.InFlight.By && decl.InFlight.Ref != "" {
+				f.Type, f.Ref, f.Inverse = "reference", decl.InFlight.Ref, decl.InFlight.Inverse
+			}
+			fields = append(fields, f)
+		}
+		verbs := make([]string, 0, len(decl.Actions))
+		for verb := range decl.Actions {
+			verbs = append(verbs, verb)
+		}
+		slices.Sort(verbs)
+		for _, verb := range verbs {
+			target := decl.Actions[verb]
+			if target == "create" || target == "edit" {
+				for _, f := range o.Fields {
+					if !f.ReadOnly && f.Live == nil && f.Formula == "" && f.FormulaExpr == nil {
+						addField(f)
+					}
+				}
+				continue
+			}
+			if idx := slices.IndexFunc(o.Actions, func(a Action) bool { return a.Name == target }); idx >= 0 {
+				for _, in := range o.Actions[idx].Inputs {
+					refType := in.RefType
+					if refType == "" {
+						if ofIdx := slices.IndexFunc(o.Fields, func(f Field) bool { return f.Name == in.Name }); ofIdx >= 0 {
+							refType = o.Fields[ofIdx].RefType
+						}
+					}
+					addField(Field{Name: in.Name, Title: in.Title, Type: in.Type, Choices: in.Choices, Ref: in.Ref, RefType: refType})
+				}
+			}
+		}
+		for i := range fields {
+			if fields[i].Type == "text" && fields[i].RefType == "" && strings.HasSuffix(fields[i].Name, "id") && len(fields[i].Name) > 2 {
+				candidate := strings.TrimSuffix(fields[i].Name, "id") + "type"
+				if seen[candidate] {
+					fields[i].RefType = candidate
+				}
+			}
+		}
+		addField(Field{Name: "action", Title: "Action", Type: "text"})
+		addField(Field{Name: "state", Title: "State", Type: "choice", Choices: "pending:Pending,held:Held,retrying:Retrying,unknown:Unknown"})
+		addField(Field{Name: "error", Title: "Error", Type: "text"})
+		var roAccess []Access
+		for _, a := range o.Access {
+			if a.Read == "all" || a.Read == "none" {
+				roAccess = append(roAccess, Access{Role: a.Role, Read: a.Read})
+			} else if a.Read != "" {
+				roAccess = append(roAccess, Access{Role: a.Role, Read: "all"})
+			}
+		}
+		shape := Object{Name: o.Name + ".inflight", Namespace: o.Namespace, Title: o.Title + " In-Flight", Fields: fields, Access: roAccess}
+		model := CompileObjectShape(shape, AppID, BuilderRole)
+		_, model.Scope, _ = CompileAccess(shape, BuilderRole, UserRole)
+		model.InFlight = fmt.Sprintf("%s/%d", decl.Name, decl.Version)
 		out = append(out, model)
 	}
 	return out

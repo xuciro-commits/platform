@@ -134,7 +134,7 @@ func (s *Store) PromoteRecords(draft *Store) error {
 		}
 	}
 	for typ := range draft.local {
-		if et := s.types[typ]; et != nil && et.info.BalanceOf != "" {
+		if et := s.types[typ]; et != nil && et.info.ReadOnlyProjection() {
 			s.LiveTouched(typ)
 		}
 		s.changed(typ)
@@ -235,6 +235,9 @@ func (et *Type) SetRows(rows Index[*Row]) {
 func (et *Type) SetRow(id string, value *Row) error {
 	if et.info.BalanceOf != "" {
 		return fmt.Errorf("ledger balance is read-only")
+	}
+	if et.info.InFlight != "" {
+		return fmt.Errorf("projection is read-only")
 	}
 	if et.info.Ledger != nil {
 		prior := et.rows.Get(id)
@@ -339,7 +342,7 @@ func (s *Store) UniqueChanges() map[string]map[string]string {
 		}
 	}
 	for typ, et := range s.types {
-		if !et.fullImage || et.info.BalanceOf != "" {
+		if !et.fullImage || et.info.ReadOnlyProjection() {
 			continue
 		}
 		for id := range et.rows.All() {
@@ -369,7 +372,7 @@ func (s *Store) PrepareUniqueIndexes() {
 
 func (s *Store) UseCurrentRows() {
 	for typ, et := range s.types {
-		if et.info.BalanceOf != "" {
+		if et.info.ReadOnlyProjection() {
 			continue
 		}
 		et.rows = SourceRows(s.current.Source(typ, nil))
@@ -431,7 +434,7 @@ func (s *Store) Install(info platform.RecordTypeInfo) error {
 		if (before.info.Ledger != nil) != (info.Ledger != nil) && before.rows.Len() > 0 {
 			return fmt.Errorf("cannot change ledger identity after facts exist")
 		}
-		if before.info.BalanceOf != info.BalanceOf {
+		if before.info.BalanceOf != info.BalanceOf || before.info.InFlight != info.InFlight {
 			return fmt.Errorf("cannot replace a balance with an ordinary type")
 		}
 		if before.info.App != info.App {
@@ -473,7 +476,7 @@ func (s *Store) Install(info platform.RecordTypeInfo) error {
 		}
 		et.SetRows(index)
 		delete(s.byGo, before.info.Go)
-	} else if info.BalanceOf == "" && s.current.Backend() != nil && s.current.View() != nil {
+	} else if !info.ReadOnlyProjection() && s.current.Backend() != nil && s.current.View() != nil {
 		et.rows = SourceRows(s.current.Source(info.Type, nil))
 	}
 	s.types[info.Type], s.byGo[info.Go] = et, et
@@ -613,4 +616,23 @@ func (s *Store) LockedRow(typ, id string) (any, bool) {
 		return nil, false
 	}
 	return row.Value.Interface(), true
+}
+
+func (s *Store) SetProjectionRows(typ string, entries []Entry[*Row]) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	et := s.types[typ]
+	if et == nil || et.info.InFlight == "" || (et.rows.Len() == 0 && len(entries) == 0) {
+		return nil
+	}
+	index, err := From(entries)
+	if err != nil {
+		return err
+	}
+	et.rows = MemoryRows(index)
+	et.indexes.Reset()
+	s.LiveTouched(typ)
+	s.changed(typ)
+	s.generation++
+	return nil
 }

@@ -143,7 +143,7 @@ func (et *Type) ledgerTrial(v reflect.Value, prior *Row) (ledgerProjection, erro
 // existing consistent view. Missing, archived or malformed sources fail closed.
 func (et *Type) ledgerCloseDate(source *platform.LedgerCloseRecord) (string, error) {
 	target := et.store.types[source.Type]
-	if target == nil || target.info.Ledger != nil || target.info.BalanceOf != "" {
+	if target == nil || target.info.Ledger != nil || target.info.ReadOnlyProjection() {
 		return "", fmt.Errorf("ledger close source type unavailable")
 	}
 	field, ok := target.info.Field(source.Field)
@@ -335,8 +335,10 @@ func (et *Type) CheckLedgerReceipt(v reflect.Value, schema string) error {
 	if err != nil {
 		return err
 	}
+	siblingTxn := et.info.App != "" && schema != "" && !strings.HasPrefix(schema, et.info.Type+".") && platform.OwnerOfType(schema) == et.info.App &&
+		!strings.HasSuffix(schema, ".create") && !strings.HasSuffix(schema, ".edit") && !strings.HasSuffix(schema, ".archive") && !strings.HasSuffix(schema, ".restore")
 	if f.reverses == "" && schema == et.info.Type+".reverse" ||
-		f.reverses != "" && !(schema == et.info.Type+".reverse" || strings.HasSuffix(schema, ".reverse") && platform.OwnerOfType(schema) == et.info.App) {
+		f.reverses != "" && !(schema == et.info.Type+".reverse" || siblingTxn) {
 		return fmt.Errorf("only the system reverse action can post a reversal")
 	}
 	return nil

@@ -60,8 +60,8 @@ func ProtocolRecords(page RecordPage, refusal *platform.Error) ([]any, *platform
 	if refusal != nil {
 		return nil, refusal
 	}
-	if page.Total > 200 {
-		return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "Protocol record reads support at most 200 visible records")
+	if page.Total > 2000 {
+		return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "Protocol record reads support at most 2000 visible records")
 	}
 	return page.Records, nil
 }

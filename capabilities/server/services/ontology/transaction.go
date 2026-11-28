@@ -272,11 +272,15 @@ func CheckTransactions(object Object, ctx TransactionContext, engines ...platfor
 					return fmt.Errorf("%s has unexpected iteration fields", where)
 				}
 				typed := map[string]bool{"post": step.Post != nil, "effect": step.Effect != nil, "work": step.Work != nil, "call": step.Call != nil, "request": step.Request != nil, "intervals": step.Intervals != nil}
+				typed["propagate"] = step.Propagate != nil
 				count := 0
 				for _, present := range typed {
 					if present {
 						count++
 					}
+				}
+				if step.Kind == "propagate" && count == 0 {
+					return fmt.Errorf("%s needs exactly its typed payload", where)
 				}
 				if count > 0 || slices.Contains([]string{"post", "effect", "work", "call", "request", "intervals"}, step.Kind) {
 					if count != 1 || !typed[step.Kind] || step.Link != nil || step.Sequence != nil || len(step.Changes) > 0 {
@@ -292,8 +296,8 @@ func CheckTransactions(object Object, ctx TransactionContext, engines ...platfor
 							return fmt.Errorf("%s reply must name a declared subject transaction without approval or confirmation", where)
 						}
 					}
-					if step.Intervals != nil && loop != "" {
-						return fmt.Errorf("%s interval projection cannot nest an iteration", where)
+					if (step.Intervals != nil || step.Propagate != nil) && loop != "" {
+						return fmt.Errorf("%s projection step cannot nest an iteration", where)
 					}
 					if step.Post != nil {
 						if err := reserve(platform.TxnRef{Type: step.Target.Type, ID: "post:" + string(platform.Raw(step.Post.Match))}, loop, step.When); err != nil {
@@ -356,7 +360,7 @@ func CheckTransactions(object Object, ctx TransactionContext, engines ...platfor
 					}
 					continue
 				}
-				if step.Link != nil || !slices.Contains([]string{"create", "update", "archive"}, step.Kind) {
+				if step.Link != nil || !slices.Contains([]string{"create", "update", "archive", "reverse"}, step.Kind) {
 					return fmt.Errorf("%s has an unsupported kind or payload", where)
 				}
 				info, ok := lookup(step.Target.Type)
@@ -385,6 +389,16 @@ func CheckTransactions(object Object, ctx TransactionContext, engines ...platfor
 				}
 				if step.Kind == "archive" && len(step.Changes) > 0 {
 					return fmt.Errorf("%s archive has no assignments", where)
+				}
+				if step.Kind == "reverse" {
+					if info.Ledger == nil {
+						return fmt.Errorf("%s reverse requires a ledger object", where)
+					}
+					for _, assignment := range step.Changes {
+						if assignment.Field != "on" {
+							return fmt.Errorf("%s reverse only accepts business date on", where)
+						}
+					}
 				}
 				used := map[string]bool{}
 				for _, assignment := range step.Changes {

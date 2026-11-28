@@ -15,6 +15,7 @@ type ContractRecord struct {
 	Description string                           `json:"description,omitempty" type:"longtext"`
 	Actions     []runtimeprotocol.ContractAction `json:"actions,omitempty" type:"json"`
 	Reads       []string                         `json:"reads,omitempty"`
+	ReadSchemas map[string][]platform.Field      `json:"readSchemas,omitempty" type:"json" field:"aside"`
 	Events      []platform.ProtocolEvent         `json:"events,omitempty" type:"json"`
 	Tests       []runtimeprotocol.ContractTest   `json:"tests,omitempty" type:"json" title:"Conformance tests"`
 	Languages   platform.Languages               `json:"languages,omitempty" type:"json" field:"internal"`
@@ -43,12 +44,23 @@ func cloneLanguages(in platform.Languages) platform.Languages {
 	return out
 }
 
+func cloneReadSchemas(in map[string][]platform.Field) map[string][]platform.Field {
+	if len(in) == 0 {
+		return nil
+	}
+	out := make(map[string][]platform.Field, len(in))
+	for k, v := range in {
+		out[k] = slices.Clone(v)
+	}
+	return out
+}
+
 func (r ContractRecord) Definition() ContractDefinition {
-	return ContractDefinition{Name: r.Name, Major: r.Major, Title: r.Title, Description: r.Description, Actions: slices.Clone(r.Actions), Reads: slices.Clone(r.Reads), Events: slices.Clone(r.Events), Tests: slices.Clone(r.Tests), Languages: cloneLanguages(r.Languages)}
+	return ContractDefinition{Name: r.Name, Major: r.Major, Title: r.Title, Description: r.Description, Actions: slices.Clone(r.Actions), Reads: slices.Clone(r.Reads), ReadSchemas: cloneReadSchemas(r.ReadSchemas), Events: slices.Clone(r.Events), Tests: slices.Clone(r.Tests), Languages: cloneLanguages(r.Languages)}
 }
 
 func ContractRecordFromDeclaration(d ContractDefinition) ContractRecord {
-	return ContractRecord{Name: d.Name, Major: d.Major, Title: d.Title, Description: d.Description, Actions: slices.Clone(d.Actions), Reads: slices.Clone(d.Reads), Events: slices.Clone(d.Events), Tests: slices.Clone(d.Tests), Languages: cloneLanguages(d.Languages)}
+	return ContractRecord{Name: d.Name, Major: d.Major, Title: d.Title, Description: d.Description, Actions: slices.Clone(d.Actions), Reads: slices.Clone(d.Reads), ReadSchemas: cloneReadSchemas(d.ReadSchemas), Events: slices.Clone(d.Events), Tests: slices.Clone(d.Tests), Languages: cloneLanguages(d.Languages)}
 }
 
 func (r ContractRecord) KeepsShape(next ContractRecord) bool {

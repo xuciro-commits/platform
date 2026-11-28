@@ -44,6 +44,25 @@ func ObjectProvisions(object Object, entity platform.RecordType, actions []platf
 			p.Protocol.Actions = append(p.Protocol.Actions, action)
 			p.Actions[verb] = schema
 		}
+		if len(declaration.Reads) > 0 {
+			if info, err := records.Describe(AppID, entity, func(reflect.Type) string { return "?" }); err == nil {
+				p.Protocol.ReadSchemas = map[string][]platform.Field{}
+				cols := make([]platform.Field, 0, len(info.Fields))
+				for _, f := range info.Fields {
+					typ := f.Type
+					switch typ {
+					case "text", "longtext", "choice", "reference", "member":
+						typ = "string"
+					case "decimal":
+						typ = "number"
+					}
+					cols = append(cols, platform.Field{Name: f.Name, Type: typ, Required: f.Required, Description: f.Title, Ref: f.Ref, RefType: f.RefType})
+				}
+				for _, read := range declaration.Reads {
+					p.Protocol.ReadSchemas[read] = slices.Clone(cols)
+				}
+			}
+		}
 		for _, read := range declaration.Reads {
 			p.Reads[read] = ProtocolReadName(entity.Type, read)
 		}
@@ -65,14 +84,37 @@ func ObjectProvisions(object Object, entity platform.RecordType, actions []platf
 }
 
 func CheckObjectProtocols(object Object, env ProtocolEnvironment) error {
+	if object.Ledger {
+		for _, b := range object.Balances {
+			if len(b.Protocols) == 0 {
+				continue
+			}
+			for _, shape := range LedgerBalances(Object{Name: object.Name, Namespace: object.Namespace, Ledger: true, Fields: object.Fields, Balances: []Balance{b}}) {
+				if shape.BalanceOf == "" {
+					continue
+				}
+				balObj := Object{Name: object.Name + "." + b.Name, Namespace: object.Namespace, Title: b.Title, Protocols: slices.Clone(b.Protocols)}
+				if info, err := records.Describe(AppID, shape, func(reflect.Type) string { return "?" }); err == nil {
+					for _, f := range info.Fields {
+						balObj.Fields = append(balObj.Fields, Field{Name: f.Name, Title: f.Title, Type: f.Type, Ref: f.Ref, ReadOnly: true})
+					}
+				}
+				if err := CheckObjectProtocols(balObj, env); err != nil {
+					return err
+				}
+			}
+		}
+	}
 	if len(object.Protocols) == 0 {
 		return nil
 	}
 	if len(object.Protocols) > 16 {
 		return fmt.Errorf("An object supports at most 16 protocol bindings")
 	}
-	if err := env.CheckProcess(object); err != nil {
-		return err
+	if !object.Ledger {
+		if err := env.CheckProcess(object); err != nil {
+			return err
+		}
 	}
 	draft := object
 	draft.Protocols = slices.Clone(object.Protocols)
@@ -91,8 +133,11 @@ func CheckObjectProtocols(object Object, env ProtocolEnvironment) error {
 	for i, declaration := range object.Protocols {
 		actual := generated[i].Protocol
 		id := actual.ID()
-		if declaration.Name == "" || strings.ContainsAny(declaration.Name, "/# :\t\n") || declaration.Version < 1 || seen[id] || len(declaration.Actions) == 0 {
-			return fmt.Errorf("A protocol binding needs a unique name, positive version and declared actions")
+		if declaration.Name == "" || strings.ContainsAny(declaration.Name, "/# :\t\n") || declaration.Version < 1 || seen[id] || (len(declaration.Actions) == 0 && len(declaration.Reads) == 0) {
+			return fmt.Errorf("A protocol binding needs a unique name, positive version and declared actions or reads")
+		}
+		if inf := declaration.InFlight; inf != nil && (len(declaration.Actions) == 0 || (inf.By != "" && (inf.Ref == "" || inf.Inverse == ""))) {
+			return fmt.Errorf("Protocol %s in-flight projection requires actions and a complete inverse target", id)
 		}
 		seen[id] = true
 		for _, bindings := range []map[string]string{declaration.Actions, declaration.Events} {

@@ -2083,6 +2083,7 @@ export type EnterpriseUsageItem = {
 export type EntityInfo = {
   ledger?: LedgerSpec;
   balanceOf?: string;
+  inFlight?: string;
   datasources?: DataSourceBinding[];
   localRules?: Record<string, Expr>;
   enterpriseUse?: Expr;
@@ -2187,6 +2188,7 @@ export type Field = {
   description: string;
   choices?: string[];
   ref?: string;
+  refType?: string;
   fields?: Field[];
   stereotype?: string;
   stereotypes?: string[];
@@ -4710,6 +4712,7 @@ export type Protocol = {
   Version: number;
   Actions: Action[];
   Reads: string[];
+  readSchemas?: Record<string, Field[]>;
   Events: ProtocolEvent[];
 };
 
@@ -5193,6 +5196,8 @@ export type RolePermissions = {
 
 export type RuleCollection = {
   set?: string;
+  protocol?: string;
+  fields?: FieldInfo[];
   app: string;
   query: string;
   version: number;
@@ -5912,6 +5917,48 @@ export type TxnPost = {
   floor?: boolean;
 };
 
+export type TxnPropagate = {
+  Nodes: string;
+  Offset: string;
+  Edges: TxnPropagateEdges;
+  Demands: TxnPropagateInput[];
+  Credits: TxnPropagateInput[];
+  Branch: TxnPropagateTarget;
+  Leaf: TxnPropagateTarget;
+};
+
+export type TxnPropagateEdges = {
+  Set: string;
+  Parent: string;
+  Child: string;
+  Ratio: string;
+  Loss: string;
+};
+
+export type TxnPropagateInput = {
+  Set: string;
+  Node: string;
+  Quantity: string;
+  Due: string;
+  SourceType: string;
+  SourceField: string;
+  Label: string;
+};
+
+export type TxnPropagateTarget = {
+  Type: string;
+  Node: string;
+  Quantity: string;
+  Due: string;
+  Start: string;
+  Level: string;
+  Origin: string;
+  Trace: string;
+  SourceType: string;
+  SourceID: string;
+  changes?: TxnSet[];
+};
+
 export type TxnRange = {
   from: Expr;
   until: Expr;
@@ -5957,6 +6004,7 @@ export type TxnStep = {
   request?: TxnRequest;
   forEach?: TxnForEach;
   intervals?: TxnIntervals;
+  propagate?: TxnPropagate;
   refusals?: Refusal[];
 };
 

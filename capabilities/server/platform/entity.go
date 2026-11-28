@@ -58,6 +58,7 @@ type LedgerBalance struct {
 type RecordType struct {
 	Ledger                                     *LedgerSpec
 	BalanceOf                                  string
+	InFlight                                   string
 	DataSources                                []DataSourceBinding
 	LocalRules                                 map[string]Expr
 	LiveRules                                  map[string]Expr
@@ -351,10 +352,12 @@ func ParseWhen(tag string) (*FieldCondition, error) {
 func (f FieldInfo) Active(valueOf func(field string) string, engines ...RuleEngine) bool {
 	return f.When == nil || f.When.Holds(valueOf(f.When.Field), engines...)
 }
+func (i RecordTypeInfo) ReadOnlyProjection() bool { return i.BalanceOf != "" || i.InFlight != "" }
 
 type RecordTypeInfo struct {
 	Ledger          *LedgerSpec         `json:"ledger,omitempty"`
 	BalanceOf       string              `json:"balanceOf,omitempty"`
+	InFlight        string              `json:"inFlight,omitempty"`
 	DataSources     []DataSourceBinding `json:"datasources,omitempty"`
 	LocalRules      map[string]Expr     `json:"localRules,omitempty"`
 	LiveRules       map[string]Expr     `json:"-"`

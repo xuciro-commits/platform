@@ -67,6 +67,17 @@ func RuleSchema(expr platform.Expr, spec platform.RuleReadSpec, lookup func(stri
 		}
 	}
 	for name, set := range spec.Collections {
+		if set.Protocol != "" {
+			if set.App == "" || set.Query != "" || set.Set != "" || set.Of != "" || len(set.Fields) == 0 || (set.Policy != "visible" && set.Policy != "complete") {
+				return schema, fmt.Errorf("rule collection %s needs a declared protocol read schema and scope policy", name)
+			}
+			fields := map[string]platform.ExprType{}
+			for _, f := range set.Fields {
+				fields[f.Name] = platform.ExprType{Kind: platform.RuleFieldKind(f.Type), Object: f.Ref}
+			}
+			schema.Sets[name] = platform.ExprSetType{Element: platform.ExprType{Kind: "reference", Object: set.Protocol, Fields: fields}, Policy: set.Policy}
+			continue
+		}
 		subField, hasSubField, err := RuleCollectionSubjectField(spec.Object, set.Of, lookup)
 		if err != nil {
 			return schema, err
@@ -134,6 +145,9 @@ func RuleSchema(expr platform.Expr, spec platform.RuleReadSpec, lookup func(stri
 				return nil
 			}
 			info, ok := lookup(typ)
+			if typ == "" && spec.Collections[child].Protocol != "" {
+				info, ok = platform.RecordTypeInfo{Type: spec.Collections[child].Protocol, Fields: spec.Collections[child].Fields}, true
+			}
 			field, found := info.Field(fieldName)
 			if !ok || !found || field.Type != "reference" || field.Ref == "" {
 				return fmt.Errorf("rule path base %s is not a declared reference", ref)
@@ -456,7 +470,21 @@ func RuleContext(c platform.Caller, expr platform.Expr, spec platform.RuleReadSp
 		}
 		var raw json.RawMessage
 		var readErr *platform.Error
-		if set.Set != "" {
+		if set.Protocol != "" {
+			protoID, readName, _ := strings.Cut(set.Protocol, "#")
+			results, qErr := c.Query(protoID, readName)
+			if qErr != nil && qErr.Code != pb.ErrorCode_ERROR_CODE_NOT_FOUND {
+				readErr = qErr
+			} else {
+				rows := []any{}
+				for _, res := range results {
+					if list, ok := res.Result.([]any); ok {
+						rows = append(rows, list...)
+					}
+				}
+				raw = platform.Raw(map[string]any{"records": rows, "total": len(rows), "sources": []string{}, "partial": false})
+			}
+		} else if set.Set != "" {
 			setOwner, subjectID, subjectRecord := spec.Object, "", record
 			_ = json.Unmarshal(values["id"], &subjectID)
 			if field, selected, _ := RuleCollectionSubjectField(spec.Object, set.Of, lookup); selected && field.Type == "reference" {
@@ -493,6 +521,9 @@ func RuleContext(c platform.Caller, expr platform.Expr, spec platform.RuleReadSp
 		ctx.Sources = append(ctx.Sources, page.Sources...)
 		collection := platform.ExprCollection{Complete: page.Total == len(page.Records), Withheld: page.Partial, Items: []platform.ExprItem{}}
 		object, ok := lookup(set.Object)
+		if set.Protocol != "" {
+			object, ok = platform.RecordTypeInfo{Type: set.Protocol, Fields: set.Fields}, len(set.Fields) > 0
+		}
 		if !ok {
 			return ctx, fmt.Errorf("collection object is unavailable")
 		}

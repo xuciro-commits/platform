@@ -48,6 +48,11 @@ func (o *queryOwner) binding() publication.QueryAuthoringBinding {
 		FreezeBatch:     o.prepare,
 		VersionedDraft:  o.draftAssets,
 		LoadExecution:   o.loadExecution,
+		Draft: func(asset platform.ReleaseAsset) (any, error) {
+			q, err := o.fromAsset(asset)
+			q.State, q.Version = "", 0
+			return q, err
+		},
 	}
 }
 

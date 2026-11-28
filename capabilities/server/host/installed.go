@@ -2,9 +2,9 @@ package host
 
 import (
 	"fmt"
-	releaseowner "platformserver/services/devops/releases"
-
+	"platformserver/services/actions"
 	pageowner "platformserver/services/apps/pages"
+	releaseowner "platformserver/services/devops/releases"
 	"slices"
 	"strings"
 
@@ -12,16 +12,17 @@ import (
 	build "platformserver/services/resources/authoring"
 )
 
-func (t *Tenant) Install(app platform.Service, e platform.RecordType, actions []platform.Action, pages ...platform.Page) error {
-	return build.ObjectInstall{
-		Owners: t.owner, Owner: t.App, Installing: func() bool { return t.installingSet },
-		Properties: t.checkObjectProperties, RecordSets: func(info platform.RecordTypeInfo) error {
+func (t *Tenant) Install(app platform.Service, e platform.RecordType, acts []platform.Action, pages ...platform.Page) error {
+	err := build.ObjectInstall{Owners: t.owner, Owner: t.App, Installing: func() bool { return t.installingSet }, Properties: t.checkObjectProperties,
+		RecordSets: func(info platform.RecordTypeInfo) error {
 			return t.objectOwner(t.Projection).CheckRecordSetDeclarations(info)
-		}, Entity: t.Entity,
-		Install:     t.Projection.Install,
-		Definitions: func() []platform.Definition { return t.definitions }, SetDefinitions: t.setDefinitions,
-		Define: t.installDefinitions,
-	}.Run(app, e, actions, pages)
+		},
+		Entity: t.Entity, Install: t.Projection.Install, Definitions: func() []platform.Definition { return t.definitions },
+		SetDefinitions: t.setDefinitions, Define: t.installDefinitions}.Run(app, e, acts, pages)
+	if err == nil && e.InFlight != "" {
+		actions.SyncInFlight(t.Projection, t.outbound.Select(nil))
+	}
+	return err
 }
 
 func (t *Tenant) storeDefinition(index int, def platform.Definition) {

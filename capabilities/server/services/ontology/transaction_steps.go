@@ -279,6 +279,8 @@ func checkTypedTxnStep(ctx TransactionContext, step platform.TxnStep, scope plat
 	switch step.Kind {
 	case "intervals":
 		return checkTxnIntervals(ctx, step, scope, lookup)
+	case "propagate":
+		return checkTxnPropagate(ctx, step, scope, lookup, engines...)
 	case "post":
 		p := step.Post
 		info, found := lookup(step.Target.Type)

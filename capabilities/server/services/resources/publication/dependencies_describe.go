@@ -86,7 +86,7 @@ func (resolver Resolver) describeAssetFresh(asset platform.ReleaseAsset, histori
 			if collection.Query != "" {
 				add(platform.AssetRef{App: collection.App, Kind: platform.AssetQuery, Name: collection.Query})
 			}
-			if collection.Object != "" && collection.Object != asset.Ref.Name {
+			if collection.Protocol == "" && collection.Object != "" && collection.Object != asset.Ref.Name {
 				addObject(collection.Object)
 			}
 		}

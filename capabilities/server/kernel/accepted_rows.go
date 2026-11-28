@@ -172,7 +172,7 @@ func ApplyDirectRows(base *records.Store, rows []acceptedformat.InputRow, member
 			}
 		}
 		recovered.RetainOriginal(image.Value)
-		if et.Info().Ledger != nil || et.Info().BalanceOf != "" {
+		if et.Info().Ledger != nil || et.Info().ReadOnlyProjection() {
 			return nil, fmt.Errorf("direct input cannot write ledger facts or balances")
 		}
 		if err := et.CheckLedgerRow(value, prior); err != nil {

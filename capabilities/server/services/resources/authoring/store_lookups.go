@@ -127,5 +127,12 @@ func StoreProtocolAssetActive(store *records.Store, tenant string, ref platform.
 		return true
 	}
 	resource, found := StoreResourceRow(store, tenant, ref)
+	if !found && ref.Kind == platform.AssetObject {
+		if i := strings.LastIndexByte(ref.Name, '.'); i > strings.IndexByte(ref.Name, '.') {
+			parent := ref
+			parent.Name = ref.Name[:i]
+			resource, found = StoreResourceRow(store, tenant, parent)
+		}
+	}
 	return !found || resource.ManagedBy == "" || !resource.Archived
 }

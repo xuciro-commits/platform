@@ -56,13 +56,40 @@ func PendingDispatches(c platform.Caller) ([]platform.DispatchRun, *platform.Err
 	}
 }
 
+type InFlightBinding struct {
+	By      string `json:"by,omitempty"`
+	Ref     string `json:"ref,omitempty"`
+	Inverse string `json:"inverse,omitempty"`
+}
+
 type ProtocolBinding struct {
 	Contract *platform.Protocol `json:"contract,omitempty"`
+	InFlight *InFlightBinding   `json:"inFlight,omitempty"`
 	Name     string             `json:"name"`
 	Version  int                `json:"version"`
 	Actions  map[string]string  `json:"actions"`
 	Reads    []string           `json:"reads,omitempty"`
 	Events   map[string]string  `json:"events,omitempty"`
+}
+
+func ContractFieldInfos(fields []platform.Field) []platform.FieldInfo {
+	out := make([]platform.FieldInfo, 0, len(fields))
+	for _, f := range fields {
+		typ := f.Type
+		switch typ {
+		case "string":
+			typ = "text"
+			if f.Ref != "" {
+				typ = "reference"
+			} else if len(f.Choices) > 0 {
+				typ = "choice"
+			}
+		case "number":
+			typ = "decimal"
+		}
+		out = append(out, platform.FieldInfo{Name: f.Name, Title: f.Description, Type: typ, Required: f.Required, ReadOnly: true, Ref: f.Ref, RefType: f.RefType, Choices: slices.Clone(f.Choices)})
+	}
+	return out
 }
 
 func CheckProtocolActions(contract platform.Protocol, actions []platform.Action) error {
@@ -112,6 +139,26 @@ func CheckProtocol(contract, actual platform.Protocol) error {
 	}
 	if !slices.Equal(names(contract), names(actual)) {
 		return fmt.Errorf("protocol %s read or event declarations differ", contract.ID())
+	}
+	kind := func(typ string) string {
+		switch typ {
+		case "string", "text", "longtext", "choice", "reference":
+			return "text"
+		case "number", "decimal":
+			return "decimal"
+		}
+		return typ
+	}
+	for read, reqFields := range contract.ReadSchemas {
+		actFields := actual.ReadSchemas[read]
+		if len(actFields) == 0 {
+			continue
+		}
+		for _, rf := range reqFields {
+			if !slices.ContainsFunc(actFields, func(af platform.Field) bool { return af.Name == rf.Name && kind(af.Type) == kind(rf.Type) }) {
+				return fmt.Errorf("protocol %s read %s field %s differs", contract.ID(), read, rf.Name)
+			}
+		}
 	}
 	return nil
 }

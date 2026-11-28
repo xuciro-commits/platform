@@ -15,15 +15,16 @@ const AssetContract platform.AssetKind = "contract"
 var contractName = regexp.MustCompile(`^[a-z][a-z0-9]*(?:[.-][a-z0-9]+)*$`)
 
 type ProtocolContract struct {
-	Name        string                   `json:"name"`
-	Major       int                      `json:"major"`
-	Title       string                   `json:"title"`
-	Description string                   `json:"description,omitempty"`
-	Actions     []ContractAction         `json:"actions,omitempty"`
-	Reads       []string                 `json:"reads,omitempty"`
-	Events      []platform.ProtocolEvent `json:"events,omitempty"`
-	Tests       []ContractTest           `json:"tests,omitempty"`
-	Languages   platform.Languages       `json:"languages,omitempty"`
+	Name        string                      `json:"name"`
+	Major       int                         `json:"major"`
+	Title       string                      `json:"title"`
+	Description string                      `json:"description,omitempty"`
+	Actions     []ContractAction            `json:"actions,omitempty"`
+	Reads       []string                    `json:"reads,omitempty"`
+	ReadSchemas map[string][]platform.Field `json:"readSchemas,omitempty"`
+	Events      []platform.ProtocolEvent    `json:"events,omitempty"`
+	Tests       []ContractTest              `json:"tests,omitempty"`
+	Languages   platform.Languages          `json:"languages,omitempty"`
 }
 
 type ContractTest struct {
@@ -61,7 +62,14 @@ func ContractAssetNameForID(id string) string {
 func (c ProtocolContract) ID() string { return fmt.Sprintf("%s/%d", c.Name, c.Major) }
 
 func (c ProtocolContract) Protocol() platform.Protocol {
-	p := platform.Protocol{Name: c.Name, Version: c.Major, Reads: slices.Clone(c.Reads), Events: slices.Clone(c.Events)}
+	var schemas map[string][]platform.Field
+	if len(c.ReadSchemas) > 0 {
+		schemas = make(map[string][]platform.Field, len(c.ReadSchemas))
+		for k, v := range c.ReadSchemas {
+			schemas[k] = slices.Clone(v)
+		}
+	}
+	p := platform.Protocol{Name: c.Name, Version: c.Major, Reads: slices.Clone(c.Reads), ReadSchemas: schemas, Events: slices.Clone(c.Events)}
 	for _, action := range c.Actions {
 		p.Actions = append(p.Actions, platform.Action{Schema: action.Name, Title: action.Title, Description: action.Description, Payload: slices.Clone(action.Payload)})
 	}
@@ -90,6 +98,14 @@ func (c ProtocolContract) Check() error {
 			return fmt.Errorf("Capability contract reads need unique lowercase names")
 		}
 		seen["read:"+read] = true
+	}
+	for read, fields := range c.ReadSchemas {
+		if !seen["read:"+read] {
+			return fmt.Errorf("Capability contract read schema %q must name a declared read", read)
+		}
+		if err := platform.CheckInputs(fields); err != nil {
+			return err
+		}
 	}
 	for _, event := range c.Events {
 		if !values.Identifier.MatchString(event.Name) || seen["event:"+event.Name] || strings.TrimSpace(event.Title) == "" || len(event.Title) > 200 {

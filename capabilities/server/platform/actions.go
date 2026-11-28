@@ -201,6 +201,7 @@ type Field struct {
 	Description string            `json:"description"`
 	Choices     []string          `json:"choices,omitempty"`
 	Ref         string            `json:"ref,omitempty"`
+	RefType     string            `json:"refType,omitempty"`
 	Fields      []Field           `json:"fields,omitempty"`
 	Stereotype  string            `json:"stereotype,omitempty"`
 	Stereotypes []string          `json:"stereotypes,omitempty"`

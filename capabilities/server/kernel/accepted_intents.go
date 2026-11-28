@@ -5,6 +5,7 @@ import (
 	"strings"
 
 	"platformserver/kernel/acceptedformat"
+	"platformserver/kernel/protocol"
 	"platformserver/platform"
 )
 
@@ -23,7 +24,7 @@ func CheckIntents(tenant string, intents []platform.Effect, known func(app strin
 			x.ID != id ||
 			ids[x.ID] || x.State != "pending" && x.State != "held" || x.At.IsZero() || !x.Due.Equal(x.At) ||
 			x.Attempts != 0 || !x.Last.IsZero() || x.Error != "" || x.Digest != "" ||
-			x.State == "held" && x.Agent == "" || queued(x.ID) {
+			x.State == "held" && x.Agent == "" && x.Endpoint != protocol.DeferredRequestEndpoint || queued(x.ID) {
 			return fmt.Errorf("accepted result has an invalid or duplicate outbound intent")
 		}
 		ids[x.ID] = true

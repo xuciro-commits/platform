@@ -61,6 +61,7 @@ type BuildHost interface {
 	ValidateCodeAsset(platform.ReleaseAsset) error
 	ProductVersion(platform.ProductVersionRequest) (platform.FrozenProductVersion, error)
 	PackageSeed(string) ([]json.RawMessage, bool)
+	ProtocolContract(string) (platform.Protocol, bool)
 }
 
 type ModelPageHost interface {

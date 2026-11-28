@@ -14,13 +14,15 @@ type RuleReadSpec struct {
 	Collections  map[string]RuleCollection `json:"collections,omitempty"`
 }
 type RuleCollection struct {
-	Set     string `json:"set,omitempty"`
-	App     string `json:"app"`
-	Query   string `json:"query"`
-	Version int    `json:"version"`
-	Object  string `json:"object"`
-	Of      string `json:"of,omitempty"`
-	Policy  string `json:"policy"`
+	Set      string      `json:"set,omitempty"`
+	Protocol string      `json:"protocol,omitempty"`
+	Fields   []FieldInfo `json:"fields,omitempty"`
+	App      string      `json:"app"`
+	Query    string      `json:"query"`
+	Version  int         `json:"version"`
+	Object   string      `json:"object"`
+	Of       string      `json:"of,omitempty"`
+	Policy   string      `json:"policy"`
 }
 
 func RuleFieldKind(kind string) string {

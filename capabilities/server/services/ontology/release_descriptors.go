@@ -171,7 +171,12 @@ func ObjectDependencies(asset platform.ReleaseAsset, historical bool) ([]platfor
 			if collection.Query != "" {
 				requires = append(requires, platform.AssetRef{App: collection.App, Kind: platform.AssetQuery, Name: collection.Query})
 			}
-			if collection.Object != "" && collection.Object != asset.Ref.Name {
+			if collection.Protocol != "" {
+				proto, _, _ := strings.Cut(collection.Protocol, "#")
+				if ref, ok := bindings.Protocols[proto]; ok && ref.Name != "" {
+					requires = append(requires, ref)
+				}
+			} else if collection.Object != "" && collection.Object != asset.Ref.Name {
 				addObject(collection.Object)
 			}
 		}
@@ -251,6 +256,14 @@ func ObjectDependencies(asset platform.ReleaseAsset, historical bool) ([]platfor
 				if step.Intervals != nil {
 					requires = append(requires, step.Intervals.Predecessors.Ref)
 				}
+				if step.Propagate != nil {
+					if step.Propagate.Branch != nil {
+						addObject(step.Propagate.Branch.Type)
+					}
+					if step.Propagate.Leaf != nil {
+						addObject(step.Propagate.Leaf.Type)
+					}
+				}
 				if step.ForEach != nil {
 					visit(step.ForEach.Steps)
 				}
@@ -303,6 +316,14 @@ func ObjectDependencies(asset platform.ReleaseAsset, historical bool) ([]platfor
 				}
 				if step.Intervals != nil {
 					requires = append(requires, step.Intervals.Predecessors.Ref)
+				}
+				if step.Propagate != nil {
+					if step.Propagate.Branch != nil {
+						addObject(step.Propagate.Branch.Type)
+					}
+					if step.Propagate.Leaf != nil {
+						addObject(step.Propagate.Leaf.Type)
+					}
 				}
 				for _, refusal := range step.Refusals {
 					if refusal.Route != nil {
@@ -379,11 +400,34 @@ func ActionDependencies(asset platform.ReleaseAsset, historical bool) ([]platfor
 	if txnSpec == nil && actionBody.Definition != nil {
 		txnSpec = actionBody.Definition.Transaction
 	}
-	if txnSpec != nil && action.Target != "" {
+	if txnSpec != nil {
+		if txnSpec.Reads != nil {
+			for _, col := range txnSpec.Reads.Collections {
+				if col.Query != "" {
+					add(platform.AssetRef{App: col.App, Kind: platform.AssetQuery, Name: col.Query})
+				}
+				if col.Protocol != "" {
+					proto, _, _ := strings.Cut(col.Protocol, "#")
+					if ref, ok := bindings.Protocols[proto]; ok {
+						add(ref)
+					}
+				} else if col.Object != "" {
+					addObject(col.Object)
+				}
+			}
+		}
 		WalkBusinessTxn(txnSpec, func(step platform.TxnStep) {
-			if step.Request != nil && step.Request.Reply != "" {
+			if step.Request != nil && step.Request.Reply != "" && action.Target != "" {
 				verb := step.Request.Reply[strings.LastIndex(step.Request.Reply, ".")+1:]
 				add(platform.AssetRef{App: asset.Ref.App, Kind: platform.AssetAction, Name: action.Target + "." + verb})
+			}
+			if step.Propagate != nil {
+				if step.Propagate.Branch != nil {
+					addObject(step.Propagate.Branch.Type)
+				}
+				if step.Propagate.Leaf != nil {
+					addObject(step.Propagate.Leaf.Type)
+				}
 			}
 		})
 	}

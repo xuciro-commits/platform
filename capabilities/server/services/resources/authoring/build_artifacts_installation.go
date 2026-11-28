@@ -118,6 +118,9 @@ func (b *Build) declarationReleaseDraft(asset platform.ReleaseAsset) (string, an
 		return TestPlanType, d, err
 	case platform.AssetCompute:
 		return b.functions.OperationDraft(asset)
+	case platform.AssetQuery:
+		d, err := b.queries.Draft(asset)
+		return QueryType, d, err
 	}
 	return "", nil, nil
 }

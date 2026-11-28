@@ -39,4 +39,5 @@ type QueryAuthoringBinding struct {
 	FreezeBatch     func([]platform.ReleaseAsset) ([]platform.ReleasePublication, error)
 	VersionedDraft  func(string, func() ([]platform.ReleaseAsset, error)) ([]platform.ReleaseAsset, []platform.ReleaseAsset, platform.AssetRef, platform.AssetRef, bool, error)
 	LoadExecution   func(platform.ReleaseAsset) error
+	Draft           func(platform.ReleaseAsset) (any, error)
 }
