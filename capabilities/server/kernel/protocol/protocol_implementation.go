@@ -103,6 +103,7 @@ const (
 	CapabilityCallType       = "build.capabilitycall"
 	SchemaCapabilityCallSend = CapabilityCallType + ".send"
 	CapabilityCallEvent      = "capability/call"
+	DeferredRequestEndpoint  = "capability-request"
 )
 
 func CapabilityCallID(protocol, action, key string) string {

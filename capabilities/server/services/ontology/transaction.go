@@ -285,6 +285,13 @@ func CheckTransactions(object Object, ctx TransactionContext, engines ...platfor
 					if err := checkTypedTxnStep(ctx, step, scope, lookup, engines...); err != nil {
 						return fmt.Errorf("%s: %w", where, err)
 					}
+					if step.Request != nil && step.Request.Reply != "" {
+						replyVerb := strings.TrimPrefix(step.Request.Reply, subject+".")
+						idx := slices.IndexFunc(object.Actions, func(a Action) bool { return a.Name == replyVerb })
+						if idx < 0 || replyVerb == action.Name || object.Actions[idx].Approval != nil || object.Actions[idx].Adoption != nil || object.Actions[idx].Transaction != nil && object.Actions[idx].Transaction.Confirmation != nil {
+							return fmt.Errorf("%s reply must name a declared subject transaction without approval or confirmation", where)
+						}
+					}
 					if step.Intervals != nil && loop != "" {
 						return fmt.Errorf("%s interval projection cannot nest an iteration", where)
 					}

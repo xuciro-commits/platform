@@ -99,11 +99,9 @@ func (h *Host) routesRecords(rt *routes) {
 	rt.handle(transport.Route{Pattern: "POST /v1/import/{type}", Summary: "Import records from CSV: a header of field names, with an optional id column; a row without an id is created, numbered when the type declares naming; each row is the type's generated create or edit as the caller", Query: []transport.Param{{Name: "preview", Description: "true: check each row and apply none"}}, Body: []byte{}, Answer: []protocol.ImportRow{}}, transport.Answering(func(r *http.Request, m platform.Member, t *Tenant) ([]protocol.ImportRow, *platform.Error) {
 		body, _ := io.ReadAll(io.LimitReader(r.Body, 16<<20))
 		rows, err := t.Import(m, r.PathValue("type"), body, r.URL.Query().Get("preview") == "true", h.Now())
-		if err == nil {
-			objects.LocalizeImportRows(rows, func(issues []platform.FieldIssue) []platform.FieldIssue {
-				return t.localizedFieldIssues(m, issues, t.Language(m, r))
-			})
-		}
+		objects.LocalizeImportRows(rows, func(issues []platform.FieldIssue) []platform.FieldIssue {
+			return t.localizedFieldIssues(m, issues, t.Language(m, r))
+		})
 		return rows, err
 	}))
 	exportCSV := func(w http.ResponseWriter, r *http.Request, m platform.Member, t *Tenant, q platform.Query) {
@@ -177,21 +175,18 @@ func (h *Host) routesRecords(rt *routes) {
 	}))
 	rt.recordRead(transport.Route{Pattern: "GET /v1/records/{type}/{id}/sections/{section}", Summary: "One independently authorized object view section: links, activity, files, work, history or comments", Answer: objects.RecordSectionView{}}, transport.Answering(func(r *http.Request, m platform.Member, t *Tenant) (objects.RecordSectionView, *platform.Error) {
 		view, err := t.objectOwner(t.Projection).RecordSection(m, r.PathValue("type"), r.PathValue("id"), r.PathValue("section"), h.Now())
-		if err == nil {
-			if activity, ok := t.i18n.TranslateMessages(view.Activity, t.Language(m, r)).([]any); ok {
-				view.Activity = activity
-			}
-		}
+		objects.LocalizeSection(&view, t.Language(m, r), t.i18n.Say, t.i18n.TranslateMessages)
 		return view, err
 	}))
 	rt.recordRead(transport.Route{Pattern: "GET /v1/records/{type}/{id}", Summary: "One authorized record; its object view sections are read independently", Answer: objects.RecordView{}}, transport.Answering(func(r *http.Request, m platform.Member, t *Tenant) (objects.RecordView, *platform.Error) {
-		now := h.Now()
+		now, lang := h.Now(), t.Language(m, r)
 		view, err := t.recordOf(m, r.PathValue("type"), r.PathValue("id"), now)
 		if err == nil && r.PathValue("type") == build.ObjectType {
 			err = objects.DraftView(&view, func(record any) (any, *platform.Error) { return t.objectDraftRecord(m, record) })
 		}
 		if info, ok := t.Entity(r.PathValue("type")); err == nil && ok {
-			view.Actions = actions.RecordActions(t.App(info.App), t.objectCaller(m, info.App), info.Type, r.PathValue("id"), now, t.Entity, func(reason string) string { return t.i18n.Say(t.Language(m, r), reason) }, t.DataOwner().Matched)
+			say := func(reason string) string { return t.i18n.Say(lang, reason) }
+			view.Actions, view.Deliveries = actions.RecordActions(t.App(info.App), t.objectCaller(m, info.App), info.Type, r.PathValue("id"), now, t.Entity, say, t.DataOwner().Matched), objects.LocalizeDeliveries(view.Deliveries, say)
 		}
 		return view, err
 	}))

@@ -6,15 +6,17 @@ import (
 	"time"
 
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
+	"platformserver/kernel/protocol"
 	"platformserver/platform"
 )
 
-const DeferredRequestEndpoint = "capability-request"
+const DeferredRequestEndpoint = protocol.DeferredRequestEndpoint
 
 type deferredRequest struct {
 	Protocol   string         `json:"protocol"`
 	Action     string         `json:"action"`
 	Provider   string         `json:"provider"`
+	Reply      string         `json:"reply,omitempty"`
 	Submission *pb.Submission `json:"submission"`
 }
 
@@ -38,7 +40,7 @@ func (r Router) PlanDeferredRequest(c platform.Caller, record *pb.ChangeRecord, 
 		return platform.Effect{}, platform.Refuse(pb.ErrorCode_ERROR_CODE_POLICY_DENIED, "The requested capability action is unavailable or outside the caller's scope")
 	}
 	sub.CorrelationId = record.GetSubmission().GetIdempotencyKey()
-	body, err := json.Marshal(deferredRequest{Protocol: q.Protocol, Action: q.Action, Provider: binding.App() + "/" + binding.EntityType(), Submission: sub})
+	body, err := json.Marshal(deferredRequest{Protocol: q.Protocol, Action: q.Action, Provider: binding.App() + "/" + binding.EntityType(), Reply: q.Reply, Submission: sub})
 	if err != nil {
 		return platform.Effect{}, platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "Invalid deferred capability request")
 	}
@@ -61,7 +63,7 @@ func (r Router) DeliverDeferredRequest(x platform.Effect, now time.Time, member 
 			if refusal.Code == pb.ErrorCode_ERROR_CODE_IDEMPOTENCY_CONFLICT {
 				return result("unknown", "The accepted result does not match the original request")
 			}
-			return result("rejected", refusal.Message)
+			return platform.Outcome{Effect: x.ID, Result: "rejected", Detail: refusal.Message, PublicMessage: refusal.Message}
 		}
 		if record == nil {
 			return result("unknown", "No accepted result was returned")

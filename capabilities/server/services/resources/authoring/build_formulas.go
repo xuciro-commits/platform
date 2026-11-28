@@ -440,7 +440,18 @@ func (b *Build) checkRuleCollections(s platform.RuleReadSpec, where string, look
 	for name, set := range s.Collections {
 		if set.Set != "" {
 			info, ok := lookup(s.Object)
-			if !ok || set.App != info.App || set.Query != "" || set.Of != "" && set.Of != "$subject" || !slices.ContainsFunc(info.Sets, func(declaration platform.RecordSet) bool {
+			owner := info
+			if subField, hasSubField, err := ruleprotocol.RuleCollectionSubjectField(s.Object, set.Of, lookup); err != nil {
+				return err
+			} else if hasSubField {
+				if subField.Type != "reference" {
+					return fmt.Errorf("%s collection %s set owner must be a reference field", where, name)
+				}
+				owner, ok = lookup(subField.Ref)
+			} else if set.Of != "" && set.Of != "$subject" {
+				return fmt.Errorf("%s collection %s must bind a declared set of its object", where, name)
+			}
+			if !ok || set.App != owner.App || set.Query != "" || !slices.ContainsFunc(owner.Sets, func(declaration platform.RecordSet) bool {
 				return declaration.Name == set.Set && declaration.Object == set.Object
 			}) {
 				return fmt.Errorf("%s collection %s must bind a declared set of its object", where, name)

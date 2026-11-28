@@ -20,9 +20,7 @@ import (
 	"time"
 
 	"google.golang.org/protobuf/proto"
-
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
-
 	"platformserver/platform"
 )
 
@@ -108,12 +106,13 @@ func (d *stagedDecision) Request(c platform.Caller, r *pb.ChangeRecord, q platfo
 		d.Intents = append(d.Intents, d.routingTenant().gatewayRuntime().Plan(c, r, q, d.Intents))
 	} else if !q.Deferred {
 		q.Payload = slices.Clone(platform.Raw(q.Payload))
-		d.requests = append(d.requests, actions.PendingRequest{Request: q, Caller: c,
-			Record: proto.Clone(r).(*pb.ChangeRecord), N: d.NextRequest(c.App + "/" + r.GetChangeId())})
+		d.requests = append(d.requests, actions.PendingRequest{Request: q, Caller: c, Record: proto.Clone(r).(*pb.ChangeRecord), N: d.NextRequest(c.App + "/" + r.GetChangeId())})
 	} else if effect, err := d.routingTenant().router().PlanDeferredRequest(c, r, q); err != nil {
 		d.FailDecision(err)
 	} else if effect.ID != "" {
 		d.Intents = append(d.Intents, effect)
+	} else if q.Reply != "" {
+		d.requests = append(d.requests, actions.PendingRequest{Request: q, Caller: c, Record: proto.Clone(r).(*pb.ChangeRecord), N: d.NextRequest(c.App + "/" + r.GetChangeId())})
 	}
 }
 func (d *stagedDecision) Query(c platform.Caller, protocol, read string, provider ...string) ([]platform.ProviderResult, *platform.Error) {

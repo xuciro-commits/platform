@@ -86,6 +86,7 @@ type Field struct {
 	Type        string                 `json:"type" field:"required" choices:"text,longtext,integer,decimal,money,date,datetime,boolean,choice,reference,member,attachment" example:"date"`
 	Choices     string                 `json:"choices,omitempty" help:"For a choice: the values, comma-separated; value:Label gives one a display name" example:"open:Open,done:Done"`
 	Ref         string                 `json:"ref,omitempty" title:"Refers to" help:"For a reference: the object it points at" example:"core.partner"`
+	RefType     string                 `json:"refType,omitempty" title:"Target type field" help:"For a text ID field: another field of this object holding the target object type"`
 	Stereotype  string                 `json:"stereotype,omitempty" title:"Element type" help:"Enterprise element type"`
 	Stereotypes []string               `json:"stereotypes,omitempty" title:"Element types" help:"Enterprise element types"`
 	Inverse     string                 `json:"inverse,omitempty" title:"Inverse name" help:"Seen from there as. For a reference: what the referenced record calls these records" example:"visits"`

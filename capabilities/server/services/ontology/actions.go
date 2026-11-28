@@ -274,7 +274,7 @@ func RuleLookup(o Object, app, builderRole string, lookup func(string) (platform
 			if len(read) > 0 {
 				read = append([]string{builderRole}, read...)
 			}
-			field := platform.FieldInfo{Name: f.Name, Type: f.Type, Ref: f.Ref, Read: read, Inverse: f.Inverse}
+			field := platform.FieldInfo{Name: f.Name, Type: f.Type, Ref: f.Ref, RefType: f.RefType, Read: read, Inverse: f.Inverse}
 			if f.Live != nil {
 				field.Provenance = "live"
 				info.LiveRules[f.Name] = *f.Live

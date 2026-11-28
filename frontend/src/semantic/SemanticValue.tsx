@@ -98,6 +98,7 @@ export function SemanticValue({
   surface = "detail",
   compactMoney = false,
   interactive = true,
+  dynamicRefType,
   recordType,
   recordId,
   recordRevision,
@@ -112,6 +113,7 @@ export function SemanticValue({
   surface?: SemanticSurface;
   compactMoney?: boolean;
   interactive?: boolean;
+  dynamicRefType?: string;
   recordType?: string;
   recordId?: string;
   recordRevision?: number;
@@ -141,9 +143,10 @@ export function SemanticValue({
     return <StatusValue label={label} dot={dot} tone={tone} size={size} appearance={surface === "header" ? "pill" : "dot"} />;
   }
 
-  if (field.type === "reference" && field.ref) {
+  const resolvedRef = (field.type === "reference" ? field.ref : undefined) || dynamicRefType;
+  if (resolvedRef) {
     const targetId = String(given);
-    return <ReferenceValue type={field.ref} id={targetId} name={name ?? refs?.[targetId]} size={size} />;
+    return <ReferenceValue type={resolvedRef} id={targetId} name={name ?? refs?.[targetId]} size={size} />;
   }
 
   if (field.type === "references" && field.ref && Array.isArray(given)) {

@@ -50,6 +50,7 @@ export function PropertyValue({
   name,
   dot,
   tone,
+  dynamicRefType,
   recordType,
   recordId,
   recordRevision,
@@ -59,6 +60,7 @@ export function PropertyValue({
   name?: string;
   dot?: Dot;
   tone?: string;
+  dynamicRefType?: string;
   recordType?: string;
   recordId?: string;
   recordRevision?: number;
@@ -72,6 +74,7 @@ export function PropertyValue({
       tone={tone}
       size="md"
       surface="detail"
+      dynamicRefType={dynamicRefType}
       recordType={recordType}
       recordId={recordId}
       recordRevision={recordRevision}
@@ -244,6 +247,7 @@ export function PropertyField(props: PropertyFieldProps) {
             name={name}
             dot={props.dot}
             tone={props.tone}
+            dynamicRefType={field.refType && typeof form?.[field.refType] === "string" ? String(form[field.refType]) : undefined}
             recordType={described?.type}
             recordId={props.recordId ?? (typeof form?.id === "string" ? form.id : undefined)}
             recordRevision={props.recordRevision}

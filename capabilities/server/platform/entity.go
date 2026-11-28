@@ -56,29 +56,28 @@ type LedgerBalance struct {
 }
 
 type RecordType struct {
-	Ledger            *LedgerSpec
-	BalanceOf         string
-	DataSources       []DataSourceBinding
-	LocalRules        map[string]Expr
-	LiveRules         map[string]Expr
-	LiveReads         *RuleReadSpec
-	EnterpriseUse     *Expr
-	Protocols         []Provision
-	CreateTxn         *BusinessTxn
-	Follow            func(Caller, *pb.ChangeRecord, string, any, time.Time) *Error
-	ReverseCheck      func(Caller, any, string, time.Time) *Error
-	ReverseFollow     func(Caller, *pb.ChangeRecord, any, string, time.Time) *Error
-	Versioning        *Versioning
-	VersionPins       []VersionPinBinding
-	Sets              []RecordSet
-	Constraints       []Constraint
-	PropertyBindings  map[string]AssetBinding
-	ValueTypeBindings map[string]AssetBinding
-	Format            map[string][]FormatRule
-	Compute           func(record any)
-	ComputeAt         func(c Caller, record, previous any, now time.Time) *Error
-	Validate          func(c Caller, record any) *Error
-
+	Ledger                                     *LedgerSpec
+	BalanceOf                                  string
+	DataSources                                []DataSourceBinding
+	LocalRules                                 map[string]Expr
+	LiveRules                                  map[string]Expr
+	LiveReads                                  *RuleReadSpec
+	EnterpriseUse                              *Expr
+	Protocols                                  []Provision
+	CreateTxn                                  *BusinessTxn
+	Follow                                     func(Caller, *pb.ChangeRecord, string, any, time.Time) *Error
+	ReverseCheck                               func(Caller, any, string, time.Time) *Error
+	ReverseFollow                              func(Caller, *pb.ChangeRecord, any, string, time.Time) *Error
+	Versioning                                 *Versioning
+	VersionPins                                []VersionPinBinding
+	Sets                                       []RecordSet
+	Constraints                                []Constraint
+	PropertyBindings                           map[string]AssetBinding
+	ValueTypeBindings                          map[string]AssetBinding
+	Format                                     map[string][]FormatRule
+	Compute                                    func(record any)
+	ComputeAt                                  func(c Caller, record, previous any, now time.Time) *Error
+	Validate                                   func(c Caller, record any) *Error
 	Type, Title, Plural, Description, Synonyms string
 	Model                                      any
 	RecordFormat                               string
@@ -273,6 +272,7 @@ type FieldInfo struct {
 	Choices      []string          `json:"choices,omitempty"`
 	ChoiceTitles []string          `json:"choiceTitles,omitempty"`
 	Ref          string            `json:"ref,omitempty"`
+	RefType      string            `json:"refType,omitempty"`
 	Stereotype   string            `json:"stereotype,omitempty"`
 	Stereotypes  []string          `json:"stereotypes,omitempty"`
 	Inverse      string            `json:"inverse,omitempty"`

@@ -21,7 +21,7 @@ import { describe, type Described, headerStatus, statusField, type Values, withR
 import { ProjectObjectsSection } from "./ExtensionCreator";
 import { KeyboardHelp } from "./KeyboardHelp";
 import { type Editor, FieldGroup, useEditor } from "./RecordFields";
-import { RecordFiles, RecordLinks, relatedGroups } from "./RecordAttachments";
+import { DownstreamDocuments, RecordFiles, RecordLinks, relatedGroups } from "./RecordAttachments";
 import { Collaboration, RecordActivity } from "./RecordActivity";
 import { compareObjectChanges, RecordComparison } from "./RecordComparison";
 import { type ContributedAction, ExtensionHost, extensionsOf } from "./RecordExtensions";
@@ -196,6 +196,25 @@ export function RecordPage({ described, id, listPath, listTitle, instances, enti
     () => Array.from(new Set(catalog.filter((action) => action.target === described.type).flatMap((action) => action.unconnected ?? []))),
     [catalog, described.type],
   );
+  const deliveryFailures = useMemo(() => {
+    if (read.status !== "ready") return [];
+    const latest = new Map<string, Api.RecordDelivery>();
+    for (const entry of read.data.deliveries ?? []) {
+      const prev = latest.get(entry.event);
+      if (!prev || entry.at >= prev.at) latest.set(entry.event, entry);
+    }
+    return Array.from(new Set(Array.from(latest.values()).filter((d) => d.state === "rejected" && d.message).map((d) => d.message as string)));
+  }, [read]);
+  const inlineSets = useMemo(
+    () =>
+      (described.entity.sets ?? []).flatMap((set) => {
+        if (set.direction !== "inverse") return [];
+        const type = entities.find((entry) => entry.type === set.object);
+        return type && !type.lifecycle && !type.ledger ? [{ set, type }] : [];
+      }),
+    [described.entity.sets, entities],
+  );
+  const inlineTypes = useMemo(() => new Set(inlineSets.map((entry) => entry.type.type)), [inlineSets]);
   const isProjectRecord = described.type === "build.app";
   const tabs = [
     { value: "details", label: "Details" },
@@ -327,6 +346,9 @@ export function RecordPage({ described, id, listPath, listTitle, instances, enti
                 <VStack gap={6}>
                   {editor.stale && <VStack xstyle={motionStyles.bannerEnter}><Banner status="info" title={t("This record has new changes")} /></VStack>}
                   {refusal && <VStack xstyle={motionStyles.bannerEnter}><Banner status="error" title={t("Not done")} description={refusal} /></VStack>}
+                  {deliveryFailures.map((msg) => (
+                    <Banner key={msg} status="error" title={msg} />
+                  ))}
                   {unconnected.map((cap) => (
                     <Banner key={cap} status="info" title={t("{capability} not connected").replace("{capability}", t(cap))} />
                   ))}
@@ -343,15 +365,14 @@ export function RecordPage({ described, id, listPath, listTitle, instances, enti
                     <ExtensionHost extensions={extensions} baseId={id} catalog={catalog} showFields onActions={onExtensionActions} />
                   )}
                   {definition && <DefinitionRows described={detail} source={definition} entities={entities} catalog={catalog} id={id} revision={kept.revision} refreshing={definitionRefreshing} onAccepted={setAcceptedDefinitionRevision} />}
-                  {described.entity.sets?.flatMap((set) => {
-                    if (set.direction !== "inverse") return [];
-                    const type = entities.find((entry) => entry.type === set.object);
+                  {inlineSets.map(({ set, type }) => {
                     const initial = described.lifecycle?.initial ?? described.lifecycle?.states?.[0]?.name;
                     const currentState = described.lifecycle ? String(values[described.lifecycle.field] ?? "") : "";
                     const pastDraft = Boolean(described.lifecycle && (described.lifecycle.states?.length ?? 0) > 1 && initial && currentState && currentState !== initial);
                     const readOnly = !editAllowed || Boolean(kept?.archived) || pastDraft;
-                    return type ? <RecordLines key={set.name} parent={described.type} id={id} set={set} child={describe(type, catalog)} readOnly={readOnly} /> : [];
+                    return <RecordLines key={set.name} parent={described.type} id={id} set={set} child={describe(type, catalog)} readOnly={readOnly} />;
                   })}
+                  <DownstreamDocuments read={links} id={id} entities={entities} inlineTypes={inlineTypes} />
                 </VStack>
               )}
               {tab !== "details" && extensions.length > 0 && (

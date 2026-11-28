@@ -243,6 +243,7 @@ func describeFields(e Entity, t reflect.Type, from int, typeOf func(reflect.Type
 		f.Group = sf.Tag.Get("group")
 		f.Aside = sf.Tag.Get("rail") == "true"
 		f.OneOf = sf.Tag.Get("oneof")
+		f.RefType = sf.Tag.Get("refType")
 		if roles := sf.Tag.Get("read"); roles != "" {
 			f.Read = strings.Split(roles, ",")
 		}
@@ -341,6 +342,14 @@ func describeFields(e Entity, t reflect.Type, from int, typeOf func(reflect.Type
 	}
 	if err := checkConditions(e.Type, out); err != nil {
 		return nil, err
+	}
+	for _, f := range out {
+		if f.RefType != "" {
+			i := slices.IndexFunc(out, func(x FieldInfo) bool { return x.Name == f.RefType })
+			if f.Type != "text" || i < 0 || f.RefType == f.Name || !slices.Contains([]string{"text", "choice"}, out[i].Type) {
+				return nil, fmt.Errorf("entity %s: field %s refType %q needs a distinct text or choice type field", e.Type, f.Name, f.RefType)
+			}
+		}
 	}
 	return out, nil
 }

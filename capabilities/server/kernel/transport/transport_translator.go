@@ -762,7 +762,7 @@ func (tr *Translator) TranslateMessages(v any, lang string) any {
 				x["answerTitles"] = titles
 			}
 			for k, child := range x {
-				if s, ok := child.(string); ok && (k == "title" || k == "body") {
+				if s, ok := child.(string); ok && (k == "title" || k == "body" || k == "message") {
 					x[k] = tr.Say(lang, s)
 					continue
 				}

@@ -65,3 +65,22 @@ func DraftView(view *RecordView, draft func(any) (any, *platform.Error)) *platfo
 	}
 	return nil
 }
+
+func LocalizeDeliveries(list []RecordDelivery, say func(string) string) []RecordDelivery {
+	if len(list) == 0 {
+		return list
+	}
+	out := make([]RecordDelivery, len(list))
+	copy(out, list)
+	for i := range out {
+		out[i].Message = say(out[i].Message)
+	}
+	return out
+}
+
+func LocalizeSection(view *RecordSectionView, lang string, say func(string, string) string, translateMessages func(any, string) any) {
+	view.Deliveries = LocalizeDeliveries(view.Deliveries, func(s string) string { return say(lang, s) })
+	if activity, ok := translateMessages(view.Activity, lang).([]any); ok {
+		view.Activity = activity
+	}
+}

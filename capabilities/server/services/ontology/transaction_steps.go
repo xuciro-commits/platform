@@ -359,6 +359,12 @@ func checkTypedTxnStep(ctx TransactionContext, step platform.TxnStep, scope plat
 		if q.Optional && !q.Deferred {
 			return fmt.Errorf("Optional capability requests must be deferred")
 		}
+		if q.Reply != "" {
+			replyVerb := strings.TrimPrefix(q.Reply, scope.Object+".")
+			if !q.Deferred || !publication.ValidName(replyVerb) || q.Reply != replyVerb && q.Reply != scope.Object+"."+replyVerb {
+				return fmt.Errorf("Capability request reply must name a subject action on a deferred request")
+			}
+		}
 		if err := check(q.Key, "text", "reference"); err != nil {
 			return err
 		}

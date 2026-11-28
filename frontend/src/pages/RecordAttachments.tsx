@@ -6,7 +6,7 @@ import { FileInput } from "@astryxdesign/core/FileInput";
 import { HStack, VStack } from "@astryxdesign/core/Layout";
 import { Link } from "@astryxdesign/core/Link";
 import { List, ListItem } from "@astryxdesign/core/List";
-import { Text } from "@astryxdesign/core/Text";
+import { Heading, Text } from "@astryxdesign/core/Text";
 import { useState } from "react";
 import { useRecordHref } from "../recordRoutes";
 import { type Api, type Read, request, requestBlob, reread, useRead, reasonOf, send } from "../host";
@@ -35,7 +35,12 @@ export function RecordLinks({ read, id, entities }: { read: Section; id: string;
         const type = entities.find((entity) => entity.type === group.type);
         const rows = group.records as (Values & { id: string })[];
         const linked = (read.data.linked ?? []).includes(group);
-        const domain = linked ? [["id", "in", rows.map((row) => row.id)]] : [[group.field, "=", id]];
+        const refField = type?.fields.find((f) => f.name === group.field);
+        const domain = linked
+          ? [["id", "in", rows.map((row) => row.id)]]
+          : refField?.refType
+            ? [[refField.refType, "=", rows[0]?.[refField.refType] ?? ""], [group.field, "=", id]]
+            : [[group.field, "=", id]];
         const route = href(group.type);
         return (
           <VStack key={`${group.type}/${group.field}/${linked}`} gap={2}>
@@ -138,6 +143,57 @@ export function RecordFiles({ read, attach, detach, target }: { read: Section; a
         />
       )}
       {preview && <MediaPreview media={{ path: path(preview.id), name: preview.name, contentType: preview.contentType }} onClose={() => setPreview(undefined)} onFailure={setFailure} />}
+    </VStack>
+  );
+}
+
+export function DownstreamDocuments({ read, id, entities, inlineTypes }: { read: Section; id: string; entities: Api.EntityInfo[]; inlineTypes: ReadonlySet<string> }) {
+  const href = useRecordHref();
+  if (read.status !== "ready") return null;
+  const groups = relatedGroups(read.data).filter((group) => !inlineTypes.has(group.type));
+  if (!groups.length) return null;
+  return (
+    <VStack gap={4}>
+      <Heading level={3} accessibilityLevel={2}>{t("Downstream documents")}</Heading>
+      {groups.map((group) => {
+        const type = entities.find((entity) => entity.type === group.type);
+        const rows = group.records as (Values & { id: string })[];
+        const linked = (read.data.linked ?? []).includes(group);
+        const refField = type?.fields.find((f) => f.name === group.field);
+        const domain = linked
+          ? [["id", "in", rows.map((row) => row.id)]]
+          : refField?.refType
+            ? [[refField.refType, "=", rows[0]?.[refField.refType] ?? ""], [group.field, "=", id]]
+            : [[group.field, "=", id]];
+        const route = href(group.type);
+        const summaryFields = (type?.fields ?? []).filter((f) =>
+          f.name !== type?.display && (f.type === "choice" || f.type === "money" || f.type === "decimal" || f.type === "integer")
+        ).slice(0, 3);
+        return (
+          <VStack key={`${group.type}/${group.field}/${linked}`} gap={2}>
+            <List header={`${t(group.title)} · ${group.total}`}>
+              {rows.slice(0, 10).map((row) => {
+                const summary = summaryFields
+                  .map((f) => {
+                    const v = shown(row[f.name]);
+                    return v ? `${t(f.title)}: ${f.type === "choice" ? t(v) : v}` : "";
+                  })
+                  .filter(Boolean)
+                  .join(" · ");
+                return (
+                  <ListItem
+                    key={row.id}
+                    label={(type && shown(row[type.display])) || row.id}
+                    description={summary || undefined}
+                    href={`${route}/${encodeURIComponent(row.id)}`}
+                  />
+                );
+              })}
+            </List>
+            {group.total > 10 && <Link href={`${route}?${new URLSearchParams({ domain: JSON.stringify(domain) })}`}>{t("View all")}</Link>}
+          </VStack>
+        );
+      })}
     </VStack>
   );
 }

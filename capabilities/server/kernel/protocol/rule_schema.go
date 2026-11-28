@@ -67,16 +67,28 @@ func RuleSchema(expr platform.Expr, spec platform.RuleReadSpec, lookup func(stri
 		}
 	}
 	for name, set := range spec.Collections {
-		if _, _, err := RuleCollectionSubjectField(spec.Object, set.Of, lookup); err != nil {
+		subField, hasSubField, err := RuleCollectionSubjectField(spec.Object, set.Of, lookup)
+		if err != nil {
 			return schema, err
 		}
 		if set.App == "" || set.Query == "" && set.Set == "" || set.Set != "" && set.Query != "" || set.Version < 0 || set.Policy != "visible" && set.Policy != "complete" {
 			return schema, fmt.Errorf("rule collection %s needs a declared query/version and scope policy", name)
 		}
-		if set.Set != "" && (set.App != record.App || set.Version != 0 || set.Of != "" && set.Of != "$subject" || !slices.ContainsFunc(record.Sets, func(declaration platform.RecordSet) bool {
-			return declaration.Name == set.Set && declaration.Object == set.Object
-		})) {
-			return schema, fmt.Errorf("rule collection %s must bind its object's declared set", name)
+		if set.Set != "" {
+			owner := record
+			if hasSubField {
+				if subField.Type != "reference" {
+					return schema, fmt.Errorf("rule collection %s set owner must be a reference field", name)
+				}
+				owner, _ = lookup(subField.Ref)
+			} else if set.Of != "" && set.Of != "$subject" {
+				return schema, fmt.Errorf("rule collection %s must bind its object's declared set", name)
+			}
+			if set.App != owner.App || set.Version != 0 || !slices.ContainsFunc(owner.Sets, func(declaration platform.RecordSet) bool {
+				return declaration.Name == set.Set && declaration.Object == set.Object
+			}) {
+				return schema, fmt.Errorf("rule collection %s must bind its object's declared set", name)
+			}
 		}
 		info, ok := lookup(set.Object)
 		if !ok {
@@ -421,7 +433,7 @@ func RuleContext(c platform.Caller, expr platform.Expr, spec platform.RuleReadSp
 				if value.Status == "withheld" {
 					return ctx, &platform.Error{Code: pb.ErrorCode_ERROR_CODE_POLICY_DENIED}
 				}
-				if value.Status != "value" || json.Unmarshal(value.Data, &of) != nil || of == "" {
+				if (value.Status != "value" || json.Unmarshal(value.Data, &of) != nil || of == "") && set.Set == "" {
 					return ctx, fmt.Errorf("collection %s subject key is unavailable", name)
 				}
 				var id string
@@ -445,12 +457,15 @@ func RuleContext(c platform.Caller, expr platform.Expr, spec platform.RuleReadSp
 		var raw json.RawMessage
 		var readErr *platform.Error
 		if set.Set != "" {
-			var subjectID string
+			setOwner, subjectID, subjectRecord := spec.Object, "", record
 			_ = json.Unmarshal(values["id"], &subjectID)
+			if field, selected, _ := RuleCollectionSubjectField(spec.Object, set.Of, lookup); selected && field.Type == "reference" {
+				setOwner, subjectID, subjectRecord = field.Ref, of, nil
+			}
 			if subjectID == "" {
 				raw = platform.Raw(map[string]any{"records": []any{}, "total": 0, "sources": []string{}, "partial": false})
 			} else {
-				page, err := ruleRecordSet(c, spec.Object, subjectID, set.Set, record, now)
+				page, err := ruleRecordSet(c, setOwner, subjectID, set.Set, subjectRecord, now)
 				readErr = err
 				if err == nil {
 					raw = platform.Raw(map[string]any{"records": page.Records, "total": len(page.Records), "sources": page.Sources, "partial": page.Partial})
@@ -598,7 +613,7 @@ func observationRuleFacts(c platform.Caller) map[string]platform.ExprValue {
 }
 
 func ruleRecordSet(c platform.Caller, object, id, name string, record any, at time.Time) (platform.RecordSetResult, *platform.Error) {
-	if runtime := c.StagedDecision(); runtime != nil {
+	if runtime := c.StagedDecision(); runtime != nil && record != nil {
 		return runtime.ReadDecisionRecordSet(c, object, id, name, platform.Raw(record), at)
 	}
 	return c.ReadRecordSet(object, id, name, at)

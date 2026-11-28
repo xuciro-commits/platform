@@ -110,6 +110,9 @@ func CompileObjectShape(o Object, app, builderRole string) platform.RecordType {
 				tag += fmt.Sprintf(` oneof:%q`, f.OneOf)
 			}
 		}
+		if f.RefType != "" {
+			tag += fmt.Sprintf(` refType:%q`, f.RefType)
+		}
 		var marks []string
 		if f.Required {
 			marks = append(marks, "required")

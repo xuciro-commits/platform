@@ -93,6 +93,50 @@ func expandSets(body *object) {
 	}
 }
 
+func expandCollections(body *object) {
+	value, ok := body.get("collections")
+	declared := asObject(value)
+	if !ok || declared == nil {
+		return
+	}
+	body.remove("collections")
+	reads := asObject(body.values["reads"])
+	if reads == nil {
+		reads = &object{}
+		body.set("reads", reads)
+	}
+	collections := asObject(reads.values["collections"])
+	if collections == nil {
+		collections = &object{}
+		reads.set("collections", collections)
+	}
+	for _, name := range declared.order() {
+		spec := asObject(declared.values[name])
+		if spec == nil {
+			continue
+		}
+		setName := text(spec, "set")
+		if setName == "" {
+			setName = name
+		}
+		of := text(spec, "of")
+		if of != "" && of != "$subject" && !strings.HasPrefix(of, "$subject.") && !strings.HasPrefix(of, "input.") {
+			of = "$subject." + of
+		}
+		read := &object{}
+		read.set("app", "build")
+		read.set("object", text(spec, "object"))
+		if of != "" {
+			read.set("of", of)
+		}
+		read.set("policy", "complete")
+		read.set("query", "")
+		read.set("set", setName)
+		read.set("version", float64(0))
+		collections.set(name, read)
+	}
+}
+
 func setNames(body *object) map[string]string {
 	out := map[string]string{}
 	value, _ := body.get("sets")
@@ -100,6 +144,15 @@ func setNames(body *object) map[string]string {
 	for _, item := range list {
 		if set := asObject(item); set != nil {
 			out[text(set, "name")] = text(set, "object")
+		}
+	}
+	if reads := asObject(body.values["reads"]); reads != nil {
+		if cols := asObject(reads.values["collections"]); cols != nil {
+			for _, name := range cols.order() {
+				if col := asObject(cols.values[name]); col != nil {
+					out[name] = text(col, "object")
+				}
+			}
 		}
 	}
 	return out
@@ -111,6 +164,7 @@ func expandObject(body *object, path string, definitions map[string]*object, typ
 		body.set("type", self)
 	}
 	expandSets(body)
+	expandCollections(body)
 	s := exprScope{objects: types, self: self, sets: setNames(body)}
 	var priorBals map[string]map[string]string
 	if isLedger, _ := body.values["ledger"].(bool); isLedger {
@@ -465,6 +519,11 @@ func expandRequest(step *object, use string, s exprScope, at string) error {
 			request.set(flag, v)
 			step.remove(flag)
 		}
+	}
+	if reply := text(step, "reply"); reply != "" {
+		reply = strings.TrimPrefix(reply, s.self+".")
+		request.set("reply", reply)
+		step.remove("reply")
 	}
 	if key, ok := step.get("key"); ok {
 		compiled, err := compileAt(key, s, "text", at+" step "+text(step, "name")+" key")

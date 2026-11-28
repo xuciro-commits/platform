@@ -2275,6 +2275,7 @@ export type FieldInfo = {
   choices?: string[];
   choiceTitles?: string[];
   ref?: string;
+  refType?: string;
   stereotype?: string;
   stereotypes?: string[];
   inverse?: string;
@@ -3703,6 +3704,7 @@ export type OntologyField = {
   type: "text" | "longtext" | "integer" | "decimal" | "money" | "date" | "datetime" | "boolean" | "choice" | "reference" | "member" | "attachment";
   choices?: string;
   ref?: string;
+  refType?: string;
   stereotype?: string;
   stereotypes?: string[];
   inverse?: string;
@@ -5969,6 +5971,7 @@ export type TxnRequest = {
   optional?: boolean;
   key?: Expr;
   use: string;
+  reply?: string;
   payload?: TxnSet[];
 };
 

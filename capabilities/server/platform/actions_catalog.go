@@ -198,7 +198,7 @@ func (c *Catalog) AuthorizationRequest(caller Caller, schema, target string) (Au
 		return AuthorizationInput{}, nil, false
 	}
 	_, id, _ := strings.Cut(target, "/")
-	if a.ConfirmationOnly && !caller.Replaying && !caller.ConfirmationCompletion(a.Target, id, schema) {
+	if a.ConfirmationOnly && !caller.Replaying && !(caller.Automation && caller.ID == "app:"+caller.App) && !caller.ConfirmationCompletion(a.Target, id, schema) {
 		return AuthorizationInput{}, nil, false
 	}
 	allowed := slices.Clone(a.Roles)

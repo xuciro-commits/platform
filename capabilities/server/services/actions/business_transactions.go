@@ -513,7 +513,12 @@ func (b *Runtime) transactAttempt(c platform.Caller, receipt *pb.ChangeRecord, t
 				if step.Request.Key != nil {
 					customKey = receipt.GetChangeId() + ":" + protocol + "#" + action + ":" + target
 				}
-				c.Request(receipt, platform.Request{Protocol: protocol, Action: action, Target: target, Key: customKey, Payload: payload, Deferred: step.Request.Deferred, Optional: step.Request.Optional})
+				replySchema := ""
+				if step.Request.Reply != "" {
+					verb := step.Request.Reply[strings.LastIndex(step.Request.Reply, ".")+1:]
+					replySchema = txn.Subject + "." + verb
+				}
+				c.Request(receipt, platform.Request{Protocol: protocol, Action: action, Target: target, Key: customKey, Payload: payload, Deferred: step.Request.Deferred, Optional: step.Request.Optional, Reply: replySchema})
 				continue
 			}
 			if step.Work != nil {

@@ -175,6 +175,7 @@ func (t *Owner) recordOf(m platform.Member, typ, id string, now time.Time) (Reco
 	}
 	base.view.Refs, base.view.Partial = t.referenceNames(m, typ, []any{base.view.Record}, now)
 	base.view.People = t.people(base.view.Record)
+	base.view.Deliveries = t.recordDeliveries(typ+"/"+id, now)
 	return base.view, nil
 }
 
@@ -240,7 +241,9 @@ func (t *Owner) recordRelated(m platform.Member, base recordBase, now time.Time)
 	s.Lock()
 	var referring []*records.Type
 	for _, other := range s.Types() {
-		named := slices.ContainsFunc(other.Info().Fields, func(f platform.FieldInfo) bool { return f.Ref == et.Info().Type && f.Inverse != "" })
+		named := slices.ContainsFunc(other.Info().Fields, func(f platform.FieldInfo) bool {
+			return (f.Ref == et.Info().Type && f.Inverse != "") || f.RefType != ""
+		})
 		if other.Info().App == et.Info().App || named {
 			referring = append(referring, other)
 		}
@@ -248,18 +251,37 @@ func (t *Owner) recordRelated(m platform.Member, base recordBase, now time.Time)
 	s.Unlock()
 	slices.SortFunc(referring, func(a, b *records.Type) int { return strings.Compare(a.Info().Type, b.Info().Type) })
 	out, partial := []Related{}, false
+	targetID := records.Header(base.row.Value).ID
 	for _, other := range referring {
 		for _, f := range other.Info().Fields {
-			if f.Ref != et.Info().Type {
+			var domain []byte
+			if f.Ref == et.Info().Type {
+				domain, _ = json.Marshal([]any{[]any{f.Name, "=", targetID}})
+			} else if f.RefType != "" {
+				if tf, ok := other.Info().Field(f.RefType); ok && len(tf.Choices) > 0 && !slices.Contains(tf.Choices, et.Info().Type) {
+					continue
+				}
+				domain, _ = json.Marshal([]any{[]any{f.RefType, "=", et.Info().Type}, []any{f.Name, "=", targetID}})
+			} else {
 				continue
 			}
-			domain, _ := json.Marshal([]any{[]any{f.Name, "=", records.Header(base.row.Value).ID}})
 			page, err := t.recordsRead(m, other.Info().Type, platform.Query{Domain: domain, Sort: []string{"-id"}, Limit: 20}, now)
 			if err != nil {
-				partial = true
+				if f.Ref == et.Info().Type {
+					partial = true
+				} else {
+					auto := t.caller(m, other.Info().App)
+					auto.ID, auto.Automation = "app:"+other.Info().App, true
+					if probe, _, pErr := t.LoadObjectSet(s, auto, (platform.Query{Domain: domain}).ObjectSet(other.Info().Type, nil), Window{Limit: 1, SkipLive: true}, now); pErr != nil || probe.Total > 0 {
+						partial = true
+					}
+				}
 				continue
 			}
-			if other.Info().App != et.Info().App && f.Inverse == "" {
+			if f.RefType != "" && page.Total == 0 {
+				continue
+			}
+			if other.Info().App != et.Info().App && f.Inverse == "" && f.RefType == "" {
 				continue
 			}
 			partial = partial || page.Partial

@@ -147,9 +147,9 @@ function shape(described: Described, declared: Declared, listPath: string, extra
           }
           return undefined;
         },
-        reference: field.type === "reference" && field.ref ? (row: Row) => {
-          const target = linked(field, row);
-          return row[target.name] ? { type: String(target.ref), id: String(row[target.name]) } : undefined;
+        reference: (field.type === "reference" && field.ref) || field.refType ? (row: Row) => {
+          const target = linked(field, row), ref = target.refType ? plain(row[target.refType]) : target.ref;
+          return ref && row[target.name] ? { type: String(ref), id: String(row[target.name]) } : undefined;
         } : undefined,
         href: drill?.measures.has(field.name) ? (row: Row) => `${drill.href}?domain=${encodeURIComponent(JSON.stringify(drill.keys.map((k) => [k, "=", plain(row[k]) ?? ""])))}` : undefined,
         value: numeric.has(field.type) ? (row: Row) => field.type === "money" ? money(row[field.name])?.amount : plain(row[field.name]) : undefined,

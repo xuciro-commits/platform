@@ -130,7 +130,6 @@ func (c Caller) Next(r *pb.ChangeRecord, sequence string, date time.Time) (strin
 }
 
 const TxnMaxSteps, TxnMaxIterations = 256, 1000
-
 const TxnMaxExecutionSteps = TxnMaxSteps * TxnMaxIterations
 
 type BusinessTxn struct {
@@ -206,6 +205,7 @@ type TxnRequest struct {
 	Optional bool     `json:"optional,omitempty"`
 	Key      *Expr    `json:"key,omitempty"`
 	Use      string   `json:"use"`
+	Reply    string   `json:"reply,omitempty"`
 	Payload  []TxnSet `json:"payload,omitempty"`
 }
 

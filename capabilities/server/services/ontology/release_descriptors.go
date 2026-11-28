@@ -138,7 +138,8 @@ func ObjectDependencies(asset platform.ReleaseAsset, historical bool) ([]platfor
 	var requires []platform.AssetRef
 	var provides []platform.Capability
 	var bindings struct {
-		Objects map[string]platform.AssetRef `json:"objectBindings"`
+		Objects   map[string]platform.AssetRef `json:"objectBindings"`
+		Protocols map[string]platform.AssetRef `json:"protocolBindings"`
 	}
 	if err := json.Unmarshal(asset.Body, &bindings); err != nil {
 		return nil, nil, err
@@ -215,6 +216,7 @@ func ObjectDependencies(asset platform.ReleaseAsset, historical bool) ([]platfor
 			Ledger string `json:"ledger"`
 		} `json:"depletion"`
 		Actions []struct {
+			Uses        []string                   `json:"uses"`
 			Reads       *platform.RuleReadSpec     `json:"reads"`
 			Transaction *platform.BusinessTxn      `json:"transaction"`
 			Adoption    *platform.ProposalAdoption `json:"adoption"`
@@ -266,6 +268,12 @@ func ObjectDependencies(asset platform.ReleaseAsset, historical bool) ([]platfor
 		}
 	}
 	for _, action := range declaration.Actions {
+		for _, use := range action.Uses {
+			proto, _, _ := strings.Cut(use, "#")
+			if ref, ok := bindings.Protocols[proto]; ok && ref.Name != "" {
+				requires = append(requires, ref)
+			}
+		}
 		readSpec(action.Reads)
 		for _, created := range action.Creates {
 			addObject(created.Object)
@@ -359,6 +367,25 @@ func ActionDependencies(asset platform.ReleaseAsset, historical bool) ([]platfor
 		if ref, ok := bindings.Protocols[protocol]; ok {
 			add(ref)
 		}
+	}
+	var actionBody struct {
+		Definition *struct {
+			Transaction *platform.BusinessTxn `json:"transaction"`
+		} `json:"definition"`
+		Transaction *platform.BusinessTxn `json:"transaction"`
+	}
+	_ = json.Unmarshal(asset.Body, &actionBody)
+	txnSpec := actionBody.Transaction
+	if txnSpec == nil && actionBody.Definition != nil {
+		txnSpec = actionBody.Definition.Transaction
+	}
+	if txnSpec != nil && action.Target != "" {
+		WalkBusinessTxn(txnSpec, func(step platform.TxnStep) {
+			if step.Request != nil && step.Request.Reply != "" {
+				verb := step.Request.Reply[strings.LastIndex(step.Request.Reply, ".")+1:]
+				add(platform.AssetRef{App: asset.Ref.App, Kind: platform.AssetAction, Name: action.Target + "." + verb})
+			}
+		})
 	}
 	var relationship struct {
 		Roles []string `json:"roles"`

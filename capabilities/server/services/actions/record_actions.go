@@ -2,9 +2,11 @@ package actions
 
 import (
 	"encoding/json"
+	"fmt"
 	"log/slog"
 	"maps"
 	"reflect"
+	"regexp"
 	"strings"
 	"time"
 
@@ -91,7 +93,35 @@ func transactionGuard(c platform.Caller, txn *platform.BusinessTxn, spec platfor
 	if refusal != nil || allowed {
 		return "", refusal
 	}
-	return txn.Message, nil
+	return formatGuardMessage(c, txn.Message, spec, subject, values, now, lookup), nil
+}
+
+var guardSlotPattern = regexp.MustCompile(`\{([A-Za-z0-9_]+)\}`)
+
+func formatGuardMessage(c platform.Caller, msg string, spec platform.RuleReadSpec, subject, values map[string]any, now time.Time, lookup func(string) (platform.RecordTypeInfo, bool)) string {
+	if !strings.Contains(msg, "{") {
+		return msg
+	}
+	info, hasInfo := lookup(spec.Object)
+	return guardSlotPattern.ReplaceAllStringFunc(msg, func(token string) string {
+		name := token[1 : len(token)-1]
+		v, ok := values[name]
+		if !ok || v == nil {
+			v, ok = subject[name]
+		}
+		if (!ok || v == nil) && hasInfo {
+			if f, found := info.Field(name); found && f.Provenance == "live" {
+				lv, _ := protocol.LiveField(c, info, f, subject, lookup, now)
+				if gv, err := protocol.ExprGoValue(lv); err == nil {
+					v, ok = gv, true
+				}
+			}
+		}
+		if !ok || v == nil {
+			return token
+		}
+		return fmt.Sprint(v)
+	})
 }
 
 type ActionConditionCheck struct {

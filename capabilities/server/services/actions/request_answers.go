@@ -60,13 +60,16 @@ func (r RequestAnswers) answer(q PendingRequest, now time.Time) (refusal *platfo
 	}
 	answer := protocol.Answer{Tag: q.Tag, Call: q.Target, Action: q.Action, Outcome: "accepted"}
 	var ref *pb.EntityRef
-	_, err := r.Attempt(func() (*pb.ChangeRecord, *platform.Error) {
-		var record *pb.ChangeRecord
-		var refusal *platform.Error
-		ref, record, refusal = r.Router().Invoke(q.Caller, q.Protocol, q.Action, q.Target,
-			platform.Raw(q.Payload), providerKey, s.GetIdempotencyKey(), now, q.Provider)
-		return record, refusal
-	})
+	var err *platform.Error
+	if !q.Deferred || !q.Optional {
+		_, err = r.Attempt(func() (*pb.ChangeRecord, *platform.Error) {
+			var record *pb.ChangeRecord
+			var refusal *platform.Error
+			ref, record, refusal = r.Router().Invoke(q.Caller, q.Protocol, q.Action, q.Target,
+				platform.Raw(q.Payload), providerKey, s.GetIdempotencyKey(), now, q.Provider)
+			return record, refusal
+		})
+	}
 	if q.Reply == "" {
 		if err != nil {
 			outcome = err.Code.String()
@@ -77,7 +80,7 @@ func (r RequestAnswers) answer(q PendingRequest, now time.Time) (refusal *platfo
 	if err != nil {
 		answer.Outcome, answer.Code, answer.Reason = "refused", err.Code.String(), err.Message
 		outcome = answer.Code
-	} else {
+	} else if ref != nil {
 		answer.Ref = ref.GetType() + "/" + ref.GetId()
 	}
 	payload, errJSON := json.Marshal(answer)

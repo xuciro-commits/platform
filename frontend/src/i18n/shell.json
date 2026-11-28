@@ -433,5 +433,6 @@
   "records": "条记录",
   "records with data": "条有数据的记录",
   "unread": "条未读",
-  "{capability} not connected": "{capability}未接入"
+  "{capability} not connected": "{capability}未接入",
+  "Downstream documents": "下游单据"
 }
