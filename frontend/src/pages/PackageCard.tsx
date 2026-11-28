@@ -278,9 +278,10 @@ export function CatalogEntryCard({
           </HStack>
           <StackItem size="fill" />
           <VStack gap={2}>
-            {(entry.kind || entry.listing?.stage === "test" || entry.listing?.stage === "preview" || (entry.listing?.industries?.length ?? 0) > 0 || (entry.listing?.domains?.length ?? 0) > 0) && (
+            {(entry.kind || entry.listing?.stage || (entry.listing?.industries?.length ?? 0) > 0 || (entry.listing?.domains?.length ?? 0) > 0) && (
               <HStack gap={1.5} vAlign="center" wrap="wrap">
                 {entry.kind && <Token label={kindLabel(entry.kind)} color="gray" size="sm" />}
+                {entry.listing?.stage === "stable" && <Token label={t("Stable")} color="green" size="sm" />}
                 {entry.listing?.stage === "test" && <Token label={t("Test")} color="orange" size="sm" />}
                 {entry.listing?.stage === "preview" && <Token label={t("Preview")} color="blue" size="sm" />}
                 {[...(entry.listing?.industries ?? []), ...(entry.listing?.domains ?? [])].slice(0, 3).map((value) => (

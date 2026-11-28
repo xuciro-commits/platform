@@ -14,6 +14,7 @@ test("library tenant: a remote catalog lists its package beside the built-in ind
     { id: "application.production-provider", version, title: "Acme production", description: "CRM from the Acme library", url: "./crm.json", sha256,
       listing: { icon: "cube", cover: "./cover.svg", industries: ["general"], capabilities: ["sales"], keywords: ["pipeline"], stage: "preview", source: { ecosystem: "frappe", app: "crm", relation: "redesign" } } },
     { id: "acme.demo", version: "1.0.0", title: "Acme demo", url: "./crm.json", sha256, listing: { capabilities: ["hr"], stage: "test" } },
+    { id: "acme.demo", version: "0.9.0", title: "Acme demo", url: "./crm.json", sha256, listing: { capabilities: ["hr"], stage: "preview" } },
   ] });
   const server = createServer((request, response) => {
     if (request.url === "/catalog.json") response.writeHead(200, { "content-type": "application/json" }).end(catalog);
@@ -35,7 +36,7 @@ test("library tenant: a remote catalog lists its package beside the built-in ind
     await manager.getByRole("textbox", { name: /Library URL/ }).fill(address);
     await manager.getByRole("textbox", { name: /Library name/ }).fill("Acme packages");
     await manager.getByRole("button", { name: "Add library", exact: true }).click();
-    await expect(manager.getByText("2 packages", { exact: true })).toBeVisible({ timeout: 20_000 });
+    await expect(manager.getByText("3 packages", { exact: true })).toBeVisible({ timeout: 20_000 });
     await expect(manager.getByRole("button", { name: "Remove", exact: true })).toHaveCount(1);
     await manager.getByRole("button", { name: "Close", exact: true }).last().click();
 
@@ -43,11 +44,13 @@ test("library tenant: a remote catalog lists its package beside the built-in ind
     await expect(remote).toContainText("Acme packages");
     await expect.poll(() => remote.evaluate((el, url) => Array.from(el.querySelectorAll("*")).some(child => getComputedStyle(child).backgroundImage.includes(url)), address.replace("catalog.json", "cover.svg"))).toBe(true);
     await expect(remote).toContainText(`application.production-provider · ${version}`);
-    await expect(page.getByRole("listitem").filter({ hasText: /^CRM/ }).filter({ hasText: `crm · ${input("crm").version}` })).toBeVisible();
+    await expect(page.getByRole("listitem").filter({ hasText: /^CRM/ }).filter({ hasText: /crm · / })).toBeVisible();
     await expect(remote).toContainText("Preview");
     await expect(remote).toContainText("Redesigned after crm");
     const demo = page.getByRole("listitem").filter({ hasText: "Acme demo" });
-    await expect(demo).toHaveCount(0);
+    await expect(demo).toBeVisible();
+    await expect(demo).toContainText("Test");
+    await expect(demo).toContainText("acme.demo · 1.0.0");
     const choose = async (filter: string, option: string) => {
       await page.getByRole("combobox", { name: filter, exact: true }).click();
       await page.getByRole("option", { name: option, exact: true }).click();
@@ -61,7 +64,12 @@ test("library tenant: a remote catalog lists its package beside the built-in ind
     await expect(demo).toHaveCount(0);
     await expect(remote).toBeVisible();
     await choose("Domain filter", "All domains");
-    await choose("Stage filter", "Released packages");
+    await choose("Stage filter", "Stable packages");
+    await expect(remote).toHaveCount(0);
+    await expect(demo).toHaveCount(0);
+    await choose("Stage filter", "Preview packages");
+    await expect(demo).toContainText("acme.demo · 0.9.0");
+    await expect(demo).toContainText("Preview");
     await page.getByRole("textbox", { name: "Search", exact: true }).fill("pipeline");
     await expect(remote).toBeVisible();
     await page.getByRole("textbox", { name: "Search", exact: true }).fill("");

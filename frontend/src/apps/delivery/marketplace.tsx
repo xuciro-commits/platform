@@ -100,7 +100,7 @@ export default function Marketplace() {
   const [domain, setDomain] = useState("all");
   const initialSearch = useSearch();
   const [kind, setKind] = useState(() => new URLSearchParams(initialSearch).get("kind") || "all");
-  const [stage, setStage] = useState("released");
+  const [stage, setStage] = useState("all");
   const [query, setQuery] = useState("");
   const gutter = useGutter();
   const rows = packages.status === "ready" ? packages.data : [];
@@ -157,7 +157,7 @@ export default function Marketplace() {
     }
     return { industries: [...industries].sort(), domains: [...domains].sort() };
   }, [remoteEntries]);
-  const classified = industry !== "all" || domain !== "all" || stage === "test";
+  const classified = industry !== "all" || domain !== "all" || stage !== "all";
 
   const isLocalInstalled = (view: Api.PackageView) =>
     Boolean(view.installed && view.installed.state !== "retired" && view.installed.version === view.descriptor.version);
@@ -190,8 +190,7 @@ export default function Marketplace() {
       if (source === "official" && !official) return false;
       if (source === "third-party" && official) return false;
       const listing = entry.listing;
-      if (stage === "released" && listing?.stage === "test") return false;
-      if (stage === "test" && listing?.stage !== "test") return false;
+      if (stage !== "all" && listing?.stage !== stage) return false;
       if (industry !== "all" && !listing?.industries?.includes(industry)) return false;
       if (domain !== "all" && !listing?.domains?.includes(domain)) return false;
       if (kind !== "all" && entry.kind !== kind) return false;
@@ -323,9 +322,10 @@ export default function Marketplace() {
                     value={stage}
                     onChange={setStage}
                     options={[
-                      { value: "released", label: t("Released packages") },
-                      { value: "test", label: t("Test packages") },
                       { value: "all", label: t("All stages") },
+                      { value: "stable", label: t("Stable packages") },
+                      { value: "preview", label: t("Preview packages") },
+                      { value: "test", label: t("Test packages") },
                     ]}
                   />
                   <TextInput
