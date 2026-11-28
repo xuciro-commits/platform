@@ -281,7 +281,7 @@ async function runBrowserSpec(pg, bin, baseArgs, spec, jsonOut) {
       if (restore && existsDB(pg, restore)) dropDB(pg, restore);
       if (existsDB(pg, db)) dropDB(pg, db);
     });
-    if (success) rmSync(work, { recursive: true, force: true });
+    if (success && process.env.TRUNK_KEEP_EVIDENCE !== "1") rmSync(work, { recursive: true, force: true });
     else console.error("trunk evidence retained at " + work);
   }
 }
@@ -416,7 +416,7 @@ if (mode === "--clean") {
   } finally {
     interrupt("SIGTERM");
     if (existsDB(pg, db)) dropDB(pg, db);
-    if (success) rmSync(work, { recursive: true, force: true });
+    if (success && process.env.TRUNK_KEEP_EVIDENCE !== "1") rmSync(work, { recursive: true, force: true });
     else console.error("trunk evidence retained at " + work);
   }
 }

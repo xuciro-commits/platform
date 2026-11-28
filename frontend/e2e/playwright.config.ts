@@ -161,7 +161,7 @@ export default defineConfig({
         { name: "official", testMatch: /official\.spec\.ts/, dependencies: ["trunk"] },
       ]
     : undefined,
-  use: { baseURL: page, locale: "en-US", channel: "chrome", trace: "retain-on-failure", actionTimeout: 10_000 },
+  use: { baseURL: page, locale: "en-US", channel: "chrome", trace: "retain-on-failure", video: process.env.TRUNK_KEEP_EVIDENCE === "1" ? "on" : "off", actionTimeout: 10_000 },
   webServer: [
     {
       command: `node "${work}/supervisor.mjs"`,
