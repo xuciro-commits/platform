@@ -1,6 +1,7 @@
 package host
 
 import (
+	"context"
 	"maps"
 	"net/http"
 	"platformserver/kernel/protocol"
@@ -110,17 +111,14 @@ func (h *Host) hostConsoleRoutes(mux *http.ServeMux) {
 
 func (h *Host) tenantView(t *Tenant) controlowner.HostTenantView {
 	now := h.Now()
-	state := t
-	image := t.readImage.Load()
-	if image != nil {
-		state = image.state
-	} else {
-		t.Lane.Lock()
-	}
-	quota := monitoring.CurrentQuota(state.Projection)
-	view := controlowner.HostTenantView{ID: t.ID, Lifecycle: t.console.State(), Plan: monitoring.PlanOf(quota), Quota: quota, ActiveRelease: state.releases.Active(), Candidates: state.releases.Count()}
-	if image == nil {
-		t.Lane.Unlock()
+	view := controlowner.HostTenantView{ID: t.ID, Lifecycle: t.console.State()}
+	if !t.quarantined() {
+		if read, refusal := recordRead(t, context.Background(), func(state *Tenant) (controlowner.HostTenantView, *platform.Error) {
+			quota := monitoring.CurrentQuota(state.Projection)
+			return controlowner.HostTenantView{ID: t.ID, Lifecycle: t.console.State(), Plan: monitoring.PlanOf(quota), Quota: quota, ActiveRelease: state.releases.Active(), Candidates: state.releases.Count()}, nil
+		}); refusal == nil {
+			view = read
+		}
 	}
 	health := t.Health(now)
 	view.Started, view.FailedWork, view.Connectors = health.Started, health.Failed, health.Connectors

@@ -3,6 +3,7 @@ const SCENARIOS = {
     records: { tenants: ["acceptance"] },
     gantt: { tenants: ["acceptance"] },
     workspace: { tenants: ["acceptance", "publisher"], seed: ["acceptance"] },
+    operations: { tenants: ["acceptance", "publisher"], seed: ["acceptance"] },
     builder: { tenants: ["acceptance"] },
     "i18n-grouping": { tenants: ["acceptance", "phone"] },
   },

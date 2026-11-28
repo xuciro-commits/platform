@@ -11,12 +11,15 @@ import { Switch } from "@astryxdesign/core/Switch";
 import { Heading } from "@astryxdesign/core/Text";
 import { useToast } from "@astryxdesign/core/Toast";
 import { Toolbar } from "@astryxdesign/core/Toolbar";
-import { ArrowLeftIcon, ChevronRightIcon, Cog6ToothIcon, HashtagIcon, ListBulletIcon, PencilSquareIcon, PowerIcon } from "@heroicons/react/24/outline";
+import { ArrowLeftIcon, ChartBarIcon, ChevronRightIcon, Cog6ToothIcon, HashtagIcon, ListBulletIcon, PencilSquareIcon, PowerIcon } from "@heroicons/react/24/outline";
 import { useState } from "react";
 import { type Api, reread, useRead, reasonOf, send } from "../host";
 import { t } from "../i18n";
 import { PageTitle, useGutter } from "./frame";
 import { controlWidth, type IconComponent, row, SettingsCard, SettingsRow, TextSetting } from "./SettingsRows";
+import { WorkspaceUsage } from "./WorkspaceUsage";
+
+const USAGE_GROUP = "__usage__";
 
 export type SettingItem = { name: string; title: string; description?: string; type: string; value: string; choices?: string[] };
 export type SettingsGroup = { id: string; label: string; settings: SettingItem[] };
@@ -24,6 +27,7 @@ export type SettingsDefinition<Answer> = {
   title: string;
   about: string;
   read: string;
+  usageRead?: string;
   groups: (answer: Answer) => SettingsGroup[];
   action: string;
   target: (group: string, setting: string) => string;
@@ -46,10 +50,11 @@ export function settingsPage<Answer>(definition: SettingsDefinition<Answer>) {
     const toast = useToast();
     const narrow = useMediaQuery("(max-width: 768px)");
     const gutter = useGutter();
-    const [chosen, setChosen] = useState("");
+    const [chosen, setChosen] = useState(definition.usageRead ? USAGE_GROUP : "");
     const [detail, setDetail] = useState(false);
     const groups = read.status === "ready" ? definition.groups(read.data) : [];
-    const group = groups.find((candidate) => candidate.id === chosen) ?? groups[0];
+    const showingUsage = Boolean(definition.usageRead) && (chosen === USAGE_GROUP || (!chosen && groups.length === 0));
+    const group = showingUsage ? undefined : (groups.find((candidate) => candidate.id === chosen) ?? groups[0]);
     const action = catalog.status === "ready" ? catalog.data.find((candidate) => candidate.schema === definition.action) : undefined;
     const commit = (setting: string) => async (value: string) => {
       if (!action || !group) return;
@@ -69,52 +74,68 @@ export function settingsPage<Answer>(definition: SettingsDefinition<Answer>) {
       <VStack gap={4} padding={gutter}>
         <PageTitle title={t(definition.title)} />
         <List density="spacious" aria-label={t("Apps")}>
+          {definition.usageRead && (
+            <ListItem
+              key={USAGE_GROUP}
+              label={t("Usage & quotas")}
+              startContent={<Icon icon={ChartBarIcon} />}
+              endContent={narrow ? <Icon icon={ChevronRightIcon} size="sm" color="secondary" /> : undefined}
+              isSelected={!narrow && showingUsage}
+              onClick={() => choose(USAGE_GROUP)}
+            />
+          )}
           {groups.map((candidate) => (
             <ListItem
               key={candidate.id}
               label={t(candidate.label)}
               startContent={<Icon icon={Cog6ToothIcon} />}
               endContent={narrow ? <Icon icon={ChevronRightIcon} size="sm" color="secondary" /> : undefined}
-              isSelected={!narrow && candidate.id === group?.id}
+              isSelected={!narrow && !showingUsage && candidate.id === group?.id}
               onClick={() => choose(candidate.id)}
             />
           ))}
         </List>
       </VStack>
     );
-    const body = group && (
+
+    const activeHeading = showingUsage ? t("Usage & quotas") : group ? t(group.label) : "";
+    const body = (showingUsage || group) && (
       <VStack gap={4} xstyle={row.panel}>
         {narrow ? (
           <Toolbar
-            label={t(group.label)}
+            label={activeHeading}
             gap={2}
             startContent={
               <>
                 <Button label={t("Back")} variant="ghost" size="sm" isIconOnly icon={<Icon icon={ArrowLeftIcon} size="sm" />} onClick={() => setDetail(false)} />
-                <Heading level={2}>{t(group.label)}</Heading>
+                <Heading level={2}>{activeHeading}</Heading>
               </>
             }
           />
         ) : (
           <HStack minHeight={36} vAlign="center">
-            <Heading level={2}>{t(group.label)}</Heading>
+            <Heading level={2}>{activeHeading}</Heading>
           </HStack>
         )}
-        <SettingsCard>
-          {group.settings.map((setting) => (
-            <SettingsRow
-              key={`${group.id}/${setting.name}`}
-              title={setting.title}
-              description={setting.description || undefined}
-              icon={icons[setting.type] ?? PencilSquareIcon}
-              control={<Control setting={setting} onCommit={commit(setting.name)} />}
-            />
-          ))}
-        </SettingsCard>
+        {showingUsage && definition.usageRead ? (
+          <WorkspaceUsage readPath={definition.usageRead} />
+        ) : group ? (
+          <SettingsCard>
+            {group.settings.map((setting) => (
+              <SettingsRow
+                key={`${group.id}/${setting.name}`}
+                title={setting.title}
+                description={setting.description || undefined}
+                icon={icons[setting.type] ?? PencilSquareIcon}
+                control={<Control setting={setting} onCommit={commit(setting.name)} />}
+              />
+            ))}
+          </SettingsCard>
+        ) : null}
       </VStack>
     );
 
-    if (read.status !== "ready") {
+    if (read.status !== "ready" && !showingUsage) {
       return (
         <Layout height="fill" content={
           <LayoutContent role="main" padding={gutter} label={t(definition.title)}>
@@ -128,7 +149,7 @@ export function settingsPage<Answer>(definition: SettingsDefinition<Answer>) {
         } />
       );
     }
-    if (!group) {
+    if (!group && !showingUsage) {
       return (
         <Layout height="fill" content={
           <LayoutContent role="main" padding={gutter} label={t(definition.title)}>
