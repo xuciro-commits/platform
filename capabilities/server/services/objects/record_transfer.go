@@ -249,7 +249,20 @@ func (o *Owner) Referrer(m platform.Member, now time.Time, translate ...func(str
 	if len(translate) > 0 {
 		tr = translate[0]
 	}
-	return func(f platform.FieldInfo, value string) (string, bool) { return o.referred(m, f.Ref, value, now, tr) }
+	type resolved struct {
+		id string
+		ok bool
+	}
+	cache := map[[2]string]resolved{}
+	return func(f platform.FieldInfo, value string) (string, bool) {
+		key := [2]string{f.Ref, value}
+		if hit, found := cache[key]; found {
+			return hit.id, hit.ok
+		}
+		id, ok := o.referred(m, f.Ref, value, now, tr)
+		cache[key] = resolved{id: id, ok: ok}
+		return id, ok
+	}
 }
 
 func (o *Owner) referred(m platform.Member, typ, value string, now time.Time, translate func(string) []string) (string, bool) {

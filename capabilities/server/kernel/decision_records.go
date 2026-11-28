@@ -280,6 +280,7 @@ func (d *Decision) Put(c platform.Caller, r *pb.ChangeRecord, entity any) *platf
 		err = d.Records.Put(c, r, prepared)
 	}
 	if err == nil {
+		d.writeSeq++
 		if d.ConstraintWrites == nil {
 			d.ConstraintWrites = map[string]ConstraintWrite{}
 		}
@@ -364,7 +365,20 @@ func (d *Decision) CaptureDirectRows(owner string, refs []string, exclude map[st
 
 func (d *Decision) CheckFinalConstraints() *platform.Error {
 	if d.Failure == nil {
-		d.Failure = d.ConstraintCheck().Final()
+		mutation := d.Records.Mutation()
+		definitions := len(d.Definitions) + len(d.Rules.Definitions())
+		publications := len(d.Publications)
+		if d.Rules.Trace() != nil || !d.finalChecked || d.finalStore != d.Records || d.finalMutation != mutation || d.finalWriteSeq != d.writeSeq || d.finalDefinitions != definitions || d.finalPublications != publications {
+			d.Failure = d.ConstraintCheck().Final()
+			if d.Failure == nil {
+				d.finalChecked = true
+				d.finalStore = d.Records
+				d.finalMutation = mutation
+				d.finalWriteSeq = d.writeSeq
+				d.finalDefinitions = definitions
+				d.finalPublications = publications
+			}
+		}
 	}
 	return d.Failure
 }

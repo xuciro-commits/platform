@@ -175,6 +175,7 @@ K54AIProvenanceSourceSlot|AI 写入在已接受结果来源槽位记录来由并
 K57DelegationAutoloop|委派资源按委派人授权与动作交集驱动外部接单闭环并强制回执幂等冲突资料隔离与跳数拦截
 AskObjectActions|包检查校验对象与动作的 ask 先问声明
 K53LedgerValuationAndDepletion|过账前余额读取、余额实时派生、加权与逐层消耗计价、已消耗层冲正拦截及重放字节一致
+K58CrossTypeConstraintPruning|跨对象路径约束仅在被引用类型变更时扫描受影响记录并保持父记录非法变更拦截与重放一致
 `.trim().split("\n").map(line => line.split("|")));
 
 const subcases = { postgres: "PostgreSQL 持久化", file: "文件持久化", memory: "内存模式", accepted: "接受结果", refused: "拒绝结果" };

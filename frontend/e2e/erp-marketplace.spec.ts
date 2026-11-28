@@ -1,6 +1,7 @@
+import { execFileSync } from "node:child_process";
 import { addToLibrary, installInput, packageWizard } from "./package-inputs";
 import { expect, test } from "@playwright/test";
-import { open, signIn, submit } from "./support";
+import { open, restartHost, signIn, submit } from "./support";
 
 test("ERP composition: purchasing works before inventory, posts stock when connected and survives retirement", async ({ page, context }) => {
   test.setTimeout(900_000);
@@ -173,4 +174,65 @@ test("ERP composition: purchasing works before inventory, posts stock when conne
   await expect(manage).toBeHidden();
   await expect(row).toContainText("retired");
   await receipt("ERP-AFTER", false);
+});
+
+test("ERP ledger: ten thousand accepted stock facts, posting/read latency and full replay", { tag: "@performance" }, async ({ page }) => {
+  test.setTimeout(2_400_000);
+  await signIn(page, "admin-1 · blank");
+  for (const name of ["geo", "party-next", "uom-next", "item-master", "stock-contract", "inventory"]) await installInput(page, name);
+  for (const [app, role] of [["party","user"], ["uom","user"], ["item","steward"], ["inventory","keeper"]]) {
+    await submit(page, "platform.member.grant", "platform.member", "admin-1", { app, role });
+  }
+  await submit(page, "item.master.create", "item.master", "LOAD-I", { title: "Ledger load item", code: "LOAD-I", kind: "material", unit: "pcs" });
+  await submit(page, "inventory.warehouse.create", "inventory.warehouse", "LOAD-W", { title: "Ledger load warehouse", code: "LOAD-W" });
+  const session = await page.evaluate(() => JSON.parse(sessionStorage.getItem("platform:session")!));
+  const host = "http://127.0.0.1:" + process.env.PLATFORM_TRUNK_HOST_PORT;
+  const started = performance.now();
+  const rss = () => {
+    const pid = execFileSync("lsof", ["-t", "-iTCP:" + process.env.PLATFORM_TRUNK_HOST_PORT, "-sTCP:LISTEN"], {encoding:"utf8"}).trim().split("\n")[0];
+    return Number(execFileSync("ps", ["-o", "rss=", "-p", pid], {encoding:"utf8"}).trim()) / 1024;
+  };
+  let peakRSS = rss();
+  let imported = 0;
+  for (let batch=0; batch<10; batch++) {
+    const csv = ["id,title,material,warehouse,quantity,on", ...Array.from({length: 1000}, (_, i) => "LOAD-"+String(batch*1000+i).padStart(5,"0")+",Fact "+(batch*1000+i)+",LOAD-I,LOAD-W,1,2026-11-26")].join("\n")+"\n";
+    const response = await page.request.post(host+"/v1/import/inventory.movement", {
+      headers: {Authorization:"Bearer "+session.token,"Platform-Tenant":session.tenant,"Content-Type":"text/csv"},
+      data: csv, timeout: 600_000
+    });
+    const data = await response.json();
+    if(!response.ok() || !Array.isArray(data)) throw Error(JSON.stringify(data).slice(0,500));
+    expect(data).toHaveLength(1000);
+    expect(data.filter(r=>r.outcome!=="ok"), JSON.stringify(data.find(r=>r.outcome!=="ok"))).toHaveLength(0);
+    imported+=data.length;
+    peakRSS=Math.max(peakRSS,rss());
+    console.log("LEDGER IMPORT", imported, "elapsed ms", (performance.now()-started).toFixed(1), "RSS MiB", peakRSS);
+  }
+  expect(imported).toBe(10000);
+  const importMs=performance.now()-started;
+  const balances = async () => page.evaluate(async () => {
+    const s = JSON.parse(sessionStorage.getItem("platform:session")!);
+    const started = performance.now();
+    const r = await fetch("/v1/records/inventory.movement.stock?limit=100",{headers:{Authorization:"Bearer "+s.token,"Platform-Tenant":s.tenant}});
+    if(!r.ok) throw Error("balance status "+r.status);
+    const data=await r.json();
+    return {elapsedMs:performance.now()-started, records:data.records as Record<string,unknown>[]};
+  });
+  expect((await balances()).records.find(r=>r.material==="LOAD-I" && r.warehouse==="LOAD-W")?.quantity).toBe(10000);
+  const postMs:number[]=[],readMs:number[]=[];
+  for(let i=0;i<20;i++){
+    const started=performance.now();
+    await submit(page,"inventory.movement.create","inventory.movement","LOAD-PROBE-"+i,{title:"Posting probe",material:"LOAD-I",warehouse:"LOAD-W",quantity:1,on:"2026-11-27"});
+    postMs.push(performance.now()-started);
+    readMs.push((await balances()).elapsedMs);
+  }
+  const before=(await balances()).records;
+  expect(before.find(r=>r.material==="LOAD-I")?.quantity).toBe(10020);
+  const replayStarted=performance.now();
+  await restartHost("replay");
+  await signIn(page,"admin-1 · blank");
+  const after=(await balances()).records;
+  expect(JSON.stringify(after)).toBe(JSON.stringify(before));
+  const p95=(values:number[])=>values.slice().sort((a,b)=>a-b)[Math.ceil(values.length*.95)-1];
+  console.log("LEDGER BASELINE",JSON.stringify({facts:10020,importMs,peakRSSMiB:peakRSS,postingP95Ms:p95(postMs),balanceReadP95Ms:p95(readMs),replayMs:performance.now()-replayStarted,replayByteEqual:true}));
 });

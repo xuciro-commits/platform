@@ -59,6 +59,13 @@ type Decision struct {
 	DirectRows        func([]acceptedformat.InputRow, string, time.Time) error
 	BusinessQuery     func(platform.RecordTypeInfo, platform.Query, platform.Member, time.Time) platform.Query
 	DirectoryOf       func() platform.Directory
+	writeSeq          uint64
+	finalChecked      bool
+	finalStore        *records.Store
+	finalMutation     uint64
+	finalWriteSeq     uint64
+	finalDefinitions  int
+	finalPublications int
 }
 
 func (d *Decision) roles() OptionalRoles {

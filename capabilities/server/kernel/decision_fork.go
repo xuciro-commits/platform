@@ -11,6 +11,7 @@ import (
 
 func (d Decision) Fork(owner func(string) platform.Service) (Decision, bool) {
 	fork := d
+	fork.finalChecked = false
 	fork.BusinessFacts = slices.Clone(d.BusinessFacts)
 	for i := range fork.BusinessFacts {
 		fork.BusinessFacts[i] = acceptedformat.CloneBusinessFact(fork.BusinessFacts[i])

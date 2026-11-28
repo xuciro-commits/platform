@@ -30,6 +30,7 @@ type Store struct {
 	parent         *Store
 	generation     uint64
 	baseGeneration uint64
+	mutation       uint64
 	writes         map[string]bool
 	local          map[string]bool
 	contents       map[string]uint64
@@ -67,7 +68,7 @@ func (s *Store) ForkRecords() *Store {
 
 func (s *Store) ForkRecordsLocked() *Store {
 	s.PrepareUniqueIndexes()
-	draft := &Store{rules: s.rules, liveVersions: maps.Clone(s.liveVersions), contents: maps.Clone(s.contents), uniqueLinks: maps.Clone(s.uniqueLinks), archiveLinks: maps.Clone(s.archiveLinks), parent: s, generation: s.generation, baseGeneration: s.generation, types: make(map[string]*Type, len(s.types)),
+	draft := &Store{rules: s.rules, liveVersions: maps.Clone(s.liveVersions), contents: maps.Clone(s.contents), uniqueLinks: maps.Clone(s.uniqueLinks), archiveLinks: maps.Clone(s.archiveLinks), parent: s, generation: s.generation, baseGeneration: s.generation, mutation: s.mutation, types: make(map[string]*Type, len(s.types)),
 		byGo: make(map[reflect.Type]*Type, len(s.byGo)), writes: map[string]bool{},
 		dirty: s.dirty, recentChanges: s.recentChanges.Fork()}
 	draft.current = s.current.Fork(func(typ string) platform.RecordTypeInfo { return draft.types[typ].info })
@@ -184,6 +185,7 @@ func (s *Store) LiveTouched(typ string) {
 // changed notes that typ's rows changed. The root counts the change; a draft
 // remembers it, because sibling drafts would otherwise share one count.
 func (s *Store) changed(typ string) {
+	s.mutation++
 	if s.parent == nil {
 		if s.contents == nil {
 			s.contents = map[string]uint64{}
@@ -495,6 +497,7 @@ func (s *Store) TypeCount() int                     { return len(s.types) }
 func (s *Store) Types() iter.Seq2[string, *Type]    { return maps.All(s.types) }
 func (s *Store) Parent() *Store                     { return s.parent }
 func (s *Store) Generation() uint64                 { return s.generation }
+func (s *Store) Mutation() uint64                   { return s.mutation }
 func (s *Store) Writes() iter.Seq[string]           { return maps.Keys(s.writes) }
 func (s *Store) Written(ref string) bool            { return s.writes[ref] }
 func (s *Store) WriteCount() int                    { return len(s.writes) }
@@ -515,8 +518,9 @@ func (s *Store) SetTouched(touched func(string, string)) { s.touched = touched }
 func (s *Store) InheritDecision(base *Store) {
 	s.parent, s.baseGeneration, s.writes = base.parent, base.baseGeneration, maps.Clone(base.writes)
 	s.local = maps.Clone(base.local)
+	s.mutation++
 }
-func (s *Store) Restored()                     { s.generation++ }
+func (s *Store) Restored()                     { s.generation++; s.mutation++ }
 func (et *Type) Info() platform.RecordTypeInfo { return et.info }
 func (et *Type) Rows() Rows                    { return et.rows }
 func (et *Type) Knowledge() bool               { return et.knowledge }
@@ -534,14 +538,16 @@ func (s *Store) ReplaceReadType(info platform.RecordTypeInfo, rows Rows, retaine
 	formats, _ := CompileFormats(info, s.rules)
 	et := &Type{store: s, info: info, rows: rows, knowledge: knowledge, retainedProjection: retained, formats: formats}
 	s.types[info.Type], s.byGo[info.Go] = et, et
+	s.mutation++
 	return et
 }
 
 func (s *Store) WriteSnapshot() map[string]bool   { return maps.Clone(s.writes) }
-func (s *Store) UseWrites(writes map[string]bool) { s.writes = writes }
+func (s *Store) UseWrites(writes map[string]bool) { s.writes = writes; s.mutation++ }
 func (s *Store) ExtendDecision(base *Store) {
 	s.parent, s.baseGeneration = base.parent, base.baseGeneration
 	maps.Copy(s.writes, base.writes)
+	s.mutation++
 }
 func (s *Store) Anchor(parent *Store) error {
 	writes, local := map[string]bool{}, map[string]bool{}
@@ -561,6 +567,7 @@ func (s *Store) Anchor(parent *Store) error {
 		cursor = predecessor
 	}
 	s.parent, s.baseGeneration, s.writes, s.local = parent, generation, writes, local
+	s.mutation++
 	return nil
 }
 

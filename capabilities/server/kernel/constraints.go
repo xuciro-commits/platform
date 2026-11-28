@@ -205,26 +205,32 @@ func (k ConstraintCheck) Final() *platform.Error {
 	}
 	slices.Sort(refs)
 	for _, et := range k.Records.SortedTypes() {
-		if len(et.Info().Constraints) == 0 {
+		info := et.Info()
+		if len(info.Constraints) == 0 {
 			continue
 		}
-		plans := make([]constraintReadPlan, len(et.Info().Constraints))
-		local := true
-		for i, rule := range et.Info().Constraints {
-			plans[i] = k.readPlan(et.Info(), rule)
-			local = local && (plans[i].local || rule.Kind == "unique" && rule.Reads == nil)
+		plans := make([]constraintReadPlan, len(info.Constraints))
+		ruleDepends := make([]bool, len(info.Constraints))
+		scanAll := false
+		for i, rule := range info.Constraints {
+			plans[i] = k.readPlan(info, rule)
+			if !(!plans[i].unknown && (plans[i].local || rule.Kind == "unique" && rule.Reads == nil)) && k.ruleMayDependOnWrites(info, rule, plans[i], refs) {
+				ruleDepends[i] = true
+				scanAll = true
+			}
 		}
 		var ids []string
-		if local {
+		var loaded map[string]*records.Row
+		if !scanAll {
 			var candidates records.Index[bool]
 			for _, ref := range refs {
 				typ, id, _ := strings.Cut(ref, "/")
-				if typ == et.Info().Type && et.Rows().Get(id) != nil {
+				if typ == info.Type && et.Rows().Get(id) != nil {
 					candidates.Set(id, true)
 				}
-				for _, rule := range et.Info().Constraints {
-					if rule.Kind == "unique" {
-						for dependent := range records.ScopeDependents(k.Records.IndexImage, et.Info(), rule, typ, id).All() {
+				for i, rule := range info.Constraints {
+					if rule.Kind == "unique" && rule.Scope != "" && rule.Scope != "tenant" && (plans[i].unknown || k.mayDependOnType(info, rule, plans[i], typ)) {
+						for dependent := range records.ScopeDependents(k.Records.IndexImage, info, rule, typ, id).All() {
 							candidates.Set(dependent, true)
 						}
 					}
@@ -234,22 +240,40 @@ func (k ConstraintCheck) Final() *platform.Error {
 				ids = append(ids, id)
 			}
 		} else {
-			ids = make([]string, 0, et.Rows().Len())
-			for id := range et.Rows().All() {
+			loaded = map[string]*records.Row{}
+			for id, row := range et.Rows().All() {
 				ids = append(ids, id)
+				loaded[id] = row
 			}
+		}
+		rowOf := func(id string) *records.Row {
+			if row, ok := loaded[id]; ok {
+				return row
+			}
+			return et.Rows().Get(id)
 		}
 		slices.Sort(ids)
 		for _, id := range ids {
-			ref := et.Info().Type + "/" + id
-			for i, rule := range et.Info().Constraints {
+			ref := info.Type + "/" + id
+			var row *records.Row
+			ensureRow := func() *records.Row {
+				if row == nil {
+					row = rowOf(id)
+				}
+				return row
+			}
+			for i, rule := range info.Constraints {
 				write, touched := k.Writes[ref]
 				if !touched {
+					if !ruleDepends[i] && !(rule.Kind == "unique" && rule.Reads == nil && rule.Scope != "" && rule.Scope != "tenant") {
+						continue
+					}
 					for _, source := range refs {
 						candidate := k.Writes[source]
-						if candidate.Caller.App == et.Info().App && k.depends(et.Info(), rule, plans[i], et.Rows().Get(id), source, candidate.Before) {
+						typ, _, _ := strings.Cut(source, "/")
+						if candidate.Caller.App == info.App && k.mayDependOnType(info, rule, plans[i], typ) && k.depends(info, rule, plans[i], ensureRow(), source, candidate.Before) {
 							write, touched = candidate, true
-							write.Before = et.Rows().Get(id)
+							write.Before = ensureRow()
 							break
 						}
 					}
@@ -257,13 +281,125 @@ func (k ConstraintCheck) Final() *platform.Error {
 				if !touched {
 					continue
 				}
-				if err := k.check(write.Caller, et.Info(), rule, et.Rows().Get(id), write.Before); err != nil {
+				if err := k.check(write.Caller, info, rule, ensureRow(), write.Before); err != nil {
 					return err
 				}
 			}
 		}
 	}
 	return nil
+}
+
+func (k ConstraintCheck) pathMayReachType(info platform.RecordTypeInfo, path []string, typ string) bool {
+	currentInfo := info
+	for i, name := range path {
+		field, ok := currentInfo.Field(name)
+		if !ok {
+			return true
+		}
+		if field.Type != "reference" {
+			return i < len(path)-1
+		}
+		if field.Ref == "" || field.Ref == typ {
+			return true
+		}
+		target := k.Records.Type(field.Ref)
+		if target == nil {
+			return true
+		}
+		currentInfo = target.Info()
+	}
+	return false
+}
+
+func (k ConstraintCheck) mayDependOnType(info platform.RecordTypeInfo, rule platform.Constraint, plan constraintReadPlan, typ string) bool {
+	if typ == ruleprotocol.OwnedRelationType(info.App) && rule.Reads != nil {
+		return true
+	}
+	if rule.Reads != nil {
+		for _, set := range rule.Reads.Collections {
+			if set.Set != "" {
+				index := slices.IndexFunc(info.Sets, func(declaration platform.RecordSet) bool { return declaration.Name == set.Set })
+				if index < 0 {
+					return true
+				}
+				declaration := info.Sets[index]
+				if typ == declaration.Object || typ == ruleprotocol.OwnedRelationType(info.App) {
+					return true
+				}
+				continue
+			}
+			if set.Object == typ {
+				return true
+			}
+			if set.Of != "" && set.Of != "$subject" && k.pathMayReachType(info, strings.Split(set.Of, "."), typ) {
+				return true
+			}
+		}
+	}
+	if plan.unknown {
+		return true
+	}
+	for _, path := range plan.paths[""] {
+		if k.pathMayReachType(info, path, typ) {
+			return true
+		}
+	}
+	for collection, itemPaths := range plan.paths {
+		if collection == "" || rule.Reads == nil {
+			continue
+		}
+		set := rule.Reads.Collections[collection]
+		if set.Set != "" {
+			index := slices.IndexFunc(info.Sets, func(declaration platform.RecordSet) bool { return declaration.Name == set.Set })
+			if index < 0 {
+				return true
+			}
+			targetType := set.Object
+			if targetType == "" {
+				targetType = info.Sets[index].Object
+			}
+			et := k.Records.Type(targetType)
+			if et == nil {
+				return true
+			}
+			for _, path := range itemPaths {
+				if k.pathMayReachType(et.Info(), path, typ) {
+					return true
+				}
+			}
+			continue
+		}
+		q, _, ok := k.RuleQuery(set.App, set.Query, set.Version)
+		et := k.Records.Type(set.Object)
+		if !ok || et == nil {
+			return true
+		}
+		if set.Of == "$subject" {
+			if _, ok := et.Info().Field(q.By); !ok {
+				return true
+			}
+		}
+		for _, path := range itemPaths {
+			if k.pathMayReachType(et.Info(), path, typ) {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+func (k ConstraintCheck) ruleMayDependOnWrites(info platform.RecordTypeInfo, rule platform.Constraint, plan constraintReadPlan, refs []string) bool {
+	for _, source := range refs {
+		if k.Writes[source].Caller.App != info.App {
+			continue
+		}
+		typ, _, _ := strings.Cut(source, "/")
+		if k.mayDependOnType(info, rule, plan, typ) {
+			return true
+		}
+	}
+	return false
 }
 
 func (k ConstraintCheck) depends(info platform.RecordTypeInfo, rule platform.Constraint, plan constraintReadPlan, root *records.Row, changed string, old *records.Row) bool {
@@ -397,8 +533,11 @@ func (k ConstraintCheck) readPlan(info platform.RecordTypeInfo, rule platform.Co
 	paths := plan.paths
 	if rule.Kind == "unique" && rule.Scope != "" && rule.Scope != "tenant" {
 		plan.local = false
-		path, _ := ruleprotocol.ConstraintScopePath(info, rule.Scope)
-		paths[""] = append(paths[""], path)
+		if path, err := ruleprotocol.ConstraintScopePath(info, rule.Scope); err != nil {
+			plan.unknown = true
+		} else {
+			paths[""] = append(paths[""], path)
+		}
 	}
 	var visit func(platform.Expr, string)
 	visit = func(expr platform.Expr, collection string) {

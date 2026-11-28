@@ -18,6 +18,7 @@ type Importer struct {
 }
 
 func (i Importer) Rows(info platform.RecordTypeInfo, parsed ImportFile) []protocol.ImportRow {
+	editable := slices.Contains(info.Standard, info.Type+".edit")
 	out := []protocol.ImportRow{}
 	for _, line := range parsed.Lines {
 		r := protocol.ImportRow{Row: line.Row, ID: line.ID, Outcome: line.Outcome}
@@ -47,7 +48,7 @@ func (i Importer) Rows(info platform.RecordTypeInfo, parsed ImportFile) []protoc
 				r.ID = hex.EncodeToString(sum[:16])
 			}
 			verb := ".create"
-			if r.ID != "" {
+			if r.ID != "" && editable {
 				verb = i.Verb(key, r.ID)
 			}
 			requestKey := key

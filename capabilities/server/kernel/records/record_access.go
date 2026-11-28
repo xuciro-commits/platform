@@ -1,6 +1,7 @@
 package records
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -13,6 +14,7 @@ import (
 	"reflect"
 	"slices"
 	"strings"
+	"sync"
 	"time"
 )
 
@@ -304,6 +306,23 @@ func Write(info platform.RecordTypeInfo, receipt *pb.ChangeRecord, prev *Row, v 
 	return next, nil
 }
 
+const decodedRowMemory = 512
+
+type decodedRowKey struct {
+	typ, id, release, format string
+	goType                   reflect.Type
+}
+
+type decodedRowEntry struct {
+	raw json.RawMessage
+	row *Row
+}
+
+type decodedRowCache struct {
+	mu      sync.Mutex
+	entries map[decodedRowKey]decodedRowEntry
+}
+
 type CurrentScope struct {
 	ctx             context.Context
 	backend         persistence.RuntimeState
@@ -313,6 +332,7 @@ type CurrentScope struct {
 	position        func() int64
 	info            func(string) platform.RecordTypeInfo
 	point           currentPoint
+	decoded         *decodedRowCache
 }
 
 type currentPoint struct {
@@ -336,15 +356,22 @@ func (s *CurrentScope) Fork(info func(string) platform.RecordTypeInfo) *CurrentS
 func (s *CurrentScope) Configure(backend persistence.RuntimeState, tenant string, applied int64, position func() int64) {
 	s.backend, s.tenant, s.applied, s.position = backend, tenant, applied, position
 }
-func (s *CurrentScope) Backend() persistence.RuntimeState   { return s.backend }
-func (s *CurrentScope) View() persistence.StateReadView     { return s.view }
-func (s *CurrentScope) Bind(view persistence.StateReadView) { s.view, s.point = view, currentPoint{} }
-func (s *CurrentScope) Tenant() string                      { return s.tenant }
-func (s *CurrentScope) Applied() int64                      { return s.applied }
-func (s *CurrentScope) MarkApplied(position int64)          { s.applied = position }
-func (s *CurrentScope) Position() func() int64              { return s.position }
-func (s *CurrentScope) Release() string                     { return s.release }
-func (s *CurrentScope) SelectRelease(release string)        { s.release = release }
+func (s *CurrentScope) Backend() persistence.RuntimeState { return s.backend }
+func (s *CurrentScope) View() persistence.StateReadView   { return s.view }
+func (s *CurrentScope) Bind(view persistence.StateReadView) {
+	s.view, s.point = view, currentPoint{}
+	if view != nil {
+		s.decoded = &decodedRowCache{entries: map[decodedRowKey]decodedRowEntry{}}
+	} else {
+		s.decoded = nil
+	}
+}
+func (s *CurrentScope) Tenant() string               { return s.tenant }
+func (s *CurrentScope) Applied() int64               { return s.applied }
+func (s *CurrentScope) MarkApplied(position int64)   { s.applied = position }
+func (s *CurrentScope) Position() func() int64       { return s.position }
+func (s *CurrentScope) Release() string              { return s.release }
+func (s *CurrentScope) SelectRelease(release string) { s.release = release }
 func (s *CurrentScope) Source(typ string, info *platform.RecordTypeInfo) RowSource {
 	return &currentRows{store: s, typ: typ, info: info}
 }
@@ -390,17 +417,54 @@ func (r *currentRows) GetBatch(ids []string) map[string]*Row {
 	return out
 }
 
+func (r *currentRows) bindHistory(row *Row, id string, count int) {
+	row.LoadHistory = func(after int) []RecordChange {
+		list, err := r.view().StateHistory(r.store.Context(), r.store.tenant, r.typ, id, after, count)
+		if err != nil {
+			panic(fmt.Errorf("record history %s/%s: %w", r.typ, id, err))
+		}
+		out := make([]RecordChange, len(list))
+		for i, raw := range list {
+			if err := json.Unmarshal(raw, &out[i]); err != nil {
+				panic(err)
+			}
+		}
+		return out
+	}
+}
+
+func cloneDecodedRow(info platform.RecordTypeInfo, template *Row) *Row {
+	cloned := *template
+	if template.Value.IsValid() && info.Go != nil {
+		cloned.Value = Copy(info.Go, template.Value.Interface())
+	}
+	cloned.Projection = CloneProjection(template.Projection)
+	return &cloned
+}
+
 func (r *currentRows) decode(id string, current persistence.StateCurrent) *Row {
 	if len(current.Image) == 0 {
 		return nil
 	}
-	var image Image
-	if err := json.Unmarshal(current.Image, &image); err != nil {
-		panic(err)
-	}
 	info := r.store.info(r.typ)
 	if r.info != nil {
 		info = *r.info
+	}
+	cache := r.store.decoded
+	key := decodedRowKey{typ: r.typ, id: id, release: r.store.release, format: info.RecordFormat, goType: info.Go}
+	if cache != nil && r.info == nil {
+		cache.mu.Lock()
+		cached, ok := cache.entries[key]
+		cache.mu.Unlock()
+		if ok && cached.row.HistoryCount == current.HistoryCount && cached.row.HistoryHead == current.HistoryHead && bytes.Equal(cached.raw, current.Image) {
+			row := cloneDecodedRow(info, cached.row)
+			r.bindHistory(row, id, current.HistoryCount)
+			return row
+		}
+	}
+	var image Image
+	if err := json.Unmarshal(current.Image, &image); err != nil {
+		panic(err)
 	}
 	decoded, err := DecodeFormattedImage(info, image.Value, image.Projection, r.store.release, image.Format)
 	if err != nil {
@@ -415,20 +479,16 @@ func (r *currentRows) decode(id string, current persistence.StateCurrent) *Row {
 		panic("SQL current record identity differs")
 	}
 	row := &Row{Value: value, Format: image.Format, HistoryCount: current.HistoryCount, HistoryHead: current.HistoryHead, Projection: image.Projection, Extraction: image.Extraction, sqlOriginal: image.Value}
-	count := current.HistoryCount
-	row.LoadHistory = func(after int) []RecordChange {
-		list, err := r.view().StateHistory(r.store.Context(), r.store.tenant, r.typ, id, after, count)
-		if err != nil {
-			panic(fmt.Errorf("record history %s/%s: %w", r.typ, id, err))
+	if cache != nil && r.info == nil {
+		template := cloneDecodedRow(info, row)
+		cache.mu.Lock()
+		if len(cache.entries) >= decodedRowMemory {
+			clear(cache.entries)
 		}
-		out := make([]RecordChange, len(list))
-		for i, raw := range list {
-			if err := json.Unmarshal(raw, &out[i]); err != nil {
-				panic(err)
-			}
-		}
-		return out
+		cache.entries[key] = decodedRowEntry{raw: bytes.Clone(current.Image), row: template}
+		cache.mu.Unlock()
 	}
+	r.bindHistory(row, id, current.HistoryCount)
 	return row
 }
 
@@ -502,7 +562,7 @@ func VisitPlan(image IndexImage, lookup ImageLookup, plan Plan, visible func(ref
 		for _, id := range ids {
 			visit(rows[id])
 		}
-	} else if current.Backend() != nil {
+	} else if image.Rows.Sourced() && current.Backend() != nil {
 		var filters []persistence.StateFilter
 		if !image.RetainedProjection && len(image.Info.RecordImages) == 0 {
 			filters = plan.Pushdown
