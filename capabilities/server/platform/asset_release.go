@@ -143,13 +143,17 @@ type ReleaseInstallation struct {
 }
 
 func DecodeJSON(raw []byte, target any, name string) error {
+	return decodeStrict(raw, target, fmt.Errorf("%s has trailing data", name))
+}
+
+func decodeStrict(raw []byte, target any, trailing error) error {
 	decoder := json.NewDecoder(bytes.NewReader(raw))
 	decoder.DisallowUnknownFields()
 	if err := decoder.Decode(target); err != nil {
 		return err
 	}
 	if err := decoder.Decode(new(any)); err != io.EOF {
-		return fmt.Errorf("%s has trailing data", name)
+		return trailing
 	}
 	return nil
 }

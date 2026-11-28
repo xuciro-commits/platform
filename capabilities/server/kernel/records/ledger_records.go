@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"reflect"
 	"strings"
+	"time"
 
 	"platformserver/platform"
 )
@@ -125,7 +126,36 @@ func (et *Type) ledgerTrial(v reflect.Value, prior *Row) (ledgerProjection, erro
 			return ledgerProjection{}, err
 		}
 	}
-	return et.ledgerImage.apply(et.ledgerPlan, f)
+	plan := et.ledgerPlan
+	if source := et.info.Ledger.ClosedBeforeRecord; source != nil {
+		day, err := et.ledgerCloseDate(source)
+		if err != nil {
+			return ledgerProjection{}, err
+		}
+		if day > plan.closedBefore {
+			plan.closedBefore = day
+		}
+	}
+	return et.ledgerImage.apply(plan, f)
+}
+
+// ledgerCloseDate reads the current accepted/draft record under the store's
+// existing consistent view. Missing, archived or malformed sources fail closed.
+func (et *Type) ledgerCloseDate(source *platform.LedgerCloseRecord) (string, error) {
+	target := et.store.types[source.Type]
+	if target == nil || target.info.Ledger != nil || target.info.BalanceOf != "" {
+		return "", fmt.Errorf("ledger close source type unavailable")
+	}
+	field, ok := target.info.Field(source.Field)
+	row := target.rows.Get(source.ID)
+	if !ok || field.Type != "date" || field.Provenance == "live" || row == nil || Header(row.Value).Archived {
+		return "", fmt.Errorf("ledger close source unavailable")
+	}
+	day := row.Value.FieldByIndex(field.Index).String()
+	if _, err := time.Parse(time.DateOnly, day); err != nil {
+		return "", fmt.Errorf("ledger close source requires a date")
+	}
+	return day, nil
 }
 
 // CheckLedgerRow evaluates a trial projection before ordinary acceptance.

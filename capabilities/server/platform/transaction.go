@@ -1,10 +1,8 @@
 package platform
 
 import (
-	"bytes"
 	"encoding/json"
 	"fmt"
-	"io"
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
 	"regexp"
 	"strconv"
@@ -297,15 +295,7 @@ type TxnSet struct {
 }
 
 func strictTxn(raw []byte, into any) error {
-	d := json.NewDecoder(bytes.NewReader(raw))
-	d.DisallowUnknownFields()
-	if err := d.Decode(into); err != nil {
-		return err
-	}
-	if err := d.Decode(new(any)); err != io.EOF {
-		return Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "One transaction definition is required / 须提供一份事务定义")
-	}
-	return nil
+	return decodeStrict(raw, into, Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "One transaction definition is required / 须提供一份事务定义"))
 }
 
 func (t *BusinessTxn) UnmarshalJSON(raw []byte) error {

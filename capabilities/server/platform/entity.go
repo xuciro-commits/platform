@@ -39,8 +39,14 @@ type Money struct {
 }
 
 type LedgerSpec struct {
-	ClosedBefore string          `json:"closedBefore,omitempty"`
-	Balances     []LedgerBalance `json:"balances"`
+	ClosedBefore       string             `json:"closedBefore,omitempty"`
+	ClosedBeforeRecord *LedgerCloseRecord `json:"closedBeforeRecord,omitempty"`
+	Balances           []LedgerBalance    `json:"balances"`
+}
+type LedgerCloseRecord struct {
+	Type  string `json:"type"`
+	ID    string `json:"id"`
+	Field string `json:"field"`
 }
 type LedgerBalance struct {
 	Name        string       `json:"name"`

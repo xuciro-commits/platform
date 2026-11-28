@@ -31,10 +31,6 @@
 拥有：`scripts/`（纯度、变异）、`Makefile` 的 trunk 部分、`frontend/e2e/`、市场卡片 `frontend/src/pages/PackageCard.tsx`、K47–K51 的不变量、租户 `sim`、发版说明。
 顺序：4.1d（ERP 能力就绪后） → 3.x → 4.4b → 门槛演示。演示要 ERP 那波的 4.3d 先落地；没落地就先做别的，都做完还没到就自己在包库补上缺的那块。
 
-### 4.1d 变异验收：等待 ERP 新能力
-
-- 按记录关账的接受路径落地后，在 scripts/mutate-ledger.mjs 加相应变异点。过账前余额读取已由 K55 变异验收覆盖。
-
 ### 3.x 阶段 3 收口
 
 - 干净候选提交的全量 `make verify`；重启、补测、万行导入基线和 65.241 秒连续演示的实测证据已归档到 `idea/sim-customer/TEST-REPORT.md`。核对原逐日剧本的覆盖缺口，完成后删掉 plan 里的阶段 3 一行。

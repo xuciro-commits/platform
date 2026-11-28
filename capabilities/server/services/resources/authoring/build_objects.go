@@ -114,6 +114,9 @@ func (b *Build) Check(o ontology.Object, id string, engine platform.RuleEngine) 
 	if err := ontology.CheckLedger(o, engine); err != nil {
 		return err
 	}
+	if err := ontology.CheckLedgerCloseSource(o, b.conditionLookup); err != nil {
+		return err
+	}
 	if err := b.checkName(o.Namespace, o.Name, id); err != nil {
 		return err
 	}

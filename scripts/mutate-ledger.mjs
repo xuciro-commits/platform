@@ -16,7 +16,9 @@ const k47 = "TestInvariantK47LedgerFactsAndProjection";
 const k48 = "TestInvariantK48LedgerReversalAndClose";
 const k49 = "TestInvariantK49LiveDerivedReadsCurrentSources";
 const k55 = "TestInvariantK55LedgerValuationAndDepletion";
+const k48Record = "TestInvariantK48LedgerRecordClose";
 const mutations = [
+  ["record-closed-date", records + "ledger_records.go", "if day > plan.closedBefore {", "if false && day > plan.closedBefore {", k48Record, "want closed before 2026-10-01"],
   ["prior-balance", schema, "if completeKeys {", "if false && completeKeys {", k55, "weighted outbound amt ="],
   ["balance-constraint", ledger, 'if err != nil || string(result.Value.Data) != "true" {', 'if err != nil || (false && string(result.Value.Data) != "true") {', k47, "concurrent 6+6:"],
   ["immutable-fact", store, "} else if !reflect.DeepEqual(prior.Value.Interface(), value.Value.Interface()) {", "} else if false && !reflect.DeepEqual(prior.Value.Interface(), value.Value.Interface()) {", k47, "ledger store allowed editing an accepted fact"],
@@ -59,6 +61,7 @@ try {
   const original = test("^TestInvariantK(47|48|49|55)");
   if (original.status !== 0 || !/^--- PASS: TestInvariantK47LedgerFactsAndProjection /m.test(original.output) ||
       !/^--- PASS: TestInvariantK48LedgerReversalAndClose /m.test(original.output) ||
+      !/^--- PASS: TestInvariantK48LedgerRecordClose /m.test(original.output) ||
       !/^--- PASS: TestInvariantK49LiveDerivedReadsCurrentSources /m.test(original.output) ||
       !/^--- PASS: TestInvariantK49StoredFormulaRejectsForeignReference /m.test(original.output) ||
       !/^--- PASS: TestInvariantK55LedgerValuationAndDepletion /m.test(original.output)) {

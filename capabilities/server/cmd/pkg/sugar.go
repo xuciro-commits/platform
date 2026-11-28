@@ -304,6 +304,9 @@ func expandObject(body *object, path string, definitions map[string]*object, typ
 	if err := ontology.CheckLedger(declaredObject, platform.NativeRules{}); err != nil {
 		return fmt.Errorf("%s: %w", path, err)
 	}
+	if err := ontology.CheckLedgerCloseSource(declaredObject, lookup); err != nil {
+		return fmt.Errorf("%s: %w", path, err)
+	}
 	if err := ontology.CheckStoredFormulas(declaredObject, lookup); err != nil {
 		return fmt.Errorf("%s: %w", path, err)
 	}

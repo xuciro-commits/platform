@@ -14,6 +14,7 @@ type Object struct {
 	platform.Record
 	Ledger               bool                         `json:"ledger,omitempty" title:"Ledger"`
 	ClosedBefore         string                       `json:"closedBefore,omitempty" type:"date" title:"Closed before"`
+	ClosedBeforeRecord   *platform.LedgerCloseRecord  `json:"closedBeforeRecord,omitempty" type:"json" field:"aside" title:"Close date record"`
 	Balances             []Balance                    `json:"balances,omitempty" type:"json" field:"aside"`
 	Depletion            *LedgerDepletion             `json:"depletion,omitempty" type:"json" field:"aside"`
 	Name                 string                       `json:"name" field:"required,search" title:"API name" help:"Its name in the platform, lower-case letters and digits" example:"visit"`

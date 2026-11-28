@@ -13,7 +13,7 @@ func LedgerOf(o Object) *platform.LedgerSpec {
 	if !o.Ledger {
 		return nil
 	}
-	spec := &platform.LedgerSpec{ClosedBefore: o.ClosedBefore}
+	spec := &platform.LedgerSpec{ClosedBefore: o.ClosedBefore, ClosedBeforeRecord: o.ClosedBeforeRecord}
 	for _, b := range o.Balances {
 		spec.Balances = append(spec.Balances, b.LedgerBalance)
 	}
@@ -22,7 +22,7 @@ func LedgerOf(o Object) *platform.LedgerSpec {
 
 func NormalizeLedger(o *Object) error {
 	if !o.Ledger {
-		if len(o.Balances) > 0 || o.ClosedBefore != "" || o.Depletion != nil {
+		if len(o.Balances) > 0 || o.ClosedBefore != "" || o.ClosedBeforeRecord != nil || o.Depletion != nil {
 			return fmt.Errorf("balances and closedBefore require ledger: true")
 		}
 		return nil
@@ -49,6 +49,11 @@ func CheckLedger(o Object, engine platform.RuleEngine) error {
 	if o.ClosedBefore != "" {
 		if _, err := time.Parse(time.DateOnly, o.ClosedBefore); err != nil {
 			return fmt.Errorf("ledger closedBefore must be a date")
+		}
+	}
+	if r := o.ClosedBeforeRecord; r != nil {
+		if r.Type == "" || r.Type == o.Type() || r.ID == "" || r.Field == "" {
+			return fmt.Errorf("ledger closedBeforeRecord needs another type, record id and date field")
 		}
 	}
 	if len(o.DataSources) > 0 || len(o.Records) > 0 || len(o.States) > 0 || len(o.Actions) > 0 || o.CreateTransaction != nil || o.Extends != "" || o.Versioning != nil {
@@ -126,6 +131,19 @@ func CheckLedger(o Object, engine platform.RuleEngine) error {
 		}
 		if d.When != nil && d.When.Kind != "boolean" {
 			return fmt.Errorf("ledger %s depletion condition must be boolean", o.Type())
+		}
+	}
+	return nil
+}
+
+// CheckLedgerCloseSource verifies the declared source shape. Its actual value
+// is read only during acceptance, never captured into the ledger plan.
+func CheckLedgerCloseSource(o Object, lookup func(string) (platform.RecordTypeInfo, bool)) error {
+	if r := o.ClosedBeforeRecord; r != nil {
+		info, ok := lookup(r.Type)
+		f, found := info.Field(r.Field)
+		if !ok || !found || f.Type != "date" || f.Provenance == "live" || info.Ledger != nil || info.BalanceOf != "" {
+			return fmt.Errorf("ledger close source must be a stored date on another record type")
 		}
 	}
 	return nil

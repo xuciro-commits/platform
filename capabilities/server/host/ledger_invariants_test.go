@@ -212,3 +212,57 @@ func TestInvariantK48LedgerReversalAndClose(t *testing.T) {
 		t.Fatal("reversal replay differs")
 	}
 }
+
+func TestInvariantK48LedgerRecordClose(t *testing.T) {
+	live := newInvariantTenant(t, "invariant-ledger-record-close")
+	const period = "invariantproject.period"
+	const fact = "invariantproject.posting"
+	const balance = fact + ".balance"
+	live.accept(t, "build.object.create", build.ObjectType, "PERIOD", map[string]any{
+		"name": "period", "title": "Period",
+		"fields": []map[string]any{{"name": "cutoff", "title": "Cutoff", "type": "date", "required": true}},
+	})
+	live.accept(t, "build.object.publish", build.ObjectType, "PERIOD", nil)
+	live.accept(t, "build.object.create", build.ObjectType, "POSTING", map[string]any{
+		"name": "posting", "title": "Posting", "ledger": true, "closedBefore": "2026-09-01",
+		"closedBeforeRecord": map[string]any{"type": period, "id": "CURRENT", "field": "cutoff"},
+		"fields":             []map[string]any{{"name": "bucket", "title": "Bucket", "type": "text", "required": true}, {"name": "qty", "title": "Quantity", "type": "integer", "required": true}},
+		"balances":           []map[string]any{{"name": "balance", "title": "Balance", "keys": []string{"bucket"}, "measures": []string{"qty"}}},
+	})
+	live.accept(t, "build.object.publish", build.ObjectType, "POSTING", nil)
+	reject := func(l *invariantTenant, schema, id string, payload map[string]any, reason string) {
+		t.Helper()
+		_, err := l.Submit(l.member(t), l.submission(schema, fact, id, payload), invariantClock)
+		if err == nil || !strings.Contains(err.Message, reason) {
+			t.Fatalf("dynamic close %s %s refusal: %+v, want %s", schema, id, err, reason)
+		}
+	}
+	post := func(day string) map[string]any { return map[string]any{"bucket": "K", "qty": 1, "on": day} }
+	reject(live, fact+".create", "MISSING", post("2026-10-01"), "close source unavailable")
+	live.accept(t, period+".create", period, "CURRENT", map[string]any{"cutoff": "2026-09-01"})
+	live.accept(t, fact+".create", fact, "A", post("2026-09-30"))
+	live.accept(t, period+".edit", period, "CURRENT", map[string]any{"cutoff": "2026-10-01"})
+	reject(live, fact+".create", "B", post("2026-09-30"), "closed before 2026-10-01")
+	reject(live, fact+".reverse", "A", map[string]any{"on": "2026-09-30"}, "closed before 2026-10-01")
+	live.accept(t, fact+".reverse", fact, "A", map[string]any{"on": "2026-10-01"})
+	live.accept(t, fact+".create", fact, "C", post("2026-10-01"))
+	read := func(l *invariantTenant) string {
+		t.Helper()
+		page, err := l.Records(t.Context(), l.member(t), balance, platform.Query{}, invariantClock)
+		if err != nil || len(page.Records) != 1 {
+			t.Fatalf("dynamic close balance: %+v %v", page, err)
+		}
+		return string(platform.Raw(page.Records[0]))
+	}
+	before := read(live)
+	if !strings.Contains(before, `"qty":1`) {
+		t.Fatalf("dynamic close balance: %s", before)
+	}
+	fresh := live.restore(t, live.entries)
+	if read(fresh) != before {
+		t.Fatal("dynamic close replay changed historical facts")
+	}
+	reject(fresh, fact+".create", "D", post("2026-09-30"), "closed before 2026-10-01")
+	live.accept(t, period+".archive", period, "CURRENT", nil)
+	reject(live, fact+".create", "ARCHIVED", post("2026-10-31"), "close source unavailable")
+}

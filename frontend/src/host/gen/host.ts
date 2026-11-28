@@ -2746,8 +2746,15 @@ export type LedgerBalance = {
   constraints?: Constraint[];
 };
 
+export type LedgerCloseRecord = {
+  type: string;
+  id: string;
+  field: string;
+};
+
 export type LedgerSpec = {
   closedBefore?: string;
+  closedBeforeRecord?: LedgerCloseRecord;
   balances: LedgerBalance[];
 };
 
