@@ -29,7 +29,7 @@
 ## 收口（GPT）
 
 拥有：`scripts/`（纯度、变异）、`Makefile` 的 trunk 部分、`frontend/e2e/`、市场卡片 `frontend/src/pages/PackageCard.tsx`、K47–K51 的不变量、租户 `sim`、发版说明。
-顺序：4.1d（ERP 能力就绪后） → 3.x → 4.4b → 门槛演示。演示要 ERP 那波的 4.3d 先落地；没落地就先做别的，都做完还没到就自己在包库补上缺的那块。
+顺序：3.x → 4.4b → 门槛演示（第 1–6 步）。
 
 ### 3.x 阶段 3 收口
 
