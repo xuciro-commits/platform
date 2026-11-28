@@ -23,7 +23,7 @@ var workReady = runtimekernel.NewWake()
 
 func wakeWork() { workReady.Signal() }
 
-var activeTicks = []func(*Tenant, time.Time){(*Tenant).Evaluate, (*Tenant).PullSources, (*Tenant).CheckConnections, (*Tenant).RunPipelines,
+var activeTicks = []func(*Tenant, time.Time){(*Tenant).SweepDelegations, (*Tenant).PullSources, (*Tenant).CheckConnections, (*Tenant).RunPipelines,
 	(*Tenant).ProjectDatasets, (*Tenant).Embed, (*Tenant).PurgeTranscripts, (*Tenant).SweepUploads}
 
 func runWorkFrom(current func() []*Tenant) func(context.Context) error {
@@ -31,8 +31,7 @@ func runWorkFrom(current func() []*Tenant) func(context.Context) error {
 		Tenants: current, Now: Now, Wake: workReady,
 		Round: func(t *Tenant, now time.Time) bool { return t.step(now) },
 		Outside: func(t *Tenant) []func() {
-			outside := append(t.dispatches(Now()), t.agentSchedule().Turns().Due(Now())...)
-			return append(outside, t.continuousSources(Now())...)
+			return append(t.dispatches(Now()), t.continuousSources(Now())...)
 		},
 		OnLane: transform.OnLane,
 		Always: func(t *Tenant) {

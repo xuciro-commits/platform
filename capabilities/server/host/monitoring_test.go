@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	persistence "platformserver/kernel/store"
@@ -24,8 +25,8 @@ import (
 	runtimeprotocol "platformserver/kernel/protocol"
 	"platformserver/platform"
 	"platformserver/services/actions"
+	agents "platformserver/services/ai/delegation"
 	agentevaluation "platformserver/services/ai/evaluation"
-	agents "platformserver/services/ai/runtime"
 	automation "platformserver/services/automate/runtime"
 	devopsauthoring "platformserver/services/devops/authoring"
 	"platformserver/services/devops/packages"
@@ -117,7 +118,6 @@ func newMonitoringTenant(tb testing.TB) *invariantTenant {
 	id := "monitoring-invariant"
 	services := runtimeprotocol.DefaultRuntimeCapabilities(security.Standard{})
 	services.BindOwner = runtimeprotocol.BindOwner
-	services.NewAgentEvaluator = agentevaluation.NewAgentEvaluator
 	services.NewTransactionExecutor = actions.NewRuntime
 	console := controlowner.NewConsole(id, actions.NewAuthority, func(id string) controlowner.Owners {
 		actions := append(runtimeprotocol.AccessActions(), runtimeprotocol.ProjectActions()...)
@@ -134,7 +134,7 @@ func newMonitoringTenant(tb testing.TB) *invariantTenant {
 	}
 	probe := &monitoringFixture{ledger: actions.NewAuthority(id, "probe", platform.NewCatalog(probeActions...), "probe.event"), undoBlocked: &atomic.Bool{}}
 	probe.undoBlocked.Store(true)
-	tenant, err := NewTenantWithCapabilities(id, services, console, build.New(id, actions.NewAuthority, []publication.Hooks{ontology.ActionTypePublication()}, PublicationResolver(), ontology.ObjectPublication, objects.QueryPublication, authoring.NewOwner, agents.BuilderPublication, agentevaluation.NewOwner, devopsauthoring.TestPlanPublication, agentevaluation.EvaluationPublication, devopsauthoring.SampleSetPublication, build.ApplicationOwners{New: appsauthoring.NewOwner, ObjectPage: appsauthoring.CompileObjectPage, ListDetailPage: appsauthoring.ListDetailPage}, automationauthoring.New), work.New(id, actions.NewAuthority), automation.New(id, actions.NewAuthority, PublicationResolver()), agents.New(id, actions.NewAuthority), probe)
+	tenant, err := NewTenantWithCapabilities(id, services, console, build.New(id, actions.NewAuthority, []publication.Hooks{ontology.ActionTypePublication()}, PublicationResolver(), ontology.ObjectPublication, objects.QueryPublication, authoring.NewOwner, agentevaluation.NewOwner, devopsauthoring.TestPlanPublication, agentevaluation.EvaluationPublication, devopsauthoring.SampleSetPublication, build.ApplicationOwners{New: appsauthoring.NewOwner, ObjectPage: appsauthoring.CompileObjectPage, ListDetailPage: appsauthoring.ListDetailPage}, automationauthoring.New), work.New(id, actions.NewAuthority), automation.New(id, actions.NewAuthority, PublicationResolver()), agents.New(id, actions.NewAuthority), probe)
 	if err != nil {
 		tb.Fatal(err)
 	}
@@ -392,24 +392,52 @@ func TestInvariantK4MonitoringOwnerBoundaries(t *testing.T) {
 		cancelled := startFlow("builder", "waiting", "cancelled")
 		submit("admin", runtimeprotocol.FlowApp, automation.SchemaFlowStop, runtimeprotocol.FlowInstanceType, cancelled, map[string]any{})
 		privateFlow := startFlow("other", "compensated", "private-flow")
-		for _, id := range []string{"running", "waiting", "done", "failed", "cancelled", "private-agent"} {
-			member := "builder"
-			if id == "private-agent" {
-				member = "other"
-			}
-			submit(member, runtimeprotocol.AgentApp, runtimeprotocol.SchemaRunStart, runtimeprotocol.RunType, id, map[string]string{"agent": "probe.helper", "goal": "Goal " + id})
-		}
-		for _, step := range []runtimeprotocol.AgentResultStep{
-			{Run: "waiting", Tool: "ask", Arguments: platform.Raw(map[string]string{"question": "What next?"})},
-			{Run: "done", Content: "Completed the goal"},
-			{Run: "failed", Stop: "the model failed 3 times"},
-			{Run: "private-agent", Stop: "no model is set for agents"},
+		submit("admin", runtimeprotocol.AgentApp, runtimeprotocol.SchemaDelegationWorkerKey, runtimeprotocol.DelegationType, "mon-wkr", map[string]any{"name": "mon-worker"})
+		wkrToken := live.Agents.MintWorkerToken("mon-wkr")
+		agentRunIDs := map[string]string{}
+		for idx, spec := range []struct{ key, member, outcome string }{
+			{"waiting", "builder", "ask"},
+			{"done", "builder", "done"},
+			{"failed", "builder", "failed"},
+			{"cancelled", "builder", "cancel"},
+			{"private-agent", "other", "failed"},
+			{"running", "builder", ""},
 		} {
-			if !live.applyAgentStep(step, now.Add(time.Second)) {
-				t.Fatalf("the Agent result was not accepted: %+v", step)
+			dlgID := fmt.Sprintf("DLG-%d", idx+1)
+			submit(spec.member, runtimeprotocol.AgentApp, runtimeprotocol.SchemaDelegationCreate, runtimeprotocol.DelegationType, dlgID, map[string]any{
+				"name": "mon-" + spec.key, "title": "Goal " + spec.key,
+				"trigger": map[string]any{"kind": "schedule", "every": "24h"},
+				"agent":   "probe.helper", "prompt": "Check", "onBehalf": spec.member, "notify": "never",
+			})
+			submit(spec.member, runtimeprotocol.AgentApp, runtimeprotocol.SchemaDelegationSweep, runtimeprotocol.DelegationType, dlgID, map[string]any{})
+			runID := fmt.Sprintf("dlg-%d", idx+1)
+			agentRunIDs[spec.key] = runID
+			if spec.outcome == "cancel" {
+				submit(spec.member, runtimeprotocol.AgentApp, runtimeprotocol.SchemaRunCancel, runtimeprotocol.RunType, runID, map[string]any{})
+			} else if spec.outcome != "" {
+				wreq := httptest.NewRequest(http.MethodGet, fmt.Sprintf("/autoloop/%s/v1/work?claim=c-%d&wait=0", live.ID, idx+1), nil)
+				wreq.Header.Set("Authorization", "Bearer "+wkrToken)
+				wrec := httptest.NewRecorder()
+				handler.ServeHTTP(wrec, wreq)
+				var claimed struct {
+					Job *struct {
+						Run   int
+						Token string
+					}
+				}
+				_ = json.Unmarshal(wrec.Body.Bytes(), &claimed)
+				rbody := map[string]any{"outcome": "done", "summary": "Completed"}
+				if spec.outcome == "ask" {
+					rbody["ask"] = []map[string]any{{"title": "What next?", "text": "Choose", "options": []string{"yes", "no"}}}
+				} else if spec.outcome == "failed" {
+					rbody = map[string]any{"outcome": "failed", "error": "run failed"}
+				}
+				rraw, _ := json.Marshal(rbody)
+				rreq := httptest.NewRequest(http.MethodPost, fmt.Sprintf("/autoloop/%s/v1/runs/%d/result", live.ID, claimed.Job.Run), bytes.NewReader(rraw))
+				rreq.Header.Set("Authorization", "Bearer "+claimed.Job.Token)
+				handler.ServeHTTP(httptest.NewRecorder(), rreq)
 			}
 		}
-		submit("builder", runtimeprotocol.AgentApp, runtimeprotocol.SchemaRunCancel, runtimeprotocol.RunType, "cancelled", map[string]any{})
 		beforeRecords, beforeEntries := live.recordImage(t), len(live.entries)
 		adminPage, builderPage, otherPage := read("admin", "?limit=100"), read("builder", "?limit=100"), read("other", "?limit=100")
 		if len(live.entries) != beforeEntries || len(differingTypes(beforeRecords, live.recordImage(t))) != 0 {
@@ -428,28 +456,28 @@ func TestInvariantK4MonitoringOwnerBoundaries(t *testing.T) {
 					t.Fatalf("Flow owner projection: %+v; owner=%+v", run, x)
 				}
 			}
-			for id, want := range map[string]string{"running": "running", "waiting": "pending", "done": "ok", "failed": "failed", "cancelled": "cancelled"} {
+			for key, want := range map[string]string{"running": "running", "waiting": "pending", "done": "ok", "failed": "failed", "cancelled": "cancelled"} {
+				id := agentRunIDs[key]
 				run := find(page, "agent:"+id)
 				view, refusal := live.RecordOf(t.Context(), admin, runtimeprotocol.RunType, id, now)
 				if refusal != nil {
 					t.Fatal(refusal)
 				}
 				x := view.Record.(runtimeprotocol.AgentRunRecord)
-				ref := platform.AssetRef{App: "probe", Kind: platform.AssetAgent, Name: "helper"}
-				if run.Type != "function" || run.Source != "agent" || run.Status != want || run.OwnerStatus != x.State || run.RecordRef != runtimeprotocol.RunType+"/"+id || run.ResourceRef == nil || *run.ResourceRef != ref || run.Title != x.Title || !run.When.Equal(x.Changed.At) || run.Retryable || run.RetrySchema != "" || run.RetryTarget != nil {
+				if run.Type != "function" || run.Source != "agent" || run.Status != want || run.OwnerStatus != x.State || run.RecordRef != runtimeprotocol.RunType+"/"+id || run.Title != x.Title || !run.When.Equal(x.Changed.At) || run.Retryable || run.RetrySchema != "" || run.RetryTarget != nil {
 					t.Fatalf("Agent owner projection: %+v; owner=%+v", run, x)
 				}
 			}
 		}
 		find(adminPage, "flow:"+privateFlow)
-		find(adminPage, "agent:private-agent")
+		find(adminPage, ""+"agent:"+agentRunIDs["private-agent"])
 		for _, run := range builderPage.Runs {
-			if run.ID == "flow:"+privateFlow || run.ID == "agent:private-agent" {
+			if run.ID == "flow:"+privateFlow || run.ID == ""+"agent:"+agentRunIDs["private-agent"] {
 				t.Fatalf("another participant's run was disclosed: %+v", run)
 			}
 		}
 		for _, run := range otherPage.Runs {
-			if (run.Source == "flow" || run.Source == "agent") && run.ID != "flow:"+privateFlow && run.ID != "agent:private-agent" {
+			if (run.Source == "flow" || run.Source == "agent") && run.ID != "flow:"+privateFlow && run.ID != ""+"agent:"+agentRunIDs["private-agent"] {
 				t.Fatalf("the other participant received builder's run: %+v", run)
 			}
 		}
@@ -464,7 +492,7 @@ func TestInvariantK4MonitoringOwnerBoundaries(t *testing.T) {
 				t.Fatalf("Flow and Agent overview changed another owner's counts: %+v", check)
 			}
 		}
-		for _, check := range []struct{ typ, id string }{{"automation", "flow:" + waiting}, {"function", "agent:running"}} {
+		for _, check := range []struct{ typ, id string }{{"automation", "flow:" + waiting}, {"function", "agent:" + agentRunIDs["running"]}} {
 			page := read("builder", "?type="+check.typ+"&limit=100")
 			find(page, check.id)
 			if page.Overview != builderPage.Overview {

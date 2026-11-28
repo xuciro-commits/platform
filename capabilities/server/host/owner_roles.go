@@ -26,19 +26,18 @@ type tenantPorts struct {
 	Files    platform.FileStore
 }
 type ownerSet struct {
-	apps          []platform.Service
-	ids           []string
-	appIndex      map[string]int
-	owner         map[string]string
-	states        map[string]platform.AcceptedStateApp
-	inputs        map[string]platform.AcceptedInputApp
-	assets        map[string]protocol.AssetLifecycleOwner
-	answerers     map[string]platform.Answerer
-	builders      map[string]build.ConstructionDrafts
-	operations    map[string]runtimekernel.OperationOwner
-	dynamicAgents map[string]protocol.DynamicAgentDefinitions
-	simulations   trialowner.SimulationOwners
-	capabilities  hostroles.Capabilities
+	apps         []platform.Service
+	ids          []string
+	appIndex     map[string]int
+	owner        map[string]string
+	states       map[string]platform.AcceptedStateApp
+	inputs       map[string]platform.AcceptedInputApp
+	assets       map[string]protocol.AssetLifecycleOwner
+	answerers    map[string]platform.Answerer
+	builders     map[string]build.ConstructionDrafts
+	operations   map[string]runtimekernel.OperationOwner
+	simulations  trialowner.SimulationOwners
+	capabilities hostroles.Capabilities
 }
 
 func newOwnerSet(apps []platform.Service) (ownerSet, error) {
@@ -58,7 +57,7 @@ func (s *ownerSet) place(apps []platform.Service) {
 	s.apps = apps
 	s.capabilities = hostroles.CapabilitiesOf(apps)
 	s.states, s.inputs, s.assets, s.answerers = s.capabilities.States, s.capabilities.Inputs, s.capabilities.Assets, s.capabilities.Answerers
-	s.builders, s.operations, s.dynamicAgents = s.capabilities.Builders, s.capabilities.Operations, s.capabilities.DynamicAgents
+	s.builders, s.operations = s.capabilities.Builders, s.capabilities.Operations
 	s.simulations = trialowner.SimulationOwners{Factories: s.capabilities.SimulationFactories, Builder: s.builders[build.ID], Identities: s.capabilities.SimulationIdentities, Organizations: s.capabilities.SimulationOrganizations}
 }
 
@@ -74,16 +73,6 @@ func (s ownerSet) App(id string) platform.Service {
 		return nil
 	}
 	return s.apps[i]
-}
-
-func (s ownerSet) dynamicAgentList() []protocol.DynamicAgentDefinitions {
-	var out []protocol.DynamicAgentDefinitions
-	for _, id := range s.ids {
-		if owner := s.dynamicAgents[id]; owner != nil {
-			out = append(out, owner)
-		}
-	}
-	return out
 }
 
 func (s ownerSet) assetOwners(active func(string) bool) []protocol.AssetLifecycleOwner {

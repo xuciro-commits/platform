@@ -29,7 +29,7 @@ func (h CatalogHooks) Of(m platform.Member) []platform.Action {
 			if _, known := permitted[key]; !known {
 				permitted[key] = a.Manifest().Actions.ForRoles(roles)
 			}
-			if !slices.ContainsFunc(permitted[key], func(p platform.Action) bool { return p.Schema == action.Schema }) || !m.May(a.Manifest().ID, action.Schema, action.Roles).Allow {
+			if !m.InScope(action.Schema) || !slices.ContainsFunc(permitted[key], func(p platform.Action) bool { return p.Schema == action.Schema }) || !m.May(a.Manifest().ID, action.Schema, action.Roles).Allow {
 				continue
 			}
 			var unconnected []string

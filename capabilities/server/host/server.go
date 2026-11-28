@@ -86,6 +86,17 @@ const TenantHeader = "Platform-Tenant"
 const chatMaxBytes = 1 << 20
 
 func (h *Host) member(r *http.Request) (platform.Member, *Tenant, bool) {
+	if tok, ok := strings.CutPrefix(strings.TrimSpace(r.Header.Get("Authorization")), "Bearer "); ok && strings.HasPrefix(tok, "dmcp_") {
+		wantTenant := strings.TrimSpace(r.Header.Get(TenantHeader))
+		for _, t := range h.currentTenants() {
+			if (wantTenant == "" || wantTenant == t.ID) && t.Agents != nil {
+				if m, valid := t.Agents.ResolveDelegationMCP(tok, h.Now()); valid {
+					return m, t, true
+				}
+			}
+		}
+		return platform.Member{}, nil, false
+	}
 	return idp.Members[*Tenant]{Authenticate: h.authenticate, SecondFactor: h.SecondFactor, Now: h.Now, Consoles: func() []idp.Console[*Tenant] {
 		var consoles []idp.Console[*Tenant]
 		for _, t := range h.currentTenants() {

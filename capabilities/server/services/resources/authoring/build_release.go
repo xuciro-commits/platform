@@ -81,7 +81,7 @@ func (b *Build) ReleaseAssets() ([]platform.ReleaseAsset, error) {
 		return nil, err
 	}
 	for _, read := range []func() ([]platform.ReleaseAsset, error){
-		b.functions.Assets, b.agent.Assets, b.queries.Assets, b.kindAssets(&linkKind), b.kindAssets(&interfaceKind), b.kindAssets(&propertyKind), b.kindAssets(&valueKind), b.kindAssets(&objectTypeGroupKind), b.kindAssets(&contractKind), b.kindAssets(&implementationKind),
+		b.functions.Assets, b.queries.Assets, b.kindAssets(&linkKind), b.kindAssets(&interfaceKind), b.kindAssets(&propertyKind), b.kindAssets(&valueKind), b.kindAssets(&objectTypeGroupKind), b.kindAssets(&contractKind), b.kindAssets(&implementationKind),
 		b.CodeReleaseAssets, b.data.Assets, b.testPlans.Assets, b.sampleSets.Assets,
 	} {
 		owned, err := read()

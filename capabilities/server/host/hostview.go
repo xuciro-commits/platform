@@ -224,15 +224,6 @@ func (h hostView) Interfaces() []platform.Interface {
 	return ontology.Interfaces(h.t.definitions, manifests)
 }
 
-func (h hostView) DynamicAgents() []runtimeprotocol.DynamicAgentDefinitions {
-	return h.t.dynamicAgentList()
-}
-
-func (h hostView) DynamicAgent(id string) (runtimeprotocol.DynamicAgentDefinitions, bool) {
-	owner, ok := h.t.dynamicAgents[id]
-	return owner, ok
-}
-
 func (h hostView) BindInterfaceQuery(q platform.NamedQuery, drafts ...platform.RecordTypeInfo) (platform.NamedQuery, error) {
 	for _, info := range drafts {
 		if info.App != h.app.Manifest().ID {

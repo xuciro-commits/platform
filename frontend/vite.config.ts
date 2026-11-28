@@ -55,7 +55,7 @@ export default defineConfig(({ mode }) => {
     server: {
       port: 8496,
       strictPort: true,
-      proxy: Object.fromEntries(["/auth", "/v1", "/healthz", "/mcp", "/a2a"].map((path) => [path, host])),
+      proxy: Object.fromEntries(["/auth", "/v1", "/healthz", "/mcp", "/autoloop"].map((path) => [path, host])),
     },
     build: { target: "safari17", outDir: "dist" },
   };

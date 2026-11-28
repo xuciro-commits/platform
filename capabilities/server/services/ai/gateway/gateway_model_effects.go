@@ -9,7 +9,7 @@ import (
 
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
 	"platformserver/platform"
-	agents "platformserver/services/ai/runtime"
+	agents "platformserver/services/ai/functions"
 )
 
 type ModelAsk struct {

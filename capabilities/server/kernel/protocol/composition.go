@@ -49,7 +49,6 @@ func BindOwner(app platform.Service, bindings OwnerBindings) {
 
 type RuntimeCapabilities struct {
 	NewTransactionExecutor func(BusinessRuntimeContext) TransactionExecutor
-	NewAgentEvaluator      func() AgentEvaluator
 	BindOwner              func(platform.Service, OwnerBindings)
 	AIInference            *AIInferencePolicy
 	Rules                  platform.RuleEngine

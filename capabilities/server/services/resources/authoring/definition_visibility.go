@@ -125,18 +125,6 @@ func (v DefinitionVisibility) Project() []platform.Definition {
 			}) {
 				continue
 			}
-		case platform.AssetAgent:
-			if def.Agent == nil || !m.Active() || len(m.RolesIn(def.Ref.App)) == 0 && !m.Holds(protocol.AgentApp, protocol.AgentAdmin) {
-				continue
-			}
-			if def.Source == "builder" && (def.OwnerRecord == "" || !v.Readable(def.OwnerRecord)) {
-				continue
-			}
-			if !slices.Contains(m.RolesIn(def.Ref.App), "builder") {
-				projection := *def.Agent
-				projection.Instructions, projection.Tools, projection.Checkpoints, projection.Cases = "", nil, nil, nil
-				def.Agent = &projection
-			}
 		case platform.AssetCompute:
 			if def.Operation == nil || !v.Capability(def.Ref.App, def.Operation.Name, def.Operation.Roles) {
 				continue

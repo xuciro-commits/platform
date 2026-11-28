@@ -22,7 +22,6 @@ type Capabilities struct {
 	Answerers               map[string]platform.Answerer
 	Builders                map[string]build.ConstructionDrafts
 	Operations              map[string]runtimekernel.OperationOwner
-	DynamicAgents           map[string]protocol.DynamicAgentDefinitions
 	SimulationFactories     map[string]protocol.SimulationFactory
 	SimulationIdentities    map[string]protocol.SimulationIdentityFactory
 	SimulationOrganizations map[string]protocol.SimulationOrganizationFactory
@@ -51,7 +50,7 @@ func CapabilitiesOf(apps []platform.Service) Capabilities {
 		States: map[string]platform.AcceptedStateApp{}, Inputs: map[string]platform.AcceptedInputApp{},
 		Assets: map[string]protocol.AssetLifecycleOwner{}, Answerers: map[string]platform.Answerer{},
 		Builders: map[string]build.ConstructionDrafts{}, Operations: map[string]runtimekernel.OperationOwner{},
-		DynamicAgents: map[string]protocol.DynamicAgentDefinitions{}, SimulationFactories: map[string]protocol.SimulationFactory{},
+		SimulationFactories:  map[string]protocol.SimulationFactory{},
 		SimulationIdentities: map[string]protocol.SimulationIdentityFactory{}, SimulationOrganizations: map[string]protocol.SimulationOrganizationFactory{},
 		Observers: map[string]platform.Observer{}, Listeners: map[string]platform.Listener{}, Identity: map[string]platform.IdentityDirectory{},
 		IdentityOwners: map[string]controlowner.IdentityOwner{}, Directories: map[string]platform.Directory{}, Linkers: map[string]platform.Linker{},
@@ -87,10 +86,6 @@ func CapabilitiesOf(apps []platform.Service) Capabilities {
 		switch owner := app.(type) {
 		case runtimekernel.OperationOwner:
 			out.Operations[id] = owner
-		}
-		switch owner := app.(type) {
-		case protocol.DynamicAgentDefinitions:
-			out.DynamicAgents[id] = owner
 		}
 		switch owner := app.(type) {
 		case protocol.SimulationFactory:

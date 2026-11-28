@@ -27,7 +27,6 @@ func (t *Tenant) EvaluateRelease(m platform.Member, request releaseowner.Release
 			},
 			Admits:        t.Admits,
 			Quarantined:   t.quarantined,
-			Agent:         t.evaluateReleaseAgentLocked,
 			FunctionStart: agentevaluation.BindPrepare(t.ID, build.ID, request.Key),
 			Accept: func(sub *pb.Submission, at time.Time) *platform.Error {
 				_, refusal := t.accept(t.App(build.ID).(platform.Service), platform.Member{ID: sub.PrincipalId, Tenant: t.ID}, sub, at, acceptOptions{automation: true})

@@ -215,7 +215,7 @@ func (d *Decision) SealResult(src ResultSources, app string, request *pb.Submiss
 func (d *Decision) recordResult(src ResultSources, app string, receipt *pb.ChangeRecord, submittedAt time.Time) ([]byte, error) {
 	if src.Controlled || d.Failure != nil || len(d.Allocated) > 0 || d.Notices.Changed() ||
 		len(d.Intents) > 0 || len(d.Observations) > 0 || len(d.States) > 0 ||
-		len(d.OperationCancels) > 0 ||
+		len(d.OperationCancels) > 0 || d.Hops > 0 ||
 		d.Observed && src.Observers {
 		return nil, fmt.Errorf("decision needs a result carrying all state and intents")
 	}

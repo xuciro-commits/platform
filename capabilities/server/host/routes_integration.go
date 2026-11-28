@@ -8,10 +8,10 @@ import (
 	runtimeprotocol "platformserver/kernel/protocol"
 	"platformserver/kernel/transport"
 	"platformserver/platform"
-	"platformserver/services/actions"
 	aigateway "platformserver/services/ai/gateway"
 	dataowner "platformserver/services/data"
 	"platformserver/services/data/lineage"
+	"strings"
 )
 
 func (h *Host) routesIntegration(rt *routes) {
@@ -91,19 +91,23 @@ func (h *Host) routesIntegration(rt *routes) {
 	rt.handle(transport.Route{Pattern: "GET /v1/capabilities/calls/compute/{id}", Summary: "Read a retained compute result after rechecking member and protected sources", Answer: platform.OperationResult{}}, transport.Answering(func(r *http.Request, m platform.Member, t *Tenant) (platform.OperationResult, *platform.Error) {
 		return t.ReadOperation(r.Context(), m, r.PathValue("id"))
 	}))
-	rt.public(transport.Route{Pattern: "GET /a2a/{tenant}/{agent}/.well-known/agent-card.json", Summary: "A published agent's A2A 1.0 card"}, func(w http.ResponseWriter, r *http.Request) {
-		tenant := h.tenantByID(r.PathValue("tenant"))
-		if tenant == nil || !tenant.published(r.PathValue("agent")) {
-			w.WriteHeader(http.StatusNotFound)
-			return
-		}
-		d, _ := tenant.Agents.AgentDeclaration(r.PathValue("agent"))
-		WriteJSON(w, http.StatusOK, actions.A2ACard(d, r.PathValue("agent"), tenant.ID, r.Host, r.TLS != nil || r.Header.Get("X-Forwarded-Proto") == "https", h.Issuer))
-	})
-	rt.public(transport.Route{Pattern: "POST /a2a/{tenant}/{agent}", Summary: "A2A 1.0 JSON-RPC to a published agent; the caller signs in with the host's issuer", Body: json.RawMessage{}}, h.serveA2A)
 	rt.handle(transport.Route{Pattern: "POST /mcp", Summary: "MCP: the caller's catalog as tools (JSON-RPC)", Body: json.RawMessage{}}, h.mcp)
 	rt.handle(transport.Route{Pattern: "DELETE /mcp", Summary: "MCP: close the caller's session"}, h.mcp)
 	rt.mux.HandleFunc("/mcp", aigateway.ServeMCPMethod)
+	rt.mux.HandleFunc("/autoloop/", func(w http.ResponseWriter, r *http.Request) {
+		rest := strings.TrimPrefix(r.URL.Path, "/autoloop/")
+		tenantID, _, ok := strings.Cut(rest, "/")
+		tenant := h.tenantByID(tenantID)
+		if !ok || tenant == nil || tenant.Agents == nil {
+			w.WriteHeader(http.StatusNotFound)
+			return
+		}
+		tenant.Agents.ServeAutoloop(w, r, h.Now, func(req *http.Request) (platform.Member, bool) {
+			req.Header.Set(TenantHeader, tenant.ID)
+			m, mt, ok := h.member(req)
+			return m, ok && mt == tenant
+		}, tenant.Submit)
+	})
 	rt.recordRead(transport.Route{Pattern: "GET /v1/lineage", Summary: "Data lineage across connections, sources, datasets, pipelines, object types and writebacks the caller may read, with dataset versions, stale inputs and propagated markings", Query: []transport.Param{{Name: "mode", Description: "overview or focus; defaults from focus/ref"}, {Name: "project", Description: "a project RID used as the overview scope"}, {Name: "focus", Description: "a resource RID or lineage node ID"}, {Name: "ref", Description: "an app/kind/name resource reference"}, {Name: "node", Description: "a legacy lineage node ID"}, {Name: "branch", Description: "a branch ID; reads its staged definitions and no main run evidence"}, {Name: "direction", Description: "upstream, downstream or both"}, {Name: "depth", Description: "1 to 3"}, {Name: "nodeLimit", Description: "response node cap, at most 2000"}, {Name: "edgeLimit", Description: "response edge cap, at most 5000"}, {Name: "fields", Description: "off or on: include field nodes and edges"}, {Name: "field", Description: "a field node ID to trace upstream and downstream"}}, Answer: lineage.Lineage{}}, transport.Answering(func(r *http.Request, m platform.Member, t *Tenant) (lineage.Lineage, *platform.Error) {
 		return lineage.NewReader(t).ReadValues(m, r.URL.Query())
 	}))

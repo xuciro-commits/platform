@@ -3,7 +3,7 @@ package host
 import (
 	"context"
 	"platformserver/kernel/protocol"
-	agentowner "platformserver/services/ai/runtime"
+	agentowner "platformserver/services/ai/functions"
 	"time"
 
 	pb "platformkernel/gen/platform/kernel/v1alpha1"

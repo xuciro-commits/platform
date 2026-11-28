@@ -152,9 +152,6 @@ func (t *Tenant) forkReadState(ctx context.Context) (*Tenant, error) {
 	view.tenantPorts = t.tenantPorts
 	view.Files = t.files()
 	view.index = t.index
-	if t.services.NewAgentEvaluator != nil {
-		view.agentEvaluator = t.services.NewAgentEvaluator()
-	}
 	view.breakers = t.breakers.Fork()
 	view.staged = compute.NewChannel(t.ID, view.files)
 	view.staged.Restore(t.staged.Snapshot())

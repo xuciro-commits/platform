@@ -566,8 +566,8 @@
       ],
       "opens": [
         {
-          "type": "build.agent",
-          "view": "agent",
+          "type": "agent.delegation",
+          "view": "delegations",
           "when": [
             {
               "app": "build",

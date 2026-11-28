@@ -48,7 +48,7 @@ func LiveReadAllowed(p string) bool {
 	return slices.Contains([]string{"/v1/authz/explain", "/v1/ai/model-selection", "/v1/ai/knowledge-index", "/v1/ai/vendors", "/v1/releases/active", "/v1/releases/candidates", "/v1/releases/drafts/working", "/v1/build/drafts/actions", "/v1/page-model/rules"}, p)
 }
 func liveOperationRead(p string) bool {
-	return strings.HasPrefix(p, "/v1/applications/") && (strings.HasSuffix(p, "/runs") || strings.HasSuffix(p, "/runtime") || strings.HasSuffix(p, "/diagnostic")) || strings.HasPrefix(p, "/v1/dispatches/") && strings.HasSuffix(p, "/targets") || strings.HasPrefix(p, "/v1/capabilities/calls/compute/") || slices.Contains([]string{"/v1/health", "/v1/work", "/v1/deliveries", "/v1/effects", "/v1/integration-effects", "/v1/endpoints", "/v1/connectors", "/v1/protocols", "/v1/agent-overview", "/v1/ai-usage", "/v1/ai/knowledge-index"}, p)
+	return strings.HasPrefix(p, "/v1/applications/") && (strings.HasSuffix(p, "/runs") || strings.HasSuffix(p, "/runtime") || strings.HasSuffix(p, "/diagnostic")) || strings.HasPrefix(p, "/v1/dispatches/") && strings.HasSuffix(p, "/targets") || strings.HasPrefix(p, "/v1/capabilities/calls/compute/") || slices.Contains([]string{"/v1/health", "/v1/work", "/v1/deliveries", "/v1/effects", "/v1/integration-effects", "/v1/endpoints", "/v1/connectors", "/v1/protocols", "/v1/ai-usage", "/v1/ai/knowledge-index"}, p)
 }
 
 func (v LiveVersions) Of(query string, global, meta, seq, published int64, owners, ops map[string]int64) string {

@@ -7,27 +7,31 @@ import (
 	"time"
 )
 
-type AgentObservation struct {
-	Body    json.RawMessage
-	Sources []string
-}
-
 type TrainingEvidenceOwner interface {
 	TrainingCandidates(platform.Caller, platform.Event, map[string]json.RawMessage) []AITrainingCandidate
 }
 
 const (
-	AgentApp          = "agent"
-	RunType           = "agent.run"
-	AgentAdmin        = "admin"
-	SchemaRunStart    = "agent.run.start"
-	SchemaToolPropose = "agent.tool.propose"
-	SchemaRunStep     = "agent.run.step"
-	SchemaRunCancel   = "agent.run.cancel"
-	SchemaRunConfirm  = "agent.run.confirm"
-	SchemaRunReject   = "agent.run.reject"
-	SettingAgentModel = "model"
-	SettingAgentDaily = "daily-tokens"
+	AgentApp                  = "agent"
+	RunType                   = "agent.run"
+	AgentAdmin                = "admin"
+	SettingAgentModel         = "model"
+	SettingAgentDaily         = "daily-tokens"
+	SchemaRunCancel           = "agent.run.cancel"
+	DelegationType            = "agent.delegation"
+	DelegationWorkerType      = "agent.worker"
+	DelegationEventType       = "agent.delegation-event"
+	DelegationJobType         = "agent.delegation-job"
+	SchemaDelegationCreate    = "agent.delegation.create"
+	SchemaDelegationEdit      = "agent.delegation.edit"
+	SchemaDelegationPause     = "agent.delegation.pause"
+	SchemaDelegationResume    = "agent.delegation.resume"
+	SchemaDelegationSweep     = "agent.delegation.sweep"
+	SchemaDelegationWorkerKey = "agent.delegation.worker-key"
+	SchemaDelegationIngest    = "agent.delegation.ingest"
+	SchemaDelegationClaim     = "agent.delegation.claim"
+	SchemaDelegationStarted   = "agent.delegation.started"
+	SchemaDelegationReceipt   = "agent.delegation.receipt"
 )
 
 type AgentRunRecord struct {
@@ -120,15 +124,6 @@ type RunStep struct {
 	Sources   []string            `json:"sources,omitempty" title:"Read records" help:"Records it read"`
 }
 
-type AgentInfo struct {
-	ID           string          `json:"id"`
-	App          string          `json:"app"`
-	Title        string          `json:"title"`
-	Instructions string          `json:"instructions"`
-	Tools        []string        `json:"tools"`
-	Budget       platform.Budget `json:"budget"`
-}
-
 const (
 	SwitchType    = "agent.switch"
 	SchemaSuspend = "agent.suspend"
@@ -143,8 +138,7 @@ type Switch struct {
 }
 
 const (
-	EvaluationType  = "agent.evaluation"
-	SchemaEvalStart = "agent.evaluation.start"
+	EvaluationType = "agent.evaluation"
 )
 
 type Evaluation struct {
@@ -206,7 +200,6 @@ type Memory struct {
 }
 
 const (
-	SettingPublished      = "published"
 	SettingTranscriptDays = "transcript-days"
 )
 

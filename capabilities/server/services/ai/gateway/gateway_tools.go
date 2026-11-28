@@ -322,7 +322,6 @@ func excludedMCPAction(a platform.Action) bool {
 	return a.Automation || a.ConfirmationOnly ||
 		a.Schema == "work.question.answer" ||
 		a.Schema == runtimeprotocol.WorkQuestionRequestSchema ||
-		a.Schema == runtimeprotocol.SchemaToolPropose ||
 		strings.HasPrefix(a.Schema, "agent.run.")
 }
 

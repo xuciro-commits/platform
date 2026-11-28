@@ -116,12 +116,6 @@ func (b *Build) declarationReleaseDraft(asset platform.ReleaseAsset) (string, an
 	case platform.AssetEvaluation, platform.AssetTestPlan:
 		d, err := b.testPlans.Draft(asset)
 		return TestPlanType, d, err
-	case platform.AssetAgent:
-		d, err := b.agent.DraftFromAsset(asset)
-		if err != nil {
-			return "", nil, err
-		}
-		return AgentType, d, nil
 	case platform.AssetCompute:
 		return b.functions.OperationDraft(asset)
 	}

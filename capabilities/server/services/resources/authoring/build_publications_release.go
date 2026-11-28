@@ -331,9 +331,6 @@ func (b *Build) applicationDrafts(id string, selectDrafts map[JointDraftRef]bool
 				p := processes[i]
 				asset, problem := b.automation.DraftAsset(p, b.Manifest().Version)
 				assets, err = []platform.ReleaseAsset{asset}, problem
-			case platform.AssetAgent:
-				asset, problem := b.agent.DraftAsset(caller, draft.ID)
-				assets, err = []platform.ReleaseAsset{asset}, problem
 			default:
 				if record, ok := integrations[draft]; ok {
 					_, version, _, _ := dataowner.IntegrationMetadata(record)

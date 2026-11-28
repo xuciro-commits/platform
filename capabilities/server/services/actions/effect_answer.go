@@ -21,7 +21,6 @@ type EffectAnswer struct {
 	Answerer   func(app string) platform.Answerer
 	Source     func(id string) (Queued, bool)
 	Origin     func(*platform.Effect, func() *platform.Error) *platform.Error
-	Agents     func(c platform.Caller, x platform.Effect, out platform.Outcome, at time.Time)
 	Finish     func(time.Time) *platform.Error
 }
 
@@ -65,7 +64,6 @@ func (a EffectAnswer) Stage(x platform.Effect, out platform.Outcome, at time.Tim
 			return refusal
 		}
 	}
-	a.Agents(c, x, out, at)
 	if refusal := a.Finish(at); refusal != nil {
 		return refusal
 	}

@@ -3,7 +3,7 @@ package host
 import (
 	"platformserver/kernel/protocol"
 	"platformserver/platform"
-	agentowner "platformserver/services/ai/runtime"
+	agentowner "platformserver/services/ai/functions"
 	"platformserver/services/functions/authoring"
 )
 

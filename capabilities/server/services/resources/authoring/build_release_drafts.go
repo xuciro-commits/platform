@@ -98,8 +98,6 @@ func (b *Build) DraftReleaseAssetsMulti(drafts []JointDraftRef, member platform.
 			return 3
 		case platform.AssetEvaluation:
 			return 2
-		case platform.AssetAgent:
-			return 1
 		}
 		return 0
 	}

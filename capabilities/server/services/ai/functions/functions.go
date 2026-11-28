@@ -1,4 +1,4 @@
-package runtime
+package functions
 
 import (
 	"encoding/json"

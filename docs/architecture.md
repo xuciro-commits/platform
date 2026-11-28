@@ -182,7 +182,7 @@ POST /v1/submissions
 - 协议的形状照 [agent-autoloop](https://github.com/xuciro-commits/agent-autoloop)（任务、回执、提问、跳数、先问）。先直接接它：
   平台是它的事件来源与提问通道，智能体经工具面回调平台。宿主自建多租户接单，等第一个租户要托管委派时再做，协议不变。
 - 宿主里唯一的循环是助手：一问一答，模型经网关，工具是同一个工具面。构建也是动作（`build.*`），智能体搭类型用的还是这个工具面，发布照常审阅。
-- 现有 `services/ai` 里留下模型配置与网关、检索、评估集与 `/mcp`（扩成工具面）；宿主内运行智能体的 `services/ai/runtime` 在委派落地后删除，不留两套。
+- `services/ai` 保留模型配置与网关、检索、函数调用准备与评估集、`/mcp` 工具面及 `delegation`（委派与 `/autoloop` 接单协议）；宿主内运行智能体的 `services/ai/runtime` 已删除，不留两套。
 
 ## 版本与纪元（D7）
 

@@ -476,9 +476,6 @@ func (b *Build) saveResource(c platform.Caller, s *pb.Submission, now time.Time)
 		if typ == protocol.PageType {
 			entity = b.apps.PageDraftEntity()
 		}
-		if typ == AgentType {
-			entity = b.agent.DraftEntity()
-		}
 		verb := "create"
 		if exists {
 			verb = "edit"

@@ -200,7 +200,6 @@ func (e Environment) InstallCandidate(candidate protocol.ReleaseCandidate, b bui
 		{kind(platform.AssetCompute), b.InstallOperationAsset},
 		{kind(platform.AssetLinkType), b.InstallDefinitionAsset},
 		{kind(platform.AssetQuery, platform.AssetObjectTypeGroup), b.InstallDefinitionAsset},
-		{kind(platform.AssetAgent), b.InstallAgentAsset},
 	} {
 		if err := install(step.kinds, step.apply); err != nil {
 			return err

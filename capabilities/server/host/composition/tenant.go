@@ -6,8 +6,8 @@ import (
 	"platformserver/platform"
 	"platformserver/services/actions"
 	"platformserver/services/ai"
+	agentowner "platformserver/services/ai/delegation"
 	agentevaluation "platformserver/services/ai/evaluation"
-	agentowner "platformserver/services/ai/runtime"
 	"platformserver/services/ai/sources"
 	appsauthoring "platformserver/services/apps/authoring"
 	automationauthoring "platformserver/services/automate/authoring"
@@ -30,7 +30,6 @@ import (
 
 func NewTenantWithCapabilities(id string, services runtimeprotocol.RuntimeCapabilities, seats ...runtimeprotocol.Seat) (*platformserver.Tenant, error) {
 	services.BindOwner = runtimeprotocol.BindOwner
-	services.NewAgentEvaluator = agentevaluation.NewAgentEvaluator
 	services.NewTransactionExecutor = actions.NewRuntime
 	return platformserver.NewTenantWithCapabilities(id, services, BuiltinApps(id, platform.OrgSeed{Memberships: controlowner.Memberships(seats)}, seats...)...)
 }
@@ -38,7 +37,7 @@ func BuiltinApps(id string, org platform.OrgSeed, seats ...runtimeprotocol.Seat)
 	return []platform.Service{
 		NewConsole(id, seats...),
 		enterprise.New(id, actions.NewAuthority, org), activity.New(id, actions.NewAuthority), ai.New(id, actions.NewAuthority), work.New(id, actions.NewAuthority), monitoring.New(id, actions.NewAuthority), automation.New(id, actions.NewAuthority, platformserver.PublicationResolver()), sources.New(id, actions.NewAuthority),
-		agentowner.New(id, actions.NewAuthority), files.New(id, actions.NewAuthority), build.New(id, actions.NewAuthority, []publication.Hooks{ontology.ActionTypePublication()}, platformserver.PublicationResolver(), ontology.ObjectPublication, objects.QueryPublication, functionauthoring.NewOwner, agentowner.BuilderPublication, agentevaluation.NewOwner, devopsauthoring.TestPlanPublication, agentevaluation.EvaluationPublication, devopsauthoring.SampleSetPublication, build.ApplicationOwners{New: appsauthoring.NewOwner, ObjectPage: appsauthoring.CompileObjectPage, ListDetailPage: appsauthoring.ListDetailPage}, automationauthoring.New),
+		agentowner.New(id, actions.NewAuthority), files.New(id, actions.NewAuthority), build.New(id, actions.NewAuthority, []publication.Hooks{ontology.ActionTypePublication()}, platformserver.PublicationResolver(), ontology.ObjectPublication, objects.QueryPublication, functionauthoring.NewOwner, agentevaluation.NewOwner, devopsauthoring.TestPlanPublication, agentevaluation.EvaluationPublication, devopsauthoring.SampleSetPublication, build.ApplicationOwners{New: appsauthoring.NewOwner, ObjectPage: appsauthoring.CompileObjectPage, ListDetailPage: appsauthoring.ListDetailPage}, automationauthoring.New),
 	}
 }
 

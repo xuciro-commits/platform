@@ -4,8 +4,8 @@ import (
 	"fmt"
 	"platformserver/kernel/protocol"
 	"platformserver/kernel/records"
+	agentowner "platformserver/services/ai/functions"
 	"platformserver/services/ai/gateway"
-	agentowner "platformserver/services/ai/runtime"
 	functionauthoring "platformserver/services/functions/authoring"
 
 	"time"

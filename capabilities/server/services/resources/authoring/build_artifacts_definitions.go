@@ -2,7 +2,6 @@ package authoring
 
 import (
 	"encoding/json"
-	"fmt"
 	"platformserver/kernel/protocol"
 	"slices"
 
@@ -39,12 +38,6 @@ func (b *Build) DefinitionDescriptor(asset platform.ReleaseAsset) (platform.Defi
 		var descriptor platform.TestPlanDescriptor
 		descriptor, err = protocol.ReadTestPlan(asset.Body)
 		definition.TestPlan = &descriptor
-	case platform.AssetAgent:
-		var descriptor platform.AgentReleaseDescriptor
-		if json.Unmarshal(asset.Body, &descriptor) != nil || b.resolver.CheckAgent(descriptor) != nil {
-			return definition, fmt.Errorf("agent descriptor is unavailable")
-		}
-		definition.Agent = &descriptor
 	}
 	if err != nil {
 		return definition, err

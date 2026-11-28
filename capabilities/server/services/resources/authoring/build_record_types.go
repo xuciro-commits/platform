@@ -148,11 +148,6 @@ func (b *Build) recordTypes(schema string, manifest bool) []platform.RecordType 
 	if matches(evaluation.Type) {
 		add(evaluation)
 	}
-	agent := b.agent.Entity
-	if schema == AgentType+".create" || schema == AgentType+".edit" {
-		agent = b.agent.DraftEntity
-	}
-	selectType(AgentType, agent)
 	if manifest {
 		add(b.functions.CodeEntity())
 		add(b.functions.TableEntity())

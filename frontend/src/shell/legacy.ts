@@ -30,7 +30,7 @@ const views = new Map(Object.entries({
   "/logic/automations": ["automation", "logic-flows", "flow"],
   "/apps/modules": ["module", "portal", "catalog-portal"],
   "/apps/object-views": ["object-views", "page", "page-preview"],
-  "/ai/agents": ["agents", "agent"],
+  "/ai/delegations": ["delegations", "agents", "agent"],
   "/ai/evaluations": ["evaluations", "evaluation-set"],
   "/delivery/products": ["products"],
   "/delivery/versions": ["versions", "release-review"],

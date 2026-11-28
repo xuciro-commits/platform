@@ -277,7 +277,6 @@ const (
 var ReadTranslationPolicies = map[string]ReadTranslationPolicy{
 	"settings":             ReadTranslateDeclaration,
 	"flows":                ReadTranslateDeclaration,
-	"agents":               ReadTranslateDeclaration,
 	"permissions":          ReadTranslateDeclaration,
 	"contributions":        ReadTranslateDeclaration,
 	"connectors":           ReadTranslateDeclaration,
@@ -309,8 +308,6 @@ var ReadTranslationPolicies = map[string]ReadTranslationPolicy{
 	"ai-limits":            ReadTranslateRawData,
 	"ai-training":          ReadTranslateRawData,
 	"runs":                 ReadTranslateRawData,
-	"memories":             ReadTranslateRawData,
-	"agent-overview":       ReadTranslateRawData,
 	"monitoring-views":     ReadTranslateRawData,
 	"release-profile":      ReadTranslateRawData,
 	"organization":         ReadTranslateRawData,

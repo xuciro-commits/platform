@@ -13,7 +13,7 @@ import (
 	"platformserver/platform"
 	"platformserver/services/actions"
 	"platformserver/services/ai"
-	agentruntime "platformserver/services/ai/runtime"
+	agentruntime "platformserver/services/ai/delegation"
 	automateruntime "platformserver/services/automate/runtime"
 	"platformserver/services/devops/packages"
 	"platformserver/services/resources/monitoring"

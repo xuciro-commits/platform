@@ -136,11 +136,6 @@ var resourceDescriptors = []resourceDescriptor{
 		presentations: []resourcePresentation{withReleaseKind(presented("table", "decision-table", "Decision table", "Decision tables", 18), "table")},
 	},
 	{
-		app: ID, typ: AgentType, kind: platform.AssetAgent, family: versionedResources, released: true, defaultDraft: true, directInstall: true, acceptedPublication: true,
-		published:     func(b *Build, c platform.Caller, id string) bool { return b.agent.Published(c, id) },
-		presentations: []resourcePresentation{presented("agent", "agent", "Agent", "Agents", 16)},
-	},
-	{
 		app: ID, typ: TestPlanType, kind: platform.AssetEvaluation, family: versionedResources, released: true, acceptedPublication: true,
 		presentations: []resourcePresentation{presented("evaluation-set", "evaluation-set", "Evaluation set", "Evaluation sets", 14)},
 	},

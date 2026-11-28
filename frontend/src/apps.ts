@@ -196,7 +196,7 @@ export const apps: App[] = [
       {
         title: "Build",
         items: [
-          { id: "agents", label: "Agents", icon: SparklesIcon },
+          { id: "delegations", label: "Delegations", icon: BoltIcon },
           { id: "knowledge", label: "Knowledge", icon: BookOpenIcon },
           { id: "evaluations", label: "Evaluations", icon: ClipboardDocumentCheckIcon },
         ],

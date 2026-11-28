@@ -103,10 +103,9 @@ func (b *Build) prepareReleasePublications(assets []platform.ReleaseAsset) ([]pl
 		return nil, nil, err
 	}
 	publications = append(publications, images...)
-	agent, _ := publication.Kind(b.publications, platform.AssetAgent)
 	plan, _ := publication.Kind(b.publications, platform.AssetTestPlan)
 	compute, _ := publication.Kind(b.publications, platform.AssetCompute)
-	for _, prepare := range []func([]platform.ReleaseAsset) ([]platform.ReleasePublication, error){agent.FreezeBatch, plan.FreezeBatch, compute.FreezeBatch} {
+	for _, prepare := range []func([]platform.ReleaseAsset) ([]platform.ReleasePublication, error){plan.FreezeBatch, compute.FreezeBatch} {
 		images, err := prepare(assets)
 		if err != nil {
 			return nil, nil, err
@@ -256,9 +255,6 @@ func (b *Build) ResolvePinned(ref platform.AssetRef, version string, contentVers
 	}
 	if ref.Kind == platform.AssetEvaluation || ref.Kind == platform.AssetTestPlan {
 		return b.testPlans.Resolve(ref, version)
-	}
-	if ref.Kind == platform.AssetAgent {
-		return b.agent.Resolve(ref, version)
 	}
 	if ref.Kind == platform.AssetCompute {
 		return b.functions.OperationReleaseAsset(ref.Name, version)

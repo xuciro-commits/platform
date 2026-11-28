@@ -14,7 +14,6 @@ import (
 type EffectControl struct {
 	Outbox    *Outbox
 	Endpoints *Endpoints
-	Agents    protocol.AgentRuntime
 	Told      func(platform.Effect, platform.Outcome, time.Time, bool)
 	Valid     func(Endpoint) bool
 	Reviewed  func(Queued) bool
@@ -107,9 +106,6 @@ func (e EffectControl) Approve(c platform.Caller, id string, now time.Time) (fun
 	}
 	return func(r *pb.ChangeRecord) {
 		e.Outbox.Update(id, func(q *Queued) { q.State, q.Due = "pending", now })
-		if x.Run != "" && e.Agents != nil {
-			e.Agents.RecordAgentSignal(c, r, x.Run, protocol.Signal{At: now, Kind: "approved", By: c.ID, Detail: x.Event}, now)
-		}
 	}, nil
 }
 
@@ -125,18 +121,10 @@ func (e EffectControl) Discard(c platform.Caller, id string, now time.Time) (fun
 		return nil, &platform.Error{Code: pb.ErrorCode_ERROR_CODE_NOT_FOUND}
 	}
 	return func(r *pb.ChangeRecord) {
-		held := false
 		e.Outbox.Update(id, func(q *Queued) {
-			held = q.State == "held"
 			q.State = "discarded"
 			x = *q
 		})
-		if held && x.Run != "" && e.Agents != nil {
-			e.Agents.RecordAgentSignal(c, r, x.Run, protocol.Signal{At: now, Kind: "discarded", By: c.ID, Detail: x.Event}, now)
-		}
-		if e.Agents != nil {
-			e.Agents.AgentEffectEnded(c, r, x.Effect, platform.Outcome{Result: "discarded", Detail: "discarded by " + c.ID}, now)
-		}
 		e.Told(x.Effect, platform.Outcome{Effect: x.ID, Result: "discarded", Detail: "discarded by " + c.ID}, now, c.Replaying)
 	}, nil
 }

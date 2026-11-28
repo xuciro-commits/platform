@@ -46,8 +46,6 @@ type Build struct {
 	queryFactory              func(publication.QueryAuthoringEnvironment) publication.QueryAuthoringBinding
 	queries                   publication.QueryAuthoringBinding
 	functionFactory           func(publication.FunctionEnvironment) publication.FunctionAuthoring
-	agentFactory              func(platform.AgentAuthoringEnvironment) platform.AgentAuthoringBinding
-	agent                     platform.AgentAuthoringBinding
 	testPlanFactory           func(testPlanEnvironment, evaluationPublication) testPlanPublication
 	evaluationSetFactory      func(testPlanEnvironment) evaluationPublication
 	functionEvaluationFactory func(publication.FunctionEvaluationEnvironment) publication.FunctionEvaluationBinding
@@ -119,13 +117,6 @@ func (b *Build) bindPublications() {
 		FreezeBatch: queries.FreezeBatch, LoadExecution: queries.LoadExecution,
 		VersionedDraft: versionedDraft(queries.VersionedDraft),
 	})
-	agent := b.agent
-	b.publications = append(b.publications, publication.Hooks{
-		Kinds: []platform.AssetKind{platform.AssetAgent}, Schemas: []publication.SchemaHooks{{Name: SchemaAgentPublish, Validate: agent.ValidateImage, Install: agent.InstallImage}},
-		ReadFrozen:  agent.ReadFrozen,
-		FreezeBatch: agent.FreezeBatch, LoadExecution: agent.LoadExecution,
-		VersionedDraft: versionedDraft(agent.VersionedDraft),
-	})
 	plan := b.testPlans
 	b.publications = append(b.publications, publication.Hooks{
 		Kinds: []platform.AssetKind{platform.AssetEvaluation, platform.AssetTestPlan}, Schemas: []publication.SchemaHooks{{Name: SchemaEvaluationSetPublish, Decode: plan.Decode, Validate: plan.Validate, Install: plan.Validate}},
@@ -152,8 +143,8 @@ func (b *Build) AttachOwner(bindings runtimeprotocol.OwnerBindings) {
 	b.AttachFiles(bindings.Files)
 }
 
-func New(tenant string, authorities platform.Authorities, publications []publication.Hooks, resolver publication.Resolver, objectPublication func(ontology.ObjectPublicationEnvironment) publication.Hooks, queryFactory func(publication.QueryAuthoringEnvironment) publication.QueryAuthoringBinding, functionFactory func(publication.FunctionEnvironment) publication.FunctionAuthoring, agentFactory func(platform.AgentAuthoringEnvironment) platform.AgentAuthoringBinding, functionEvaluationFactory func(publication.FunctionEvaluationEnvironment) publication.FunctionEvaluationBinding, testPlanFactory func(testPlanEnvironment, evaluationPublication) testPlanPublication, evaluationSetFactory func(testPlanEnvironment) evaluationPublication, sampleSetFactory func(devopsmodel.SampleSetEnvironment) devopsmodel.SampleSetPublication, application ApplicationOwners, automationFactory func(publication.AutomationEnvironment, publication.Resolver) publication.AutomationAuthoring) *Build {
-	b := &Build{resolver: resolver, publicationBase: slices.Clone(publications), objectPublication: objectPublication, queryFactory: queryFactory, functionFactory: functionFactory, agentFactory: agentFactory, functionEvaluationFactory: functionEvaluationFactory, testPlanFactory: testPlanFactory, evaluationSetFactory: evaluationSetFactory, sampleSetFactory: sampleSetFactory, installed: map[string]platform.RecordType{}, linkTypes: map[string]ontology.LinkType{}, propertyTypes: map[string]ontology.PropertyType{}, valueTypes: map[string]ontology.ValueType{}, objectTypeGroups: map[string]ontology.ObjectTypeGroup{}, interfaces: map[string]ontology.InterfaceRecord{}, contracts: map[string]ontology.ContractRecord{}, implementations: map[string]ontology.ImplementationRecord{}, manifestCache: new(buildManifestCache)}
+func New(tenant string, authorities platform.Authorities, publications []publication.Hooks, resolver publication.Resolver, objectPublication func(ontology.ObjectPublicationEnvironment) publication.Hooks, queryFactory func(publication.QueryAuthoringEnvironment) publication.QueryAuthoringBinding, functionFactory func(publication.FunctionEnvironment) publication.FunctionAuthoring, functionEvaluationFactory func(publication.FunctionEvaluationEnvironment) publication.FunctionEvaluationBinding, testPlanFactory func(testPlanEnvironment, evaluationPublication) testPlanPublication, evaluationSetFactory func(testPlanEnvironment) evaluationPublication, sampleSetFactory func(devopsmodel.SampleSetEnvironment) devopsmodel.SampleSetPublication, application ApplicationOwners, automationFactory func(publication.AutomationEnvironment, publication.Resolver) publication.AutomationAuthoring) *Build {
+	b := &Build{resolver: resolver, publicationBase: slices.Clone(publications), objectPublication: objectPublication, queryFactory: queryFactory, functionFactory: functionFactory, functionEvaluationFactory: functionEvaluationFactory, testPlanFactory: testPlanFactory, evaluationSetFactory: evaluationSetFactory, sampleSetFactory: sampleSetFactory, installed: map[string]platform.RecordType{}, linkTypes: map[string]ontology.LinkType{}, propertyTypes: map[string]ontology.PropertyType{}, valueTypes: map[string]ontology.ValueType{}, objectTypeGroups: map[string]ontology.ObjectTypeGroup{}, interfaces: map[string]ontology.InterfaceRecord{}, contracts: map[string]ontology.ContractRecord{}, implementations: map[string]ontology.ImplementationRecord{}, manifestCache: new(buildManifestCache)}
 	b.queries = b.queryFactory(b.queryEnvironment())
 	b.data = dataowner.New(buildDataHost{b}, resolver)
 	b.data.AttachIntegrationRuntime(b.integrationRuntime())
@@ -165,7 +156,6 @@ func New(tenant string, authorities platform.Authorities, publications []publica
 	b.manifestPages = b.buildManifestPages()
 	b.apps = b.application.New(appEnvironment{b})
 	b.branches = branchowner.New(branchEnvironment{b})
-	b.agent = b.agentFactory(b.agentEnvironment())
 	b.bindTestPlans()
 	b.bindSampleSets()
 	b.bindPublications()
@@ -198,14 +188,13 @@ func New(tenant string, authorities platform.Authorities, publications []publica
 	actions = append(actions, dataowner.ConfirmationActions()...)
 	actions = append(actions, dataowner.DispatchActions()...)
 	actions = append(actions, actioncatalog.EntityActions(b.functions.TableEntity())...)
-	actions = append(actions, actioncatalog.EntityActions(b.agent.Entity())...)
 	actions = append(actions, actioncatalog.EntityActions(b.sampleSets.Entity())...)
 	actions = append(actions, b.functions.CodeActions()...)
 	actions = append(actions, actioncatalog.EntityActions(b.productEntity())...)
 	actions = append(actions, devopsmodel.ProductVersionActions()...)
 	actions = append(actions, platform.Action{Schema: SchemaEvaluationSetPublish, Target: TestPlanType, Title: "Publish test plan", Description: "Freeze a portable business scenario or the evaluation cases for one function version.", Capability: "objects", Roles: []string{Builder}, Payload: []platform.Field{}})
 	actions = resourceActions(actions)
-	classes := []string{ObjectType, ActionTypeType, runtimeprotocol.PageType, runtimeprotocol.AppType, TestPlanType, runtimeprotocol.ProcessType, runtimeprotocol.FunctionType, PropertyTypeType, ValueTypeType, ObjectTypeGroupType, LinkTypeType, b.queries.Entity().Type, InterfaceType, ContractType, ImplementationType, ConnectorSetupType, CapabilityCallType, runtimeprotocol.FunctionCallType, b.evaluations.Entity().Type, runtimeprotocol.CodeType, runtimeprotocol.TableType, AgentType, SampleSetType, BranchType, ResourceType, FolderType, WorkingStateType, ProductType, ProductVersionType, runtimeprotocol.OwnedRelationType(ID), runtimeprotocol.ConfirmationType, runtimeprotocol.DispatchType}
+	classes := []string{ObjectType, ActionTypeType, runtimeprotocol.PageType, runtimeprotocol.AppType, TestPlanType, runtimeprotocol.ProcessType, runtimeprotocol.FunctionType, PropertyTypeType, ValueTypeType, ObjectTypeGroupType, LinkTypeType, b.queries.Entity().Type, InterfaceType, ContractType, ImplementationType, ConnectorSetupType, CapabilityCallType, runtimeprotocol.FunctionCallType, b.evaluations.Entity().Type, runtimeprotocol.CodeType, runtimeprotocol.TableType, SampleSetType, BranchType, ResourceType, FolderType, WorkingStateType, ProductType, ProductVersionType, runtimeprotocol.OwnedRelationType(ID), runtimeprotocol.ConfirmationType, runtimeprotocol.DispatchType}
 	classes = append(classes, b.data.Types()...)
 	b.authorities = authorities
 	b.authority = authorities(tenant, ID, platform.NewCatalog(actions...), classes...)
@@ -291,7 +280,7 @@ func (b *Build) Manifest() platform.Manifest {
 			}
 		}
 	}
-	return platform.Manifest{ID: ID, Title: platform.BuiltinManifestTitle(ID), Version: ValueDefinitionVersion, Sequences: sequences, Actions: catalog, Entities: entities, Roles: roles, Settings: b.settings(), Jobs: buildManifestJobs, Provides: provisions, Consumes: b.consumedProtocols(), Reads: reads, ReadSources: readSources, Queries: b.queries.Declarations(), Functions: b.functions.Declarations(), Agents: b.agent.Declarations(), Operations: b.functions.OperationDeclarations(), Pages: pages, Languages: languages, Subscribes: []string{ontology.SchemaPublish}}
+	return platform.Manifest{ID: ID, Title: platform.BuiltinManifestTitle(ID), Version: ValueDefinitionVersion, Sequences: sequences, Actions: catalog, Entities: entities, Roles: roles, Settings: b.settings(), Jobs: buildManifestJobs, Provides: provisions, Consumes: b.consumedProtocols(), Reads: reads, ReadSources: readSources, Queries: b.queries.Declarations(), Functions: b.functions.Declarations(), Operations: b.functions.OperationDeclarations(), Pages: pages, Languages: languages, Subscribes: []string{ontology.SchemaPublish}}
 }
 
 func (b *Build) Interested(names []string, e platform.Event) bool {
@@ -617,7 +606,6 @@ func (b *Build) Fork(authority platform.Authority) (platform.Service, error) {
 	fork.data = b.data.Fork(buildDataHost{&fork})
 	fork.data.AttachIntegrationRuntime(fork.integrationRuntime())
 	fork.automation = b.automationFactory(automationEnvironment{&fork}, b.resolver)
-	fork.agent = b.agent.Fork(fork.agentEnvironment())
 	fork.bindTestPlans()
 	fork.bindSampleSets()
 	fork.bindPublications()
@@ -625,7 +613,7 @@ func (b *Build) Fork(authority platform.Authority) (platform.Service, error) {
 }
 
 func (b *Build) newSimulation(tenant string) *Build {
-	return New(tenant, b.authorities, b.publicationBase, b.resolver, b.objectPublication, b.queryFactory, b.functionFactory, b.agentFactory, b.functionEvaluationFactory, b.testPlanFactory, b.evaluationSetFactory, b.sampleSetFactory, b.application, b.automationFactory)
+	return New(tenant, b.authorities, b.publicationBase, b.resolver, b.objectPublication, b.queryFactory, b.functionFactory, b.functionEvaluationFactory, b.testPlanFactory, b.evaluationSetFactory, b.sampleSetFactory, b.application, b.automationFactory)
 }
 func (b *Build) NewSimulationApp(tenant string) platform.Service { return b.newSimulation(tenant) }
 func (b *Build) NewSimulationSandbox(tenant string) ConstructionSandbox {
@@ -711,6 +699,5 @@ type ConstructionSandbox interface {
 	BeginAssetBootstrap([]platform.ReleaseAsset) (func(), error)
 	ProcessFromAsset(platform.ReleaseAsset) (runtimeprotocol.Process, error)
 	InstallDefinitionAsset(platform.ReleaseAsset) error
-	InstallAgentAsset(platform.ReleaseAsset) error
 	InstallOperationAsset(platform.ReleaseAsset) error
 }

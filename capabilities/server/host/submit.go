@@ -153,6 +153,9 @@ func (t *Tenant) acceptWithPrior(a platform.Service, m platform.Member, s *pb.Su
 		return nil, actions.AgentSuspended(m.ID)
 	}
 	draft := t.newStagedDecision()
+	if ai := protocol.ReadAICaller(m); ai != nil && ai.Hops > 0 {
+		draft.Hops = ai.Hops
+	}
 	draft.sourceProjection = opts.source
 	draft.ObservationInput = opts.observation
 	draft.SchemaVersion = binding

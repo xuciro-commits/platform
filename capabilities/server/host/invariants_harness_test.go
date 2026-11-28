@@ -20,7 +20,6 @@ import (
 	"platformserver/platform"
 	"platformserver/services/actions"
 	agentevaluation "platformserver/services/ai/evaluation"
-	agentowner "platformserver/services/ai/runtime"
 	devopsauthoring "platformserver/services/devops/authoring"
 	"platformserver/services/devops/packages"
 	functionauthoring "platformserver/services/functions/authoring"
@@ -73,7 +72,6 @@ func newInvariantTenantSetup(tb testing.TB, id string, apps []platform.Service, 
 	tb.Helper()
 	services := runtimeprotocol.DefaultRuntimeCapabilities(security.Standard{})
 	services.BindOwner = runtimeprotocol.BindOwner
-	services.NewAgentEvaluator = agentevaluation.NewAgentEvaluator
 	services.NewTransactionExecutor = actions.NewRuntime
 	seat := runtimeprotocol.Seat{Subjects: []string{"builder"}, Member: platform.Member{ID: "builder", Roles: map[string]string{build.ID: build.Builder}}}
 	console := controlowner.NewConsole(id, actions.NewAuthority, func(id string) controlowner.Owners {
@@ -81,7 +79,7 @@ func newInvariantTenantSetup(tb testing.TB, id string, apps []platform.Service, 
 		actions = append(actions, packages.Actions()...)
 		return controlowner.Owners{Policies: security.NewPolicies(), Packages: packages.New(id, PublicationResolver()), Actions: actions}
 	}, append([]runtimeprotocol.Seat{seat}, seats...)...)
-	tenant, err := NewTenantWithCapabilities(id, services, append([]platform.Service{console, build.New(id, actions.NewAuthority, []publication.Hooks{ontology.ActionTypePublication()}, PublicationResolver(), ontology.ObjectPublication, objects.QueryPublication, functionauthoring.NewOwner, agentowner.BuilderPublication, agentevaluation.NewOwner, devopsauthoring.TestPlanPublication, agentevaluation.EvaluationPublication, devopsauthoring.SampleSetPublication, build.ApplicationOwners{New: appsauthoring.NewOwner, ObjectPage: appsauthoring.CompileObjectPage, ListDetailPage: appsauthoring.ListDetailPage}, automationauthoring.New)}, apps...)...)
+	tenant, err := NewTenantWithCapabilities(id, services, append([]platform.Service{console, build.New(id, actions.NewAuthority, []publication.Hooks{ontology.ActionTypePublication()}, PublicationResolver(), ontology.ObjectPublication, objects.QueryPublication, functionauthoring.NewOwner, agentevaluation.NewOwner, devopsauthoring.TestPlanPublication, agentevaluation.EvaluationPublication, devopsauthoring.SampleSetPublication, build.ApplicationOwners{New: appsauthoring.NewOwner, ObjectPage: appsauthoring.CompileObjectPage, ListDetailPage: appsauthoring.ListDetailPage}, automationauthoring.New)}, apps...)...)
 	if err != nil {
 		tb.Fatal(err)
 	}

@@ -6,14 +6,13 @@ import (
 	"platformserver/kernel/protocol"
 	"platformserver/kernel/records"
 	"platformserver/platform"
-	agentowner "platformserver/services/ai/runtime"
 	pageowner "platformserver/services/apps/pages"
 	releaseowner "platformserver/services/devops/releases"
 	"platformserver/services/resources/publication"
 )
 
 func PublicationResolver() publication.Resolver {
-	return agentowner.WithPublicationResolver(pageowner.PublicationResolver())
+	return pageowner.PublicationResolver()
 }
 
 func (h hostView) ValidateCodeAsset(asset platform.ReleaseAsset) error {

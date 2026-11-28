@@ -120,41 +120,6 @@ func ApplicationReports(c platform.Caller) func(string, int, string) ([]protocol
 	}
 }
 
-func AgentApplicationReports(c platform.Caller) func(string, string, string) ([]protocol.ApplicationAIEvaluation, *platform.Error) {
-	return func(agent, digest, config string) ([]protocol.ApplicationAIEvaluation, *platform.Error) {
-		out := []protocol.ApplicationAIEvaluation{}
-		for offset := 0; ; {
-			rows, total, problem := platform.Find[protocol.Evaluation](c, platform.Query{
-				Domain: platform.Raw([]any{[]any{"agent", "=", agent}, []any{"definitionDigest", "=", digest}}),
-				Sort:   []string{"id"}, Limit: 500, Offset: offset,
-			})
-			if problem != nil {
-				return nil, problem
-			}
-			for _, report := range rows {
-				if report.Archived {
-					continue
-				}
-				state := report.State
-				if state == "done" {
-					state = "failed"
-					if report.Score == 1 && report.Fails == 0 && report.Differs == 0 {
-						state = "passed"
-					}
-				}
-				if report.State == "done" && (config == "" || report.ModelConfig != config) {
-					state = "Configuration changed; evaluate again"
-				}
-				out = append(out, protocol.ApplicationAIEvaluation{ID: report.ID, Candidate: report.Candidate, State: state, Model: report.Model, Quality: report.Score, CostUSD: report.Cost})
-			}
-			offset += len(rows)
-			if offset >= total || len(rows) == 0 {
-				return out, nil
-			}
-		}
-	}
-}
-
 func (o *evaluationOwner) submit(c platform.Caller, s *pb.Submission, now time.Time) (*pb.ChangeRecord, *platform.Error) {
 	return o.env.Authority().Receive(c, s, now, nil, func() (func(*pb.ChangeRecord), *platform.Error) {
 		if !c.Automation || !c.Staging() {

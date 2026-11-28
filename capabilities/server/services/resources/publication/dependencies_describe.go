@@ -273,62 +273,6 @@ func (resolver Resolver) describeAssetFresh(asset platform.ReleaseAsset, histori
 			add(ref)
 		}
 		capability("operation", flow.Name, platform.CapabilityAuthoritative, nil, platform.ValueSchema{}, platform.ValueSchema{}, nil)
-	case platform.AssetAgent:
-		var agent platform.AgentReleaseDescriptor
-		if err := json.Unmarshal(asset.Body, &agent); err != nil {
-			return out, err
-		}
-		if err := resolver.CheckAgent(agent); err != nil {
-			return out, err
-		}
-		if historical {
-			for _, ref := range resolver.AgentDependencies(agent, asset.Ref.App) {
-				add(ref)
-			}
-		} else {
-			for _, tool := range agent.Tools {
-				if protocol, _, ok := strings.Cut(tool, "#"); ok {
-					ref, found := bindings.Protocols[protocol]
-					if !found || ref.Kind != platform.AssetProtocol || ref.Check() != nil {
-						return out, fmt.Errorf("agent %s tool %s needs its declared provider protocol binding", asset.Ref, tool)
-					}
-					add(ref)
-					continue
-				}
-				if strings.HasPrefix(tool, "read:") || strings.HasPrefix(tool, "emit:") {
-					if !agent.Native {
-						return out, fmt.Errorf("agent %s tool %s is not a published native declaration", asset.Ref, tool)
-					}
-					continue
-				}
-				query, queryTool := strings.CutPrefix(tool, "query:")
-				if ref, fixed := agent.ToolBindings[tool]; fixed {
-					kind := platform.AssetAction
-					name := tool
-					if queryTool {
-						kind = platform.AssetQuery
-						name = query
-					}
-					if ref.Kind != kind || ref.App != asset.Ref.App || ref.Name != name {
-						return out, fmt.Errorf("agent %s tool %s binding differs from its original declaration", asset.Ref, tool)
-					}
-					add(ref)
-					continue
-				}
-				if agent.Native {
-					return out, fmt.Errorf("agent %s tool %s needs a fixed declared asset binding", asset.Ref, tool)
-				}
-				if queryTool && query != "" {
-					add(platform.AssetRef{App: asset.Ref.App, Kind: platform.AssetQuery, Name: query})
-					continue
-				}
-				if platform.OwnerOfType(tool) != asset.Ref.App || strings.ContainsAny(tool, "#:") {
-					return out, fmt.Errorf("agent %s tool %s is not a declared local action", asset.Ref, tool)
-				}
-				add(platform.AssetRef{App: asset.Ref.App, Kind: platform.AssetAction, Name: tool})
-			}
-		}
-		capability("operation", agent.Name, platform.CapabilityEffect, nil, platform.ValueSchema{}, platform.ValueSchema{}, nil)
 	case platform.AssetEvaluation:
 		evaluation, err := runtimeprotocol.ReadEvaluationSet(asset.Body)
 		if err != nil {

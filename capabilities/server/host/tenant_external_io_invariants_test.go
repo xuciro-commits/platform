@@ -9,9 +9,8 @@ import (
 	"testing"
 	"time"
 
-	pb "platformkernel/gen/platform/kernel/v1alpha1"
 	"platformserver/platform"
-	agentowner "platformserver/services/ai/runtime"
+	agentowner "platformserver/services/ai/delegation"
 	build "platformserver/services/resources/authoring"
 	filesowner "platformserver/services/resources/files"
 )
@@ -103,17 +102,14 @@ func TestInvariantK13AgentReadDoesNotAcquireTenantLane(t *testing.T) {
 	live.accept(t, "build.object.create", build.ObjectType, "OBJECT", invariantObject("alpha", "Alpha"))
 	live.accept(t, "build.object.publish", build.ObjectType, "OBJECT", map[string]any{})
 	live.accept(t, "invariantproject.alpha.create", "invariantproject.alpha", "A1", map[string]any{"note": "snapshot"})
+	member := live.member(t)
 	if err := live.Lane.Hold(t.Context(), "background"); err != nil {
 		t.Fatal(err)
 	}
 	finished := make(chan *platform.Error, 1)
 	go func() {
-		finished <- (hostView{t: live.Tenant}).WithAgentRead(func(runtime protocol.AgentEvaluationRuntime) *platform.Error {
-			if _, found := runtime.Host.Record("invariantproject.alpha/A1"); !found {
-				return platform.Refuse(pb.ErrorCode_ERROR_CODE_NOT_FOUND, "missing snapshot record")
-			}
-			return nil
-		})
+		_, refusal := live.QueryModelObjects(member, protocol.ModelObjectQuery{Set: platform.ObjectSet{Object: "invariantproject.alpha"}, Limit: 10}, invariantClock)
+		finished <- refusal
 	}()
 	select {
 	case refusal := <-finished:

@@ -24,6 +24,7 @@ export type AICaller = {
   cost?: number;
   due?: string;
   approvedBy?: string;
+  hops?: number;
 };
 
 export type AIFunction = {
@@ -254,29 +255,6 @@ export type ActionConditionCheck = {
   allowed: boolean;
   needsInputs?: boolean;
   message: string;
-};
-
-export type AgentInfo = {
-  id: string;
-  app: string;
-  title: string;
-  instructions: string;
-  tools: string[];
-  budget: Budget;
-};
-
-export type AgentOverview = {
-  member: string;
-  title: string;
-  outside?: boolean;
-  suspended: boolean;
-  runs: number;
-  live: number;
-  actions: number;
-  calls: number;
-  tokens: number;
-  cost: number;
-  judged: Record<string, number>;
 };
 
 export type AgentReleaseDescriptor = {
@@ -3126,23 +3104,6 @@ export type Membership = {
   primary?: boolean;
   from?: string;
   until?: string;
-};
-
-export type Memory = {
-  id: string;
-  revision: number;
-  created: Stamp;
-  changed: Stamp;
-  archived?: boolean;
-  versionPins?: RecordVersionPin[];
-  agent: string;
-  fact: string;
-  for?: string;
-  run?: string;
-  sources?: string[];
-  state: "proposed" | "active" | "forgotten";
-  expires?: string;
-  withheld?: boolean;
 };
 
 export type Message = {

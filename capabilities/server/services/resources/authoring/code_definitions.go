@@ -161,16 +161,6 @@ func (h CodeDefinitions) Register() error {
 				return err
 			}
 		}
-		for _, agent := range manifest.Agents {
-			descriptor, err := h.Resolver.AgentDescriptor(agent)
-			if err != nil {
-				return err
-			}
-			ref := platform.AssetRef{App: manifest.ID, Kind: platform.AssetAgent, Name: agent.Name}
-			if err := add(platform.Definition{Ref: ref, Source: "code", Version: manifest.Version, ContractVersion: 1, Agent: &descriptor}); err != nil {
-				return err
-			}
-		}
 		for _, operation := range manifest.Operations {
 			o := operation
 			if err := add(platform.Definition{Ref: platform.AssetRef{App: manifest.ID, Kind: platform.AssetCompute, Name: o.Name}, Source: "code", Version: manifest.Version, ContractVersion: 1, Operation: &o}); err != nil {

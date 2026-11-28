@@ -25,7 +25,6 @@ import (
 	"platformserver/platform"
 	"platformserver/services/actions"
 	"platformserver/services/ai"
-	agentevaluation "platformserver/services/ai/evaluation"
 	"platformserver/services/devops/packages"
 	"platformserver/services/objects"
 	authoring "platformserver/services/resources/authoring"
@@ -181,7 +180,7 @@ func newTrial(script tryScript, at time.Time, out io.Writer) (*trial, error) {
 	}
 	org.Memberships = controlowner.Memberships(seats)
 	services := protocol.DefaultRuntimeCapabilities(security.Standard{})
-	services.BindOwner, services.NewAgentEvaluator, services.NewTransactionExecutor = protocol.BindOwner, agentevaluation.NewAgentEvaluator, actions.NewRuntime
+	services.BindOwner, services.NewTransactionExecutor = protocol.BindOwner, actions.NewRuntime
 	tenant, err := host.NewTenantWithCapabilities("try", services, composition.BuiltinApps("try", org, seats...)...)
 	if err != nil {
 		return nil, err

@@ -143,9 +143,6 @@ func (b *Build) Reinstall() error {
 		return err
 	}
 
-	if err := b.agent.Restore(); err != nil {
-		return err
-	}
 	if err := b.functions.RestoreCodes(); err != nil {
 		return err
 	}

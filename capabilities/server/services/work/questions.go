@@ -1,6 +1,7 @@
 package work
 
 import (
+	"bytes"
 	"cmp"
 	"encoding/json"
 	"fmt"
@@ -93,9 +94,57 @@ func (w *Work) questionRequest(c platform.Caller, s *pb.Submission, now time.Tim
 		Scopes      []string                  `json:"scopes"`
 		AgentCaller bool                      `json:"agentCaller"`
 		Caller      *runtimeprotocol.AICaller `json:"caller"`
+		Title       string                    `json:"title"`
+		Reason      string                    `json:"reason"`
+		Options     []string                  `json:"options"`
+		Recommend   int                       `json:"recommend"`
+		About       string                    `json:"about"`
+		Key         string                    `json:"key"`
+		Delegation  string                    `json:"delegation"`
+	}
+	if json.Unmarshal(s.GetPayload(), &p) != nil {
+		return nil, invalid
+	}
+	trimmedSub := bytes.TrimSpace(p.Submission)
+	if len(trimmedSub) == 0 || string(trimmedSub) == "null" {
+		requester, ok := w.host.Member(p.Requester)
+		if !ok || strings.TrimSpace(p.Title) == "" || len(p.Options) < 2 {
+			return nil, invalid
+		}
+		delegates := w.delegates(c, []string{requester.ID}, now)
+		candidates := []string{requester.ID}
+		for delegate := range delegates {
+			candidates = append(candidates, delegate)
+		}
+		slices.Sort(candidates)
+		candidates = slices.Compact(candidates)
+		question := AgentQuestion{
+			Record:       platform.Record{ID: s.GetTarget().GetId()},
+			Title:        strings.TrimSpace(p.Title),
+			Reason:       strings.TrimSpace(p.Reason),
+			App:          runtimeprotocol.AgentApp,
+			Requester:    requester.ID,
+			Candidates:   candidates,
+			AgentCaller:  p.AgentCaller,
+			Caller:       p.Caller,
+			Options:      slices.Clone(p.Options),
+			OptionTitles: slices.Clone(p.Options),
+			Recommend:    p.Recommend,
+			Key:          p.Key,
+			About:        p.About,
+			Delegation:   p.Delegation,
+			State:        "open",
+		}
+		if _, exists := platform.Get[AgentQuestion](c, question.ID); exists {
+			return nil, &platform.Error{Code: pb.ErrorCode_ERROR_CODE_CONFLICT}
+		}
+		return func(r *pb.ChangeRecord) {
+			c.Put(r, question)
+			w.offerQuestion(c, r, question, cmp.Or(question.Reason, question.Title), now)
+		}, nil
 	}
 	held := &pb.Submission{}
-	if json.Unmarshal(s.GetPayload(), &p) != nil || protojson.Unmarshal(p.Submission, held) != nil {
+	if protojson.Unmarshal(p.Submission, held) != nil {
 		return nil, invalid
 	}
 	app, declared, known := w.host.Action(held.GetSchema().GetName())

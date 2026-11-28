@@ -10,13 +10,10 @@ import (
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
 	"platformserver/platform"
 	"platformserver/services/ontology"
-	"platformserver/services/resources/publication"
 )
 
 type ApplicationAI struct {
 	Model               func(kind, name string, options platform.ModelOptions) (string, string, bool)
-	Resolver            publication.Resolver
-	AgentEvaluations    func(string, string, string) ([]protocol.ApplicationAIEvaluation, *platform.Error)
 	FunctionDefinition  func(platform.ReleaseAsset) (platform.AIFunction, int, error)
 	FunctionEvaluations func(string, int, string) ([]protocol.ApplicationAIEvaluation, *platform.Error)
 	Roles               []string
@@ -33,38 +30,6 @@ func (a ApplicationAI) List(m platform.Member, assets []platform.ReleaseAsset, v
 			continue
 		}
 		authorized := slices.ContainsFunc(a.Roles, func(role string) bool { return m.Holds(asset.Ref.App, role) })
-		if asset.Ref.Kind == platform.AssetAgent {
-			var definition platform.AgentReleaseDescriptor
-			if json.Unmarshal(asset.Body, &definition) != nil || a.Resolver.CheckAgent(definition) != nil {
-				return nil, conflict(fmt.Errorf("invalid agent declaration"))
-			}
-			item := protocol.ApplicationAI{Resource: platform.AssetBinding{Ref: asset.Ref, SourceVersion: asset.SourceVersion}, Placement: "assist", Model: definition.Model, HandoffRole: definition.HandoffRole, Adoptions: []string{}, Checkpoints: slices.Clone(definition.Checkpoints), Evaluations: []protocol.ApplicationAIEvaluation{}}
-			currentConfig := ""
-			if bound, config, ok := a.Model("agent", definition.Model, definition.ModelOptions); ok {
-				item.Model, currentConfig = bound, config
-			}
-			for _, tool := range definition.Tools {
-				if strings.HasPrefix(tool, "query:") || strings.HasPrefix(tool, "read:") {
-					continue
-				}
-				if item.Placement == "assist" {
-					item.Placement = "act"
-				}
-				if !slices.Contains(definition.Checkpoints, tool) {
-					item.Placement = "autonomous"
-				}
-			}
-			if authorized && a.AgentEvaluations != nil {
-				digest, _ := platform.CanonicalDigest(asset)
-				reports, problem := a.AgentEvaluations(asset.Ref.App+"."+asset.Ref.Name, digest, currentConfig)
-				if problem != nil {
-					return nil, problem
-				}
-				item.Evaluations = reports
-			}
-			out = append(out, item)
-			continue
-		}
 		if asset.Ref.Kind != platform.AssetFunction {
 			continue
 		}

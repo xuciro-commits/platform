@@ -21,13 +21,7 @@ func (s authorizationSources) Engine() platform.AuthorizationEngine {
 func (s authorizationSources) LookupMember(id string) (platform.Member, bool) { return s.t.member(id) }
 
 func (s authorizationSources) DeclaredPrincipal(id string) bool {
-	return security.DeclaredPrincipal(id, s.t.Identity == nil, func(app string) bool { return s.t.App(app) != nil }, func(agent string) (bool, bool) {
-		if s.t.Agents == nil {
-			return false, false
-		}
-		_, declared := s.t.Agents.AgentDeclaration(agent)
-		return declared, true
-	})
+	return security.DeclaredPrincipal(id, s.t.Identity == nil, func(app string) bool { return s.t.App(app) != nil }, func(string) (bool, bool) { return false, false })
 }
 
 func (s authorizationSources) App(id string) platform.Service { return s.t.App(id) }

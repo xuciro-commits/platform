@@ -57,6 +57,7 @@ type AICaller struct {
 	Cost       float64   `json:"cost,omitempty"`
 	Due        time.Time `json:"due,omitzero"`
 	ApprovedBy string    `json:"approvedBy,omitempty"`
+	Hops       int       `json:"hops,omitempty"`
 }
 
 func WithAICaller(m platform.Member, ai *AICaller) platform.Member {

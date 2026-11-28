@@ -4,7 +4,6 @@ import (
 	"encoding/json"
 	"platformserver/kernel/protocol"
 	"slices"
-	"strings"
 	"testing"
 	"time"
 
@@ -33,11 +32,6 @@ func TestInvariantK1FunctionAuthoringPublishesEvaluatesReviewsAndReplays(t *test
 	}
 	live.accept(t, "build.function.create", protocol.FunctionType, "FUNCTION", declaration("Return the original answer."))
 	live.accept(t, "build.function.publish", protocol.FunctionType, "FUNCTION", map[string]any{})
-	live.accept(t, "build.agent.create", build.AgentType, "AGENT", map[string]any{
-		"name": "helper", "title": "Builder helper", "description": "Builds a small business application",
-		"instructions": "Inspect the goal, propose the next step and finish with the result.",
-	})
-	live.accept(t, "build.agent.publish", build.AgentType, "AGENT", map[string]any{})
 
 	owner := live.App(build.ID).(*build.Build)
 	ledger, err := owner.Authority().ForkRead()
@@ -49,36 +43,25 @@ func TestInvariantK1FunctionAuthoringPublishesEvaluatesReviewsAndReplays(t *test
 		t.Fatal(err)
 	}
 	live.accept(t, "build.function.edit", protocol.FunctionType, "FUNCTION", map[string]any{"instructions": "Return the revised answer."})
-	live.accept(t, "build.agent.edit", build.AgentType, "AGENT", map[string]any{"instructions": "Ask before the final step, then finish with the result."})
 
 	preview, err := owner.DraftReleaseAssetsMulti([]build.JointDraftRef{
-		{Kind: platform.AssetFunction, ID: "FUNCTION"}, {Kind: platform.AssetAgent, ID: "AGENT"},
+		{Kind: platform.AssetFunction, ID: "FUNCTION"},
 	}, live.member(t), false)
 	if err != nil {
 		t.Fatal(err)
 	}
 	ref := platform.AssetRef{App: build.ID, Kind: platform.AssetFunction, Name: "answer"}
-	agentRef := platform.AssetRef{App: build.ID, Kind: platform.AssetAgent, Name: "helper"}
 	var candidate platform.ReleaseAsset
-	var agentCandidate platform.ReleaseAsset
 	for _, asset := range preview.After {
 		if asset.Ref == ref {
 			candidate = asset
-		}
-		if asset.Ref == agentRef {
-			agentCandidate = asset
 		}
 	}
 	var next platform.AIFunction
 	if candidate.SourceVersion != "1.function-2" || json.Unmarshal(candidate.Body, &next) != nil || next.Instructions != "Return the revised answer." {
 		t.Fatalf("function draft lost the edited version: %+v", candidate)
 	}
-	var nextAgent platform.AgentReleaseDescriptor
-	if agentCandidate.SourceVersion != "1.agent-2" || json.Unmarshal(agentCandidate.Body, &nextAgent) != nil || nextAgent.Instructions != "Ask before the final step, then finish with the result." {
-		t.Fatalf("agent draft lost the edited version: %+v", agentCandidate)
-	}
 	live.accept(t, "build.function.publish", protocol.FunctionType, "FUNCTION", map[string]any{})
-	live.accept(t, "build.agent.publish", build.AgentType, "AGENT", map[string]any{})
 
 	functionVersion := func(app platform.Service, version, expected int, instructions string) {
 		t.Helper()
@@ -90,19 +73,6 @@ func TestInvariantK1FunctionAuthoringPublishesEvaluatesReviewsAndReplays(t *test
 	functionVersion(owner, 1, 1, "Return the original answer.")
 	functionVersion(owner, 0, 2, "Return the revised answer.")
 	functionVersion(fork, 0, 1, "Return the original answer.")
-	agentVersion := func(app platform.Service, expected int, instructions string) {
-		t.Helper()
-		agents := app.Manifest().Agents
-		if len(agents) != 1 || agents[0].Name != "helper" || !strings.Contains(agents[0].Instructions, instructions) {
-			t.Fatalf("agent version differs: %+v", agents)
-		}
-		dynamic := app.(protocol.DynamicAgentDefinitions)
-		if actual := dynamic.AgentVersion("helper"); actual != expected {
-			t.Fatalf("agent version: got %d, want %d", actual, expected)
-		}
-	}
-	agentVersion(owner, 2, "Ask before the final step")
-	agentVersion(fork, 1, "Inspect the goal")
 	retained, err := owner.FunctionReleaseAsset("answer", "1.function-1")
 	if err != nil {
 		t.Fatalf("retained function asset: %v", err)
@@ -231,7 +201,7 @@ func TestInvariantK1FunctionAuthoringPublishesEvaluatesReviewsAndReplays(t *test
 	if !found || releaseEvaluation.State != "passed" {
 		t.Fatalf("release evaluation did not pass: %+v", releaseEvaluation)
 	}
-	aiAssets := []platform.ReleaseAsset{retained, agentCandidate}
+	aiAssets := []platform.ReleaseAsset{retained}
 	visible := map[platform.AssetRef]bool{}
 	for _, asset := range aiAssets {
 		visible[asset.Ref] = true
@@ -240,16 +210,14 @@ func TestInvariantK1FunctionAuthoringPublishesEvaluatesReviewsAndReplays(t *test
 	if refusal != nil {
 		t.Fatalf("application AI view: %v", refusal)
 	}
-	var applicationFunction, applicationAgent *protocol.ApplicationAI
+	var applicationFunction *protocol.ApplicationAI
 	for i := range ai {
 		switch ai[i].Resource.Ref {
 		case ref:
 			applicationFunction = &ai[i]
-		case agentRef:
-			applicationAgent = &ai[i]
 		}
 	}
-	if applicationFunction == nil || len(applicationFunction.Evaluations) != 3 || applicationAgent == nil {
+	if applicationFunction == nil || len(applicationFunction.Evaluations) != 3 {
 		t.Fatalf("application AI view differs: %+v", ai)
 	}
 	evaluations := map[string]bool{}
@@ -297,7 +265,7 @@ func TestInvariantK1FunctionAuthoringPublishesEvaluatesReviewsAndReplays(t *test
 		t.Fatalf("replayed application AI view: %v", refusal)
 	}
 	replayedFunction := slices.IndexFunc(replayedAI, func(item protocol.ApplicationAI) bool { return item.Resource.Ref == ref })
-	if len(replayedAI) != 2 || replayedFunction < 0 || len(replayedAI[replayedFunction].Evaluations) != 3 {
+	if len(replayedAI) != 1 || replayedFunction < 0 || len(replayedAI[replayedFunction].Evaluations) != 3 {
 		t.Fatalf("application AI replay differs: %+v", replayedAI)
 	}
 	replayedPlan, found := platform.Get[build.TestPlan](replayed.automation(build.ID, false), "PLAN")
