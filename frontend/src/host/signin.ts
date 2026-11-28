@@ -1,6 +1,6 @@
 import type { Api } from "./contract";
 import { HostRefusal, request } from "./request";
-import type { Session } from "./session";
+import { startSession, type Session } from "./session";
 
 const pending = "platform:sign-in";
 const scope = "openid email profile";
@@ -26,6 +26,20 @@ async function exchange(issuer: string, form: Record<string, string>): Promise<S
 
 export function signInWithPassword(sign: Api.SignIn, username: string, password: string) {
   return exchange(sign.issuer ?? "", { grant_type: "password", client_id: sign.client ?? "", username, password, scope });
+}
+
+export function requestEmailCode(email: string) {
+  return request<Api.EmailCodeAnswer>("/v1/auth/email/code", { body: { email } });
+}
+
+export function verifyEmailCode(email: string, code: string) {
+  return request<Api.AuthSession>("/v1/auth/email/verify", { body: { email, code } });
+}
+
+export function enterVerifiedSession(answer: Api.AuthSession) {
+  const token = answer.token ?? "";
+  const tenant = answer.tenants[0]?.id ?? "";
+  startSession({ token, tenant });
 }
 
 export async function startSingleSignOn(sign: Api.SignIn) {

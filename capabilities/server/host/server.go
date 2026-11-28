@@ -49,6 +49,8 @@ type Host struct {
 	web                 *transport.WebFiles
 	Templates           func() []runtimeprotocol.TenantTemplate
 	CreateTenant        func(runtimeprotocol.CreateTenantRequest, string) (*Tenant, error)
+	Accounts            *idp.Accounts
+	MailEndpoint        runtimeprotocol.MailChannel
 	routes              []transport.Route
 	SecondFactor        Attest
 }
@@ -154,6 +156,7 @@ func (h *Host) Handler() http.Handler {
 	mux := rt.mux
 	h.routes = nil
 	h.routesCore(rt)
+	h.routesOnboarding(rt)
 	h.routesDiscovery(rt)
 	h.routesApplications(rt)
 	h.routesMonitoring(rt)

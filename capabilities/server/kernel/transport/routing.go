@@ -51,8 +51,11 @@ func DecodeSubmission(body []byte, correctionOf string) (*pb.Submission, *platfo
 	return sub, nil
 }
 
-func SignInOf(issuer, client string, development bool, identities func() []protocol.LoginIdentity, mint func(string) string) SignIn {
+func SignInOf(issuer, client string, development bool, identities func() []protocol.LoginIdentity, mint func(string) string, localAuth ...bool) SignIn {
 	out := SignIn{}
+	if len(localAuth) > 0 && localAuth[0] {
+		out.LocalAuth = true
+	}
 	if issuer != "" {
 		out.Issuer, out.Client = issuer, client
 	} else if development {

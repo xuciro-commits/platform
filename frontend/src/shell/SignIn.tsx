@@ -6,6 +6,7 @@ import { Divider } from "@astryxdesign/core/Divider";
 import { Grid } from "@astryxdesign/core/Grid";
 import { Icon } from "@astryxdesign/core/Icon";
 import { HStack, StackItem, VStack } from "@astryxdesign/core/Layout";
+import { Link } from "@astryxdesign/core/Link";
 import { Section } from "@astryxdesign/core/Section";
 import { Skeleton } from "@astryxdesign/core/Skeleton";
 import { Spinner } from "@astryxdesign/core/Spinner";
@@ -16,7 +17,18 @@ import { CubeIcon } from "@heroicons/react/24/outline";
 import * as stylex from "@stylexjs/stylex";
 import { useEffect, useRef, useState } from "react";
 import {
-  type Api, HostRefusal, finishSingleSignOn, returningFromSingleSignOn, signInWithPassword, startSession, startSingleSignOn, useRead,
+  type Api,
+  HostRefusal,
+  enterVerifiedSession,
+  finishSingleSignOn,
+  reasonOf as hostReasonOf,
+  requestEmailCode,
+  returningFromSingleSignOn,
+  signInWithPassword,
+  startSession,
+  startSingleSignOn,
+  useRead,
+  verifyEmailCode,
 } from "../host";
 import { t } from "../i18n";
 import { navigate } from "../router";
@@ -82,6 +94,79 @@ function Credentials({ sign }: { sign: Api.SignIn }) {
   );
 }
 
+function LocalEmailCredentials() {
+  const [email, setEmail] = useState("");
+  const [code, setCode] = useState("");
+  const [sent, setSent] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const [failure, setFailure] = useState("");
+  const validEmail = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim());
+
+  const send = async () => {
+    if (!validEmail || busy) return;
+    setBusy(true);
+    setFailure("");
+    try {
+      await requestEmailCode(email.trim());
+      setSent(true);
+    } catch (problem) {
+      setFailure(hostReasonOf(problem));
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const verify = async () => {
+    if (!validEmail || code.trim().length !== 6 || busy) return;
+    setBusy(true);
+    setFailure("");
+    try {
+      enterVerifiedSession(await verifyEmailCode(email.trim(), code.trim()));
+      void navigate("/", null, true);
+    } catch (problem) {
+      setFailure(hostReasonOf(problem));
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <VStack gap={3} hAlign="stretch" width="100%">
+      {failure && <Banner status="error" title={failure} />}
+      {!sent ? (
+        <>
+          <TextInput
+            label={t("Work email")}
+            isLabelHidden
+            type="email"
+            autoComplete="email"
+            placeholder={t("name@company.com")}
+            value={email}
+            onChange={(next: string) => { setEmail(next); setFailure(""); }}
+            size="lg"
+            onKeyDown={(event) => { if (event.key === "Enter") void send(); }}
+          />
+          <Button label={t("Send verification code")} variant="primary" size="lg" isLoading={busy} isDisabled={!validEmail} onClick={() => void send()} />
+        </>
+      ) : (
+        <>
+          <TextInput
+            label={t("Verification code")}
+            isLabelHidden
+            placeholder="000000"
+            value={code}
+            onChange={(next: string) => { setCode(next.replace(/\D+/g, "").slice(0, 6)); setFailure(""); }}
+            size="lg"
+            onKeyDown={(event) => { if (event.key === "Enter") void verify(); }}
+          />
+          <Button label={t("Verify and continue")} variant="primary" size="lg" isLoading={busy} isDisabled={code.trim().length !== 6} onClick={() => void verify()} />
+          <Button label={t("Use a different email")} variant="ghost" size="sm" isDisabled={busy} onClick={() => { setSent(false); setCode(""); setFailure(""); }} />
+        </>
+      )}
+    </VStack>
+  );
+}
+
 function Returning({ sign }: { sign: Api.SignIn }) {
   const [failure, setFailure] = useState("");
   const started = useRef(false);
@@ -104,6 +189,7 @@ export function SignIn() {
   const options = useRead<Api.SignIn>("/v1/sign-in");
   const [returning] = useState(returningFromSingleSignOn);
   const sign = options.status === "ready" ? options.data : undefined;
+  const identities = [...new Map((sign?.identities ?? []).map((identity) => [identity.token, identity])).values()];
   return (
     <Center axis="both" padding={6} minHeight="100dvh">
       <Card padding={0} width="100%" maxWidth={1200}>
@@ -112,7 +198,7 @@ export function SignIn() {
             <VStack gap={5} height="100%" hAlign="stretch">
               <HStack gap={2} vAlign="center">
                 <Icon icon={CubeIcon} />
-                <Text type="body" weight="bold">{t("Platform")}</Text>
+                <Link href="/welcome" isStandalone color="primary" weight="bold">{t("Platform")}</Link>
               </HStack>
               <StackItem size="fill">
                 <Center axis="vertical" height="100%">
@@ -120,7 +206,7 @@ export function SignIn() {
                     <VStack gap={1}>
                       <Text type="display-1" as="h1">{t("Welcome back")}</Text>
                       <Text type="body" color="secondary" size="sm">
-                        {sign?.issuer ? t("Sign in to your Platform workspace") : t("Choose how to continue")}
+                        {sign?.issuer || sign?.localAuth ? t("Sign in to your Platform workspace") : t("Choose how to continue")}
                       </Text>
                     </VStack>
                     {options.status === "loading" && <Skeleton height={44} />}
@@ -128,13 +214,26 @@ export function SignIn() {
                       <Banner status="error" title={t("The platform could not be reached")} description={options.reason} />
                     )}
                     {sign?.issuer && (returning ? <Returning sign={sign} /> : <Credentials sign={sign} />)}
-                    {sign && !sign.issuer && (
+                    {sign && !sign.issuer && identities.length === 0 && sign.localAuth && <LocalEmailCredentials />}
+                    {sign && !sign.issuer && identities.length > 0 && (
                       <VStack gap={3} hAlign="stretch">
-                        {[...new Map((sign.identities ?? []).map((identity) => [identity.token, identity])).values()].map((identity) => (
+                        {identities.map((identity) => (
                           <Button key={identity.token} label={identity.member}
                             variant="secondary" size="lg" onClick={() => startSession({ token: identity.token, tenant: identity.tenant })} />
                         ))}
+                        {sign.localAuth && (
+                          <>
+                            <Divider label={t("Or")} />
+                            <Button label={t("Continue with email")} variant="secondary" size="lg" href="/signup?mode=signin" />
+                          </>
+                        )}
                       </VStack>
+                    )}
+                    {sign?.localAuth && (
+                      <Text type="supporting" color="secondary">
+                        {t("New to Platform?")}{" "}
+                        <Link href="/signup" type="supporting">{t("Create account")}</Link>
+                      </Text>
                     )}
                   </VStack>
                 </Center>

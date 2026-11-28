@@ -82,6 +82,10 @@ func (p *Local) Mint(subject string, ttl time.Duration, now time.Time) (string, 
 }
 
 func (p *Local) Verify(token string) (string, bool) {
+	return p.VerifyAt(token, time.Now().UTC())
+}
+
+func (p *Local) VerifyAt(token string, now time.Time) (string, bool) {
 	parts := strings.Split(token, ".")
 	if len(parts) != 3 {
 		return "", false
@@ -111,7 +115,7 @@ func (p *Local) Verify(token string) (string, bool) {
 	if json.Unmarshal(payload, &claims) != nil || claims.Issuer != issuer || claims.Subject == "" {
 		return "", false
 	}
-	now := time.Now().UTC()
+	now = now.UTC()
 	if claims.ExpiresAt == 0 || now.Unix() >= claims.ExpiresAt {
 		return "", false
 	}

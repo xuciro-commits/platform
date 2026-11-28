@@ -195,6 +195,7 @@ type MeTenant struct {
 type SignIn struct {
 	Issuer     string                   `json:"issuer,omitempty"`
 	Client     string                   `json:"client,omitempty"`
+	LocalAuth  bool                     `json:"localAuth,omitempty"`
 	Identities []protocol.LoginIdentity `json:"identities,omitempty"`
 }
 

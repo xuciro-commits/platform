@@ -109,7 +109,7 @@ func (h *Host) routesCore(rt *routes) {
 		})
 	})
 	rt.public(transport.Route{Pattern: "GET /v1/sign-in", Summary: "How the workspace signs in: the OpenID issuer and client, or development identities", Answer: transport.SignIn{}}, func(w http.ResponseWriter, _ *http.Request) {
-		WriteJSON(w, http.StatusOK, transport.SignInOf(h.Issuer, h.Client, h.Development, h.loginIdentities, h.Mint))
+		WriteJSON(w, http.StatusOK, transport.SignInOf(h.Issuer, h.Client, h.Development, h.loginIdentities, h.Mint, h.Accounts != nil && h.Issuer == ""))
 	})
 }
 

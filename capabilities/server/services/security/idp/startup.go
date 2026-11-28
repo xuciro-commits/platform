@@ -1,11 +1,16 @@
 package idp
 
 import (
+	"cmp"
+	"context"
 	"flag"
 	"fmt"
 	"log"
+	"net/url"
 	"os"
 	"path/filepath"
+	"platformserver/kernel/protocol"
+	"strings"
 	"time"
 )
 
@@ -100,4 +105,67 @@ func (f *Flags) Validate() (err error) {
 
 func (f *Flags) Startup() Startup {
 	return Startup{Profile: f.Profile, Data: f.Data, KeyFile: f.IDPKey, Mint: f.Mint, NewKey: f.NewKey, TokenTTL: f.TokenTTL}
+}
+
+func (f *Flags) IsDevelopment() bool {
+	return f.Issuer == "" && f.Profile != "lightweight" && f.IDPKey == "" && os.Getenv("PLATFORM_IDP_KEY") == "" && os.Getenv("PLATFORM_SMTP_URL") == ""
+}
+
+func (f *Flags) BootstrapOnboarding(signer *Local) (*Accounts, protocol.MailChannel, func(context.Context) error, error) {
+	stateDir := f.Data
+	if stateDir == "" && strings.HasPrefix(f.Files, "file:") {
+		if u, err := url.Parse(f.Files); err == nil && u.Path != "" {
+			stateDir = filepath.Join(u.Path, "_idp")
+		}
+	}
+	if stateDir == "" && f.TenantsFile != "" {
+		stateDir = filepath.Dir(f.TenantsFile)
+	}
+	var err error
+	if signer == nil {
+		switch {
+		case f.IDPKey != "":
+			signer, err = LoadLocal(f.IDPKey)
+		case len(os.Getenv("PLATFORM_IDP_KEY")) > 0:
+			signer, err = NewLocal([]byte(os.Getenv("PLATFORM_IDP_KEY")))
+		case stateDir != "":
+			signer, err = EnsureLocal(filepath.Join(stateDir, "idp.key"))
+		default:
+			var key []byte
+			if key, err = NewKey(); err == nil {
+				signer, err = NewLocal(key)
+			}
+		}
+		if err != nil {
+			return nil, protocol.MailChannel{}, nil, err
+		}
+	}
+	var captured *LoopbackMailbox
+	var closeFn func(context.Context) error
+	var channel protocol.MailChannel
+	if smtpURL := os.Getenv("PLATFORM_SMTP_URL"); smtpURL != "" {
+		channel = protocol.MailChannel{
+			URL:          smtpURL,
+			From:         cmp.Or(os.Getenv("PLATFORM_SMTP_FROM"), "noreply@platform.local"),
+			Secret:       os.Getenv("PLATFORM_SMTP_SECRET"),
+			AllowPrivate: os.Getenv("PLATFORM_SMTP_ALLOW_PRIVATE") == "1",
+		}
+	} else if f.IsDevelopment() {
+		captured, err = StartLoopbackMailbox(stateDir)
+		if err != nil {
+			return nil, protocol.MailChannel{}, nil, err
+		}
+		channel = captured.Endpoint()
+		closeFn = func(context.Context) error { return captured.Close() }
+	}
+	accountsPath := ""
+	if stateDir != "" {
+		accountsPath = filepath.Join(stateDir, "idp-accounts.json")
+	}
+	accounts := NewAccounts(signer, AccountOptions{
+		Path:     accountsPath,
+		TokenTTL: f.TokenTTL,
+		Captured: captured,
+	})
+	return accounts, channel, closeFn, nil
 }

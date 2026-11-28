@@ -1,4 +1,5 @@
 const descriptions = new Map(`
+OnboardingEmailVerificationAndRateLimits|注册邮箱一次性验证码过期单次使用速率限制与同邮箱登录合一
 K48LedgerRecordClose|记录关账日期动态读取、拒绝补记、跨期冲正与重放
 K56DeferredReplyAndPolymorphicProvenance|跨权威延迟契约应答、引用集合守卫插值、提供方事实回传与多态下游单据溯源
 K55LedgerValuationAndDepletion|过账前余额计价、分层消耗与投影重放一致

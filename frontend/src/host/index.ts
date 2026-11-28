@@ -14,4 +14,4 @@ export {
   useSession,
 } from "./session";
 export { type BatchRow, send, sendBatch } from "./write";
-export { finishSingleSignOn, returningFromSingleSignOn, signInWithPassword, startSingleSignOn } from "./signin";
+export { enterVerifiedSession, finishSingleSignOn, requestEmailCode, returningFromSingleSignOn, signInWithPassword, startSingleSignOn, verifyEmailCode } from "./signin";

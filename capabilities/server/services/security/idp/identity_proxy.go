@@ -84,8 +84,8 @@ func (p Profile) Check() (string, error) {
 	}
 	switch p.Name {
 	case "", "delivery":
-		if p.Data != "" || p.KeyFile != "" {
-			return "delivery", fmt.Errorf("-data and -idp-key belong to -profile lightweight; the delivery profile keeps -database, -files and -oidc-issuer")
+		if p.Data != "" || (p.KeyFile != "" && p.Issuer != "") {
+			return "delivery", fmt.Errorf("-data belongs to -profile lightweight, and -idp-key cannot be combined with -oidc-issuer")
 		}
 		return "delivery", nil
 	case "lightweight":
@@ -112,4 +112,15 @@ func Select(issuer, keys string) (Authenticate, Attest, error) {
 	}
 	authenticate, attest := OIDCProvider(issuer, keys)
 	return authenticate, attest, nil
+}
+
+func EnsureLocal(path string) (*Local, error) {
+	if _, err := os.Stat(path); os.IsNotExist(err) {
+		if err := MakeKeyFile(path); err != nil && !os.IsExist(err) {
+			return nil, err
+		}
+	} else if err != nil {
+		return nil, err
+	}
+	return LoadLocal(path)
 }

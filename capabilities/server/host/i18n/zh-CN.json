@@ -3012,5 +3012,15 @@
   "Invalid Platform-AI-Caller header": "Platform-AI-Caller 请求头格式无效",
   "Answered": "已回答",
   "Expired": "已过期",
-  "Chosen option": "所选选项"
+  "Chosen option": "所选选项",
+  "Account could not be saved.": "无法保存账号。",
+  "Enter a valid email address.": "输入有效的邮箱地址。",
+  "Enter the 6-digit verification code.": "输入 6 位验证码。",
+  "Session token could not be issued.": "无法签发会话令牌。",
+  "Too many requests from this address. Try again shortly.": "来自当前地址的请求过于频繁，稍后再试。",
+  "Too many verification attempts from this address. Try again shortly.": "来自当前地址的验证尝试过于频繁，稍后再试。",
+  "Too many verification codes requested for this email. Try again shortly.": "该邮箱请求验证码过于频繁，稍后再试。",
+  "Verification code could not be generated.": "无法生成验证码。",
+  "Verification code is invalid or expired.": "验证码无效或已过期。",
+  "Verification email could not be sent.": "验证邮件发送失败。"
 }

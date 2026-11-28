@@ -251,9 +251,19 @@ func (d *Deployment) Serve(tenants ...*Tenant) (serveErr error) {
 			return nil
 		}
 	}
-	host.Web, host.Issuer, host.Client, host.Development = d.Web, d.Issuer, "platform-web", d.Issuer == ""
+	host.Web, host.Issuer, host.Client, host.Development = d.Web, d.Issuer, "platform-web", d.IsDevelopment()
 	host.Release, host.ReleaseDigest = d.Release, d.ReleaseDigest
-	if signer != nil {
+	if d.Issuer == "" {
+		accounts, mailCh, closeMail, err := d.BootstrapOnboarding(signer)
+		if err != nil {
+			return err
+		}
+		if closeMail != nil {
+			_ = resources.Track("onboarding mailbox", closeMail)
+		}
+		host.MailEndpoint = mailCh
+		host.EnableLocalOnboarding(accounts)
+	} else if signer != nil {
 		host.SignWith(signer, d.TokenTTL)
 	}
 	handler, err := idp.IdentityProxyHandler(d.IdentityProxy, host.Handler())

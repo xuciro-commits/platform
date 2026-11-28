@@ -22,7 +22,9 @@ import { CallDock } from "../pages/CallDock";
 import { CommandSearch } from "./CommandSearch";
 import { ErrorBoundary } from "./ErrorBoundary";
 import { legacyTarget } from "./legacy";
+import { LandingPage } from "./LandingPage";
 import { SignIn } from "./SignIn";
+import { AccountHome, SignUpPage } from "./SignUpPage";
 import { iconOf } from "../pages/icons";
 import { motionStyles } from "../pages/motion";
 
@@ -103,9 +105,11 @@ export function Shell() {
   const legacy = useMemo(() => legacyTarget(hash, recordHref), [hash, recordHref]);
   const toast = useToast();
   const segments = path.split("/");
-  const projected = useRead<Api.ApplicationView[]>(session ? "/v1/applications" : null);
-  const me = useRead<Api.MeView>(session ? "/v1/me" : null);
-  const entities = useRead<Api.EntityInfo[]>(session ? "/v1/entities" : null);
+  const hasTenant = Boolean(session?.tenant);
+  const signInOptions = useRead<Api.SignIn>(!session && path === "/" ? "/v1/sign-in" : null);
+  const projected = useRead<Api.ApplicationView[]>(hasTenant ? "/v1/applications" : null);
+  const me = useRead<Api.MeView>(hasTenant ? "/v1/me" : null);
+  const entities = useRead<Api.EntityInfo[]>(hasTenant ? "/v1/entities" : null);
   useEffect(() => {
     if (me.status !== "ready") return;
     setLanguage(me.data.language);
@@ -115,7 +119,7 @@ export function Shell() {
     setCurrency(me.data.currency || me.data.tenant?.settings?.currency || "EUR");
     setAppearance(me.data.account.theme);
   }, [me]);
-  const signedIn = session && me.status !== "loading";
+  const signedIn = hasTenant && me.status !== "loading";
   const resourcePath = signedIn && legacy && legacy !== "unmatched" && "rid" in legacy
     ? `/v1/resources/${encodeURIComponent(legacy.rid)}`
     : null;
@@ -168,7 +172,16 @@ export function Shell() {
   const navItem = navApp === app && found ? item : undefined;
   const object = item.object ?? (app.id === "ontology" && item.id === "objects" ? decodeURIComponent(segments[3] ?? "") : "");
   const listPath = app.id === "ontology" && item.id === "objects" ? `/ontology/objects/${encodeURIComponent(object)}` : item.object ? `/${app.id}/${item.id}` : undefined;
-  if (!session) return <SignIn />;
+  if (path === "/welcome") return <LandingPage />;
+  if (!session) {
+    if (path === "/signup") return <SignUpPage />;
+    if (path === "/sign-in") return <SignIn />;
+    if (path === "/" && signInOptions.status === "ready" && !signInOptions.data.issuer && (signInOptions.data.identities?.length ?? 0) === 0) {
+      return <LandingPage />;
+    }
+    return <SignIn />;
+  }
+  if (!session.tenant) return <AccountHome />;
   if (legacy) return null;
   const Entry = entries[`${app.id}/${item.id}`];
   const retiredLink = projected.status === "ready" && segments[3] && !directObject && !available.some((application) => application.id === segments[1]);

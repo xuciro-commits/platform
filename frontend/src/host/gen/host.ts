@@ -767,6 +767,19 @@ export type AuditPage = {
   coverage: AuditCoverage;
 };
 
+export type AuthSession = {
+  token?: string;
+  accountId: string;
+  email: string;
+  subject: string;
+  tenants: AuthWorkspace[];
+};
+
+export type AuthWorkspace = {
+  id: string;
+  name?: string;
+};
+
 export type AuthorityDeclaration = Record<string, unknown>;
 
 export type AuthzCollection = {
@@ -1981,6 +1994,19 @@ export type Element = {
   properties?: Record<string, unknown>;
   periods?: Period[];
   deleted?: boolean;
+};
+
+export type EmailCodeAnswer = {
+  expiresInSeconds: number;
+};
+
+export type EmailCodeRequest = {
+  email: string;
+};
+
+export type EmailVerifyRequest = {
+  email: string;
+  code: string;
 };
 
 export type EndpointView = {
@@ -5363,6 +5389,7 @@ export type SettingValue = {
 export type SignIn = {
   issuer?: string;
   client?: string;
+  localAuth?: boolean;
   identities?: Identity[];
 };
 
