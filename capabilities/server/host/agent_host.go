@@ -49,7 +49,7 @@ func (t *Tenant) suspended(member string) bool {
 
 func (t *Tenant) SweepDelegations(now time.Time) {
 	if t.Agents != nil && !t.businessStopped() && !t.quarantined() {
-		t.Agents.SweepDelegations(now, t.Submit)
+		t.Agents.SweepDelegations(now, func(fn func()) { readOnly(t, func(*Tenant) struct{} { fn(); return struct{}{} }) }, t.Submit)
 	}
 }
 

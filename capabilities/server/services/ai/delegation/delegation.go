@@ -1226,13 +1226,20 @@ func (a *Service) receiveAnswerResume(c platform.Caller, sub *pb.Submission, d D
 	})
 }
 
-func (a *Service) SweepDelegations(now time.Time, submit func(platform.Member, *pb.Submission, time.Time) (*pb.ChangeRecord, *platform.Error)) {
+func (a *Service) SweepDelegations(now time.Time, scope func(func()), submit func(platform.Member, *pb.Submission, time.Time) (*pb.ChangeRecord, *platform.Error)) {
+	if scope == nil {
+		scope = func(read func()) { read() }
+	}
 	if a.host == nil {
 		return
 	}
-	c := a.automation(runtimeprotocol.AgentApp, false)
-	delegations, _, err := platform.Find[Delegation](c, platform.Query{Sort: []string{"id"}})
-	if err != nil {
+	var delegations []Delegation
+	var findErr error
+	scope(func() {
+		c := a.automation(runtimeprotocol.AgentApp, false)
+		delegations, _, findErr = platform.Find[Delegation](c, platform.Query{Sort: []string{"id"}})
+	})
+	if findErr != nil {
 		return
 	}
 	for _, d := range delegations {

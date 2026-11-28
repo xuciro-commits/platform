@@ -39,7 +39,10 @@ func (s sqlShapedState) InitializeState(context.Context, string, int64, persiste
 func (s sqlShapedState) StateRecord(context.Context, string, string, string) (json.RawMessage, error) {
 	return nil, nil
 }
-func (s sqlShapedState) StateCandidates(context.Context, string, string, []persistence.StateFilter, string, int, int64) ([]string, error) {
+func (s sqlShapedState) StateCandidates(ctx context.Context, _ string, _ string, _ []persistence.StateFilter, _ string, _ int, _ int64) ([]string, error) {
+	if ctx != nil && ctx.Err() != nil {
+		return nil, ctx.Err()
+	}
 	return nil, nil
 }
 func (s sqlShapedState) StateHistory(context.Context, string, string, string, int, int) ([]json.RawMessage, error) {
@@ -89,7 +92,10 @@ func (v sqlShapedView) StateWindow(_ context.Context, _, _ string, window persis
 func (sqlShapedView) StateRecord(context.Context, string, string, string) (json.RawMessage, error) {
 	return nil, nil
 }
-func (v sqlShapedView) StateCandidates(_ context.Context, _, typ string, filters []persistence.StateFilter, after string, limit int, _ int64) ([]string, error) {
+func (v sqlShapedView) StateCandidates(ctx context.Context, _, typ string, filters []persistence.StateFilter, after string, limit int, _ int64) ([]string, error) {
+	if ctx != nil && ctx.Err() != nil {
+		return nil, ctx.Err()
+	}
 	v.reads.candidates = append(v.reads.candidates, typ)
 	v.reads.filters = append(v.reads.filters, filters)
 	if rows, configured := v.reads.rows[typ]; configured {
@@ -348,4 +354,27 @@ func TestInvariantAggregateGroupsByMemberAndNarrowsDerivedFields(t *testing.T) {
 	}, invariantClock); probeErr == nil || probeErr.Code != pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT {
 		t.Fatalf("expected domain filter on narrowable derived field to be rejected, got %v", probeErr)
 	}
+}
+
+func TestInvariantReadScopeDetachesCanceledContextBeforeSweep(t *testing.T) {
+	live := newInvariantTenant(t, "invariant-read-scope-detach")
+	admin := live.member(t)
+	reads := &sqlShapedReads{rows: map[string]map[string]persistence.StateCurrent{}}
+	withSQLShapedReads(t, live, reads)
+
+	reqCtx, cancel := context.WithCancel(context.Background())
+	reqView, openErr := live.Projection.Current().Open(reqCtx)
+	if openErr != nil || reqView == nil {
+		t.Fatalf("open read scope failed: view=%v err=%v", reqView, openErr)
+	}
+	_ = live.Projection.Current().Detach()
+	if _, refusal := live.Records(reqCtx, admin, build.ObjectType, platform.Query{Limit: 10}, invariantClock); refusal != nil {
+		t.Fatalf("initial scoped read failed: %v", refusal)
+	}
+	cancel()
+
+	if err := live.Projection.Current().Context().Err(); err != nil {
+		t.Fatalf("detached read scope retained canceled request context: %v", err)
+	}
+	live.SweepDelegations(invariantClock)
 }

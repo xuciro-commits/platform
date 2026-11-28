@@ -41,5 +41,5 @@ type AgentRuntime interface {
 	MintWorkerToken(string) string
 	ResolveDelegationMCP(string, time.Time) (platform.Member, bool)
 	ServeAutoloop(http.ResponseWriter, *http.Request, func() time.Time, func(*http.Request) (platform.Member, bool), func(platform.Member, *pb.Submission, time.Time) (*pb.ChangeRecord, *platform.Error))
-	SweepDelegations(time.Time, func(platform.Member, *pb.Submission, time.Time) (*pb.ChangeRecord, *platform.Error))
+	SweepDelegations(time.Time, func(func()), func(platform.Member, *pb.Submission, time.Time) (*pb.ChangeRecord, *platform.Error))
 }

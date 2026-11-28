@@ -501,23 +501,26 @@ func (r *currentRows) IDs(after string, limit int) []string {
 }
 
 func (s *CurrentScope) Open(ctx context.Context) (persistence.StateReadView, error) {
-	s.ctx = ctx
 	var views persistence.StateReadViews
 	switch value := s.backend.(type) {
 	case persistence.StateReadViews:
 		views = value
 	default:
+		s.ctx = nil
 		return nil, nil
 	}
 	view, err := views.BeginStateRead(ctx, s.tenant, s.applied)
 	if err != nil {
+		s.ctx = nil
 		return nil, err
 	}
+	s.ctx = ctx
 	s.Bind(view)
 	return view, nil
 }
 func (s *CurrentScope) Detach() persistence.StateReadView {
 	view := s.view
+	s.ctx = nil
 	s.Bind(nil)
 	return view
 }
