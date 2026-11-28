@@ -143,7 +143,9 @@ export function domainOf(filters: PowerSearchFilter[], choiceValue: (field: stri
 }
 
 export function shownMonth(view: ViewState) {
-  return view.month || new Date().toISOString().slice(0, 7);
+  if (view.month) return view.month;
+  const now = new Date();
+  return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
 }
 
 export function monthSpan(month: string) {

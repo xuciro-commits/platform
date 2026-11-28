@@ -90,7 +90,7 @@ test("extension project: create an extension object from its project page and ga
   await expect(allowedSurvey).toBeHidden();
   await expect(property(page, "Survey engineer")).toContainText("周工");
   const today = new Date();
-  const date = today.toISOString().slice(0, 10);
+  const date = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, "0")}-${String(today.getDate()).padStart(2, "0")}`;
   await page.getByRole("button", { name: "Edit Site survey date", exact: true }).press("Enter");
   const input = page.getByRole("combobox", { name: "Site survey date", exact: true });
   await input.fill(today.toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" }));

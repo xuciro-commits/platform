@@ -206,7 +206,9 @@ export function useEditor(described: Described, id: string, values: Values, revi
       if (!(parameter.name in origins.current)) origins.current[parameter.name] = values[parameter.name];
       const field = described.field(parameter.name);
       const cleared = field && !blank(value) ? described.members(field).filter((sibling) => sibling.name !== parameter.name).map((sibling) => [sibling.name, ""]) : [];
-      setDrafts((previous) => ({ ...previous, ...Object.fromEntries(cleared), [parameter.name]: value }));
+      const nextDrafts = { ...pending.current, ...Object.fromEntries(cleared), [parameter.name]: value };
+      pending.current = nextDrafts;
+      setDrafts(nextDrafts);
       setStatus(({ [parameter.name]: _, ...rest }) => rest);
       if (settles(parameter, described.field(parameter.name))) save(parameter.name, value);
     },

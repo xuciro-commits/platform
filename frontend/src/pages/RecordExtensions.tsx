@@ -108,6 +108,7 @@ function ExtensionSlot({
       return detail.edit
         ? async (patch: Values, expected: number) => {
             const accepted = await send(detail.edit!, extId, patch, expected);
+            reread();
             return { revision: accepted.revision };
           }
         : undefined;

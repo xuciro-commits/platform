@@ -315,10 +315,10 @@ test("ontology: consistent resource scopes and grouping", async ({ page }) => {
   await open(page, "Ontology", "Action types");
   await search("sales.opportunity.create");
   await expect(page.getByRole("cell", { name: "sales.opportunity.create", exact: true })).toBeVisible();
-  await search("agent.run.start");
-  await expect(page.getByRole("cell", { name: "agent.run.start", exact: true })).toHaveCount(0);
+  await search("agent.delegation.create");
+  await expect(page.getByRole("cell", { name: "agent.delegation.create", exact: true })).toHaveCount(0);
   await page.getByRole("radio", { name: "All resources" }).click();
-  await expect(page.getByRole("cell", { name: "agent.run.start", exact: true })).toBeVisible();
+  await expect(page.getByRole("cell", { name: "agent.delegation.create", exact: true })).toBeVisible();
   await page.getByRole("button", { name: "View options", exact: true }).click();
   await page.getByRole("button", { name: "Grouping", exact: true }).click();
   await page.getByRole("radiogroup", { name: "Primary group", exact: true }).getByRole("radio", { name: "Namespace", exact: true }).click();

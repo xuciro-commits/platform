@@ -6,6 +6,7 @@ import { Markdown } from "@astryxdesign/core/Markdown";
 import { Spinner } from "@astryxdesign/core/Spinner";
 import { radiusVars } from "@astryxdesign/core/theme/tokens.stylex";
 import * as stylex from "@stylexjs/stylex";
+import pdfWorkerUrl from "pdfjs-dist/build/pdf.worker.min.mjs?url";
 import { type ReactNode, useEffect, useRef, useState } from "react";
 import { requestBlob, reasonOf } from "../host";
 import { t } from "../i18n";
@@ -56,7 +57,7 @@ function PdfContent({ media, blob }: { media: Media; blob: Blob }) {
     const box = pages.current;
     void (async () => {
       const pdfjs = await import("pdfjs-dist");
-      pdfjs.GlobalWorkerOptions.workerSrc = (await import("pdfjs-dist/build/pdf.worker.min.mjs?url")).default;
+      pdfjs.GlobalWorkerOptions.workerSrc = typeof pdfWorkerUrl === "string" && pdfWorkerUrl ? pdfWorkerUrl : new URL("pdfjs-dist/build/pdf.worker.min.mjs", import.meta.url).href;
       const loading = pdfjs.getDocument({ data: new Uint8Array(await blob.arrayBuffer()) });
       task = loading;
       const document = await loading.promise;

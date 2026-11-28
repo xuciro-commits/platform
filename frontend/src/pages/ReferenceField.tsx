@@ -69,7 +69,7 @@ function RecordReferenceInput({ type, id, name, label, description, required, fo
     const find = async (query: string, context?: SearchContext<Reference>) => {
       const needle = query.toLocaleLowerCase();
       const shownFirst = [...cache.values()].filter((item) => item.label.toLocaleLowerCase().includes(needle));
-      context?.update(withCreate(shownFirst, createLabelRef.current));
+      if (shownFirst.length > 0) context?.update(withCreate(shownFirst, createLabelRef.current));
       try {
         const [answer, described, catalog] = await Promise.all([
           request<Api.RecordPage>(`/v1/records/${encodeURIComponent(type)}?${new URLSearchParams(query ? { search: query, limit: "9" } : { limit: "9" })}`),
