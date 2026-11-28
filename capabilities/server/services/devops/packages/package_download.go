@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/url"
+	runtimeprotocol "platformserver/kernel/protocol"
 )
 
 const maxRedirects = 5
@@ -13,8 +14,13 @@ const maxRedirects = 5
 var ErrUnreachable = errors.New("unreachable")
 
 func Download(ctx context.Context, address *url.URL, allowPrivate bool, send func(*http.Request, bool) (*http.Response, error)) (*http.Response, error) {
+	initialLoopback := allowPrivate
 	for hop := 0; ; hop++ {
-		req, err := http.NewRequestWithContext(ctx, http.MethodGet, address.String(), nil)
+		reqCtx := ctx
+		if allowPrivate {
+			reqCtx = runtimeprotocol.WithLoopbackPackage(ctx)
+		}
+		req, err := http.NewRequestWithContext(reqCtx, http.MethodGet, address.String(), nil)
 		if err != nil {
 			return nil, err
 		}
@@ -37,8 +43,10 @@ func Download(ctx context.Context, address *url.URL, allowPrivate bool, send fun
 		if err != nil {
 			return nil, fmt.Errorf("The address redirected to an invalid address")
 		}
-		if address, allowPrivate, err = ValidatePackageURL(next.String()); err != nil {
+		nextAddr, nextLoopback, err := ValidatePackageURL(next.String())
+		if err != nil || (nextLoopback && !initialLoopback) {
 			return nil, fmt.Errorf("The address redirected to an address that is not HTTPS")
 		}
+		address, allowPrivate = nextAddr, nextLoopback
 	}
 }

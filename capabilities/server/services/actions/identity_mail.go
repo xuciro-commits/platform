@@ -25,7 +25,7 @@ func IdentityMailEndpoint() (Endpoint, bool) {
 			return Endpoint{}, false
 		}
 	}
-	return Endpoint{ID: IdentityMailID, Kind: "email", URL: raw, From: from, Notifications: []string{"platform"}, AllowPrivate: os.Getenv("PLATFORM_IDENTITY_SMTP_ALLOW_PRIVATE") == "1"}, true
+	return Endpoint{ID: IdentityMailID, Kind: "email", URL: raw, From: from, Notifications: []string{"platform"}, AllowPrivate: os.Getenv("PLATFORM_IDENTITY_SMTP_ALLOW_PRIVATE") == "1", OperatorOwned: true}, true
 }
 
 func InvitationMail(app, key string) bool {

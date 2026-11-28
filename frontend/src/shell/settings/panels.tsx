@@ -10,7 +10,7 @@ import {
   GlobeAltIcon, HashtagIcon, InboxIcon, LanguageIcon, MoonIcon, PaintBrushIcon, PhoneIcon, TagIcon, UserIcon,
 } from "@heroicons/react/24/outline";
 import { useState } from "react";
-import { type Api, request, reread, useRead, reasonOf } from "../../host";
+import { type Api, endSession, request, reread, useRead, reasonOf } from "../../host";
 import { dateText, t } from "../../i18n";
 import { AvatarPicker } from "../../pages/AvatarPicker";
 import { type ProfileValues, useAccount } from "../account";
@@ -75,17 +75,17 @@ function deviceOf(agent = "") {
 export function SecurityPanel() {
   const toast = useToast();
   const sessions = useRead<Api.Session[]>("/v1/sessions");
-  const [busy, setBusy] = useState(false);
+  const [busy, setBusy] = useState("");
   const open = sessions.status === "ready" ? sessions.data.filter((session) => !session.ended) : [];
-  const endOthers = async () => {
-    setBusy(true);
+  const runSessionAction = async (key: string, path: string, after: () => void) => {
+    setBusy(key);
     try {
-      await request("/v1/sessions/end-others", { body: {} });
-      reread();
+      await request(path, { body: {} });
+      after();
     } catch (problem) {
       toast({ body: reasonOf(problem), type: "error" });
     } finally {
-      setBusy(false);
+      setBusy("");
     }
   };
   return (
@@ -93,10 +93,18 @@ export function SecurityPanel() {
       {open.map((session) => (
         <SettingsRow key={session.id} title={deviceOf(session.agent)} icon={/iPhone|Android/.test(session.agent ?? "") ? DevicePhoneMobileIcon : ComputerDesktopIcon}
           titleAccessory={session.current ? <Token label={t("This session")} size="sm" /> : undefined}
-          description={`${t("Last active")} ${dateText(session.last)}`} />
+          description={`${t("Last active")} ${dateText(session.last)}`}
+          control={!session.current ? (
+            <Button label={t("Revoke")} variant="secondary" size="sm" isLoading={busy === session.id} isDisabled={Boolean(busy)}
+              onClick={() => void runSessionAction(session.id, `/v1/sessions/${encodeURIComponent(session.id)}/end`, reread)} />
+          ) : undefined} />
       ))}
       <SettingsRow title={t("Sign out other sessions")} icon={ClockIcon} description={t("Every other device has to sign in again.")}
-        control={<Button label={t("Sign out others")} variant="secondary" size="sm" isLoading={busy} isDisabled={open.length < 2} onClick={endOthers} />} />
+        control={<Button label={t("Sign out others")} variant="secondary" size="sm" isLoading={busy === "others"} isDisabled={Boolean(busy) || open.length < 2}
+          onClick={() => void runSessionAction("others", "/v1/sessions/end-others", reread)} />} />
+      <SettingsRow title={t("Sign out all devices")} icon={ClockIcon} description={t("Sign out everywhere, including this device.")}
+        control={<Button label={t("Sign out all devices")} variant="destructive" size="sm" isLoading={busy === "all"} isDisabled={Boolean(busy) || open.length === 0}
+          onClick={() => void runSessionAction("all", "/v1/sessions/end-all", endSession)} />} />
     </SettingsCard>
   );
 }

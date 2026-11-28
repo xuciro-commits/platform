@@ -37,6 +37,9 @@ type choiceError struct{ field string }
 func (e choiceError) Error() string { return "unknown or ambiguous choice for " + e.field }
 
 func ParseImport(info platform.RecordTypeInfo, data []byte, currency string, refer func(platform.FieldInfo, string) (string, bool), translate ...func(string) []string) (ImportFile, *platform.Error) {
+	if len(data) > 16<<20 {
+		return ImportFile{}, platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "The import file exceeds 16 MiB")
+	}
 	rows, err := csv.NewReader(bytes.NewReader(data)).ReadAll()
 	if err != nil || len(rows) < 1 {
 		return ImportFile{}, &platform.Error{Code: pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT}

@@ -15,7 +15,6 @@ import (
 	"platformserver/services/security/idp"
 	"strconv"
 	"strings"
-	"time"
 )
 
 func (h *Host) routesCore(rt *routes) {
@@ -87,14 +86,20 @@ func (h *Host) routesCore(rt *routes) {
 	rt.handle(transport.Route{Pattern: "GET /v1/sessions", Summary: "The caller's sessions: the credentials the host has seen act as them, the current one marked", Answer: []protocol.Session{}}, func(w http.ResponseWriter, r *http.Request, m platform.Member, t *Tenant) {
 		WriteJSON(w, http.StatusOK, consoleOf(t).Sessions(m.ID, bearer(r), h.Now()))
 	})
+	rt.handle(transport.Route{Pattern: "POST /v1/sessions/{id}/end", Summary: "Revoke one session of the caller immediately", Answer: map[string]bool{}}, func(w http.ResponseWriter, r *http.Request, m platform.Member, t *Tenant) {
+		transport.Answer(w, map[string]bool{"ended": true}, controlowner.RequireEndedSession(consoleOf(t).EndSession(m.ID, r.PathValue("id"), bearer(r), h.Now())))
+	})
 	rt.handle(transport.Route{Pattern: "POST /v1/sessions/end-others", Summary: "End every session of the caller but this one: the host refuses those credentials from now on", Answer: map[string]int{}}, func(w http.ResponseWriter, r *http.Request, m platform.Member, t *Tenant) {
 		WriteJSON(w, http.StatusOK, map[string]int{"ended": consoleOf(t).EndOtherSessions(m.ID, bearer(r), h.Now())})
+	})
+	rt.handle(transport.Route{Pattern: "POST /v1/sessions/end-all", Summary: "End every session of the caller across all devices including this one", Answer: map[string]int{}}, func(w http.ResponseWriter, r *http.Request, m platform.Member, t *Tenant) {
+		WriteJSON(w, http.StatusOK, map[string]int{"ended": consoleOf(t).EndAllSessions(m.ID, bearer(r), h.Now())})
 	})
 	rt.handle(transport.Route{Pattern: "GET /v1/tokens", Summary: "The caller's personal tokens, never their secrets", Answer: []protocol.TokenView{}}, func(w http.ResponseWriter, r *http.Request, m platform.Member, t *Tenant) {
 		WriteJSON(w, http.StatusOK, consoleOf(t).Tokens(m.ID, h.Now()))
 	})
 	rt.handle(transport.Route{Pattern: "GET /v1/tokens/{id}/secret", Summary: "The secret of a token the caller just issued, once", Answer: map[string]string{}}, transport.Answering(func(r *http.Request, m platform.Member, t *Tenant) (map[string]string, *platform.Error) {
-		secret, ok := consoleOf(t).Minted(r.PathValue("id"), m.ID, time.Now())
+		secret, ok := consoleOf(t).Minted(r.PathValue("id"), m.ID, h.Now())
 		if !ok {
 			return nil, &platform.Error{Code: pb.ErrorCode_ERROR_CODE_NOT_FOUND}
 		}
@@ -118,15 +123,12 @@ func (h *Host) routesCore(rt *routes) {
 		WriteJSON(w, http.StatusOK, sign)
 	})
 }
-
 func (h *Host) loginIdentities() []protocol.LoginIdentity {
 	return idp.LoginIdentities(h.workspaceIdentities())
 }
-
 func bearer(r *http.Request) string {
 	return strings.TrimPrefix(r.Header.Get("Authorization"), "Bearer ")
 }
-
 func (t *Tenant) namedRead(w http.ResponseWriter, r *http.Request, m platform.Member, app string, read func(app string, inputs json.RawMessage) (any, *platform.Error)) {
 	name := r.PathValue("read")
 	inputs, refusal := transport.NamedReadInputs(t.App(app), name, r.URL.Query())

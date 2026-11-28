@@ -33,6 +33,11 @@ jobs:
       - run: make check
       - run: make test-runner
       - run: make test-fast
+      - name: Check Go vulnerabilities
+        run: |
+          go install golang.org/x/vuln/cmd/govulncheck@latest
+          (cd capabilities/server && govulncheck ./...)
+          (cd capabilities/voice && govulncheck ./...)
 
   frontend:
     runs-on: ubuntu-latest
@@ -49,3 +54,4 @@ jobs:
           cache-dependency-path: frontend/pnpm-lock.yaml
       - run: pnpm --dir frontend install --frozen-lockfile
       - run: make check-frontend
+      - run: pnpm --dir frontend audit --audit-level=high

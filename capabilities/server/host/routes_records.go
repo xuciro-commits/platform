@@ -97,7 +97,7 @@ func (h *Host) routesRecords(rt *routes) {
 		return objects.ReadSheet(r.Body)
 	}))
 	rt.handle(transport.Route{Pattern: "POST /v1/import/{type}", Summary: "Import records from CSV: a header of field names, with an optional id column; a row without an id is created, numbered when the type declares naming; each row is the type's generated create or edit as the caller", Query: []transport.Param{{Name: "preview", Description: "true: check each row and apply none"}}, Body: []byte{}, Answer: []protocol.ImportRow{}}, transport.Answering(func(r *http.Request, m platform.Member, t *Tenant) ([]protocol.ImportRow, *platform.Error) {
-		body, _ := io.ReadAll(io.LimitReader(r.Body, 16<<20))
+		body, _ := io.ReadAll(io.LimitReader(r.Body, (16<<20)+1))
 		rows, err := t.Import(m, r.PathValue("type"), body, r.URL.Query().Get("preview") == "true", h.Now())
 		objects.LocalizeImportRows(rows, func(issues []platform.FieldIssue) []platform.FieldIssue {
 			return t.localizedFieldIssues(m, issues, t.Language(m, r))

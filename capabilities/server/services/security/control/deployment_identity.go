@@ -7,12 +7,12 @@ import (
 )
 
 func ConfigurePersonalTokens(issuer string) ([]byte, error) {
-	if issuer == "" {
+	key := os.Getenv("PLATFORM_PERSONAL_TOKEN_KEY")
+	if key == "" && issuer == "" {
 		return nil, nil
 	}
-	key := os.Getenv("PLATFORM_PERSONAL_TOKEN_KEY")
 	if len(key) < 32 {
-		return nil, fmt.Errorf("OIDC delivery requires PLATFORM_PERSONAL_TOKEN_KEY of at least 32 bytes")
+		return nil, fmt.Errorf("PLATFORM_PERSONAL_TOKEN_KEY requires at least 32 bytes")
 	}
 	UseTokenKey([]byte(key))
 	return []byte(key), nil

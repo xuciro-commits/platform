@@ -84,6 +84,8 @@ func StreamAvatar(w http.ResponseWriter, files platform.FileStore, tenant, hash 
 	w.Header().Set("Content-Type", contentType)
 	w.Header().Set("Cache-Control", "private, no-store")
 	w.Header().Set("X-Content-Type-Options", "nosniff")
+	w.Header().Set("Content-Security-Policy", "default-src 'none'; sandbox")
+	w.Header().Set("Cross-Origin-Resource-Policy", "same-origin")
 	w.WriteHeader(http.StatusOK)
 	_, _ = w.Write(data)
 }

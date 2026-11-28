@@ -87,6 +87,9 @@ func (w *Work) RequestQuestion(c platform.Caller, held *pb.Submission, now time.
 }
 
 func (w *Work) questionRequest(c platform.Caller, s *pb.Submission, now time.Time) (func(*pb.ChangeRecord), *platform.Error) {
+	if !c.Automation && !c.Replaying {
+		return nil, &platform.Error{Code: pb.ErrorCode_ERROR_CODE_POLICY_DENIED}
+	}
 	invalid := &platform.Error{Code: pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT}
 	var p struct {
 		Requester   string                    `json:"requester"`

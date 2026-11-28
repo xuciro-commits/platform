@@ -18,9 +18,11 @@ import (
 	"net/textproto"
 	"net/url"
 	"os"
+	"platformserver/kernel/protocol"
 	"platformserver/platform"
 	"strconv"
 	"strings"
+	"sync/atomic"
 	"syscall"
 	"time"
 )
@@ -53,20 +55,40 @@ type Endpoint struct {
 	From          string   `json:"from,omitempty"`
 	Notifications []string `json:"notifications,omitempty"`
 	AllowPrivate  bool     `json:"allowPrivate,omitempty"`
+	OperatorOwned bool     `json:"-"`
 	Irreversible  bool     `json:"irreversible,omitempty"`
 }
 
 var ErrPrivate = fmt.Errorf("private address refused")
 
-func GuardedDialer(allowPrivate bool) *net.Dialer {
+var allowPrivateOutbound atomic.Bool
+
+func SetAllowPrivateOutbound(allow bool) { allowPrivateOutbound.Store(allow) }
+
+func AllowPrivateOutbound() bool {
+	return allowPrivateOutbound.Load() || os.Getenv("PLATFORM_ALLOW_PRIVATE_OUTBOUND") == "1"
+}
+
+func EffectiveAllowPrivate(requested bool) bool {
+	return requested && AllowPrivateOutbound()
+}
+
+func dialerWithPolicy(effectivePrivate, allowLoopback bool) *net.Dialer {
 	return &net.Dialer{Timeout: effectTimeout, Control: func(_, address string, _ syscall.RawConn) error {
 		host, _, _ := net.SplitHostPort(address)
-		ip := net.ParseIP(host)
-		if !allowPrivate && (ip == nil || ip.IsPrivate() || ip.IsLoopback() || ip.IsLinkLocalUnicast() || ip.IsUnspecified()) {
+		if protocol.IsRestrictedHostIP(host, effectivePrivate, allowLoopback) {
 			return ErrPrivate
 		}
 		return nil
 	}}
+}
+
+func guardedDialerWithLoopback(allowPrivate, allowLoopback bool) *net.Dialer {
+	return dialerWithPolicy(EffectiveAllowPrivate(allowPrivate), allowLoopback)
+}
+
+func GuardedDialer(allowPrivate bool) *net.Dialer {
+	return guardedDialerWithLoopback(allowPrivate, false)
 }
 
 func (d Transport) Webhook(ep Endpoint, x platform.Effect, now time.Time) platform.Outcome {
@@ -78,7 +100,8 @@ func (d Transport) Webhook(ep Endpoint, x platform.Effect, now time.Time) platfo
 		return out
 	}
 	u, err := url.Parse(ep.URL)
-	if err != nil || u.Scheme != "https" && !(u.Scheme == "http" && ep.AllowPrivate) {
+	effectivePrivate := EffectiveAllowPrivate(ep.AllowPrivate) || (ep.OperatorOwned && ep.AllowPrivate)
+	if err != nil || u.Scheme != "https" && !(u.Scheme == "http" && effectivePrivate) {
 		out.Result, out.Detail = "rejected", "only https endpoints (http when private addresses are allowed)"
 		return out
 	}
@@ -165,7 +188,7 @@ func (d Transport) Mail(ep Endpoint, x platform.Effect, now time.Time) platform.
 		msg.WriteString(h[0] + ": " + h[1] + "\r\n")
 	}
 	msg.WriteString("\r\n" + strings.ReplaceAll(strings.ReplaceAll(m.Text, "\r\n", "\n"), "\n", "\r\n") + "\r\n")
-	err = deliverMail(addr, ep.AllowPrivate, auth, ep.From, m.To, msg.String())
+	err = deliverMail(addr, EffectiveAllowPrivate(ep.AllowPrivate) || (ep.OperatorOwned && ep.AllowPrivate), auth, ep.From, m.To, msg.String())
 	var refused *textproto.Error
 	switch {
 	case err == nil:
@@ -180,8 +203,8 @@ func (d Transport) Mail(ep Endpoint, x platform.Effect, now time.Time) platform.
 	return out
 }
 
-func deliverMail(addr string, allowPrivate bool, auth smtp.Auth, from, to, msg string) error {
-	conn, err := GuardedDialer(allowPrivate).Dial("tcp", addr)
+func deliverMail(addr string, effectivePrivate bool, auth smtp.Auth, from, to, msg string) error {
+	conn, err := dialerWithPolicy(effectivePrivate, false).Dial("tcp", addr)
 	if err != nil {
 		return err
 	}

@@ -113,7 +113,7 @@ func (d *Deployment) Serve(tenants ...*Tenant) (serveErr error) {
 			return err
 		}
 		files = store
-		log.Printf("files in %s", d.Files)
+		log.Printf("files configured (%s)", runtimekernel.RedactLogText(d.Files))
 	}
 	code := CodeOf(tenants...)
 	restored := map[string]int64{}

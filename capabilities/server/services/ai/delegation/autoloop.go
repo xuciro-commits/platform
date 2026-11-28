@@ -457,6 +457,9 @@ func derefStr(p *string) string {
 }
 
 func (a *Service) receiveClaim(c platform.Caller, s *pb.Submission, now time.Time) (*pb.ChangeRecord, *platform.Error) {
+	if !c.Automation && !c.Replaying {
+		return nil, &platform.Error{Code: pb.ErrorCode_ERROR_CODE_POLICY_DENIED}
+	}
 	ac := a.host.Automation(c, runtimeprotocol.AgentApp)
 	id := s.GetTarget().GetId()
 	return a.authority.Receive(c, s, now, nil, func() (func(*pb.ChangeRecord), *platform.Error) {
@@ -498,6 +501,9 @@ func (a *Service) receiveClaim(c platform.Caller, s *pb.Submission, now time.Tim
 }
 
 func (a *Service) receiveStarted(c platform.Caller, s *pb.Submission, now time.Time) (*pb.ChangeRecord, *platform.Error) {
+	if !c.Automation && !c.Replaying {
+		return nil, &platform.Error{Code: pb.ErrorCode_ERROR_CODE_POLICY_DENIED}
+	}
 	ac := a.host.Automation(c, runtimeprotocol.AgentApp)
 	id := s.GetTarget().GetId()
 	return a.authority.Receive(c, s, now, nil, func() (func(*pb.ChangeRecord), *platform.Error) {
@@ -524,6 +530,9 @@ func (a *Service) receiveStarted(c platform.Caller, s *pb.Submission, now time.T
 }
 
 func (a *Service) receiveReceipt(c platform.Caller, s *pb.Submission, now time.Time) (*pb.ChangeRecord, *platform.Error) {
+	if !c.Automation && !c.Replaying {
+		return nil, &platform.Error{Code: pb.ErrorCode_ERROR_CODE_POLICY_DENIED}
+	}
 	ac := a.host.Automation(c, runtimeprotocol.AgentApp)
 	id := s.GetTarget().GetId()
 	return a.authority.Receive(c, s, now, nil, func() (func(*pb.ChangeRecord), *platform.Error) {
@@ -690,6 +699,9 @@ func (a *Service) receiveReceipt(c platform.Caller, s *pb.Submission, now time.T
 }
 
 func (a *Service) receiveIngest(c platform.Caller, s *pb.Submission, now time.Time) (*pb.ChangeRecord, *platform.Error) {
+	if !c.Automation && !c.Replaying {
+		return nil, &platform.Error{Code: pb.ErrorCode_ERROR_CODE_POLICY_DENIED}
+	}
 	ac := a.host.Automation(c, runtimeprotocol.AgentApp)
 	id := s.GetTarget().GetId()
 	return a.authority.Receive(c, s, now, nil, func() (func(*pb.ChangeRecord), *platform.Error) {
@@ -720,7 +732,7 @@ func (a *Service) receiveIngest(c platform.Caller, s *pb.Submission, now time.Ti
 				Summary:    derefStr(p.Event.Summary),
 				Detail:     detail,
 				Link:       derefStr(p.Event.Link),
-				Hops:       p.Event.Hops,
+				Hops:       max(0, p.Event.Hops),
 				ReceivedAt: now,
 			}
 			routed, paused, hopBlocked := a.routeInboundEvent(c, r, ev, now)

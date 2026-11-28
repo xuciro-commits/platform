@@ -2,7 +2,9 @@ package kernel
 
 import (
 	"encoding/json"
+	"maps"
 	"platformserver/kernel/protocol"
+	"regexp"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -51,7 +53,44 @@ func ObservationLevelRank(level string) int {
 	return -1
 }
 
+var (
+	redactURLUserInfo = regexp.MustCompile(`([a-zA-Z][a-zA-Z0-9+.-]*://)[^/\s@]+@`)
+	redactExportPath  = regexp.MustCompile(`(/v1/(?:ai/training/)?export)(?:[/?][^\s"',;]*)?`)
+	redactBearer      = regexp.MustCompile(`(?i)\bBearer\s+[A-Za-z0-9._~+/=-]+`)
+	redactPrefixedTok = regexp.MustCompile(`\b(?:pat|dwkr|dmcp)_[A-Za-z0-9._-]+`)
+	redactJWT         = regexp.MustCompile(`\beyJ[A-Za-z0-9_-]+\.eyJ[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+`)
+	redactKeyVal      = regexp.MustCompile(`(?i)\b(secret|token|password|passwd|api[_-]?key|access[_-]?key|code|otp|verification[_-]?code|x-amz-signature|signature|sig|auth|cookie|set-cookie)\s*([=:])\s*([^\s&"',;]+)`)
+)
+
+func RedactLogText(s string) string {
+	if s == "" {
+		return ""
+	}
+	s = redactURLUserInfo.ReplaceAllString(s, "${1}[redacted]@")
+	s = redactExportPath.ReplaceAllString(s, "[redacted-export]")
+	s = redactBearer.ReplaceAllString(s, "Bearer [redacted]")
+	s = redactPrefixedTok.ReplaceAllString(s, "[redacted-token]")
+	s = redactJWT.ReplaceAllString(s, "[redacted-jwt]")
+	s = redactKeyVal.ReplaceAllString(s, "${1}${2}[redacted]")
+	return s
+}
+
+func RedactObservation(event protocol.Observation) protocol.Observation {
+	event.Message = RedactLogText(event.Message)
+	event.Resource = RedactLogText(event.Resource)
+	event.Route = RedactLogText(event.Route)
+	if len(event.Attributes) > 0 {
+		cleaned := maps.Clone(event.Attributes)
+		for k, v := range cleaned {
+			cleaned[k] = RedactLogText(v)
+		}
+		event.Attributes = cleaned
+	}
+	return event
+}
+
 func (b *ObservationBuffer) Record(store persistence.Store, event protocol.Observation, quotaBytes int64) error {
+	event = RedactObservation(event)
 	b.mu.Lock()
 	defer b.mu.Unlock()
 	var usageErr error

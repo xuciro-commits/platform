@@ -106,7 +106,7 @@ func (h *Host) routesIntegration(rt *routes) {
 			req.Header.Set(TenantHeader, tenant.ID)
 			m, mt, ok := h.member(req)
 			return m, ok && mt == tenant
-		}, tenant.Submit)
+		}, tenant.submitBackground)
 	})
 	rt.recordRead(transport.Route{Pattern: "GET /v1/lineage", Summary: "Data lineage across connections, sources, datasets, pipelines, object types and writebacks the caller may read, with dataset versions, stale inputs and propagated markings", Query: []transport.Param{{Name: "mode", Description: "overview or focus; defaults from focus/ref"}, {Name: "project", Description: "a project RID used as the overview scope"}, {Name: "focus", Description: "a resource RID or lineage node ID"}, {Name: "ref", Description: "an app/kind/name resource reference"}, {Name: "node", Description: "a legacy lineage node ID"}, {Name: "branch", Description: "a branch ID; reads its staged definitions and no main run evidence"}, {Name: "direction", Description: "upstream, downstream or both"}, {Name: "depth", Description: "1 to 3"}, {Name: "nodeLimit", Description: "response node cap, at most 2000"}, {Name: "edgeLimit", Description: "response edge cap, at most 5000"}, {Name: "fields", Description: "off or on: include field nodes and edges"}, {Name: "field", Description: "a field node ID to trace upstream and downstream"}}, Answer: lineage.Lineage{}}, transport.Answering(func(r *http.Request, m platform.Member, t *Tenant) (lineage.Lineage, *platform.Error) {
 		return lineage.NewReader(t).ReadValues(m, r.URL.Query())

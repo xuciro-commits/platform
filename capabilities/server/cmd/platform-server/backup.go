@@ -105,7 +105,7 @@ func (o *backupOptions) run(deployment *platformserver.Deployment, development r
 		if err := persistence.WriteTenantBackupFile(path, archive); err != nil {
 			return err
 		}
-		log.Printf("exported tenant %s (%d entries) to %s", exportID, count, path)
+		log.Printf("exported tenant %s (%d entries)", exportID, count)
 		return nil
 	}
 
@@ -117,6 +117,6 @@ func (o *backupOptions) run(deployment *platformserver.Deployment, development r
 	if err != nil {
 		return err
 	}
-	log.Printf("imported tenant %s (%d entries) from %s", importID, count, path)
+	log.Printf("imported tenant %s (%d entries)", importID, count)
 	return nil
 }

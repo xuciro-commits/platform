@@ -76,7 +76,7 @@ func (p *Local) Mint(subject string, ttl time.Duration, now time.Time) (string, 
 	}
 	header, _ := json.Marshal(map[string]string{"alg": "HS256", "typ": "JWT"})
 	claims, _ := json.Marshal(map[string]any{"iss": issuer, "sub": subject,
-		"iat": now.UTC().Unix(), "exp": now.UTC().Add(ttl).Unix()})
+		"iat": now.UTC().Unix(), "iat_us": now.UTC().UnixMicro(), "exp": now.UTC().Add(ttl).Unix()})
 	signing := p.b64(header) + "." + p.b64(claims)
 	return signing + "." + p.b64(p.sign(signing)), nil
 }
@@ -127,6 +127,10 @@ func (p *Local) VerifyAt(token string, now time.Time) (string, bool) {
 
 func (p *Local) Authenticate() Authenticate {
 	return func(credential string) (string, bool) { return p.Verify(credential) }
+}
+
+func (p *Local) AuthenticateAt(now func() time.Time) Authenticate {
+	return func(credential string) (string, bool) { return p.VerifyAt(credential, now()) }
 }
 
 func (p *Local) sign(signing string) []byte {

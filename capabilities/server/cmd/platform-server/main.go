@@ -26,6 +26,7 @@ func main() {
 	tenant := flag.String("tenant", "workspace", "default tenant when -tenants is not configured")
 	admin := flag.String("admin", "", "explicit administrator subject for the default tenant")
 	allowLoopback := flag.Bool("allow-loopback-packages", false, "allow HTTP package and catalog addresses on loopback hosts for tests")
+	allowPrivate := flag.Bool("allow-private-outbound", false, "allow tenant connectors and delivery endpoints with allowPrivate to reach private networks")
 	connectorOrigin := flag.String("test-connector-origin", os.Getenv("PLATFORM_TRUNK_CONNECTOR_ORIGIN"), "exact HTTPS loopback origin of the connector trunk stub")
 	connectorCert := flag.String("test-connector-cert", os.Getenv("PLATFORM_TRUNK_CONNECTOR_CERT"), "certificate of the connector trunk stub")
 	backup := registerBackupFlags()
@@ -41,6 +42,9 @@ func main() {
 	}
 	if *allowLoopback {
 		packages.SetAllowLoopback(true)
+	}
+	if *allowPrivate {
+		actions.SetAllowPrivateOutbound(true)
 	}
 	if !backup.active() {
 		configureStandalone(deployment, admin)

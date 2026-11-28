@@ -13,6 +13,7 @@ import (
 	"net"
 	"net/http"
 	"net/http/pprof"
+	"net/url"
 	"os"
 	"path"
 	"path/filepath"
@@ -323,6 +324,63 @@ func (s *Stats) WritePrometheus(w io.Writer) {
 	_, _ = io.WriteString(w, b.String())
 }
 
+func isLoopbackHostname(host string) bool {
+	if strings.EqualFold(host, "localhost") {
+		return true
+	}
+	ip := net.ParseIP(strings.Trim(host, "[]"))
+	return ip != nil && ip.IsLoopback()
+}
+
+func hostPart(hostport string) string {
+	if h, _, err := net.SplitHostPort(hostport); err == nil {
+		return h
+	}
+	return strings.Trim(hostport, "[]")
+}
+
+func allowedBrowserOrigin(origin, requestHost, secFetchSite string) bool {
+	u, err := url.Parse(origin)
+	if err != nil || (u.Scheme != "http" && u.Scheme != "https") || u.Host == "" || u.User != nil {
+		return false
+	}
+	if strings.EqualFold(u.Host, requestHost) {
+		return true
+	}
+	if u.Scheme == "http" && !strings.EqualFold(secFetchSite, "cross-site") && isLoopbackHostname(u.Hostname()) && isLoopbackHostname(hostPart(requestHost)) {
+		return true
+	}
+	return false
+}
+
+func csrfBlocked(r *http.Request) bool {
+	if r.Method == http.MethodGet || r.Method == http.MethodHead || r.Method == http.MethodOptions {
+		return false
+	}
+	secSite := strings.TrimSpace(r.Header.Get("Sec-Fetch-Site"))
+	if strings.EqualFold(secSite, "cross-site") {
+		return true
+	}
+	origin := strings.TrimSpace(r.Header.Get("Origin"))
+	if origin != "" {
+		return !allowedBrowserOrigin(origin, r.Host, secSite)
+	}
+	if r.Header.Get("Cookie") != "" && r.Header.Get("Authorization") == "" && !strings.EqualFold(secSite, "same-origin") {
+		return true
+	}
+	return false
+}
+
+func redactAccessPath(p string) string {
+	if strings.HasPrefix(p, "/v1/export/") || strings.HasPrefix(p, "/v1/ai/training/export") {
+		return "[redacted-export]"
+	}
+	if strings.HasPrefix(p, "/v1/tokens/") && strings.HasSuffix(p, "/secret") {
+		return "/v1/tokens/[redacted]/secret"
+	}
+	return p
+}
+
 func Edge(next http.Handler, stats *Stats, limiter *Limiter, tenantHeader, schemaVersionHeader string) http.Handler {
 	accessLog := os.Getenv("PLATFORM_ACCESS_LOG") == "1"
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -332,17 +390,26 @@ func Edge(next http.Handler, stats *Stats, limiter *Limiter, tenantHeader, schem
 
 		w.Header().Set("X-Content-Type-Options", "nosniff")
 		w.Header().Set("Referrer-Policy", "same-origin")
-		w.Header().Set("Access-Control-Allow-Origin", "*")
+		if origin := strings.TrimSpace(r.Header.Get("Origin")); origin != "" && allowedBrowserOrigin(origin, r.Host, r.Header.Get("Sec-Fetch-Site")) {
+			w.Header().Set("Access-Control-Allow-Origin", origin)
+			w.Header().Add("Vary", "Origin")
+		}
 		w.Header().Set("Access-Control-Allow-Headers", "Authorization, Content-Type, Accept-Language, "+tenantHeader+", "+schemaVersionHeader+", If-None-Match")
 		w.Header().Set("Access-Control-Expose-Headers", "ETag, X-Request-Id")
-		w.Header().Set("Vary", "Accept-Language")
-		w.Header().Set("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
+		w.Header().Add("Vary", "Accept-Language")
+		w.Header().Set("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS")
 		if r.Method == http.MethodOptions {
 			w.WriteHeader(http.StatusNoContent)
 			return
 		}
-
 		pattern := patternOf(r.URL.Path)
+		if csrfBlocked(r) {
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusForbidden)
+			_, _ = io.WriteString(w, `{"error":{"code":"ERROR_CODE_POLICY_DENIED","message":"Cross-site write requests are refused."}}`)
+			stats.observe(pattern, http.StatusForbidden, time.Since(started))
+			return
+		}
 		if limiter != nil && strings.HasPrefix(r.URL.Path, "/v1/") {
 			if retry, ok := limiter.allow(r); !ok {
 				w.Header().Set("Retry-After", strconv.Itoa(int(retry.Seconds()+0.5)))
@@ -362,7 +429,7 @@ func Edge(next http.Handler, stats *Stats, limiter *Limiter, tenantHeader, schem
 		}
 		stats.observe(pattern, edge.statusCode(), time.Since(started))
 		if accessLog {
-			log.Printf("%s %s %d %s %s", r.Method, r.URL.Path, edge.statusCode(), time.Since(started).Round(time.Microsecond), RemoteOf(r))
+			log.Printf("%s %s %d %s %s", r.Method, redactAccessPath(r.URL.Path), edge.statusCode(), time.Since(started).Round(time.Microsecond), RemoteOf(r))
 		}
 	})
 }

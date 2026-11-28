@@ -18,6 +18,7 @@ const hash = (...values) => {
 };
 const owner = hash(root).slice(0, 10);
 const nonce = randomBytes(10).toString("hex");
+const tokenKey = process.env.PLATFORM_PERSONAL_TOKEN_KEY || randomBytes(32).toString("hex");
 const image = "platform-postgres:18-vector";
 const poolTune = "fast-v1";
 const label = "io.platform.test-pool";
@@ -136,7 +137,7 @@ async function seed(work, bin, pg, db, port, plan) {
   tenantFile(work, plan);
   mkdirSync(join(work, "files"), { recursive: true, mode: 0o700 });
   if (!plan.seed.length) return;
-  const proc = start(bin, hostArgs(work, pg, db, port), { ...process.env, PLATFORM_PACKAGES_DIR: "" }, join(root, "capabilities/server"));
+  const proc = start(bin, hostArgs(work, pg, db, port), { ...process.env, PLATFORM_PACKAGES_DIR: "", PLATFORM_PERSONAL_TOKEN_KEY: tokenKey }, join(root, "capabilities/server"));
   try {
     await measure("种子宿主启动", () => ready(proc, port));
     await measure("安装包与初始化种子", () => checked(process.execPath, [join(root, "scripts/frontend-seed.mjs")], { ...process.env,
@@ -258,6 +259,7 @@ async function runBrowserSpec(pg, bin, baseArgs, spec, jsonOut) {
     const env = {
       ...process.env,
       PLATFORM_PACKAGES_DIR: "",
+      PLATFORM_PERSONAL_TOKEN_KEY: tokenKey,
       PLATFORM_TRUNK_BIN: bin,
       PLATFORM_TIMING_SCOPE: spec,
       TRUNK_DATABASE: pg.url(db),
@@ -392,7 +394,7 @@ if (mode === "--clean") {
     if (plan.cache && process.env.TRUNK_FRESH !== "1") await cloneBaseline(pg, work, bin, db, seedPort, plan);
     else { createDB(pg, db); await seed(work, bin, pg, db, seedPort, plan); }
     if (mode === "--security") {
-      const proc = start(bin, hostArgs(work, pg, db, hostPort), { ...process.env, PLATFORM_PACKAGES_DIR: "" }, join(root, "capabilities/server"));
+      const proc = start(bin, hostArgs(work, pg, db, hostPort), { ...process.env, PLATFORM_PACKAGES_DIR: "", PLATFORM_PERSONAL_TOKEN_KEY: tokenKey }, join(root, "capabilities/server"));
       try {
         await measure("安全验收宿主启动", () => ready(proc, hostPort));
         await measure("HTTP 租户隔离验收", () => checked(process.execPath, ["--test", join(root, "scripts/pg-security.test.mjs")], { ...process.env, PLATFORM_SECURITY_TEST_HOST: "http://127.0.0.1:" + hostPort }));
@@ -403,7 +405,7 @@ if (mode === "--clean") {
     } else {
       const port = 18511;
       console.log("frontend-host: PostgreSQL at http://127.0.0.1:" + port);
-      const proc = start(bin, hostArgs(work, pg, db, port), { ...process.env, PLATFORM_PACKAGES_DIR: "" }, join(root, "capabilities/server"));
+      const proc = start(bin, hostArgs(work, pg, db, port), { ...process.env, PLATFORM_PACKAGES_DIR: "", PLATFORM_PERSONAL_TOKEN_KEY: tokenKey }, join(root, "capabilities/server"));
       try {
         await measure("开发夹具宿主启动", () => ready(proc, port));
         await proc.done;

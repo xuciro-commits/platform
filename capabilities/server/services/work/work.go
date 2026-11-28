@@ -97,9 +97,9 @@ func New(tenant string, authorities platform.Authorities) *Work {
 		actions = append(actions, actioncatalog.EntityActions(e)...)
 	}
 	actions = append(actions, platform.Action{Schema: SchemaRequest, Target: ApprovalType, Capability: "approvals", Title: "Request approval",
-		Description: "Hold a submission until its approvers agree (made by the host when an action needs approval).", Payload: []platform.Field{}, Roles: []string{Admin}},
+		Description: "Hold a submission until its approvers agree (made by the host when an action needs approval).", Payload: []platform.Field{}, Automation: true},
 		platform.Action{Schema: SchemaQuestionRequest, Target: QuestionType, Capability: "approvals", Title: "Ask before acting",
-			Description: "Hold an AI submission as a question in the requester's inbox until answered.", Payload: []platform.Field{}, Roles: []string{Admin}},
+			Description: "Hold an AI submission as a question in the requester's inbox until answered.", Payload: []platform.Field{}, Automation: true},
 		platform.Action{Schema: SchemaViewSave, Target: ViewType, Capability: "views", Title: "Save view", Description: "Save a view of a list under a name, or change your own.",
 			Payload: []platform.Field{{Name: "title", Type: "string", Required: true, Description: "Its name"}, {Name: "entity", Type: "string", Required: true, Description: "The entity type listed"},
 				{Name: "state", Type: "string", Description: "The list's state: search, grouping, pivot or chart"}}, Roles: []string{platform.AnyMember}},
@@ -237,6 +237,9 @@ func (w *Work) Submit(c platform.Caller, s *pb.Submission, now time.Time) (*pb.C
 }
 
 func (w *Work) request(c platform.Caller, s *pb.Submission, now time.Time) (func(*pb.ChangeRecord), *platform.Error) {
+	if !c.Automation && !c.Replaying {
+		return nil, &platform.Error{Code: pb.ErrorCode_ERROR_CODE_POLICY_DENIED}
+	}
 	invalid := &platform.Error{Code: pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT}
 	var p struct {
 		Requester  string          `json:"requester"`

@@ -1,6 +1,7 @@
 package blobs
 
 import (
+	"bytes"
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
@@ -23,17 +24,73 @@ type Received struct {
 	ContentType string
 }
 
+func detectSafeUploadType(declared string, data []byte) (string, int, error) {
+	head := bytes.TrimSpace(data[:min(len(data), 1024)])
+	lowerHead := bytes.ToLower(head)
+	looksActiveWeb := bytes.HasPrefix(lowerHead, []byte("<svg")) ||
+		bytes.HasPrefix(lowerHead, []byte("<!doctype html")) ||
+		bytes.HasPrefix(lowerHead, []byte("<html")) ||
+		bytes.HasPrefix(lowerHead, []byte("<script")) ||
+		(bytes.HasPrefix(lowerHead, []byte("<?xml")) && bytes.Contains(lowerHead, []byte("<svg")))
+	mediaType := ""
+	if strings.TrimSpace(declared) != "" {
+		parsed, _, err := mime.ParseMediaType(declared)
+		if err != nil {
+			return "", http.StatusUnsupportedMediaType, fmt.Errorf("unsupported media type")
+		}
+		mediaType = strings.ToLower(parsed)
+	}
+	if mediaType == "image/svg+xml" || mediaType == "text/html" || mediaType == "application/xhtml+xml" || looksActiveWeb {
+		return "", http.StatusUnsupportedMediaType, fmt.Errorf("active HTML and SVG uploads are refused")
+	}
+	actual := detectAvatarType(data)
+	switch {
+	case actual == "" && len(data) >= 6 && (bytes.Equal(data[:6], []byte("GIF87a")) || bytes.Equal(data[:6], []byte("GIF89a"))):
+		actual = "image/gif"
+	case actual == "" && len(data) >= 5 && bytes.Equal(data[:5], []byte("%PDF-")):
+		actual = "application/pdf"
+	}
+	switch mediaType {
+	case "image/png", "image/jpeg", "image/webp", "image/gif", "image/avif", "application/pdf":
+		if actual != mediaType {
+			return "", http.StatusUnsupportedMediaType, fmt.Errorf("file content does not match declared %s", mediaType)
+		}
+		return mediaType, 0, nil
+	case "":
+		if actual != "" {
+			return actual, 0, nil
+		}
+		sniffed, _, _ := mime.ParseMediaType(http.DetectContentType(data))
+		if sniffed == "text/html" || sniffed == "text/xml" || sniffed == "application/xml" {
+			return "application/octet-stream", 0, nil
+		}
+		return sniffed, 0, nil
+	case "application/javascript", "text/javascript", "text/xml", "application/xml":
+		return "application/octet-stream", 0, nil
+	default:
+		return mediaType, 0, nil
+	}
+}
+
 func Receive(uploads *Uploads, files platform.FileStore, tenant string, limit int, contentType string, body io.Reader, now time.Time) (Received, int, error) {
+	if limit <= 0 {
+		return Received{}, http.StatusBadRequest, fmt.Errorf("invalid upload limit")
+	}
 	data, err := io.ReadAll(io.LimitReader(body, int64(limit)+1))
 	if err != nil {
 		return Received{}, http.StatusBadRequest, err
 	}
+	if len(data) == 0 {
+		return Received{}, http.StatusBadRequest, fmt.Errorf("empty file")
+	}
 	if len(data) > limit {
 		return Received{}, http.StatusRequestEntityTooLarge, fmt.Errorf("larger than %d MB", limit>>20)
 	}
-	if contentType == "" {
-		contentType = http.DetectContentType(data)
+	checkedType, status, typeErr := detectSafeUploadType(contentType, data)
+	if typeErr != nil {
+		return Received{}, status, typeErr
 	}
+	contentType = checkedType
 	sum := sha256.Sum256(data)
 	hash := hex.EncodeToString(sum[:])
 	if !uploads.BeginPut(hash) {
@@ -119,7 +176,8 @@ func Stream(w http.ResponseWriter, files platform.FileStore, key, name, contentT
 	w.Header().Set("Content-Length", fmt.Sprint(size))
 	w.Header().Set("Content-Disposition", "attachment; filename*=UTF-8''"+url.PathEscape(strings.ReplaceAll(name, "\"", "")))
 	w.Header().Set("X-Content-Type-Options", "nosniff")
-	w.Header().Set("Content-Security-Policy", "sandbox")
+	w.Header().Set("Content-Security-Policy", "default-src 'none'; sandbox")
+	w.Header().Set("Cross-Origin-Resource-Policy", "same-origin")
 	io.Copy(w, body)
 }
 

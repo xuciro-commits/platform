@@ -50,12 +50,16 @@ type Token struct {
 const endedSessionsShown = 24 * time.Hour
 
 type sessionTable struct {
-	mu      sync.Mutex
-	seen    map[string]map[string]*protocol.Session
-	revoked map[string]bool
+	mu            sync.Mutex
+	seen          map[string]map[string]*protocol.Session
+	revoked       map[string]bool
+	revokedBefore map[string]time.Time
 }
 
 func (st *sessionTable) end(member, id string, now time.Time) {
+	if st.revoked == nil {
+		st.revoked = map[string]bool{}
+	}
 	st.revoked[id] = true
 	if s := st.seen[member][id]; s != nil && s.Ended.IsZero() {
 		s.Ended = now
@@ -263,6 +267,9 @@ func (d *Console) decideToken(c platform.Caller, s *pb.Submission) (func(*pb.Cha
 	if c.Scopes != nil && !c.Replaying {
 		return nil, &platform.Error{Code: pb.ErrorCode_ERROR_CODE_POLICY_DENIED}
 	}
+	if !c.Replaying && !HasTokenKey() {
+		return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_POLICY_DENIED, "Personal tokens require a host token signing key")
+	}
 	return func(r *pb.ChangeRecord) {
 		d.tokens[id] = &Token{ID: id, Member: c.ID, Label: p.Label, Change: r.GetChangeId(), Scopes: p.Scopes, Until: p.Until, Issued: r.GetRecordedTime().AsTime()}
 	}, nil
@@ -270,18 +277,31 @@ func (d *Console) decideToken(c platform.Caller, s *pb.Submission) (func(*pb.Cha
 
 var (
 	tokenKeyMu sync.RWMutex
-	tokenKey   = []byte("development-only")
+	tokenKey   []byte
 )
 
 func UseTokenKey(key []byte) {
 	tokenKeyMu.Lock()
 	defer tokenKeyMu.Unlock()
-	tokenKey = append([]byte{}, key...)
+	if len(key) < 32 {
+		tokenKey = nil
+		return
+	}
+	tokenKey = append([]byte("platform-personal-token-v1|"), key...)
+}
+
+func HasTokenKey() bool {
+	tokenKeyMu.RLock()
+	defer tokenKeyMu.RUnlock()
+	return len(tokenKey) > 0
 }
 
 func tokenSecret(tenant, id, change string) string {
 	tokenKeyMu.RLock()
 	defer tokenKeyMu.RUnlock()
+	if len(tokenKey) == 0 {
+		return ""
+	}
 	mac := hmac.New(sha256.New, tokenKey)
 	mac.Write([]byte(tenant + "/" + id + "/" + change))
 	return TokenPrefix + base64.RawURLEncoding.EncodeToString(mac.Sum(nil)[:24])
@@ -309,18 +329,23 @@ func (d *Console) Minted(id, member string, now time.Time) (string, bool) {
 	if t == nil || t.Member != member || d.minted[id] || now.Sub(t.Issued) > mintWindow {
 		return "", false
 	}
+	secret := tokenSecret(d.tenant, id, t.Change)
+	if secret == "" {
+		return "", false
+	}
 	d.minted[id] = true
-	return tokenSecret(d.tenant, id, t.Change), true
+	return secret, true
 }
 
 func (d *Console) MemberByToken(secret string, now time.Time) (platform.Member, bool) {
-	if !strings.HasPrefix(secret, TokenPrefix) {
+	if !strings.HasPrefix(secret, TokenPrefix) || !HasTokenKey() {
 		return platform.Member{}, false
 	}
 	d.mu.Lock()
 	defer d.mu.Unlock()
 	for _, t := range d.tokens {
-		if !hmac.Equal([]byte(tokenSecret(d.tenant, t.ID, t.Change)), []byte(secret)) {
+		expected := tokenSecret(d.tenant, t.ID, t.Change)
+		if expected == "" || !hmac.Equal([]byte(expected), []byte(secret)) {
 			continue
 		}
 		m := d.members[t.Member]
@@ -361,6 +386,31 @@ func (d *Console) Tokens(member string, now time.Time) []protocol.TokenView {
 
 func sessionID(credential string) string { return tokenHash(credential)[:16] }
 
+func jwtIssuedAt(credential string) time.Time {
+	parts := strings.Split(credential, ".")
+	if len(parts) != 3 {
+		return time.Time{}
+	}
+	payload, err := base64.RawURLEncoding.DecodeString(parts[1])
+	if err != nil {
+		return time.Time{}
+	}
+	var claims struct {
+		IssuedAt   int64 `json:"iat"`
+		IssuedAtUs int64 `json:"iat_us"`
+	}
+	if json.Unmarshal(payload, &claims) != nil {
+		return time.Time{}
+	}
+	if claims.IssuedAtUs > 0 {
+		return time.UnixMicro(claims.IssuedAtUs).UTC()
+	}
+	if claims.IssuedAt <= 0 {
+		return time.Time{}
+	}
+	return time.Unix(claims.IssuedAt, 0).UTC()
+}
+
 func (d *Console) NoticeSession(member, credential, agent string, kind string, now time.Time) bool {
 	id := sessionID(credential)
 	hours := 0
@@ -368,11 +418,14 @@ func (d *Console) NoticeSession(member, credential, agent string, kind string, n
 		hours, _ = strconv.Atoi(d.tenantDefault(SettingSessionHours))
 	}
 	token := ""
+	var tokenIssued time.Time
 	if kind == "token" {
 		d.mu.Lock()
 		for key, t := range d.tokens {
-			if t.Member == member && hmac.Equal([]byte(tokenSecret(d.tenant, t.ID, t.Change)), []byte(credential)) {
+			expected := tokenSecret(d.tenant, t.ID, t.Change)
+			if expected != "" && t.Member == member && hmac.Equal([]byte(expected), []byte(credential)) {
 				token = key
+				tokenIssued = t.Issued
 				break
 			}
 		}
@@ -387,7 +440,21 @@ func (d *Console) NoticeSession(member, credential, agent string, kind string, n
 		d.sessions.seen[member] = map[string]*protocol.Session{}
 	}
 	s := d.sessions.seen[member][id]
-	if s != nil && kind == "sign-in" && hours > 0 && now.Sub(s.First) >= time.Duration(hours)*time.Hour {
+	if cutoff, ok := d.sessions.revokedBefore[member]; ok {
+		if s != nil && !s.First.After(cutoff) {
+			d.sessions.end(member, id, now)
+			return false
+		}
+		if kind == "sign-in" {
+			if iat := jwtIssuedAt(credential); !iat.IsZero() && !iat.After(cutoff) {
+				return false
+			}
+		}
+		if kind == "token" && !tokenIssued.IsZero() && !tokenIssued.After(cutoff) {
+			return false
+		}
+	}
+	if s != nil && (kind == "sign-in" || kind == "dev") && hours > 0 && now.Sub(s.First) >= time.Duration(hours)*time.Hour {
 		d.sessions.end(member, id, now)
 		return false
 	}
@@ -409,6 +476,21 @@ func (d *Console) endSessions(member, token string, now time.Time) {
 	}
 }
 
+func (d *Console) EndSession(member, id, credential string, now time.Time) bool {
+	cur := sessionID(credential)
+	if id == "" || id == "current" {
+		id = cur
+	}
+	d.sessions.mu.Lock()
+	defer d.sessions.mu.Unlock()
+	s := d.sessions.seen[member][id]
+	if s == nil && id != cur {
+		return false
+	}
+	d.sessions.end(member, id, now)
+	return true
+}
+
 func (d *Console) EndOtherSessions(member, credential string, now time.Time) int {
 	keep := sessionID(credential)
 	d.sessions.mu.Lock()
@@ -417,6 +499,30 @@ func (d *Console) EndOtherSessions(member, credential string, now time.Time) int
 	for id, s := range d.sessions.seen[member] {
 		if id != keep && s.Ended.IsZero() {
 			d.sessions.end(member, id, now)
+			n++
+		}
+	}
+	return n
+}
+
+func (d *Console) EndAllSessions(member, credential string, now time.Time) int {
+	d.sessions.mu.Lock()
+	defer d.sessions.mu.Unlock()
+	if d.sessions.revokedBefore == nil {
+		d.sessions.revokedBefore = map[string]time.Time{}
+	}
+	d.sessions.revokedBefore[member] = now
+	n := 0
+	for id, s := range d.sessions.seen[member] {
+		if s.Ended.IsZero() {
+			d.sessions.end(member, id, now)
+			n++
+		}
+	}
+	if credential != "" {
+		cur := sessionID(credential)
+		if !d.sessions.revoked[cur] {
+			d.sessions.end(member, cur, now)
 			n++
 		}
 	}
@@ -662,4 +768,11 @@ func (d *Console) lastAdministrator(member *platform.Member) bool {
 		}
 	}
 	return true
+}
+
+func RequireEndedSession(ok bool) *platform.Error {
+	if !ok {
+		return &platform.Error{Code: pb.ErrorCode_ERROR_CODE_NOT_FOUND}
+	}
+	return nil
 }

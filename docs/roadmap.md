@@ -92,20 +92,7 @@
 ## 硬化
 
 拥有：安全评审涉及的修复（跨路径，改到最小）、`make test-security-pg` 的用例、租户 `sim`、`frontend/e2e/erp-marketplace.spec.ts` 的演示、`services/actions/txn_propagate.go`。
-顺序：5.6a → 3.x → 4.x → 债。
-
-### 5.6a 安全评审
-
-规则写进 [architecture](architecture.md) 的“安全”一节；每条一个不变量或 trunk 步骤，`make test-security-pg` 覆盖新入口。
-
-- 密钥：全仓没有写死的签名密钥，也没有 `"development-only"` 这类回退（`services/security/control/control_tenants.go` 的令牌密钥）；没有密钥就拒绝。
-- 身份：请求头、查询参数、负载都不能设置宿主认定的租户、成员、调用者、批准人与跳数；逐个入口列出并验收。
-- 租户隔离：跨租户猜记录号、令牌、上传与导出地址都被拒。
-- 外连：连接器、包下载、投递地址拒绝内网与本机地址，除非运营显式允许。
-- 上传与渲染：核对类型、大小上限，PDF 与图片渲染隔离。
-- 会话：过期、撤销、退出全部设备；写入的跨站请求防护。
-- 日志：不打印凭据、令牌、验证码与导出地址。
-- 依赖：`govulncheck` 与 `pnpm audit` 进 CI，高危清零。
+顺序：3.x → 4.x → 债。
 
 ### 3.x 阶段 3 收口
 

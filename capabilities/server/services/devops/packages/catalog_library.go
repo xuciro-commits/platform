@@ -80,11 +80,19 @@ func ValidatePackageURL(raw string) (*url.URL, bool, error) {
 	if err != nil || address.Host == "" || address.User != nil || address.Fragment != "" {
 		return nil, false, fmt.Errorf("Use an HTTPS address for a platform package, without embedded credentials")
 	}
+	host := address.Hostname()
+	loopbackOK := AllowLoopback() && isLoopbackHost(host)
+	if ip := net.ParseIP(host); ip != nil && runtimeprotocol.IsRestrictedHostIP(host, false, loopbackOK) {
+		return nil, false, fmt.Errorf("Package addresses may not target private or loopback networks")
+	}
+	if !loopbackOK && strings.EqualFold(host, "localhost") {
+		return nil, false, fmt.Errorf("Package addresses may not target private or loopback networks")
+	}
 	switch strings.ToLower(address.Scheme) {
 	case "https":
-		return address, false, nil
+		return address, loopbackOK, nil
 	case "http":
-		if AllowLoopback() && isLoopbackHost(address.Hostname()) {
+		if loopbackOK {
 			return address, true, nil
 		}
 	}
@@ -122,7 +130,6 @@ func resolveLibraryCandidates(raw string, official bool) ([]string, error) {
 	if err != nil || !official || len(candidates) == 0 {
 		return candidates, err
 	}
-	// Keep the old catalog URL valid for released hosts with strict decoders.
 	return append([]string{strings.TrimSuffix(candidates[0], "catalog.json") + "catalog-appearance.json"}, candidates...), nil
 }
 

@@ -181,6 +181,12 @@ K53LedgerValuationAndDepletion|过账前余额读取、余额实时派生、加�
 ReadScopeDetachesCanceledContextBeforeSweep|读作用域解绑清空已取消请求上下文且后台委派扫描走隔离读视图
 K58CrossTypeConstraintPruning|跨对象路径约束仅在被引用类型变更时扫描受影响记录并保持父记录非法变更拦截与重放一致
 K11UsageProjectionRebuildAndIsolation|用量投影由接受结果与网关结算派生、可丢弃重建、不写接受结果且跨租户隔离
+SecurityReviewKeysAndTokens|安全评审：无硬编码回退密钥且无密钥时拒绝签发与验证令牌
+SecurityReviewIdentityBoundaries|安全评审：请求头查询参数与负载不可篡改租户成员调用者批准人与跳数
+SecurityReviewOutboundGuard|安全评审：连接器包下载与投递默认拦截内网本机及重定向地址除非运营显式允许
+SecurityReviewUploadAndRenderIsolation|安全评审：上传校验大小与真实媒体类型并隔离附件与 PDF 渲染
+SecurityReviewSessionsAndCSRF|安全评审：会话过期单会话撤销退出全部设备与跨站写入防护
+SecurityReviewLogRedaction|安全评审：运营与访问日志脱敏凭据令牌验证码与导出地址
 `.trim().split("\n").map(line => line.split("|")));
 
 const subcases = { postgres: "PostgreSQL 持久化", file: "文件持久化", memory: "内存模式", accepted: "接受结果", refused: "拒绝结果" };

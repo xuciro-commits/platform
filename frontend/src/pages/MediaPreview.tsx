@@ -29,6 +29,23 @@ export function kindOf(media: Pick<Media, "name" | "contentType">): Kind | undef
   return (media.contentType && byType[media.contentType.split(";")[0].trim()]) || byExtension[media.name.split(".").pop()?.toLowerCase() ?? ""];
 }
 
+function detectSafeMime(kind: Kind, bytes: Uint8Array): string | null {
+  if (kind === "pdf") {
+    return bytes.length >= 5 && bytes[0] === 0x25 && bytes[1] === 0x50 && bytes[2] === 0x44 && bytes[3] === 0x46 && bytes[4] === 0x2d
+      ? "application/pdf"
+      : null;
+  }
+  if (kind === "image") {
+    if (bytes.length >= 8 && bytes[0] === 0x89 && bytes[1] === 0x50 && bytes[2] === 0x4e && bytes[3] === 0x47) return "image/png";
+    if (bytes.length >= 3 && bytes[0] === 0xff && bytes[1] === 0xd8 && bytes[2] === 0xff) return "image/jpeg";
+    if (bytes.length >= 12 && bytes[0] === 0x52 && bytes[1] === 0x49 && bytes[2] === 0x46 && bytes[3] === 0x46 && bytes[8] === 0x57 && bytes[9] === 0x45 && bytes[10] === 0x42 && bytes[11] === 0x50) return "image/webp";
+    if (bytes.length >= 6 && bytes[0] === 0x47 && bytes[1] === 0x49 && bytes[2] === 0x46 && bytes[3] === 0x38) return "image/gif";
+    if (bytes.length >= 12 && bytes[4] === 0x66 && bytes[5] === 0x74 && bytes[6] === 0x79 && bytes[7] === 0x70) return "image/avif";
+    return null;
+  }
+  return "text/plain";
+}
+
 function ImageViewer({ media, blob, onClose }: { media: Media; blob: Blob; onClose: () => void }) {
   const [url] = useState(() => URL.createObjectURL(blob));
   useEffect(() => () => URL.revokeObjectURL(url), [url]);
@@ -58,7 +75,13 @@ function PdfContent({ media, blob }: { media: Media; blob: Blob }) {
     void (async () => {
       const pdfjs = await import("pdfjs-dist");
       pdfjs.GlobalWorkerOptions.workerSrc = typeof pdfWorkerUrl === "string" && pdfWorkerUrl ? pdfWorkerUrl : new URL("pdfjs-dist/build/pdf.worker.min.mjs", import.meta.url).href;
-      const loading = pdfjs.getDocument({ data: new Uint8Array(await blob.arrayBuffer()) });
+      const loading = pdfjs.getDocument({
+        data: new Uint8Array(await blob.arrayBuffer()),
+        enableXfa: false,
+        disableFontFace: true,
+        disableAutoFetch: true,
+        disableStream: true,
+      });
       task = loading;
       const document = await loading.promise;
       const width = (box?.clientWidth || 800) * window.devicePixelRatio;
@@ -95,6 +118,7 @@ export function MediaPreview({ media, onClose, onFailure }: { media: Media; onCl
   const callbacks = useRef({ onClose, onFailure });
   callbacks.current = { onClose, onFailure };
   useEffect(() => {
+    if (!kind) return;
     setBlob(undefined);
     setText(undefined);
     const controller = new AbortController();
@@ -109,7 +133,15 @@ export function MediaPreview({ media, onClose, onFailure }: { media: Media; onCl
           }
           return;
         }
-        setBlob(answer);
+        const bytes = new Uint8Array(await answer.arrayBuffer());
+        if (controller.signal.aborted) return;
+        const safeMime = detectSafeMime(kind, bytes);
+        if (!safeMime) {
+          callbacks.current.onFailure(t("This file could not be shown"));
+          callbacks.current.onClose();
+          return;
+        }
+        setBlob(new Blob([bytes], { type: safeMime }));
       },
       (problem) => {
         if (controller.signal.aborted) return;

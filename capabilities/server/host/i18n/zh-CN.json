@@ -3031,5 +3031,10 @@
   "Send invitation": "发送邀请",
   "Send or renew an invitation after preparing its access.": "准备好权限后发送或续期邀请。",
   "The invitation is not available.": "邀请不可用。",
-  "A workspace must retain an administrator.": "工作区必须保留至少一位管理员。"
+  "A workspace must retain an administrator.": "工作区必须保留至少一位管理员。",
+  "Cross-site write requests are refused.": "跨站写入请求已被拒绝。",
+  "Delegation tokens require a host token signing key": "委派令牌需要宿主配置令牌签名密钥",
+  "Package addresses may not target private or loopback networks": "产品包地址不得指向内网或本机回环网络",
+  "Personal tokens require a host token signing key": "个人令牌需要宿主配置令牌签名密钥",
+  "The import file exceeds 16 MiB": "导入文件超过 16 MiB 上限"
 }

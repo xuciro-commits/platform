@@ -34,7 +34,17 @@ var delegationSecret struct {
 func UseTokenKey(key []byte) {
 	delegationSecret.Lock()
 	defer delegationSecret.Unlock()
+	if len(key) < 32 {
+		delegationSecret.key = nil
+		return
+	}
 	delegationSecret.key = append([]byte("platform-delegation-v1|"), key...)
+}
+
+func HasTokenKey() bool {
+	delegationSecret.RLock()
+	defer delegationSecret.RUnlock()
+	return len(delegationSecret.key) > 0
 }
 
 type Service struct {
@@ -411,7 +421,6 @@ func delegationActions() []platform.Action {
 			Capability:  "delegations",
 			Title:       "Record delegation event",
 			Description: "Record an inbound or downstream delegation event and route matching active delegations.",
-			Roles:       []string{runtimeprotocol.AgentAdmin},
 			Automation:  true,
 			Payload:     []platform.Field{{Name: "event", Type: "json", Required: true}},
 		},
@@ -421,7 +430,6 @@ func delegationActions() []platform.Action {
 			Capability:  "delegations",
 			Title:       "Claim delegation job",
 			Description: "Assign the next queued delegation run to an authenticated outbound worker.",
-			Roles:       []string{runtimeprotocol.AgentAdmin},
 			Automation:  true,
 			Payload:     []platform.Field{{Name: "claim", Type: "string", Required: true}},
 		},
@@ -431,7 +439,6 @@ func delegationActions() []platform.Action {
 			Capability:  "delegations",
 			Title:       "Mark delegation run started",
 			Description: "Record the worker session and resume link for an active delegation attempt.",
-			Roles:       []string{runtimeprotocol.AgentAdmin},
 			Automation:  true,
 			Payload: []platform.Field{
 				{Name: "token", Type: "string", Required: true},
@@ -445,7 +452,6 @@ func delegationActions() []platform.Action {
 			Capability:  "delegations",
 			Title:       "Accept delegation receipt",
 			Description: "Atomically settle one turn receipt from an outbound worker.",
-			Roles:       []string{runtimeprotocol.AgentAdmin},
 			Automation:  true,
 			Payload: []platform.Field{
 				{Name: "token", Type: "string", Required: true},
@@ -838,6 +844,9 @@ func (a *Service) Submit(c platform.Caller, s *pb.Submission, now time.Time) (*p
 		}
 		if json.Unmarshal(s.GetPayload(), &p) != nil || strings.TrimSpace(p.Name) == "" {
 			return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "Worker name is required")
+		}
+		if !c.Replaying && !HasTokenKey() {
+			return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_POLICY_DENIED, "Delegation tokens require a host token signing key")
 		}
 		allowed := func() bool {
 			return c.Holds(runtimeprotocol.AgentApp, runtimeprotocol.AgentAdmin) || c.Holds("platform", "admin")

@@ -197,7 +197,9 @@ type IdentitySessions interface {
 	JoinID(string) string
 	SecondFactorRequired() bool
 	Minted(string, string, time.Time) (string, bool)
+	EndSession(string, string, string, time.Time) bool
 	EndOtherSessions(string, string, time.Time) int
+	EndAllSessions(string, string, time.Time) int
 	Sessions(string, string, time.Time) []Session
 	Tokens(string, time.Time) []TokenView
 }

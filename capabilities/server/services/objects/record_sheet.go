@@ -16,9 +16,12 @@ import (
 )
 
 func ReadSheet(body io.Reader) (protocol.ImportSheet, *platform.Error) {
-	data, err := io.ReadAll(io.LimitReader(body, 16<<20))
+	data, err := io.ReadAll(io.LimitReader(body, (16<<20)+1))
+	if err != nil || len(data) > 16<<20 {
+		return protocol.ImportSheet{}, platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "The import file exceeds 16 MiB")
+	}
 	rows, ok := sheetRows(data)
-	if err != nil || !ok || len(rows) == 0 {
+	if !ok || len(rows) == 0 {
 		return protocol.ImportSheet{}, &platform.Error{Code: pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, Message: "The file is not a CSV file or an Excel workbook"}
 	}
 	sheet := protocol.ImportSheet{Columns: rows[0], Rows: [][]string{}}

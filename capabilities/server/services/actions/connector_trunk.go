@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"net/url"
 	"os"
+	"platformserver/kernel/protocol"
 	"time"
 )
 
@@ -43,6 +44,6 @@ func GuardedHTTPClient(req *http.Request, allowPrivate bool) *http.Client {
 	if connectorTrunkClient != nil && req.URL.User == nil && req.URL.Scheme+"://"+req.URL.Host == connectorTrunkOrigin {
 		return connectorTrunkClient
 	}
-	dialer := GuardedDialer(allowPrivate)
+	dialer := guardedDialerWithLoopback(allowPrivate, allowPrivate && protocol.IsLoopbackPackage(req.Context()))
 	return &http.Client{Timeout: 10 * time.Second, Transport: &http.Transport{DialContext: dialer.DialContext, Proxy: nil}, CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }}
 }

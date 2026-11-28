@@ -42,7 +42,7 @@ func (h *Host) sendOnboardingMail(to, subject, text, id string, now time.Time) e
 		return nil
 	}
 	raw, _ := json.Marshal(actions.Letter{To: to, Subject: subject, Text: text})
-	ep := actions.Endpoint{ID: "idp-mail", Kind: "email", URL: h.MailEndpoint.URL, From: cmp.Or(h.MailEndpoint.From, "noreply@platform.local"), Secret: h.MailEndpoint.Secret, AllowPrivate: h.MailEndpoint.AllowPrivate}
+	ep := actions.Endpoint{ID: "idp-mail", Kind: "email", URL: h.MailEndpoint.URL, From: cmp.Or(h.MailEndpoint.From, "noreply@platform.local"), Secret: h.MailEndpoint.Secret, AllowPrivate: h.MailEndpoint.AllowPrivate, OperatorOwned: true}
 	out := (actions.Transport{Credentials: hostMailCredentials{}, Send: guarded}).Mail(ep, platform.Effect{ID: id, Body: string(raw), At: now}, now)
 	if out.Result != "delivered" {
 		return fmt.Errorf("%s", cmp.Or(out.Detail, out.Result))

@@ -26,7 +26,6 @@ type (
 func Tokens(table map[string]string) Authenticate {
 	return func(token string) (string, bool) { s, ok := table[token]; return s, ok }
 }
-
 func Now() time.Time { return time.Now().UTC().Truncate(time.Microsecond) }
 
 type Host struct {
@@ -57,7 +56,7 @@ type Host struct {
 }
 
 func (h *Host) SignWith(signer *idp.Local, ttl time.Duration) {
-	h.authenticate = signer.Authenticate()
+	h.authenticate = signer.AuthenticateAt(func() time.Time { return h.Now() })
 	controlowner.UseTokenKey(signer.Key())
 	agentowner.UseTokenKey(signer.Key())
 	h.Mint = func(subject string) string {
@@ -75,20 +74,17 @@ func NewHost(authenticate Authenticate, tenants ...*Tenant) *Host {
 }
 
 func (h *Host) currentTenants() []*Tenant {
-	tenants := h.tenants
-	if h.tenantsFrom != nil {
-		tenants = h.tenantsFrom()
+	if h.tenantsFrom == nil {
+		return h.tenants
 	}
-	return tenants
+	return h.tenantsFrom()
 }
+func consoleOf(t *Tenant) runtimeprotocol.IdentitySessions { return t.IdentityOwner }
 
-func consoleOf(t *Tenant) runtimeprotocol.IdentitySessions {
-	return t.IdentityOwner
-}
-
-const TenantHeader = "Platform-Tenant"
-
-const chatMaxBytes = 1 << 20
+const (
+	TenantHeader = "Platform-Tenant"
+	chatMaxBytes = 1 << 20
+)
 
 func (h *Host) member(r *http.Request) (platform.Member, *Tenant, bool) {
 	if tok, ok := strings.CutPrefix(strings.TrimSpace(r.Header.Get("Authorization")), "Bearer "); ok && strings.HasPrefix(tok, "dmcp_") {
@@ -201,5 +197,4 @@ func (h *Host) Handler() http.Handler {
 func Reply(w http.ResponseWriter, record *pb.ChangeRecord, err *platform.Error, issues ...platform.FieldIssue) {
 	transport.Reply(w, record, err, issues...)
 }
-
 func WriteJSON(w http.ResponseWriter, status int, v any) { transport.WriteJSON(w, status, v) }
