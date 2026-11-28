@@ -18,6 +18,7 @@ const SCENARIOS = {
     official: { tenants: ["official"] },
     marketplace: { tenants: ["blank"] },
     "erp-marketplace": { tenants: ["blank"] },
+    "erp-gate": { tenants: ["blank"] },
     "package-upgrade": { tenants: ["upgrade"] },
     "party-upgrade": { tenants: ["party-upgrade"] },
     "package-library": { tenants: ["library"] },

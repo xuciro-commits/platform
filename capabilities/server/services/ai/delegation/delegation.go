@@ -26,7 +26,16 @@ var languages = platform.LoadLanguages(languageFiles, "i18n")
 
 const maxDelegationHops = 8
 
-var delegationSecret = []byte("platform-delegation-autoloop-v1")
+var delegationSecret struct {
+	sync.RWMutex
+	key []byte
+}
+
+func UseTokenKey(key []byte) {
+	delegationSecret.Lock()
+	defer delegationSecret.Unlock()
+	delegationSecret.key = append([]byte("platform-delegation-v1|"), key...)
+}
 
 type Service struct {
 	host        runtimeprotocol.AgentHost
@@ -447,10 +456,33 @@ func delegationActions() []platform.Action {
 	}
 }
 
-func signToken(parts ...string) string {
-	mac := hmac.New(sha256.New, delegationSecret)
+func signToken(parts ...string) (string, bool) {
+	delegationSecret.RLock()
+	defer delegationSecret.RUnlock()
+	if len(delegationSecret.key) == 0 {
+		return "", false
+	}
+	mac := hmac.New(sha256.New, delegationSecret.key)
 	mac.Write([]byte(strings.Join(parts, "|")))
-	return hex.EncodeToString(mac.Sum(nil))[:24]
+	return hex.EncodeToString(mac.Sum(nil))[:24], true
+}
+
+func validSignature(sig string, parts ...string) bool {
+	want, ok := signToken(parts...)
+	return ok && hmac.Equal([]byte(sig), []byte(want))
+}
+
+func signedToken(prefix string, parts ...string) string {
+	sig, ok := signToken(parts...)
+	if !ok {
+		return ""
+	}
+	return prefix + strings.Join(parts[1:], "_") + "_" + sig
+}
+
+func eventRecordID(tenant, id string) string {
+	sum := sha256.Sum256([]byte(tenant + "|" + id))
+	return "ev-in-" + hex.EncodeToString(sum[:])[:16]
 }
 
 func (a *Service) MintWorkerToken(id string) string {
@@ -461,7 +493,7 @@ func (a *Service) MintWorkerToken(id string) string {
 	if _, ok := platform.Get[DelegationWorker](c, id); !ok {
 		return ""
 	}
-	return "dwkr_" + a.tenant + "_" + id + "_" + signToken("worker", a.tenant, id)
+	return signedToken("dwkr_", "worker", a.tenant, id)
 }
 
 func (a *Service) verifyWorkerToken(token string) (string, bool) {
@@ -474,7 +506,7 @@ func (a *Service) verifyWorkerToken(token string) (string, bool) {
 		return "", false
 	}
 	id, sig := rest[:idx], rest[idx+1:]
-	if !hmac.Equal([]byte(sig), []byte(signToken("worker", a.tenant, id))) {
+	if !validSignature(sig, "worker", a.tenant, id) {
 		return "", false
 	}
 	c := a.automation(runtimeprotocol.AgentApp, false)
@@ -486,12 +518,12 @@ func (a *Service) verifyWorkerToken(token string) (string, bool) {
 
 func (a *Service) mintAttemptToken(run int, attempt int) string {
 	r, att := strconv.Itoa(run), strconv.Itoa(attempt)
-	return "drun_" + a.tenant + "_" + r + "_" + att + "_" + signToken("attempt", a.tenant, r, att)
+	return signedToken("drun_", "attempt", a.tenant, r, att)
 }
 
 func (a *Service) MintRunMCPToken(run int, attempt int) string {
 	r, att := strconv.Itoa(run), strconv.Itoa(attempt)
-	return "dmcp_" + a.tenant + "_" + r + "_" + att + "_" + signToken("mcp", a.tenant, r, att)
+	return signedToken("dmcp_", "mcp", a.tenant, r, att)
 }
 
 func (a *Service) ResolveDelegationMCP(token string, now time.Time) (platform.Member, bool) {
@@ -504,7 +536,7 @@ func (a *Service) ResolveDelegationMCP(token string, now time.Time) (platform.Me
 		return platform.Member{}, false
 	}
 	runStr, attStr, sig := parts[0], parts[1], parts[2]
-	if !hmac.Equal([]byte(sig), []byte(signToken("mcp", a.tenant, runStr, attStr))) {
+	if !validSignature(sig, "mcp", a.tenant, runStr, attStr) {
 		return platform.Member{}, false
 	}
 	runNum, err1 := strconv.Atoi(runStr)

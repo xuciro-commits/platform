@@ -78,8 +78,6 @@ func (et *Type) ensureLedger() error {
 	if err != nil {
 		return err
 	}
-	// Rebuilding from unordered rows must not impose contemporary close dates
-	// or intermediate balance constraints on already accepted historical facts.
 	rebuild := plan.replayPlan()
 	var image ledgerProjection
 	for _, row := range et.rows.All() {
@@ -139,8 +137,6 @@ func (et *Type) ledgerTrial(v reflect.Value, prior *Row) (ledgerProjection, erro
 	return et.ledgerImage.apply(plan, f)
 }
 
-// ledgerCloseDate reads the current accepted/draft record under the store's
-// existing consistent view. Missing, archived or malformed sources fail closed.
 func (et *Type) ledgerCloseDate(source *platform.LedgerCloseRecord) (string, error) {
 	target := et.store.types[source.Type]
 	if target == nil || target.info.Ledger != nil || target.info.ReadOnlyProjection() {
@@ -158,8 +154,6 @@ func (et *Type) ledgerCloseDate(source *platform.LedgerCloseRecord) (string, err
 	return day, nil
 }
 
-// CheckLedgerRow evaluates a trial projection before ordinary acceptance.
-// Replay consumes accepted facts without re-evaluating business constraints.
 func (et *Type) CheckLedgerRow(v reflect.Value, prior *Row) error {
 	_, err := et.ledgerTrial(v, prior)
 	return err
@@ -211,8 +205,6 @@ func (et *Type) writeLedgerBalance(b ledgerBalancePlan, keys []json.RawMessage, 
 		}
 	}
 	row := &Row{Value: v}
-	// Deliberately do not use TrackWrite/Put: balances never enter the accepted
-	// row set or authority journal. This is the only generated row writer.
 	et.indexes.ReplaceReferences(et.info, et.rows, id, row)
 	et.rows.Set(id, row)
 	et.store.changed(et.info.Type)
@@ -274,7 +266,6 @@ func (s *Store) RebuildLedgerBalances() error {
 	return nil
 }
 
-// ReverseLedgerValue constructs a new immutable fact; the original is not edited.
 func ReverseLedgerValue(e platform.RecordType, original any, id, day string) (any, error) {
 	if e.Ledger == nil {
 		return nil, fmt.Errorf("not a ledger")

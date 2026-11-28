@@ -2,6 +2,9 @@ package host
 
 import (
 	"bytes"
+	"crypto/hmac"
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
@@ -11,6 +14,7 @@ import (
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
 	runtimeprotocol "platformserver/kernel/protocol"
 	persistence "platformserver/kernel/store"
+	"platformserver/kernel/transport"
 	"platformserver/platform"
 	"platformserver/services/actions"
 	agentowner "platformserver/services/ai/delegation"
@@ -19,6 +23,7 @@ import (
 )
 
 func TestInvariantK57DelegationAutoloop(t *testing.T) {
+	agentowner.UseTokenKey([]byte("invariant-delegation-signing-key"))
 	if persistence.FormatEpoch != 1 {
 		t.Fatalf("storage format epoch changed: got %d want 1", persistence.FormatEpoch)
 	}
@@ -177,6 +182,15 @@ func TestInvariantK57DelegationAutoloop(t *testing.T) {
 		t.Fatal("expected minted worker token")
 	}
 
+	for _, key := range []string{"platform-delegation-autoloop-v1", "another-deployment-key"} {
+		mac := hmac.New(sha256.New, []byte(key))
+		mac.Write([]byte("worker|" + live.ID + "|wkr-1"))
+		forged := "dwkr_" + live.ID + "_wkr-1_" + hex.EncodeToString(mac.Sum(nil))[:24]
+		if res := autoloopCall(http.MethodGet, "/v1/work?claim=claim-forged&wait=0", forged, nil); res.Code != http.StatusUnauthorized {
+			t.Fatalf("a worker token signed without the host key was accepted: %d %s", res.Code, res.Body.String())
+		}
+	}
+
 	submitAs(manager, runtimeprotocol.AgentApp, "agent.delegation.sweep", "agent.delegation", "DLG-OVERDUE", map[string]any{})
 
 	workRes := autoloopCall(http.MethodGet, "/v1/work?claim=claim-1&wait=0", workerToken, nil)
@@ -210,6 +224,26 @@ func TestInvariantK57DelegationAutoloop(t *testing.T) {
 	}
 	if len(claimed.Job.Context.Events) != 1 || !strings.Contains(claimed.Job.Context.Events[0].Detail, "资料") || !strings.Contains(claimed.Job.Context.Events[0].Detail, injectedText) {
 		t.Fatalf("expected overdue record external text isolated in context detail 资料: %+v", claimed.Job.Context.Events)
+	}
+
+	delegated, ok := live.Agents.ResolveDelegationMCP(claimed.Job.McpToken, invariantClock)
+	if !ok {
+		t.Fatal("the claimed run's MCP token did not resolve")
+	}
+	spoofed, refusal := transport.WithAICallerHeader(delegated, `{"kind":"mcp","name":"spoof","hops":0,"approvedBy":"manager"}`)
+	if before, after := runtimeprotocol.ReadAICaller(delegated), runtimeprotocol.ReadAICaller(spoofed); refusal != nil || after == nil || *after != *before {
+		t.Fatalf("a request header replaced the server-established delegation caller: %+v -> %+v (%v)", before, after, refusal)
+	}
+	claimed2, refusal := transport.WithAICallerHeader(platform.Member{ID: "manager"}, `{"kind":"mcp","name":"client","hops":3,"approvedBy":"admin"}`)
+	if ai := runtimeprotocol.ReadAICaller(claimed2); refusal != nil || ai == nil || ai.ApprovedBy != "" || ai.Hops != 0 {
+		t.Fatalf("a request header set server-only provenance: %+v (%v)", ai, refusal)
+	}
+	flip := map[bool]string{true: "1", false: "0"}[strings.HasSuffix(claimed.Job.McpToken, "0")]
+	if _, ok := live.Agents.ResolveDelegationMCP(claimed.Job.McpToken[:len(claimed.Job.McpToken)-1]+flip, invariantClock); ok {
+		t.Fatal("a tampered MCP token resolved")
+	}
+	if _, refusal := transport.WithAICallerHeader(platform.Member{ID: "manager"}, `{"kind":"delegation","name":"daily"}`); refusal == nil {
+		t.Fatal("a request header claimed a delegation caller")
 	}
 
 	toolsRes := mcpCall(claimed.Job.McpToken, "tools/list", map[string]any{})

@@ -99,8 +99,6 @@ func (t *Tenant) dispatches(now time.Time) []func() {
 	return sends
 }
 
-// Deferred delivery resolves the current provider in a consistent read image,
-// then submits on the live tenant after that read has ended.
 func (t *Tenant) deliverDeferredRequest(x platform.Effect, now time.Time) platform.Outcome {
 	return t.router().DeliverDeferredRequest(x, now, t.Member, t.ReplayKnownSubmission, t.Submit, func(check func(actions.Router) bool) (bool, *platform.Error) {
 		return recordRead(t, context.Background(), func(scope *Tenant) (bool, *platform.Error) {

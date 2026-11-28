@@ -163,7 +163,7 @@ func TestInvariantK54AIProvenanceSourceSlot(t *testing.T) {
 	}
 
 	delegationCaller := map[string]any{
-		"kind": "delegation", "name": "overdue-handler", "version": "3",
+		"kind": "agent", "name": "overdue-handler", "version": "3",
 		"model": "claude-sonnet-4-6", "event": "due:T-1", "run": "run-12",
 		"input": 950, "output": 140, "cached": 200, "cost": 0.0048,
 	}
@@ -265,7 +265,7 @@ func TestInvariantK54AIProvenanceSourceSlot(t *testing.T) {
 			t.Fatalf("%s unexpected pure-transition AI provenance: %+v", label, closeAI)
 		}
 		sendAI, ok := aiMap[sendChg]
-		if !ok || sendAI.Kind != "delegation" || sendAI.Name != "overdue-handler" || sendAI.Version != "3" ||
+		if !ok || sendAI.Kind != "agent" || sendAI.Name != "overdue-handler" || sendAI.Version != "3" ||
 			sendAI.Tool != "invariantproject_ticket_send" || sendAI.Model != "claude-sonnet-4-6" ||
 			sendAI.Event != "due:T-1" || sendAI.Run != "run-12" || sendAI.ApprovedBy != "builder" ||
 			sendAI.Input != 950 || sendAI.Output != 140 || sendAI.Cached != 200 || sendAI.Cost != 0.0048 {

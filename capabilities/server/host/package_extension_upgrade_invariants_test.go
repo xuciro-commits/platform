@@ -144,7 +144,6 @@ func TestInvariantK9PackageUpgradeRefusesIncompatibleExtensions(t *testing.T) {
 			t.Fatalf("extension definition lost: %+v", info)
 		}
 	}
-	// A restart must not declare generated package actions to be native platform resources.
 	generated := platform.AssetRef{App: build.ID, Kind: platform.AssetAction, Name: "crm.lead.create"}
 	generatedID := protocol.ResourceID(live.ID, generated)
 	if err := live.initializeResources(invariantClock); err != nil {
@@ -154,7 +153,6 @@ func TestInvariantK9PackageUpgradeRefusesIncompatibleExtensions(t *testing.T) {
 		t.Fatalf("generated action registered as native: %+v", resource)
 	}
 	if _, found := build.StoreResourceRow(live.Projection, live.ID, generated); !found {
-		// Reproduce the old bootstrap journal entry, rather than editing the store.
 		placeholder := protocol.Resource{Record: platform.Record{ID: generatedID}, Ref: generated, Title: generated.Name, Project: build.WorkspaceProject, State: "active", Version: 1, ManagedBy: "platform"}
 		req := live.submission(build.SchemaResourceRegister, build.ResourceType, "legacy-directory", map[string]any{"resources": []protocol.Resource{placeholder}})
 		req.PrincipalId = ""

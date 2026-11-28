@@ -6,6 +6,7 @@ import (
 	"context"
 	"log"
 	"net/http"
+	agentowner "platformserver/services/ai/delegation"
 	"platformserver/services/security"
 	controlowner "platformserver/services/security/control"
 	"platformserver/services/security/idp"
@@ -55,6 +56,7 @@ type Host struct {
 func (h *Host) SignWith(signer *idp.Local, ttl time.Duration) {
 	h.authenticate = signer.Authenticate()
 	controlowner.UseTokenKey(signer.Key())
+	agentowner.UseTokenKey(signer.Key())
 	h.Mint = func(subject string) string {
 		token, err := signer.Mint(subject, ttl, h.Now())
 		if err != nil {

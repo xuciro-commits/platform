@@ -393,7 +393,7 @@ func (a *Service) ServeAutoloop(w http.ResponseWriter, r *http.Request, now func
 				return
 			}
 		}
-		evRecID := "ev-in-" + signToken(a.tenant, ev.ID)[:16]
+		evRecID := eventRecordID(a.tenant, ev.ID)
 		sub := &pb.Submission{
 			TenantId:       a.tenant,
 			PrincipalId:    serviceActor.ID,

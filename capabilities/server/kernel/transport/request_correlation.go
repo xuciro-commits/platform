@@ -119,7 +119,7 @@ func (w *StatusWriter) StatusCode() int {
 
 func WithAICallerHeader(m platform.Member, raw string) (platform.Member, *platform.Error) {
 	trimmed := strings.TrimSpace(raw)
-	if trimmed == "" {
+	if trimmed == "" || protocol.ReadAICaller(m) != nil {
 		return m, nil
 	}
 	var caller protocol.AICaller
@@ -134,6 +134,10 @@ func WithAICallerHeader(m platform.Member, raw string) (platform.Member, *platfo
 		}
 		caller = protocol.AICaller{Kind: strings.TrimSpace(kind), Name: strings.TrimSpace(name)}
 	}
+	if caller.Kind == "delegation" {
+		return m, platform.Refuse(pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT, "Invalid Platform-AI-Caller header")
+	}
+	caller.ApprovedBy, caller.Hops = "", 0
 	m.AskOK = false
 	return protocol.WithAICaller(m, &caller), nil
 }

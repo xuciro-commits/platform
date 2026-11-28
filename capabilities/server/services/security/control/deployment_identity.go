@@ -6,16 +6,16 @@ import (
 	"strings"
 )
 
-func ConfigurePersonalTokens(issuer string) error {
+func ConfigurePersonalTokens(issuer string) ([]byte, error) {
 	if issuer == "" {
-		return nil
+		return nil, nil
 	}
 	key := os.Getenv("PLATFORM_PERSONAL_TOKEN_KEY")
 	if len(key) < 32 {
-		return fmt.Errorf("OIDC delivery requires PLATFORM_PERSONAL_TOKEN_KEY of at least 32 bytes")
+		return nil, fmt.Errorf("OIDC delivery requires PLATFORM_PERSONAL_TOKEN_KEY of at least 32 bytes")
 	}
 	UseTokenKey([]byte(key))
-	return nil
+	return []byte(key), nil
 }
 
 func HostAdministrators(list string) map[string]bool {

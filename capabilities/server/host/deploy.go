@@ -12,6 +12,7 @@ import (
 	persistence "platformserver/kernel/store"
 	"platformserver/kernel/transport"
 	"platformserver/platform"
+	agentowner "platformserver/services/ai/delegation"
 	fileowner "platformserver/services/data/blobs"
 	"platformserver/services/devops/packages"
 	"platformserver/services/resources/monitoring"
@@ -87,8 +88,10 @@ func (d *Deployment) Serve(tenants ...*Tenant) (serveErr error) {
 	if err != nil || done {
 		return err
 	}
-	if err := controlowner.ConfigurePersonalTokens(d.Issuer); err != nil {
+	if key, err := controlowner.ConfigurePersonalTokens(d.Issuer); err != nil {
 		return err
+	} else if key != nil {
+		agentowner.UseTokenKey(key)
 	}
 	for _, tenant := range tenants {
 		tenant.services.StorageModule = d.storageModule()

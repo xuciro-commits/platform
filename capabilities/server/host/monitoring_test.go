@@ -393,6 +393,7 @@ func TestInvariantK4MonitoringOwnerBoundaries(t *testing.T) {
 		submit("admin", runtimeprotocol.FlowApp, automation.SchemaFlowStop, runtimeprotocol.FlowInstanceType, cancelled, map[string]any{})
 		privateFlow := startFlow("other", "compensated", "private-flow")
 		submit("admin", runtimeprotocol.AgentApp, runtimeprotocol.SchemaDelegationWorkerKey, runtimeprotocol.DelegationType, "mon-wkr", map[string]any{"name": "mon-worker"})
+		agents.UseTokenKey([]byte("invariant-delegation-signing-key"))
 		wkrToken := live.Agents.MintWorkerToken("mon-wkr")
 		agentRunIDs := map[string]string{}
 		for idx, spec := range []struct{ key, member, outcome string }{

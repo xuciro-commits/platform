@@ -201,10 +201,10 @@ func withMCPCaller(m platform.Member, client mcpClientInfo, tool string, meta mc
 	if meta.Model != "" {
 		caller.Model = strings.TrimSpace(meta.Model)
 	}
-	if meta.Event != "" {
+	if meta.Event != "" && caller.Event == "" {
 		caller.Event = strings.TrimSpace(meta.Event)
 	}
-	if meta.Run != "" {
+	if meta.Run != "" && caller.Run == "" {
 		caller.Run = strings.TrimSpace(meta.Run)
 	}
 	if meta.Usage.Input > 0 {

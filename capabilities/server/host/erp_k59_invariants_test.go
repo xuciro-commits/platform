@@ -49,7 +49,6 @@ func TestInvariantK59ContractReadsInFlightAndGraphPropagation(t *testing.T) {
 		runType        = "invariantproject.planrun"
 	)
 
-	// 1. Declare contracts with ReadSchemas and polymorphic RefType payload fields.
 	source.accept(t, "build.contract.create", build.ContractType, "C_METRIC", map[string]any{
 		"name":  "sample.metric",
 		"major": 1,
@@ -80,8 +79,6 @@ func TestInvariantK59ContractReadsInFlightAndGraphPropagation(t *testing.T) {
 	})
 	source.accept(t, "build.contract.publish", build.ContractType, "C_INGEST", nil)
 
-	// 2. Provider side: unitnode + factline ledger whose balance implements sample.metric/1#totals,
-	// plus voucherdoc testing transactional reverse step & via-target update.
 	source.accept(t, "build.object.create", build.ObjectType, "UNIT", map[string]any{
 		"name": "unitnode", "title": "Unit node", "plural": "Unit nodes",
 		"fields": []map[string]any{
@@ -171,7 +168,6 @@ func TestInvariantK59ContractReadsInFlightAndGraphPropagation(t *testing.T) {
 	}
 	source.accept(t, "build.object.publish", build.ObjectType, "VOUCHER", nil)
 
-	// 3. Consumer/Reconcile side: reconcilehub + ingestdoc with InFlight projection & protocol-backed RuleCollection.
 	source.accept(t, "build.object.create", build.ObjectType, "HUB", map[string]any{
 		"name": "reconcilehub", "title": "Reconcile hub", "plural": "Reconcile hubs",
 		"fields": []map[string]any{
@@ -226,7 +222,6 @@ func TestInvariantK59ContractReadsInFlightAndGraphPropagation(t *testing.T) {
 	})
 	source.accept(t, "build.object.publish", build.ObjectType, "HUB", nil)
 
-	// 4. Graph propagation objects (3-level DAG + cycle detection + idempotent draft upsert).
 	source.accept(t, "build.object.create", build.ObjectType, "EDGE", map[string]any{
 		"name": "graphlink", "title": "Graph link", "plural": "Graph links",
 		"fields": []map[string]any{
@@ -454,7 +449,6 @@ func TestInvariantK59ContractReadsInFlightAndGraphPropagation(t *testing.T) {
 		return out
 	}
 
-	// Bind metric & ingest, then PAUSE ingest to verify held in-flight projection.
 	bindProto(metricContract, map[string]any{"provider": build.ID})
 	bindProto(ingestContract, map[string]any{"provider": build.ID, "paused": true})
 
@@ -466,7 +460,6 @@ func TestInvariantK59ContractReadsInFlightAndGraphPropagation(t *testing.T) {
 		target.Round(invariantClock.Add(time.Second), 4)
 	}
 
-	// Verify via-target update worked, metric read reflects 120, and ingest is held in inflight projection!
 	if got := readRec("provider.unitnode", "N-TOP")["statusnote"]; got != "posted" {
 		t.Fatalf("expected unit statusnote=posted via $subject.<ref> target, got %v", got)
 	}
@@ -484,14 +477,12 @@ func TestInvariantK59ContractReadsInFlightAndGraphPropagation(t *testing.T) {
 		t.Fatalf("unexpected inflight row: %+v", infRow)
 	}
 
-	// Verify unbinding sample.metric/1 cleanly evaluates optional protocol collection to 0.
 	bindProto(metricContract, map[string]any{"provider": ""})
 	if got := readRec("consumer.reconcilehub", "DEFAULT")["externalamount"]; got != float64(0) {
 		t.Fatalf("expected unbound metric collection to evaluate to 0, got %v", got)
 	}
 	bindProto(metricContract, map[string]any{"provider": build.ID})
 
-	// Resume ingest delivery -> held request settles, inflight drops to 0, difference = 0!
 	bindProto(ingestContract, map[string]any{"provider": build.ID, "paused": false})
 	for range 10 {
 		target.Dispatch(invariantClock.Add(2 * time.Second))
@@ -502,7 +493,6 @@ func TestInvariantK59ContractReadsInFlightAndGraphPropagation(t *testing.T) {
 		t.Fatalf("expected settled difference=0 & inflightcount=0, got %+v", hub)
 	}
 
-	// Verify transactional ledger reversal (`kind: "reverse"`).
 	v1 := readRec("provider.voucherdoc", "V1")
 	factID, _ := v1["fact"].(string)
 	submitAs("provider.voucherdoc.voiddoc", "provider.voucherdoc", "V1", map[string]any{"on": "2026-04-12"})
@@ -516,7 +506,6 @@ func TestInvariantK59ContractReadsInFlightAndGraphPropagation(t *testing.T) {
 		t.Fatalf("expected externalamount=0 after ledger reversal, got %v", got)
 	}
 
-	// Verify 3-level DAG topological requirement propagation & idempotent upsert.
 	submitAs("provider.unitnode.create", "provider.unitnode", "N-MID", map[string]any{"title": "Mid Subassembly", "offsetdays": 3})
 	submitAs("provider.unitnode.create", "provider.unitnode", "N-RAW", map[string]any{"title": "Raw Material", "offsetdays": 5})
 	submitAs("provider.graphlink.create", "provider.graphlink", "E1", map[string]any{"parent": "N-TOP", "child": "N-MID", "ratio": 2, "loss": 0})
@@ -576,7 +565,6 @@ func TestInvariantK59ContractReadsInFlightAndGraphPropagation(t *testing.T) {
 		t.Fatalf("expected total N-RAW net requirement = 30.7 (29.7 + 6 - 5), got %v (%+v)", totalLeaf, leaves)
 	}
 
-	// Confirm one leaf proposal, then re-run execute -> unconfirmed drafts update in place without duplicating, confirmed stays untouched!
 	confirmedLeafID := leafIDsBefore[0]
 	submitAs("provider.leafplan.confirm", "provider.leafplan", confirmedLeafID, map[string]any{})
 	submitAs("provider.planrun.execute", "provider.planrun", "RUN1", map[string]any{})
@@ -589,7 +577,6 @@ func TestInvariantK59ContractReadsInFlightAndGraphPropagation(t *testing.T) {
 		t.Fatalf("confirmed proposal must remain confirmed across re-runs: %+v", confirmedLeaf)
 	}
 
-	// Introduce a cycle edge (N-RAW -> N-TOP) and verify cycle refusal!
 	submitAs("provider.graphlink.create", "provider.graphlink", "ECYCLE", map[string]any{"parent": "N-RAW", "child": "N-TOP", "ratio": 1, "loss": 0})
 	cycleSub := target.submission("provider.planrun.execute", "provider.planrun", "RUN1", map[string]any{})
 	cycleSub.PrincipalId = admin.ID
@@ -597,7 +584,6 @@ func TestInvariantK59ContractReadsInFlightAndGraphPropagation(t *testing.T) {
 		t.Fatalf("expected cycle refusal with CONFLICT, got %+v", cycleErr)
 	}
 
-	// Replay byte-equivalence check.
 	replayed := target.restore(t, target.entries, seat)
 	replayed.Files = target.files()
 	replayed.invalidateReadImage()

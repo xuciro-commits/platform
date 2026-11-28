@@ -167,7 +167,6 @@ func (b *Runtime) txnPropagate(c platform.Caller, receipt *pb.ChangeRecord, p pl
 		slices.SortFunc(adj[k], func(a, b propEdge) int { return strings.Compare(a.child, b.child) })
 	}
 
-	// Detect cycles deterministically.
 	allNodes := make([]string, 0, len(knownNodes))
 	for n := range knownNodes {
 		allNodes = append(allNodes, n)
@@ -191,7 +190,6 @@ func (b *Runtime) txnPropagate(c platform.Caller, receipt *pb.ChangeRecord, p pl
 		}
 	}
 
-	// Low-level codes over DAG.
 	level := map[string]int{}
 	maxLevel := 0
 	for range len(allNodes) + 1 {
