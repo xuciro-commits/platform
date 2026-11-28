@@ -70,6 +70,9 @@ func (t *Tenant) submit(ctx context.Context, m platform.Member, s *pb.Submission
 		value.record, refusal = t.finishPreparedSubmission(m, decision, value.record, refusal)
 		return value, refusal
 	})
+	if refusal == nil && result.record != nil && !monitoring.QuotaExemptSubmission(s) {
+		t.notifySoftQuota(now)
+	}
 	return result.record, refusal, result.issues
 }
 
@@ -143,6 +146,9 @@ func (t *Tenant) acceptWithPrior(a platform.Service, m platform.Member, s *pb.Su
 		return record, refusal
 	}
 	if refusal := controlowner.CheckCredentialSave(t.ID, s); refusal != nil {
+		return nil, refusal
+	}
+	if refusal := t.checkHardQuota(s, now); refusal != nil {
 		return nil, refusal
 	}
 
@@ -353,6 +359,9 @@ func (t *Tenant) prepareAcceptedDirectRows(rows []acceptedformat.InputRow, membe
 }
 
 func (t *Tenant) inputAccepted(a platform.AcceptedInputApp, m platform.Member, name string, body []byte, now time.Time) (any, *platform.Error) {
+	if refusal := t.checkInputHardQuota(a, name, body, now); refusal != nil {
+		return nil, refusal
+	}
 	return t.AcceptInput(a, m, name, body, now, runtimekernel.InputAcceptance{CommittedInput: t.committedInput(),
 		Draft: func() runtimekernel.InputDraft {
 			draft := t.newStagedDecision()

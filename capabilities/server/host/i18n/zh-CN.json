@@ -3036,5 +3036,20 @@
   "Delegation tokens require a host token signing key": "委派令牌需要宿主配置令牌签名密钥",
   "Package addresses may not target private or loopback networks": "产品包地址不得指向内网或本机回环网络",
   "Personal tokens require a host token signing key": "个人令牌需要宿主配置令牌签名密钥",
-  "The import file exceeds 16 MiB": "导入文件超过 16 MiB 上限"
+  "The import file exceeds 16 MiB": "导入文件超过 16 MiB 上限",
+  "Assign workspace quota": "分配工作区配额",
+  "Assign a quota plan and soft or hard limits to this workspace.": "为该工作区分配套餐配额及软硬上限。",
+  "Workspace quota": "工作区配额",
+  "Workspace record quota reached; remove records or upgrade the workspace plan": "工作区记录配额已满；删除部分记录或升级套餐后继续写入",
+  "Workspace storage quota reached; remove files or upgrade the workspace plan": "工作区存储配额已满；清理附件或升级套餐后继续写入",
+  "Workspace daily write quota reached; try again tomorrow or upgrade the workspace plan": "工作区今日写入配额已满；明日再试或升级套餐后继续写入",
+  "Workspace AI quota reached; upgrade the workspace plan to continue": "工作区 AI 配额已满；升级套餐后继续写入",
+  "Workspace package quota reached; retire unused packages or upgrade the workspace plan": "工作区应用包配额已满；退役不用的包或升级套餐后继续写入",
+  "Workspace record usage crossed the soft limit": "工作区记录数已超过软上限",
+  "Workspace storage crossed the soft limit": "工作区存储空间已超过软上限",
+  "Workspace daily writes crossed the soft limit": "工作区今日写入已超过软上限",
+  "Workspace AI usage crossed the soft limit": "工作区 AI 用量已超过软上限",
+  "Workspace installed packages crossed the soft limit": "工作区已装包数已超过软上限",
+  "Acknowledge": "知悉",
+  "Upgrade plan": "升级套餐"
 }

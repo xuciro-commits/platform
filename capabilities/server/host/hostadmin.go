@@ -13,6 +13,7 @@ import (
 	transport "platformserver/kernel/transport"
 	"platformserver/platform"
 	releaseowner "platformserver/services/devops/releases"
+	"platformserver/services/resources/monitoring"
 
 	controlowner "platformserver/services/security/control"
 )
@@ -59,6 +60,15 @@ func (h *Host) hostConsoleRoutes(mux *http.ServeMux) {
 		}))
 	h.hostRoute(mux, transport.Route{Pattern: "GET /v1/host/tenants/{tenant}", Summary: "One tenant's console view (host administrators)", Answer: controlowner.HostTenantView{}},
 		transport.HostAnswer(func(_ string, t *Tenant) any { return h.tenantView(t) }))
+	h.hostRoute(mux, transport.Route{Pattern: "GET /v1/host/plans", Summary: "Quota plans available for host operators to assign to workspaces", Answer: []protocol.QuotaPlan{}},
+		transport.HostAnswer(func(string, *Tenant) any { return monitoring.DefaultQuotaPlans() }))
+	h.hostRoute(mux, transport.Route{Pattern: "POST /v1/host/tenants/{tenant}/quota", Summary: "Assign a quota plan or custom soft and hard limits to a tenant, recorded in its audit (host administrators)", Body: protocol.QuotaRequest{}, Answer: controlowner.HostTenantView{}},
+		transport.CommandOr(1<<20, http.StatusConflict, func(_ *http.Request, subject string, t *Tenant, body protocol.QuotaRequest) (controlowner.HostTenantView, error) {
+			if err := t.setHostQuota(body, subject, h.Now()); err != nil {
+				return controlowner.HostTenantView{}, err
+			}
+			return h.tenantView(t), nil
+		}))
 	h.hostRoute(mux, transport.Route{Pattern: "POST /v1/host/tenants/{tenant}/lifecycle", Summary: "Open, suspend, resume or decommission a tenant, with a reason recorded in its audit (host administrators)", Body: controlowner.LifecycleRequest{}, Answer: controlowner.HostTenantView{}},
 		transport.CommandOr(1<<20, http.StatusConflict, func(r *http.Request, subject string, t *Tenant, body controlowner.LifecycleRequest) (controlowner.HostTenantView, error) {
 			if err := t.setHostLifecycle(body, subject, h.Now(), transport.HostRequestAuthorization(r, t.ID)...); err != nil {
@@ -107,7 +117,8 @@ func (h *Host) tenantView(t *Tenant) controlowner.HostTenantView {
 	} else {
 		t.Lane.Lock()
 	}
-	view := controlowner.HostTenantView{ID: t.ID, Lifecycle: t.console.State(), ActiveRelease: state.releases.Active(), Candidates: state.releases.Count()}
+	quota := monitoring.CurrentQuota(state.Projection)
+	view := controlowner.HostTenantView{ID: t.ID, Lifecycle: t.console.State(), Plan: monitoring.PlanOf(quota), Quota: quota, ActiveRelease: state.releases.Active(), Candidates: state.releases.Count()}
 	if image == nil {
 		t.Lane.Unlock()
 	}

@@ -187,6 +187,7 @@ SecurityReviewOutboundGuard|安全评审：连接器包下载与投递默认拦�
 SecurityReviewUploadAndRenderIsolation|安全评审：上传校验大小与真实媒体类型并隔离附件与 PDF 渲染
 SecurityReviewSessionsAndCSRF|安全评审：会话过期单会话撤销退出全部设备与跨站写入防护
 SecurityReviewLogRedaction|安全评审：运营与访问日志脱敏凭据令牌验证码与导出地址
+K63QuotaDataSoftAskAndHardAdmission|套餐配额作为数据下发、软上限每日每类至多向管理员发一次收件箱提问、硬上限仅在唯一入口拒绝新写入而保留读导出删除与登录
 `.trim().split("\n").map(line => line.split("|")));
 
 const subcases = { postgres: "PostgreSQL 持久化", file: "文件持久化", memory: "内存模式", accepted: "接受结果", refused: "拒绝结果" };

@@ -139,6 +139,9 @@ func (t *Tenant) meter(m platform.Member, u platform.AIUsage) *platform.Error {
 		}
 		return value, t.finishUsage(decision)
 	})
+	if refusal == nil {
+		t.notifySoftQuota(u.At)
+	}
 	return refusal
 }
 
@@ -184,7 +187,11 @@ func (t *Tenant) acceptUsage(m platform.Member, u platform.AIUsage) *platform.Er
 	if t.stage(decision) {
 		return nil
 	}
-	return t.finishUsage(decision)
+	refusal = t.finishUsage(decision)
+	if refusal == nil {
+		t.notifySoftQuota(u.At)
+	}
+	return refusal
 }
 
 func (t *Tenant) finishUsage(decision preparedAccepted) *platform.Error {
@@ -192,5 +199,9 @@ func (t *Tenant) finishUsage(decision preparedAccepted) *platform.Error {
 	if err != nil {
 		return platform.Refuse(pb.ErrorCode_ERROR_CODE_CONFLICT, "The model usage was not accepted")
 	}
-	return t.usageAcceptance().Finish(committed, decision.key, decision.hash)
+	refusal := t.usageAcceptance().Finish(committed, decision.key, decision.hash)
+	if refusal == nil {
+		t.invalidateReadImage()
+	}
+	return refusal
 }

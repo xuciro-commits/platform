@@ -154,6 +154,9 @@ func classifyAcceptedWrite(entryApp string, raw []byte) (writeOrigin, bool) {
 		app = cmp.Or(res.App, app)
 		if sub, err := acceptedformat.BatchSubmission(res, receipt); err == nil {
 			if typ := sub.GetTarget().GetType(); typ != "" {
+				if isSystemBookkeepingType(typ) {
+					return writeOrigin{}, false
+				}
 				return writeOrigin{Key: typ, App: app, Record: true}, true
 			}
 		}
@@ -177,6 +180,9 @@ func classifyAcceptedWrite(entryApp string, raw []byte) (writeOrigin, bool) {
 		}
 		app = cmp.Or(res.App, app)
 		if res.Row.Type != "" {
+			if isSystemBookkeepingType(res.Row.Type) {
+				return writeOrigin{}, false
+			}
 			return writeOrigin{Key: res.Row.Type, App: app, Record: true}, true
 		}
 		return writeOrigin{Key: "app:" + app, App: app}, true
@@ -217,7 +223,12 @@ func ProjectUsage(m *Monitoring, in UsageInput) protocol.TenantUsage {
 		}
 		for _, et := range types {
 			info := et.Info()
-			if info.ReadOnlyProjection() {
+			if info.ReadOnlyProjection() || isSystemBookkeepingType(info.Type) {
+				continue
+			}
+			countsAsRecord := isCustomerRecordType(info.Type)
+			countsAsStorage := countsAsRecord || info.Type == platform.MediaSetType || info.Type == platform.MediaSetVersionType || info.Type == "build.datasetversion"
+			if !countsAsRecord && !countsAsStorage {
 				continue
 			}
 			var activeCount int64
@@ -273,16 +284,20 @@ func ProjectUsage(m *Monitoring, in UsageInput) protocol.TenantUsage {
 				if !hdr.Created.At.IsZero() {
 					createdDay := hdr.Created.At.UTC().Format(time.DateOnly)
 					if strings.HasPrefix(createdDay, monthPrefix) {
-						recordsByDay[createdDay]++
-						storageByDay[createdDay] += rowBytes
+						if countsAsRecord {
+							recordsByDay[createdDay]++
+						}
+						if countsAsStorage {
+							storageByDay[createdDay] += rowBytes
+						}
 					}
 				}
 			}
-			if activeCount > 0 {
+			if countsAsRecord && activeCount > 0 {
 				totalRecords += activeCount
 				recordSources = append(recordSources, recordUsageSource(info.Type, cmp.Or(info.Title, info.Type), info.App, activeCount))
 			}
-			if typeBytes > 0 {
+			if countsAsStorage && typeBytes > 0 {
 				totalStorage += typeBytes
 				storageByType[info.Type] += typeBytes
 			}
@@ -393,18 +408,30 @@ func ProjectUsage(m *Monitoring, in UsageInput) protocol.TenantUsage {
 	}
 	sortUsageSources(pkgSources)
 
+	quota := CurrentQuota(in.Records)
+	var recLimit, storeLimit, writeLimit, aiTokLimit, pkgLimit protocol.QuotaThresholds
+	var aiCostLimit protocol.AICostThresholds
+	var planName string
+	if quota != nil {
+		planName = quota.Plan
+		recLimit, storeLimit, writeLimit = quota.Records, quota.StorageBytes, quota.DailyWrites
+		aiTokLimit, aiCostLimit, pkgLimit = quota.AITokens, quota.AICost, quota.InstalledPackages
+	}
+
 	metrics := []protocol.UsageMetric{
-		{Kind: "records", Unit: "records", Used: totalRecords, Trend: buildTrend(days, recordsByDay, nil), Sources: recordSources},
-		{Kind: "storage", Unit: "bytes", Used: totalStorage, Trend: buildTrend(days, storageByDay, nil), Sources: storageSources},
-		{Kind: "writes", Unit: "writes/day", Used: writesToday, Trend: buildTrend(days, byDay, nil), Sources: writeSources},
-		{Kind: "ai", Unit: "tokens", Used: aiTokens, Cost: aiCost, Trend: buildTrend(days, aiByDayTokens, aiByDayCost), Sources: aiSources},
-		{Kind: "packages", Unit: "packages", Used: installedCount, Trend: buildTrend(days, pkgByDay, nil), Sources: pkgSources},
+		{Kind: "records", Unit: "records", Used: totalRecords, SoftLimit: recLimit.Soft, HardLimit: recLimit.Hard, Trend: buildTrend(days, recordsByDay, nil), Sources: recordSources},
+		{Kind: "storage", Unit: "bytes", Used: totalStorage, SoftLimit: storeLimit.Soft, HardLimit: storeLimit.Hard, Trend: buildTrend(days, storageByDay, nil), Sources: storageSources},
+		{Kind: "writes", Unit: "writes/day", Used: writesToday, SoftLimit: writeLimit.Soft, HardLimit: writeLimit.Hard, Trend: buildTrend(days, byDay, nil), Sources: writeSources},
+		{Kind: "ai", Unit: "tokens", Used: aiTokens, Cost: aiCost, SoftLimit: aiTokLimit.Soft, HardLimit: aiTokLimit.Hard, SoftCost: aiCostLimit.Soft, HardCost: aiCostLimit.Hard, Trend: buildTrend(days, aiByDayTokens, aiByDayCost), Sources: aiSources},
+		{Kind: "packages", Unit: "packages", Used: installedCount, SoftLimit: pkgLimit.Soft, HardLimit: pkgLimit.Hard, Trend: buildTrend(days, pkgByDay, nil), Sources: pkgSources},
 	}
 
 	return protocol.TenantUsage{
 		Tenant:            in.Tenant,
 		At:                now,
 		Month:             monthPrefix,
+		Plan:              planName,
+		Quota:             quota,
 		Records:           totalRecords,
 		StorageBytes:      totalStorage,
 		WritesToday:       writesToday,
@@ -467,4 +494,17 @@ func buildTrend(days []string, values map[string]int64, costs map[string]float64
 
 func roundMoney6(v float64) float64 {
 	return math.Round(v*1e6) / 1e6
+}
+
+func isSystemBookkeepingType(typ string) bool {
+	return typ == QuotaType || typ == ViewType || typ == protocol.WorkQuestionType || typ == protocol.WorkTaskType || typ == protocol.WorkViewType || typ == "work.viewpreference"
+}
+
+func isCustomerRecordType(typ string) bool {
+	for _, prefix := range []string{"build.", "work.", "monitoring.", "ai.", "agent."} {
+		if strings.HasPrefix(typ, prefix) {
+			return false
+		}
+	}
+	return typ != ""
 }

@@ -8,19 +8,21 @@ import (
 )
 
 type HostTenantView struct {
-	ID            string    `json:"id"`
-	Quarantined   bool      `json:"quarantined,omitempty"`
-	Fault         string    `json:"fault,omitempty"`
-	Lifecycle     string    `json:"lifecycle,omitempty"`
-	Apps          []string  `json:"apps"`
-	Members       int       `json:"members"`
-	Audit         int       `json:"audit"`
-	ActiveRelease string    `json:"activeRelease,omitempty"`
-	Candidates    int       `json:"candidates"`
-	Support       int       `json:"support"`
-	FailedWork    int       `json:"failedWork"`
-	Connectors    int       `json:"connectors"`
-	Started       time.Time `json:"started,omitempty"`
+	ID            string                `json:"id"`
+	Quarantined   bool                  `json:"quarantined,omitempty"`
+	Fault         string                `json:"fault,omitempty"`
+	Lifecycle     string                `json:"lifecycle,omitempty"`
+	Plan          string                `json:"plan,omitempty"`
+	Quota         *protocol.TenantQuota `json:"quota,omitempty"`
+	Apps          []string              `json:"apps"`
+	Members       int                   `json:"members"`
+	Audit         int                   `json:"audit"`
+	ActiveRelease string                `json:"activeRelease,omitempty"`
+	Candidates    int                   `json:"candidates"`
+	Support       int                   `json:"support"`
+	FailedWork    int                   `json:"failedWork"`
+	Connectors    int                   `json:"connectors"`
+	Started       time.Time             `json:"started,omitempty"`
 }
 
 type HostOverview struct {

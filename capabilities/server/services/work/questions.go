@@ -92,18 +92,21 @@ func (w *Work) questionRequest(c platform.Caller, s *pb.Submission, now time.Tim
 	}
 	invalid := &platform.Error{Code: pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT}
 	var p struct {
-		Requester   string                    `json:"requester"`
-		Submission  json.RawMessage           `json:"submission"`
-		Scopes      []string                  `json:"scopes"`
-		AgentCaller bool                      `json:"agentCaller"`
-		Caller      *runtimeprotocol.AICaller `json:"caller"`
-		Title       string                    `json:"title"`
-		Reason      string                    `json:"reason"`
-		Options     []string                  `json:"options"`
-		Recommend   int                       `json:"recommend"`
-		About       string                    `json:"about"`
-		Key         string                    `json:"key"`
-		Delegation  string                    `json:"delegation"`
+		Requester    string                    `json:"requester"`
+		Candidates   []string                  `json:"candidates"`
+		OptionTitles []string                  `json:"optionTitles"`
+		App          string                    `json:"app"`
+		Submission   json.RawMessage           `json:"submission"`
+		Scopes       []string                  `json:"scopes"`
+		AgentCaller  bool                      `json:"agentCaller"`
+		Caller       *runtimeprotocol.AICaller `json:"caller"`
+		Title        string                    `json:"title"`
+		Reason       string                    `json:"reason"`
+		Options      []string                  `json:"options"`
+		Recommend    int                       `json:"recommend"`
+		About        string                    `json:"about"`
+		Key          string                    `json:"key"`
+		Delegation   string                    `json:"delegation"`
 	}
 	if json.Unmarshal(s.GetPayload(), &p) != nil {
 		return nil, invalid
@@ -114,24 +117,38 @@ func (w *Work) questionRequest(c platform.Caller, s *pb.Submission, now time.Tim
 		if !ok || strings.TrimSpace(p.Title) == "" || len(p.Options) < 2 {
 			return nil, invalid
 		}
-		delegates := w.delegates(c, []string{requester.ID}, now)
-		candidates := []string{requester.ID}
+		seeds := []string{requester.ID}
+		for _, cand := range p.Candidates {
+			if m, exists := w.host.Member(cand); exists && !slices.Contains(seeds, m.ID) {
+				seeds = append(seeds, m.ID)
+			}
+		}
+		delegates := w.delegates(c, seeds, now)
+		candidates := slices.Clone(seeds)
 		for delegate := range delegates {
 			candidates = append(candidates, delegate)
 		}
 		slices.Sort(candidates)
 		candidates = slices.Compact(candidates)
+		optionTitles := slices.Clone(p.Options)
+		if len(p.OptionTitles) == len(p.Options) {
+			for i, title := range p.OptionTitles {
+				if trimmed := strings.TrimSpace(title); trimmed != "" {
+					optionTitles[i] = trimmed
+				}
+			}
+		}
 		question := AgentQuestion{
 			Record:       platform.Record{ID: s.GetTarget().GetId()},
 			Title:        strings.TrimSpace(p.Title),
 			Reason:       strings.TrimSpace(p.Reason),
-			App:          runtimeprotocol.AgentApp,
+			App:          cmp.Or(p.App, runtimeprotocol.AgentApp),
 			Requester:    requester.ID,
 			Candidates:   candidates,
 			AgentCaller:  p.AgentCaller,
 			Caller:       p.Caller,
 			Options:      slices.Clone(p.Options),
-			OptionTitles: slices.Clone(p.Options),
+			OptionTitles: optionTitles,
 			Recommend:    p.Recommend,
 			Key:          p.Key,
 			About:        p.About,

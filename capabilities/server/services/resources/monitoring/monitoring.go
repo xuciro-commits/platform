@@ -44,14 +44,19 @@ func New(tenant string, authorities platform.Authorities) *Monitoring {
 				{Name: "status", Type: "string", Description: "Legacy run status filter", Choices: []string{"ok", "failed", "pending", "running", "warning", "paused", "cancelled", "unknown"}},
 			}},
 		{Schema: SchemaViewRemove, Target: ViewType, Capability: "views", Title: "Remove monitoring view", Description: "Remove one of your saved monitoring filters.", Roles: roles, Payload: []platform.Field{}},
+		{Schema: SchemaQuotaSet, Target: QuotaType, Capability: "quota", Automation: true, Title: "Assign workspace quota", Description: "Assign a quota plan and soft or hard limits to this workspace.", Payload: []platform.Field{}},
 	}
-	return &Monitoring{authority: authorities(tenant, ID, platform.NewCatalog(actions...), ViewType), projector: &UsageProjector{}}
+	return &Monitoring{authority: authorities(tenant, ID, platform.NewCatalog(actions...), ViewType, QuotaType), projector: &UsageProjector{}}
 }
 
 func (m *Monitoring) Manifest() platform.Manifest {
 	return platform.Manifest{ID: ID, Title: platform.BuiltinManifestTitle(ID), Version: "1", Actions: m.authority.Catalog(),
-		Entities: []platform.RecordType{{Type: ViewType, Title: "Monitoring view", Model: SavedView{}, Display: "title",
-			Scope: platform.Scope{Default: platform.ScopeOwn, Owner: "owner", Participants: func(value any) []string { return []string{value.(SavedView).Owner} }}}},
+		Entities: []platform.RecordType{
+			{Type: ViewType, Title: "Monitoring view", Model: SavedView{}, Display: "title",
+				Scope: platform.Scope{Default: platform.ScopeOwn, Owner: "owner", Participants: func(value any) []string { return []string{value.(SavedView).Owner} }}},
+			{Type: QuotaType, Title: "Workspace quota", Model: protocol.WorkspaceQuota{}, Display: "plan",
+				Scope: platform.Scope{Default: platform.ScopeTenant}},
+		},
 		Reads: []string{ReadViews}, Everyone: []string{ReadViews}}
 }
 
@@ -74,6 +79,9 @@ func (m *Monitoring) Restore(raw json.RawMessage) error        { return m.author
 func (m *Monitoring) Submit(c platform.Caller, s *pb.Submission, now time.Time) (*pb.ChangeRecord, *platform.Error) {
 	return m.authority.Receive(c, s, now, nil, func() (func(*pb.ChangeRecord), *platform.Error) {
 		name := s.GetSchema().GetName()
+		if name == SchemaQuotaSet {
+			return m.decideQuota(c, s)
+		}
 		if name != SchemaViewSave && name != SchemaViewRemove {
 			return nil, &platform.Error{Code: pb.ErrorCode_ERROR_CODE_UNKNOWN_SCHEMA}
 		}

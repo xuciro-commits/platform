@@ -212,5 +212,10 @@
   "You do not belong to a workspace yet.": "你还没有加入任何工作区。",
   "You must administer the source workspace.": "你必须拥有来源租户的管理权限。",
   "Your workspaces": "你的工作区",
-  "{count} selected": "已选 {count} 个"
+  "{count} selected": "已选 {count} 个",
+  "Workspace record quota reached; remove records or upgrade the workspace plan": "工作区记录配额已满；删除部分记录或升级套餐后继续写入",
+  "Workspace storage quota reached; remove files or upgrade the workspace plan": "工作区存储配额已满；清理附件或升级套餐后继续写入",
+  "Workspace daily write quota reached; try again tomorrow or upgrade the workspace plan": "工作区今日写入配额已满；明日再试或升级套餐后继续写入",
+  "Workspace AI quota reached; upgrade the workspace plan to continue": "工作区 AI 配额已满；升级套餐后继续写入",
+  "Workspace package quota reached; retire unused packages or upgrade the workspace plan": "工作区应用包配额已满；退役不用的包或升级套餐后继续写入"
 }

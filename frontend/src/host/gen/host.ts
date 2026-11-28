@@ -27,6 +27,11 @@ export type AICaller = {
   hops?: number;
 };
 
+export type AICostThresholds = {
+  soft?: number;
+  hard?: number;
+};
+
 export type AIFunction = {
   proposal?: ProposalPolicy;
   conversation?: boolean;
@@ -2513,6 +2518,8 @@ export type HostTenantView = {
   quarantined?: boolean;
   fault?: string;
   lifecycle?: string;
+  plan?: string;
+  quota?: TenantQuota;
   apps: string[];
   members: number;
   audit: number;
@@ -4841,6 +4848,24 @@ export type QueueHealth = {
   oldestSeconds: number;
 };
 
+export type QuotaPlan = {
+  id: string;
+  title: string;
+  description?: string;
+  quota: TenantQuota;
+};
+
+export type QuotaRequest = {
+  plan?: string;
+  quota?: TenantQuota;
+  reason?: string;
+};
+
+export type QuotaThresholds = {
+  soft?: number;
+  hard?: number;
+};
+
 export type RecordAction = {
   schema: string;
   allowed: boolean;
@@ -5745,6 +5770,16 @@ export type TenantLink = {
   content?: string;
 };
 
+export type TenantQuota = {
+  plan?: string;
+  records?: QuotaThresholds;
+  storageBytes?: QuotaThresholds;
+  dailyWrites?: QuotaThresholds;
+  aiTokens?: QuotaThresholds;
+  aiCost?: AICostThresholds;
+  installedPackages?: QuotaThresholds;
+};
+
 export type TenantRecord = {
   id: string;
   name: string;
@@ -5769,6 +5804,7 @@ export type TenantUsage = {
   at: string;
   month: string;
   plan?: string;
+  quota?: TenantQuota;
   records: number;
   storageBytes: number;
   writesToday: number;

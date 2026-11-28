@@ -2,6 +2,7 @@ package host
 
 import (
 	"cmp"
+	"context"
 	"encoding/json"
 	runtimekernel "platformserver/kernel"
 	"platformserver/kernel/protocol"
@@ -102,17 +103,10 @@ func (t *Tenant) monitoringRunsFromOwners(m platform.Member, filter monitoring.M
 }
 
 func (t *Tenant) tenantUsage(now time.Time) protocol.TenantUsage {
-	origin := t
-	if t.readOrigin != nil {
-		origin = t.readOrigin
-	}
-	pos := t.Projection.Current().Applied()
-	if pos <= 0 {
-		if t.SnapshotPosition > 0 {
-			pos = t.SnapshotPosition
-		} else if origin.RuntimePosition != nil {
-			pos = origin.RuntimePosition()
-		}
+	origin := cmp.Or(t.readOrigin, t)
+	pos := cmp.Or(t.Projection.Current().Applied(), t.SnapshotPosition)
+	if pos <= 0 && origin.RuntimePosition != nil {
+		pos = origin.RuntimePosition()
 	}
 	var entries func(int64) ([]monitoring.JournalSlice, error)
 	if origin.JournalEntries != nil {
@@ -133,4 +127,58 @@ func (t *Tenant) tenantUsage(now time.Time) protocol.TenantUsage {
 		in.Packages = t.PackageOwner.InstalledPackages()
 	}
 	return monitoring.ProjectUsage(origin.Monitoring, in)
+}
+
+func (t *Tenant) checkInputHardQuota(a platform.AcceptedInputApp, name string, body []byte, now time.Time) *platform.Error {
+	var auth string
+	if a != nil {
+		auth = a.Manifest().ID
+	}
+	return t.checkHardQuota(monitoring.InputQuotaSubmission(auth, name, body), now)
+}
+
+func (t *Tenant) checkHardQuota(s *pb.Submission, now time.Time) *platform.Error {
+	if monitoring.QuotaExemptSubmission(s) {
+		return nil
+	}
+	quota := monitoring.CurrentQuota(t.Projection)
+	if quota == nil {
+		return nil
+	}
+	var pkgs map[string]*protocol.InstalledPackage
+	if t.PackageOwner != nil {
+		pkgs = t.PackageOwner.InstalledPackages()
+	}
+	return monitoring.CheckHardQuota(t.tenantUsage(now), quota, s, pkgs)
+}
+
+func (t *Tenant) notifySoftQuota(now time.Time) {
+	if t.readOrigin != nil || t.App(protocol.WorkApp) == nil {
+		return
+	}
+	admins := (hostView{t: t}).Holding(controlowner.PlatformApp, controlowner.Admin)
+	var caller platform.Member
+	subs, _ := recordRead(t, context.Background(), func(view *Tenant) ([]*pb.Submission, *platform.Error) {
+		var out []*pb.Submission
+		caller, out = monitoring.SoftQuotaSubmissions(t.ID, view.tenantUsage(now), view.Projection, admins, now)
+		return out, nil
+	})
+	for _, sub := range subs {
+		_, _ = t.submitBackground(caller, sub, now)
+	}
+}
+
+func (t *Tenant) setHostQuota(req protocol.QuotaRequest, subject string, now time.Time) error {
+	if now.IsZero() {
+		now = Now()
+	}
+	caller, sub, audit, err := monitoring.PrepareHostQuota(t.ID, subject, req, now)
+	if err != nil {
+		return err
+	}
+	if _, refusal := t.submitBackground(caller, sub, now); refusal != nil {
+		return refusal
+	}
+	t.AuditLog.Remember(audit)
+	return nil
 }

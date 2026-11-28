@@ -5,6 +5,8 @@ import (
 	"time"
 )
 
+const MonitoringQuotaType = "monitoring.quota"
+
 type MonitoringView struct {
 	platform.Record
 	Title   string    `json:"title" field:"required,search" source:"record"`
@@ -18,6 +20,58 @@ type MonitoringView struct {
 	Type    string    `json:"type,omitempty" choices:"sync,build,automation,function,delivery" source:"record"`
 	Status  string    `json:"status,omitempty" choices:"ok,failed,pending,running,warning,paused,cancelled,unknown" source:"record"`
 	Owner   string    `json:"owner" field:"readonly" source:"record"`
+}
+
+type QuotaThresholds struct {
+	Soft int64 `json:"soft,omitempty"`
+	Hard int64 `json:"hard,omitempty"`
+}
+
+type AICostThresholds struct {
+	Soft float64 `json:"soft,omitempty"`
+	Hard float64 `json:"hard,omitempty"`
+}
+
+type TenantQuota struct {
+	Plan              string           `json:"plan,omitempty"`
+	Records           QuotaThresholds  `json:"records,omitempty"`
+	StorageBytes      QuotaThresholds  `json:"storageBytes,omitempty"`
+	DailyWrites       QuotaThresholds  `json:"dailyWrites,omitempty"`
+	AITokens          QuotaThresholds  `json:"aiTokens,omitempty"`
+	AICost            AICostThresholds `json:"aiCost,omitempty"`
+	InstalledPackages QuotaThresholds  `json:"installedPackages,omitempty"`
+}
+
+type QuotaPlan struct {
+	ID          string      `json:"id"`
+	Title       string      `json:"title"`
+	Description string      `json:"description,omitempty"`
+	Quota       TenantQuota `json:"quota"`
+}
+
+type QuotaRequest struct {
+	Plan   string       `json:"plan,omitempty"`
+	Quota  *TenantQuota `json:"quota,omitempty"`
+	Reason string       `json:"reason,omitempty"`
+}
+
+type WorkspaceQuota struct {
+	platform.Record
+	Plan         string  `json:"plan,omitempty" source:"record"`
+	RecordsSoft  int64   `json:"recordsSoft,omitempty" source:"record"`
+	RecordsHard  int64   `json:"recordsHard,omitempty" source:"record"`
+	StorageSoft  int64   `json:"storageSoft,omitempty" source:"record"`
+	StorageHard  int64   `json:"storageHard,omitempty" source:"record"`
+	WritesSoft   int64   `json:"writesSoft,omitempty" source:"record"`
+	WritesHard   int64   `json:"writesHard,omitempty" source:"record"`
+	AITokensSoft int64   `json:"aiTokensSoft,omitempty" source:"record"`
+	AITokensHard int64   `json:"aiTokensHard,omitempty" source:"record"`
+	AICostSoft   float64 `json:"aiCostSoft,omitempty" source:"record"`
+	AICostHard   float64 `json:"aiCostHard,omitempty" source:"record"`
+	PackagesSoft int64   `json:"packagesSoft,omitempty" source:"record"`
+	PackagesHard int64   `json:"packagesHard,omitempty" source:"record"`
+	Reason       string  `json:"reason,omitempty" source:"record"`
+	AssignedBy   string  `json:"assignedBy,omitempty" field:"readonly" source:"record"`
 }
 
 type UsageSource struct {
@@ -54,6 +108,7 @@ type TenantUsage struct {
 	At                time.Time     `json:"at"`
 	Month             string        `json:"month"`
 	Plan              string        `json:"plan,omitempty"`
+	Quota             *TenantQuota  `json:"quota,omitempty"`
 	Records           int64         `json:"records"`
 	StorageBytes      int64         `json:"storageBytes"`
 	WritesToday       int64         `json:"writesToday"`
