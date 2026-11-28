@@ -252,9 +252,14 @@ test("gate: a builder creates a type with fields, states and a transition, publi
   await createType.getByRole("textbox", { name: /^Name/ }).fill("Gate item");
   await createType.getByRole("button", { name: "Create", exact: true }).click();
   await expect(page.getByRole("heading", { level: 1, name: "Gate item", exact: true })).toBeVisible();
+  const press = async (name: string) => {
+    const button = page.getByRole("button", { name, exact: true });
+    await expect(button).toBeEnabled();
+    await button.click();
+  };
 
   for (const [name, label, type] of [["code", "Code", "text"], ["summary", "Summary", "text"], ["quantity", "Quantity", "integer"]] as const) {
-    await page.getByRole("button", { name: "Add field", exact: true }).click();
+    await press("Add field");
     const field = page.getByRole("dialog");
     await field.getByRole("textbox", { name: /^Name/ }).fill(name);
     await field.getByRole("textbox", { name: /^Label/ }).fill(label);
@@ -263,13 +268,13 @@ test("gate: a builder creates a type with fields, states and a transition, publi
     await field.getByRole("button", { name: "Save", exact: true }).click();
   }
   for (const [name, title] of [["draft", "Draft"], ["active", "Active"]] as const) {
-    await page.getByRole("button", { name: "Add state", exact: true }).click();
+    await press("Add state");
     const state = page.getByRole("dialog");
     await state.getByRole("textbox", { name: /^API name/ }).fill(name);
     await state.getByRole("textbox", { name: /^Name/ }).fill(title);
     await state.getByRole("button", { name: "Save", exact: true }).click();
   }
-  await page.getByRole("button", { name: "Create transition", exact: true }).click();
+  await press("Create transition");
   const transition = page.getByRole("dialog");
   await transition.getByRole("textbox", { name: "What people call it", exact: true }).fill("Activate gate item");
   await transition.getByRole("button", { name: "Save", exact: true }).click();
