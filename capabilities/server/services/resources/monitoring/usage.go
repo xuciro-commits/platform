@@ -497,7 +497,7 @@ func roundMoney6(v float64) float64 {
 }
 
 func isSystemBookkeepingType(typ string) bool {
-	return typ == QuotaType || typ == ViewType || typ == protocol.WorkQuestionType || typ == protocol.WorkTaskType || typ == protocol.WorkViewType || typ == "work.viewpreference"
+	return typ == QuotaType || typ == BackupType || typ == ViewType || typ == protocol.WorkQuestionType || typ == protocol.WorkTaskType || typ == protocol.WorkViewType || typ == "work.viewpreference"
 }
 
 func isCustomerRecordType(typ string) bool {
@@ -507,4 +507,15 @@ func isCustomerRecordType(typ string) bool {
 		}
 	}
 	return typ != ""
+}
+
+func UsageSummaryOf(u protocol.TenantUsage) *protocol.TenantUsageSummary {
+	return &protocol.TenantUsageSummary{
+		Records:           u.Records,
+		StorageBytes:      u.StorageBytes,
+		WritesToday:       u.WritesToday,
+		AITokens:          u.AITokens,
+		AICost:            u.AICost,
+		InstalledPackages: u.InstalledPackages,
+	}
 }

@@ -8,21 +8,31 @@ import (
 )
 
 type HostTenantView struct {
-	ID            string                `json:"id"`
-	Quarantined   bool                  `json:"quarantined,omitempty"`
-	Fault         string                `json:"fault,omitempty"`
-	Lifecycle     string                `json:"lifecycle,omitempty"`
-	Plan          string                `json:"plan,omitempty"`
-	Quota         *protocol.TenantQuota `json:"quota,omitempty"`
-	Apps          []string              `json:"apps"`
-	Members       int                   `json:"members"`
-	Audit         int                   `json:"audit"`
-	ActiveRelease string                `json:"activeRelease,omitempty"`
-	Candidates    int                   `json:"candidates"`
-	Support       int                   `json:"support"`
-	FailedWork    int                   `json:"failedWork"`
-	Connectors    int                   `json:"connectors"`
-	Started       time.Time             `json:"started,omitempty"`
+	ID             string                       `json:"id"`
+	HealthStatus   string                       `json:"healthStatus,omitempty"`
+	Quarantined    bool                         `json:"quarantined,omitempty"`
+	Fault          string                       `json:"fault,omitempty"`
+	Lifecycle      string                       `json:"lifecycle,omitempty"`
+	Plan           string                       `json:"plan,omitempty"`
+	Quota          *protocol.TenantQuota        `json:"quota,omitempty"`
+	Usage          *protocol.TenantUsageSummary `json:"usage,omitempty"`
+	LaneWaiters    int64                        `json:"laneWaiters"`
+	LaneHeldMillis float64                      `json:"laneHeldMillis"`
+	SlowHoldMillis float64                      `json:"slowHoldMillis,omitempty"`
+	SlowHoldHolder string                       `json:"slowHoldHolder,omitempty"`
+	Requests       int                          `json:"requests"`
+	Errors         int                          `json:"errors"`
+	ErrorRate      float64                      `json:"errorRate"`
+	LastBackup     *protocol.BackupStatus       `json:"lastBackup,omitempty"`
+	Apps           []string                     `json:"apps"`
+	Members        int                          `json:"members"`
+	Audit          int                          `json:"audit"`
+	ActiveRelease  string                       `json:"activeRelease,omitempty"`
+	Candidates     int                          `json:"candidates"`
+	Support        int                          `json:"support"`
+	FailedWork     int                          `json:"failedWork"`
+	Connectors     int                          `json:"connectors"`
+	Started        time.Time                    `json:"started,omitempty"`
 }
 
 type HostOverview struct {
@@ -118,4 +128,16 @@ func SupportGrantID(tenant, subject string, action HostAction, now time.Time) (s
 
 func RecordMigration(image *protocol.HostControlImage, result protocol.MigrationResult, member string, now time.Time) {
 	image.Migrations = append(image.Migrations, protocol.MigrationManifest{At: now.UTC(), From: result.From, To: result.To, Key: result.Key, Member: member, Types: result.Types})
+}
+
+func ApplyTenantTelemetry(view *HostTenantView, status string, waiters int64, heldSec float64, slowSec float64, slowHolder string, summary protocol.ObservationSummary) {
+	view.HealthStatus = status
+	view.LaneWaiters, view.LaneHeldMillis = waiters, heldSec*1000
+	if slowSec > 0 || slowHolder != "" {
+		view.SlowHoldMillis, view.SlowHoldHolder = slowSec*1000, slowHolder
+	}
+	view.Requests, view.Errors = summary.Requests, summary.Errors
+	if summary.Requests > 0 {
+		view.ErrorRate = float64(summary.Errors) / float64(summary.Requests)
+	}
 }

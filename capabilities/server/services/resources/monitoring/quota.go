@@ -14,9 +14,12 @@ import (
 )
 
 const (
-	QuotaType      = protocol.MonitoringQuotaType
-	SchemaQuotaSet = "monitoring.quota.set"
-	QuotaRecordID  = "current"
+	QuotaType          = protocol.MonitoringQuotaType
+	SchemaQuotaSet     = "monitoring.quota.set"
+	QuotaRecordID      = "current"
+	BackupType         = protocol.MonitoringBackupType
+	SchemaBackupRecord = "monitoring.backup.record"
+	BackupRecordID     = "latest"
 
 	ReasonRecordQuotaExceeded  = "Workspace record quota reached; remove records or upgrade the workspace plan"
 	ReasonStorageQuotaExceeded = "Workspace storage quota reached; remove files or upgrade the workspace plan"
@@ -197,7 +200,7 @@ func QuotaExemptSubmission(s *pb.Submission) bool {
 		return true
 	}
 	schema := s.GetSchema().GetName()
-	if schema == "" || schema == SchemaQuotaSet || schema == protocol.WorkQuestionRequestSchema || schema == protocol.WorkQuestionType+".answer" ||
+	if schema == "" || schema == SchemaQuotaSet || schema == SchemaBackupRecord || schema == protocol.WorkQuestionRequestSchema || schema == protocol.WorkQuestionType+".answer" ||
 		schema == "platform.member.join" || schema == "platform.notification.read" {
 		return true
 	}
@@ -344,7 +347,7 @@ func PrepareHostQuota(tenant, subject string, req protocol.QuotaRequest, now tim
 	}
 	actor := "host:" + subject
 	caller := platform.Member{ID: "app:" + ID, Tenant: tenant}
-	digest, _ := platform.CanonicalDigest([]any{tenant, actor, resolved, req.Reason, now.UTC()})
+	digest, _ := platform.CanonicalDigest([]any{tenant, actor, resolved.Plan, req.Reason, now.UTC().UnixNano()})
 	if len(digest) > 24 {
 		digest = digest[:24]
 	}
@@ -364,4 +367,78 @@ func PrepareHostQuota(tenant, subject string, req protocol.QuotaRequest, now tim
 	}
 	audit := protocol.AuditEntry{At: now.UTC(), Member: actor, App: "platform", Action: "host.quota.set", Target: target}
 	return caller, sub, audit, nil
+}
+
+func CurrentBackup(store *records.Store) *protocol.BackupStatus {
+	if store == nil {
+		return nil
+	}
+	for _, row := range records.RowsOf[protocol.WorkspaceBackup](store, BackupType) {
+		if row.ID == BackupRecordID && !row.Archived {
+			return &protocol.BackupStatus{At: row.At, Status: row.Status, Entries: row.Entries, Bytes: row.Bytes, Error: row.Error, By: row.By}
+		}
+	}
+	return nil
+}
+
+func (m *Monitoring) decideBackup(c platform.Caller, s *pb.Submission) (func(*pb.ChangeRecord), *platform.Error) {
+	if !c.Automation && !c.Replaying {
+		return nil, &platform.Error{Code: pb.ErrorCode_ERROR_CODE_POLICY_DENIED}
+	}
+	var payload struct {
+		Status protocol.BackupStatus `json:"status"`
+		Reason string                `json:"reason"`
+	}
+	if json.Unmarshal(s.GetPayload(), &payload) != nil || (payload.Status.Status != "ok" && payload.Status.Status != "failed") {
+		return nil, &platform.Error{Code: pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT}
+	}
+	current, _ := platform.Get[protocol.WorkspaceBackup](c, BackupRecordID)
+	next := protocol.WorkspaceBackup{
+		Record:  current.Record,
+		At:      payload.Status.At.UTC(),
+		Status:  payload.Status.Status,
+		Entries: payload.Status.Entries,
+		Bytes:   payload.Status.Bytes,
+		Error:   payload.Status.Error,
+		Reason:  strings.TrimSpace(payload.Reason),
+		By:      cmp.Or(payload.Status.By, c.ID),
+	}
+	next.ID = BackupRecordID
+	next.Archived = false
+	if err := c.Check(next); err != nil {
+		return nil, err
+	}
+	return func(r *pb.ChangeRecord) { c.Put(r, next) }, nil
+}
+
+func PrepareHostBackup(tenant, subject string, status protocol.BackupStatus, reason string, now time.Time) (platform.Member, *pb.Submission, protocol.AuditEntry) {
+	actor := "host:" + subject
+	status.By = actor
+	if status.At.IsZero() {
+		status.At = now.UTC()
+	}
+	caller := platform.Member{ID: "app:" + ID, Tenant: tenant}
+	digest, _ := platform.CanonicalDigest([]any{tenant, actor, status.Status, status.Entries, status.Bytes, status.Error, reason, status.At.UnixNano()})
+	if len(digest) > 24 {
+		digest = digest[:24]
+	}
+	sub := &pb.Submission{
+		TenantId:       tenant,
+		PrincipalId:    caller.ID,
+		Authority:      ID,
+		IdempotencyKey: "host-backup:" + digest,
+		Target:         &pb.EntityRef{Type: BackupType, Id: BackupRecordID},
+		Schema:         &pb.SchemaRef{Name: SchemaBackupRecord, Version: 1},
+		Payload:        platform.Raw(map[string]any{"status": status, "reason": reason}),
+	}
+	act := "host.backup.run"
+	if status.Status == "failed" {
+		act = "host.backup.failed"
+	}
+	target := tenant
+	if reason != "" {
+		target += ":" + reason
+	}
+	audit := protocol.AuditEntry{At: status.At, Member: actor, App: "platform", Action: act, Target: target}
+	return caller, sub, audit
 }

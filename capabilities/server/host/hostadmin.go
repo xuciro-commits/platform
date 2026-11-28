@@ -70,6 +70,13 @@ func (h *Host) hostConsoleRoutes(mux *http.ServeMux) {
 			}
 			return h.tenantView(t), nil
 		}))
+	h.hostRoute(mux, transport.Route{Pattern: "POST /v1/host/tenants/{tenant}/backup", Summary: "Run or record a tenant backup and store the result in control state and audit (host administrators)", Body: protocol.BackupRequest{}, Answer: controlowner.HostTenantView{}},
+		transport.CommandOr(1<<20, http.StatusConflict, func(_ *http.Request, subject string, t *Tenant, body protocol.BackupRequest) (controlowner.HostTenantView, error) {
+			if err := t.runHostBackup(body, subject, h.Now()); err != nil {
+				return controlowner.HostTenantView{}, err
+			}
+			return h.tenantView(t), nil
+		}))
 	h.hostRoute(mux, transport.Route{Pattern: "POST /v1/host/tenants/{tenant}/lifecycle", Summary: "Open, suspend, resume or decommission a tenant, with a reason recorded in its audit (host administrators)", Body: controlowner.LifecycleRequest{}, Answer: controlowner.HostTenantView{}},
 		transport.CommandOr(1<<20, http.StatusConflict, func(r *http.Request, subject string, t *Tenant, body controlowner.LifecycleRequest) (controlowner.HostTenantView, error) {
 			if err := t.setHostLifecycle(body, subject, h.Now(), transport.HostRequestAuthorization(r, t.ID)...); err != nil {
@@ -114,13 +121,24 @@ func (h *Host) tenantView(t *Tenant) controlowner.HostTenantView {
 	view := controlowner.HostTenantView{ID: t.ID, Lifecycle: t.console.State()}
 	if !t.quarantined() {
 		if read, refusal := recordRead(t, context.Background(), func(state *Tenant) (controlowner.HostTenantView, *platform.Error) {
-			quota := monitoring.CurrentQuota(state.Projection)
-			return controlowner.HostTenantView{ID: t.ID, Lifecycle: t.console.State(), Plan: monitoring.PlanOf(quota), Quota: quota, ActiveRelease: state.releases.Active(), Candidates: state.releases.Count()}, nil
+			quota, backup := monitoring.CurrentQuota(state.Projection), monitoring.CurrentBackup(state.Projection)
+			usage := monitoring.UsageSummaryOf(state.tenantUsage(now))
+			return controlowner.HostTenantView{ID: t.ID, Lifecycle: t.console.State(), Plan: monitoring.PlanOf(quota), Quota: quota, Usage: usage, LastBackup: backup, ActiveRelease: state.releases.Active(), Candidates: state.releases.Count()}, nil
 		}); refusal == nil {
 			view = read
 		}
 	}
-	health := t.Health(now)
+	health, lane := t.Health(now), t.laneHealth(now, true)
+	var slowSec float64
+	var slowHolder string
+	if lane.LastSlow != nil {
+		slowSec, slowHolder = lane.LastSlow.Seconds, lane.LastSlow.Holder
+	}
+	var obs protocol.ObservationSummary
+	if t.Log() != nil {
+		obs, _ = t.Log().SummarizeObservations(t.ID, "", now.Add(-time.Hour), now)
+	}
+	controlowner.ApplyTenantTelemetry(&view, health.Status, lane.Waiters, lane.HeldSeconds, slowSec, slowHolder, obs)
 	view.Started, view.FailedWork, view.Connectors = health.Started, health.Failed, health.Connectors
 	view.Apps = []string{}
 	for _, a := range t.Apps() {

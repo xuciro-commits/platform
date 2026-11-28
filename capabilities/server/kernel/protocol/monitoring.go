@@ -6,6 +6,7 @@ import (
 )
 
 const MonitoringQuotaType = "monitoring.quota"
+const MonitoringBackupType = "monitoring.backup"
 
 type MonitoringView struct {
 	platform.Record
@@ -121,4 +122,41 @@ type TenantUsage struct {
 	AICost            float64       `json:"aiCost"`
 	InstalledPackages int64         `json:"installedPackages"`
 	Metrics           []UsageMetric `json:"metrics"`
+}
+
+type BackupStatus struct {
+	At      time.Time `json:"at"`
+	Status  string    `json:"status"`
+	Entries int64     `json:"entries"`
+	Bytes   int64     `json:"bytes"`
+	Error   string    `json:"error,omitempty"`
+	By      string    `json:"by,omitempty"`
+}
+
+type BackupRequest struct {
+	Status  string `json:"status,omitempty"`
+	Entries int64  `json:"entries,omitempty"`
+	Bytes   int64  `json:"bytes,omitempty"`
+	Error   string `json:"error,omitempty"`
+	Reason  string `json:"reason,omitempty"`
+}
+
+type WorkspaceBackup struct {
+	platform.Record
+	At      time.Time `json:"at"`
+	Status  string    `json:"status"`
+	Entries int64     `json:"entries"`
+	Bytes   int64     `json:"bytes"`
+	Error   string    `json:"error,omitempty"`
+	Reason  string    `json:"reason,omitempty"`
+	By      string    `json:"by,omitempty"`
+}
+
+type TenantUsageSummary struct {
+	Records           int64   `json:"records"`
+	StorageBytes      int64   `json:"storageBytes"`
+	WritesToday       int64   `json:"writesToday"`
+	AITokens          int64   `json:"aiTokens"`
+	AICost            float64 `json:"aiCost"`
+	InstalledPackages int64   `json:"installedPackages"`
 }

@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	runtimekernel "platformserver/kernel"
 	"platformserver/kernel/protocol"
+	persistence "platformserver/kernel/store"
 	automation "platformserver/services/automate/runtime"
 	dataowner "platformserver/services/data"
 	compute "platformserver/services/functions/runtime"
@@ -176,6 +177,38 @@ func (t *Tenant) setHostQuota(req protocol.QuotaRequest, subject string, now tim
 	if err != nil {
 		return err
 	}
+	if _, refusal := t.submitBackground(caller, sub, now); refusal != nil {
+		return refusal
+	}
+	t.AuditLog.Remember(audit)
+	return nil
+}
+
+func (t *Tenant) runHostBackup(req protocol.BackupRequest, subject string, now time.Time) error {
+	if now.IsZero() {
+		now = Now()
+	}
+	status := protocol.BackupStatus{At: now.UTC(), Status: cmp.Or(req.Status, "ok"), Entries: req.Entries, Bytes: req.Bytes, Error: req.Error}
+	if req.Status == "" {
+		var entries []persistence.Entry
+		if t.JournalEntries != nil {
+			raw, err := t.JournalEntries(context.Background(), 0)
+			if err != nil {
+				status.Status, status.Error = "failed", err.Error()
+			} else {
+				entries = raw
+			}
+		}
+		if status.Status == "ok" {
+			archive, err := persistence.EncodeTenantBackup(t.ID, acceptedIdentity, entries, nil)
+			if err != nil {
+				status.Status, status.Error = "failed", err.Error()
+			} else {
+				status.Entries, status.Bytes = int64(len(entries)), int64(len(archive))
+			}
+		}
+	}
+	caller, sub, audit := monitoring.PrepareHostBackup(t.ID, subject, status, req.Reason, now)
 	if _, refusal := t.submitBackground(caller, sub, now); refusal != nil {
 		return refusal
 	}

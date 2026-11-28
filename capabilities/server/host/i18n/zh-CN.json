@@ -3051,5 +3051,11 @@
   "Workspace AI usage crossed the soft limit": "工作区 AI 用量已超过软上限",
   "Workspace installed packages crossed the soft limit": "工作区已装包数已超过软上限",
   "Acknowledge": "知悉",
-  "Upgrade plan": "升级套餐"
+  "Upgrade plan": "升级套餐",
+  "Workspace backup": "工作区备份",
+  "Workspace backups": "工作区备份",
+  "Record workspace backup": "记录工作区备份",
+  "Record the latest workspace backup status.": "记录最近一次工作区备份状态。",
+  "Entries": "日志条数",
+  "Recorded by": "记录人"
 }

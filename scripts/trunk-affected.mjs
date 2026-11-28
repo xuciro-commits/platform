@@ -24,7 +24,7 @@ const rules = [
   [/^frontend\/src\/apps\/(ontology|logic|apps)\//, ["builder", "records", "package-extension"]],
   [/^frontend\/src\/apps\/(home|ai|data)\//, ["workspace"]],
   [/^frontend\/src\/apps\/(operations|host)\//, ["operations", "workspace"]],
-  [/^frontend\/src\/pages\/WorkspaceUsage\.tsx$/, ["operations"]],
+  [/^frontend\/src\/pages\/(WorkspaceUsage|HostTenantsPage)\.tsx$/, ["operations"]],
   [/^frontend\/src\/pages\/GanttView\.tsx$/, ["gantt"]],
   [/^frontend\/src\/pages\/CallDock\.tsx$/, ["phone"]],
   [/^frontend\/src\/pages\/Capabilities\.tsx$/, ["connector", "workspace"]],

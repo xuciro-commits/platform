@@ -810,6 +810,23 @@ export type AvatarUpload = {
   size: number;
 };
 
+export type BackupRequest = {
+  status?: string;
+  entries?: number;
+  bytes?: number;
+  error?: string;
+  reason?: string;
+};
+
+export type BackupStatus = {
+  at: string;
+  status: string;
+  entries: number;
+  bytes: number;
+  error?: string;
+  by?: string;
+};
+
 export type BalanceRule = {
   app: string;
   role: string;
@@ -2515,11 +2532,21 @@ export type HostOverview = {
 
 export type HostTenantView = {
   id: string;
+  healthStatus?: string;
   quarantined?: boolean;
   fault?: string;
   lifecycle?: string;
   plan?: string;
   quota?: TenantQuota;
+  usage?: TenantUsageSummary;
+  laneWaiters: number;
+  laneHeldMillis: number;
+  slowHoldMillis?: number;
+  slowHoldHolder?: string;
+  requests: number;
+  errors: number;
+  errorRate: number;
+  lastBackup?: BackupStatus;
   apps: string[];
   members: number;
   audit: number;
@@ -5817,6 +5844,15 @@ export type TenantUsage = {
   aiCost: number;
   installedPackages: number;
   metrics: UsageMetric[];
+};
+
+export type TenantUsageSummary = {
+  records: number;
+  storageBytes: number;
+  writesToday: number;
+  aiTokens: number;
+  aiCost: number;
+  installedPackages: number;
 };
 
 export type TestPlanDescriptor = {
