@@ -12,6 +12,7 @@ import (
 	automation "platformserver/services/automate/runtime"
 	"platformserver/services/devops/packages"
 	build "platformserver/services/resources/authoring"
+	"platformserver/services/resources/monitoring"
 	controlowner "platformserver/services/security/control"
 )
 
@@ -43,6 +44,7 @@ type Capabilities struct {
 	FunctionAssets          map[string]platform.RetainedFunctionAssets
 	Agents                  map[string]protocol.AgentRuntime
 	Knowledge               map[string]platform.Glossary
+	Monitoring              map[string]*monitoring.Monitoring
 }
 
 func CapabilitiesOf(apps []platform.Service) Capabilities {
@@ -60,6 +62,7 @@ func CapabilitiesOf(apps []platform.Service) Capabilities {
 		InputReceivers: map[string]platform.InputReceiver{}, RelationSources: map[string]protocol.LegacyRelationSource{},
 		FunctionAssets: map[string]platform.RetainedFunctionAssets{},
 		Agents:         map[string]protocol.AgentRuntime{}, Knowledge: map[string]platform.Glossary{},
+		Monitoring: map[string]*monitoring.Monitoring{},
 	}
 	for _, app := range apps {
 		id := app.Manifest().ID
@@ -171,6 +174,10 @@ func CapabilitiesOf(apps []platform.Service) Capabilities {
 		case platform.Glossary:
 			out.Knowledge[id] = owner
 		}
+		switch owner := app.(type) {
+		case *monitoring.Monitoring:
+			out.Monitoring[id] = owner
+		}
 	}
 	return out
 }
@@ -214,6 +221,7 @@ type Roles struct {
 	FunctionAssets  map[string]platform.RetainedFunctionAssets
 	Agents          protocol.AgentRuntime
 	Glossary        platform.Glossary
+	Monitoring      *monitoring.Monitoring
 	Observers       []platform.Observer
 	Listeners       []string
 }
@@ -273,7 +281,10 @@ func Resolve(c Capabilities, ids []string, active func(string) bool) (Roles, err
 	if roles.Agents, err = Unique(c.Agents, active, "agent"); err != nil {
 		return roles, err
 	}
-	roles.Glossary, err = Unique(c.Knowledge, active, "glossary")
+	if roles.Glossary, err = Unique(c.Knowledge, active, "glossary"); err != nil {
+		return roles, err
+	}
+	roles.Monitoring, err = Unique(c.Monitoring, active, "monitoring")
 	return roles, err
 }
 

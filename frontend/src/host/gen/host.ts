@@ -5718,6 +5718,25 @@ export type TenantTemplate = {
   adminRoles?: Record<string, string>;
 };
 
+export type TenantUsage = {
+  tenant: string;
+  at: string;
+  month: string;
+  plan?: string;
+  records: number;
+  storageBytes: number;
+  writesToday: number;
+  writesMonth: number;
+  dailyWrites: UsageDay[];
+  aiTokens: number;
+  aiInputTokens: number;
+  aiOutputTokens: number;
+  aiCalls: number;
+  aiCost: number;
+  installedPackages: number;
+  metrics: UsageMetric[];
+};
+
 export type TestPlanDescriptor = {
   organization?: OrgSeed;
   name: string;
@@ -6070,6 +6089,35 @@ export type Usage = {
   costReported?: boolean;
   millis: number;
   outcome: string;
+};
+
+export type UsageDay = {
+  date: string;
+  value: number;
+  cost?: number;
+};
+
+export type UsageMetric = {
+  kind: string;
+  unit: string;
+  used: number;
+  cost?: number;
+  softLimit?: number;
+  hardLimit?: number;
+  softCost?: number;
+  hardCost?: number;
+  trend: UsageDay[];
+  sources: UsageSource[];
+};
+
+export type UsageSource = {
+  key: string;
+  title: string;
+  app?: string;
+  value: number;
+  cost?: number;
+  objectSet?: ObjectSet;
+  path?: string;
 };
 
 export type Value = {

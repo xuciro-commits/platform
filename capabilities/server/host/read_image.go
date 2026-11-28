@@ -157,6 +157,9 @@ func (t *Tenant) forkReadState(ctx context.Context) (*Tenant, error) {
 	view.staged.Restore(t.staged.Snapshot())
 	view.Claims = t.Claims.Fork()
 	view.DefinitionEpoch.Store(t.DefinitionEpoch.Load())
+	if t.RuntimePosition != nil {
+		view.SnapshotPosition = t.RuntimePosition()
+	}
 	view.runIndex.CopyGeneration(&t.runIndex)
 	view.includeArchivedDefinitions = t.includeArchivedDefinitions
 	view.i18n = view.translator()

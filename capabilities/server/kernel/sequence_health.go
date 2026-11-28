@@ -59,6 +59,9 @@ func (s *Sequence) AuditEmpty() bool {
 
 func (s *Sequence) AttachJournal(ctx context.Context, journal persistence.Journals) {
 	s.RuntimePosition = func() int64 { return journal.Position(s.ID) }
+	s.JournalEntries = func(readCtx context.Context, after int64) ([]persistence.Entry, error) {
+		return journal.Entries(readCtx, s.ID, after)
+	}
 	s.Store = journal
 	s.AuditLog.Backfill()
 	id := s.ID

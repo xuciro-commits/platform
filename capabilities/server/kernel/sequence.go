@@ -32,6 +32,7 @@ type Sequence struct {
 	StateReader       AcceptedStateReader
 	SnapshotPosition  int64
 	RuntimePosition   func() int64
+	JournalEntries    func(context.Context, int64) ([]persistence.Entry, error)
 	Record            func(persistence.Entry)
 	AcceptResult      func(context.Context, persistence.Entry, string, string) (*persistence.AcceptedWrite, error)
 	AcceptResults     func([]persistence.AcceptedAppend) ([][]byte, error)

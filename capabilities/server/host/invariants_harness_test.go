@@ -84,6 +84,13 @@ func newInvariantTenantSetup(tb testing.TB, id string, apps []platform.Service, 
 		tb.Fatal(err)
 	}
 	live := &invariantTenant{Tenant: tenant}
+	tenant.RuntimePosition = func() int64 { return int64(len(live.entries)) }
+	tenant.JournalEntries = func(_ context.Context, after int64) ([]persistence.Entry, error) {
+		if after >= int64(len(live.entries)) {
+			return nil, nil
+		}
+		return slices.Clone(live.entries[after:]), nil
+	}
 	tenant.AcceptResult = func(_ context.Context, e Entry, _, _ string) (*persistence.AcceptedWrite, error) {
 		live.entries = append(live.entries, e)
 		return &persistence.AcceptedWrite{Body: e.Body}, nil

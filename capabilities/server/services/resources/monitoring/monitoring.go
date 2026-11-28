@@ -24,6 +24,7 @@ type SavedView = protocol.MonitoringView
 
 type Monitoring struct {
 	authority platform.Authority
+	projector *UsageProjector
 }
 
 func New(tenant string, authorities platform.Authorities) *Monitoring {
@@ -44,7 +45,7 @@ func New(tenant string, authorities platform.Authorities) *Monitoring {
 			}},
 		{Schema: SchemaViewRemove, Target: ViewType, Capability: "views", Title: "Remove monitoring view", Description: "Remove one of your saved monitoring filters.", Roles: roles, Payload: []platform.Field{}},
 	}
-	return &Monitoring{authority: authorities(tenant, ID, platform.NewCatalog(actions...), ViewType)}
+	return &Monitoring{authority: authorities(tenant, ID, platform.NewCatalog(actions...), ViewType), projector: &UsageProjector{}}
 }
 
 func (m *Monitoring) Manifest() platform.Manifest {
@@ -57,7 +58,13 @@ func (m *Monitoring) Manifest() platform.Manifest {
 func (m *Monitoring) Authority() platform.Authority { return m.authority }
 
 func (m *Monitoring) Fork(authority platform.Authority) (platform.Service, error) {
-	return &Monitoring{authority: authority}, nil
+	return &Monitoring{authority: authority, projector: m.projector}, nil
+}
+
+func (m *Monitoring) DiscardUsage() {
+	if m != nil && m.projector != nil {
+		m.projector.Reset()
+	}
 }
 func (m *Monitoring) Declarations() []*pb.AuthorityDeclaration { return m.authority.Declarations() }
 func (m *Monitoring) SnapshotFormat() string                   { return "platform.ledger.v1" }

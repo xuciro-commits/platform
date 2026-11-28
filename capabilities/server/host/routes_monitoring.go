@@ -22,6 +22,11 @@ func (h *Host) routesMonitoring(rt *routes) {
 	rt.authorized(transport.Route{Pattern: "GET /v1/monitoring/log-policies", Summary: "Effective tenant and application log policies", Answer: []controlowner.LogPolicyView{}}, controlowner.PlatformApp, []string{controlowner.Admin}, transport.Answering(func(_ *http.Request, _ platform.Member, t *Tenant) ([]controlowner.LogPolicyView, *platform.Error) {
 		return t.LogPolicies(), nil
 	}))
+	rt.authorized(transport.Route{Pattern: "GET /v1/monitoring/usage", Summary: "Workspace usage projection derived from accepted results and AI gateway settlements", Answer: protocol.TenantUsage{}}, controlowner.PlatformApp, []string{controlowner.Admin, protocol.Auditor}, transport.Answering(func(r *http.Request, _ platform.Member, t *Tenant) (protocol.TenantUsage, *platform.Error) {
+		return recordRead(t, r.Context(), func(t *Tenant) (protocol.TenantUsage, *platform.Error) {
+			return t.tenantUsage(h.Now()), nil
+		})
+	}))
 	rt.recordRead(transport.Route{Pattern: "GET /v1/monitoring/runs", Summary: "Current and retained runs visible through their original owners, with unfiltered overview counts and recovery actions", Answer: monitoring.MonitoringRunPage{}, Query: []transport.Param{{Name: "type", Description: "sync, build, automation, function or delivery; empty selects all"}, {Name: "status", Description: "ok, failed, pending, running, warning, paused, cancelled or unknown; empty selects all"}, {Name: "offset", Description: "Nonnegative run offset, default 0"}, {Name: "limit", Description: "1-100, default 50"}}}, transport.Answering(func(r *http.Request, m platform.Member, t *Tenant) (monitoring.MonitoringRunPage, *platform.Error) {
 		filter, refusal := monitoring.RunFilterFrom(r.URL.Query())
 		if refusal != nil {

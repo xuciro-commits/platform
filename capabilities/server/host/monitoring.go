@@ -100,3 +100,37 @@ func (t *Tenant) monitoringRunsFromOwners(m platform.Member, filter monitoring.M
 		Integrations: func() ([]dataowner.IntegrationEffect, *platform.Error) { return t.integrationEffects(m, now) },
 	}.Page()
 }
+
+func (t *Tenant) tenantUsage(now time.Time) protocol.TenantUsage {
+	origin := t
+	if t.readOrigin != nil {
+		origin = t.readOrigin
+	}
+	pos := t.Projection.Current().Applied()
+	if pos <= 0 {
+		if t.SnapshotPosition > 0 {
+			pos = t.SnapshotPosition
+		} else if origin.RuntimePosition != nil {
+			pos = origin.RuntimePosition()
+		}
+	}
+	var entries func(int64) ([]monitoring.JournalSlice, error)
+	if origin.JournalEntries != nil {
+		entries = func(after int64) ([]monitoring.JournalSlice, error) {
+			raw, err := origin.JournalEntries(t.readContext(), after)
+			out := make([]monitoring.JournalSlice, len(raw))
+			for i, item := range raw {
+				out[i] = monitoring.JournalSlice{At: item.At, App: item.App, Body: item.Body}
+			}
+			return out, err
+		}
+	}
+	in := monitoring.UsageInput{Tenant: t.ID, Now: now, Records: t.Projection, Position: pos, Entries: entries}
+	if t.Models != nil {
+		in.AIUsage = t.Models.Usage()
+	}
+	if t.PackageOwner != nil {
+		in.Packages = t.PackageOwner.InstalledPackages()
+	}
+	return monitoring.ProjectUsage(origin.Monitoring, in)
+}
