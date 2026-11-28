@@ -86,11 +86,7 @@
 ## 硬化
 
 拥有：安全评审涉及的修复（跨路径，改到最小）、`make test-security-pg` 的用例、租户 `sim`、`frontend/e2e/erp-marketplace.spec.ts` 的演示、`services/actions/txn_propagate.go`。
-顺序：3.x → 4.x → 债。
-
-### 3.x 阶段 3 收口
-
-- 核对原逐日剧本与已归档证据的覆盖缺口，缺的补跑；做完删掉 plan 里的阶段 3 一行。
+顺序：4.x → 债。
 
 ### 4.x 阶段 4 门槛演示（第 1–6 步）
 
