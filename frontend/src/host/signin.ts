@@ -1,6 +1,6 @@
 import type { Api } from "./contract";
-import { HostRefusal, request } from "./request";
-import { startSession, type Session } from "./session";
+import { HostRefusal, refusal, request } from "./request";
+import { currentSession, requireSession, startSession, type Session } from "./session";
 
 const pending = "platform:sign-in";
 const scope = "openid email profile";
@@ -12,6 +12,7 @@ const random = () => encoded(crypto.getRandomValues(new Uint8Array(32)));
 const returnTo = () => `${location.origin}/`;
 
 async function exchange(issuer: string, form: Record<string, string>): Promise<Session> {
+  const session = currentSession();
   const response = await fetch(endpoint(issuer, "token"), {
     method: "POST",
     headers: { "Content-Type": "application/x-www-form-urlencoded" },
@@ -20,8 +21,12 @@ async function exchange(issuer: string, form: Record<string, string>): Promise<S
   const answer = await response.json().catch(() => ({})) as { access_token?: string; error?: string; error_description?: string };
   if (!response.ok || !answer.access_token) throw new HostRefusal(response.status, answer.error ?? "", answer.error_description ?? "");
   const token = answer.access_token;
-  const me = await request<Api.MeView>("/v1/me", { headers: { authorization: `Bearer ${token}` } });
-  return { token, tenant: me.tenantId };
+  requireSession(session);
+  const identityResponse = await fetch("/v1/auth/me", { cache: "no-store", headers: { authorization: `Bearer ${token}` } });
+  if (!identityResponse.ok) throw refusal(identityResponse.status, await identityResponse.json().catch(() => null));
+  const identity = await identityResponse.json() as Api.IdentityEntry;
+  requireSession(session);
+  return { token, tenant: identity.invitations.length ? "" : identity.workspaces[0]?.id ?? "" };
 }
 
 export function signInWithPassword(sign: Api.SignIn, username: string, password: string) {
@@ -38,7 +43,7 @@ export function verifyEmailCode(email: string, code: string) {
 
 export function enterVerifiedSession(answer: Api.AuthSession) {
   const token = answer.token ?? "";
-  const tenant = answer.tenants[0]?.id ?? "";
+  const tenant = "";
   startSession({ token, tenant });
 }
 
@@ -69,4 +74,13 @@ export async function finishSingleSignOn(sign: Api.SignIn): Promise<{ session: S
     redirect_uri: returnTo(), code_verifier: saved.verifier,
   });
   return { session, back: saved.back || "/" };
+}
+
+export async function signInDevelopment(token: string, tenant: string): Promise<Session> {
+  const active = currentSession();
+  const response = await fetch("/v1/auth/me", { headers: { authorization: `Bearer ${token}` }, cache: "no-store" });
+  if (!response.ok) throw refusal(response.status, await response.json().catch(() => null));
+  const identity = await response.json() as Api.IdentityEntry;
+  requireSession(active);
+  return {token, tenant: identity.workspaces.some((workspace) => workspace.id === tenant) ? tenant : ""};
 }

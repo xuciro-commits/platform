@@ -83,6 +83,7 @@ export function TenantSwitcher() {
           })}
         </DropdownMenuGroup>
         <DropdownMenuDivider />
+        <DropdownMenuItem icon={PlusIcon} label={t("Workspaces")} onClick={() => { if (session) { startSession({ token: session.token, tenant: "" }); navigate("/"); } }} />
         {canHost && (
           <DropdownMenuItem
             icon={PlusIcon}

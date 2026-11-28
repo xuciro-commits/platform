@@ -104,3 +104,27 @@ func Unavailable(w http.ResponseWriter, r *http.Request, quarantined, suspended 
 	}
 	return false
 }
+
+func HostAnswer[T any](f func(subject string, t T) any) func(http.ResponseWriter, *http.Request, string, T) {
+	return func(w http.ResponseWriter, _ *http.Request, subject string, t T) {
+		WriteJSON(w, http.StatusOK, f(subject, t))
+	}
+}
+
+func HostTransfer[B any, T comparable](lookup func(string) T, required string, complete func(B) bool, source func(B) string, f func(*http.Request, T, T, B) (any, int, error)) func(http.ResponseWriter, *http.Request, string, T) {
+	return func(w http.ResponseWriter, r *http.Request, _ string, to T) {
+		var body B
+		if err := DecodeBodyLimit(r, &body, 1<<20); err != nil || !complete(body) {
+			WriteJSON(w, http.StatusBadRequest, map[string]any{"error": required})
+			return
+		}
+		from := lookup(source(body))
+		var zero T
+		if from == zero {
+			WriteJSON(w, http.StatusNotFound, map[string]any{"error": "no such source tenant"})
+			return
+		}
+		out, failure, err := f(r, from, to, body)
+		AnswerOr(w, failure, out, err)
+	}
+}

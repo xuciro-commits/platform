@@ -1,3 +1,4 @@
+import type { Api } from "./contract";
 import { t } from "../i18n";
 import { currentSession, endSessionIfCurrent, requireSession, type Session } from "./session";
 
@@ -92,4 +93,23 @@ export async function requestBlob(path: string, signal?: AbortSignal) {
 
 export function reasonOf(problem: unknown) {
   return (problem instanceof Error && problem.message) || t("The platform did not accept this change.");
+}
+
+export async function workspaceMemberAccounts(tenant: string, signal?: AbortSignal) {
+  const session = currentSession();
+  if (!session || tenant === session.tenant) throw new Error(t("Choose another workspace."));
+  const read = async <Answer,>(path: string) => {
+    requireSession(session);
+    const response = await fetch(path, { signal, cache: "no-store", headers: { authorization: `Bearer ${session.token}`, "Platform-Tenant": tenant } });
+    requireSession(session);
+    if (!response.ok) throw refusal(response.status, await response.json().catch(() => null));
+    const value = await response.json() as Answer;
+    requireSession(session);
+    return value;
+  };
+  const me = await read<Api.MeView>("/v1/me");
+  if (me.tenantId !== tenant || !(me.profile.roles.platform === "admin" || me.profile.grants?.some((grant) => grant.app === "platform" && grant.role === "admin"))) {
+    throw new Error(t("You must administer the source workspace."));
+  }
+  return read<Api.MemberView[]>("/v1/members");
 }

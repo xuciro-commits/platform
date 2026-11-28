@@ -55,6 +55,9 @@ func (e *Endpoints) Remove(id string) {
 }
 
 func (ep *Endpoint) Valid(app func(string) platform.Service, declared func(event string) bool) bool {
+	if ep.ID == IdentityMailID {
+		return false
+	}
 	u, err := url.Parse(ep.URL)
 	if err != nil || u.Host == "" {
 		return false

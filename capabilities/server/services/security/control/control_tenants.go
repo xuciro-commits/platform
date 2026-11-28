@@ -9,6 +9,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"maps"
+	"net/mail"
 	"os"
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
 	"platformserver/kernel/protocol"
@@ -23,6 +24,9 @@ import (
 
 const (
 	SchemaInvite        = "platform.member.invite"
+	SchemaInviteSend    = "platform.member.invite.send"
+	SchemaInviteAccept  = "platform.member.invite.accept"
+	SchemaInviteRevoke  = "platform.member.invite.revoke"
 	SchemaJoin          = "platform.member.join"
 	SchemaMemberSuspend = "platform.member.suspend"
 	SchemaMemberResume  = "platform.member.resume"
@@ -63,9 +67,12 @@ func lifecycleActions() []platform.Action {
 	reason := platform.Field{Name: "reason", Type: "string"}
 	return []platform.Action{
 		{Schema: SchemaInvite, Target: MemberType, Capability: "members", Title: "Invite member",
-			Description: "Add a member who has not signed in yet: they stand invited until they first do, and may be granted roles meanwhile.",
+			Description: "Prepare an invitation for a verified email identity. It grants no access until sent and accepted.",
 			Payload: []platform.Field{{Name: "subject", Type: "string", Required: true, Description: "user:<email> or client:<id>"},
 				{Name: "agent", Type: "boolean", Description: "An AI agent"}}, Roles: admin},
+		{Schema: SchemaInviteSend, Target: MemberType, Capability: "members", Title: "Send invitation", Description: "Send or renew an invitation after preparing its access.", Payload: []platform.Field{}, Roles: admin},
+		{Schema: SchemaInviteAccept, Target: MemberType, Capability: "members", Title: "Accept invitation", Description: "Accept a pending invitation as its authenticated recipient.", Automation: true, Payload: []platform.Field{{Name: "subject", Type: "string", Required: true}}},
+		{Schema: SchemaInviteRevoke, Target: MemberType, Capability: "members", Title: "Revoke invitation", Description: "Cancel an invitation before it is accepted.", Payload: []platform.Field{}, Roles: admin},
 		{Schema: SchemaJoin, Target: MemberType, Capability: "members", Title: "Join by sign-in domain", Automation: true,
 			Description: "A person whose mail domain the tenant lists under sign-in domains becomes a member on first sign-in, holding nothing until granted. Recorded by the host.",
 			Payload:     []platform.Field{{Name: "subject", Type: "string", Required: true}}},
@@ -85,7 +92,7 @@ func lifecycleActions() []platform.Action {
 	}
 }
 
-func (d *Console) decideLifecycle(c platform.Caller, s *pb.Submission) (func(*pb.ChangeRecord), *platform.Error) {
+func (d *Console) decideLifecycle(c platform.Caller, s *pb.Submission, now time.Time) (func(*pb.ChangeRecord), *platform.Error) {
 	invalid := &platform.Error{Code: pb.ErrorCode_ERROR_CODE_INVALID_ARGUMENT}
 	var p struct {
 		Subject, Reason, Successor string
@@ -114,15 +121,55 @@ func (d *Console) decideLifecycle(c platform.Caller, s *pb.Submission) (func(*pb
 				d.subjects[p.Subject] = id
 			}, nil
 		}
+		email := strings.TrimPrefix(p.Subject, "user:")
+		address, err := mail.ParseAddress(email)
+		if !strings.HasPrefix(p.Subject, "user:") || err != nil || address.Address != email || p.Agent {
+			return nil, invalid
+		}
 		return func(r *pb.ChangeRecord) {
-			d.members[id] = &platform.Member{ID: id, Tenant: d.tenant, Roles: map[string]string{}, Agent: p.Agent, Status: platform.MemberInvited}
+			d.members[id] = &platform.Member{ID: id, Tenant: d.tenant, Roles: map[string]string{}, Status: platform.MemberInvited, Invitation: &platform.Invitation{State: "draft", InvitedBy: c.ID, Created: r.GetRecordedTime().AsTime()}}
 			d.subjects[p.Subject] = id
+		}, nil
+	case SchemaInviteSend:
+		if m == nil || m.Invitation == nil || m.Status != platform.MemberInvited || (m.Invitation.State != "draft" && m.Invitation.State != "pending") {
+			return nil, invalid
+		}
+		return func(r *pb.ChangeRecord) {
+			invitation := *m.Invitation
+			invitation.State = "pending"
+			invitation.Expires = r.GetRecordedTime().AsTime().Add(7 * 24 * time.Hour)
+			m.Invitation = &invitation
 			d.then = func() {
 				org := cmp.Or(d.tenantDefault(SettingName), d.tenant)
-				c.Notify(platform.Notification{Category: protocol.NotificationSystem, Title: "You are invited to " + org, Key: "invite",
-					Body: "Sign in with " + strings.TrimPrefix(p.Subject, "user:") + " to take your seat at " + org + "."},
-					r.GetRecordedTime().AsTime(), platform.Recipient{Member: id})
+				body := "Sign in with your invited email to accept the invitation to " + org + "."
+				if origin := strings.TrimRight(os.Getenv("PLATFORM_PUBLIC_URL"), "/"); strings.HasPrefix(origin, "https://") || strings.HasPrefix(origin, "http://localhost:") {
+					body += "\n\n" + origin + "/"
+				}
+				c.Notify(platform.Notification{Category: protocol.NotificationSystem, Title: "You are invited to " + org, Key: "invite:" + r.GetChangeId(), Body: body}, r.GetRecordedTime().AsTime(), platform.Recipient{Member: id})
 			}
+		}, nil
+	case SchemaInviteAccept:
+		if !c.Automation || m == nil || m.Status != platform.MemberInvited || m.Invitation == nil || m.Invitation.State != "pending" || d.subjects[p.Subject] != id || !now.Before(m.Invitation.Expires) {
+			return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_POLICY_DENIED, "The invitation is not available.")
+		}
+		return func(r *pb.ChangeRecord) {
+			invitation := *m.Invitation
+			invitation.State = "accepted"
+			invitation.Accepted = r.GetRecordedTime().AsTime()
+			m.Invitation = &invitation
+			m.Status = ""
+		}, nil
+	case SchemaInviteRevoke:
+		if m == nil || m.Status != platform.MemberInvited || m.Invitation == nil || m.Invitation.State == "accepted" {
+			return nil, invalid
+		}
+		return func(*pb.ChangeRecord) {
+			invitation := *m.Invitation
+			invitation.State = "revoked"
+			m.Invitation = &invitation
+			m.Status = platform.MemberLeft
+			m.Grants = nil
+			m.Roles = map[string]string{}
 		}, nil
 	}
 	if m == nil {
@@ -133,16 +180,25 @@ func (d *Console) decideLifecycle(c platform.Caller, s *pb.Submission) (func(*pb
 	}
 	switch s.GetSchema().GetName() {
 	case SchemaMemberSuspend:
+		if m.PendingInvitation() {
+			return nil, invalid
+		}
+		if d.lastAdministrator(m) {
+			return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_POLICY_DENIED, "A workspace must retain an administrator.")
+		}
 		return func(r *pb.ChangeRecord) {
 			m.Status = platform.MemberSuspended
 			d.endSessions(id, "", r.GetRecordedTime().AsTime())
 		}, nil
 	case SchemaMemberResume:
-		if m.Status != platform.MemberSuspended {
+		if m.Status != platform.MemberSuspended || m.PendingInvitation() {
 			return nil, invalid
 		}
 		return func(*pb.ChangeRecord) { m.Status = "" }, nil
 	case SchemaOffboard:
+		if d.lastAdministrator(m) {
+			return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_POLICY_DENIED, "A workspace must retain an administrator.")
+		}
 		successor := d.members[p.Successor]
 		if p.Successor != "" && (successor == nil || p.Successor == id || !d.currentMember(successor).Active()) {
 			return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_POLICY_DENIED, "{member} cannot take over: not an active member", p.Successor)
@@ -594,4 +650,16 @@ func (r *Registry[T]) Replace(id string, old, fresh T) error {
 		}
 	}
 	return fmt.Errorf("tenant %s: not hosted", id)
+}
+
+func (d *Console) lastAdministrator(member *platform.Member) bool {
+	if !d.currentMember(member).Holds(PlatformApp, Admin) {
+		return false
+	}
+	for id, other := range d.members {
+		if id != member.ID && d.currentMember(other).Holds(PlatformApp, Admin) {
+			return false
+		}
+	}
+	return true
 }

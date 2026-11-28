@@ -187,16 +187,14 @@ type InboxTask struct {
 	AnswerTitles []string `json:"answerTitles,omitempty"`
 }
 
-type MeTenant struct {
-	ID   string `json:"id"`
-	Name string `json:"name,omitempty"`
-}
+type MeTenant = protocol.MeTenant
 
 type SignIn struct {
-	Issuer     string                   `json:"issuer,omitempty"`
-	Client     string                   `json:"client,omitempty"`
-	LocalAuth  bool                     `json:"localAuth,omitempty"`
-	Identities []protocol.LoginIdentity `json:"identities,omitempty"`
+	RegistrationURL string                   `json:"registrationUrl,omitempty"`
+	Issuer          string                   `json:"issuer,omitempty"`
+	Client          string                   `json:"client,omitempty"`
+	LocalAuth       bool                     `json:"localAuth,omitempty"`
+	Identities      []protocol.LoginIdentity `json:"identities,omitempty"`
 }
 
 func ApplicationRunFilterOf(query url.Values) (protocol.ApplicationRunFilter, *platform.Error) {

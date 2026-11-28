@@ -24,7 +24,8 @@ import { ErrorBoundary } from "./ErrorBoundary";
 import { legacyTarget } from "./legacy";
 import { LandingPage } from "./LandingPage";
 import { SignIn } from "./SignIn";
-import { AccountHome, SignUpPage } from "./SignUpPage";
+import { SignUpPage } from "./SignUpPage";
+import { WorkspaceEntry } from "./WorkspaceEntry";
 import { iconOf } from "../pages/icons";
 import { motionStyles } from "../pages/motion";
 
@@ -181,7 +182,7 @@ export function Shell() {
     }
     return <SignIn />;
   }
-  if (!session.tenant) return <AccountHome />;
+  if (!session.tenant) return <WorkspaceEntry />;
   if (legacy) return null;
   const Entry = entries[`${app.id}/${item.id}`];
   const retiredLink = projected.status === "ready" && segments[3] && !directObject && !available.some((application) => application.id === segments[1]);

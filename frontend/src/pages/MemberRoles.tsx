@@ -93,6 +93,15 @@ export function MemberRoles({ member }: { member: Api.MemberView }) {
   const grantAction = actions.find((action) => action.schema === "platform.member.grant");
   const revokeAction = actions.find((action) => action.schema === "platform.member.revoke");
 
+  const invitationAction = async (schema: string) => {
+    const action = actions.find((candidate) => candidate.schema === schema);
+    if (!action || busy) return;
+    setBusy(true);
+    setFailure("");
+    try { await send(action, member.id, {}); reread(); }
+    catch (problem) { setFailure(reasonOf(problem)); }
+    finally { setBusy(false); }
+  };
   const runGrant = async () => {
     if (!grantAction || !chosenApp || !chosenRole) return;
     setBusy(true);
@@ -140,6 +149,15 @@ export function MemberRoles({ member }: { member: Api.MemberView }) {
 
   return (
     <VStack gap={4}>
+      {member.status === "invited" && member.invitation && <VStack gap={2}>
+        <Text type="body" weight="bold">{t("Invitation")}</Text>
+        <Text type="supporting">{t(member.invitation.state)}{member.invitation.expires ? ` · ${new Date(member.invitation.expires).toLocaleString()}` : ""}</Text>
+        <HStack gap={2}>
+          {actions.some((action) => action.schema === "platform.member.invite.send") && <Button label={t("Send invitation")} variant="secondary" isDisabled={busy} onClick={() => void invitationAction("platform.member.invite.send")} />}
+          {actions.some((action) => action.schema === "platform.member.invite.revoke") && <Button label={t("Revoke invitation")} variant="secondary" isDisabled={busy} onClick={() => void invitationAction("platform.member.invite.revoke")} />}
+        </HStack>
+      </VStack>}
+
       {failure && <Banner status="error" title={t("Not saved")} description={failure} />}
 
       {(member.markings?.length ?? 0) > 0 && (

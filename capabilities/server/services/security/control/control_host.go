@@ -501,8 +501,8 @@ func (d *Console) Submit(c platform.Caller, s *pb.Submission, now time.Time) (*p
 				apply, err = d.decideDelegate(c, s)
 			case s.GetSchema().GetName() == runtimeprotocol.SchemaUndelegate:
 				apply, err = d.decideUndelegate(c, s)
-			case slices.Contains([]string{SchemaInvite, SchemaJoin, SchemaMemberSuspend, SchemaMemberResume, SchemaOffboard}, s.GetSchema().GetName()):
-				apply, err = d.decideLifecycle(c, s)
+			case slices.Contains([]string{SchemaInvite, SchemaInviteSend, SchemaInviteAccept, SchemaInviteRevoke, SchemaJoin, SchemaMemberSuspend, SchemaMemberResume, SchemaOffboard}, s.GetSchema().GetName()):
+				apply, err = d.decideLifecycle(c, s, now)
 			default:
 				apply, err = d.decideMember(c, s)
 			}
@@ -621,6 +621,17 @@ func (d *Console) decideMember(c platform.Caller, s *pb.Submission) (func(*pb.Ch
 		if p.App == "" {
 			return nil, invalid
 		}
+		if p.App == PlatformApp && d.lastAdministrator(m) {
+			proposed := clone(m)
+			d.migrateGrants(&proposed)
+			proposed.Grants = slices.DeleteFunc(proposed.Grants, func(g platform.Grant) bool {
+				return g.App == p.App && (p.Role == "" || g.Role == p.Role) && (p.Unit == "" || g.Unit == p.Unit) && (p.By == "" || g.By == p.By)
+			})
+			d.deriveRoles(&proposed, today(&proposed))
+			if !d.currentMember(&proposed).Holds(PlatformApp, Admin) {
+				return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_POLICY_DENIED, "A workspace must retain an administrator.")
+			}
+		}
 		return func(*pb.ChangeRecord) {
 			d.migrateGrants(m)
 			m.Grants = slices.DeleteFunc(m.Grants, func(g platform.Grant) bool {
@@ -717,6 +728,10 @@ func (d *Console) Read(c platform.Caller, name string) (any, *platform.Error) {
 		current := d.currentMember(m)
 		day := current.Today(time.Now())
 		v := runtimeprotocol.MemberView{Member: current, Subjects: []string{}, Profile: d.account(m.ID, def).Profile}
+		if m.Status == platform.MemberInvited && m.PendingInvitation() {
+			v.Roles = maps.Clone(m.Roles)
+			v.Grants = slices.Clone(m.Grants)
+		}
 		if m.Active() {
 			all := append(slices.Clone(m.Grants), d.ConsolePolicies.TeamGrants(m.ID)...)
 			for _, g := range all {

@@ -40,6 +40,7 @@ type Host struct {
 	Web                 string
 	Issuer, Client      string
 	Development         bool
+	SelfService         bool
 	Mint                func(subject string) string
 	HostAdmins          map[string]bool
 	RuntimeProviders    runtimeprotocol.RuntimeProviders
@@ -111,12 +112,20 @@ func (h *Host) member(r *http.Request) (platform.Member, *Tenant, bool) {
 }
 
 func (h *Host) join(t *Tenant, subject string, now time.Time) bool {
-	_, refusal := decideOnImage(t, context.Background(), "identity:join", func(t *Tenant) (*pb.ChangeRecord, *platform.Error) {
+	refusal := h.identitySubmission(t, subject, now, controlowner.JoinSubmission)
+	if refusal != nil {
+		log.Printf("join %s to %s: %s", subject, t.ID, refusal.Error())
+	}
+	return refusal == nil
+}
+
+func (h *Host) identitySubmission(t *Tenant, subject string, now time.Time, prepare func(runtimeprotocol.IdentitySessions, string, string, func() string) (*pb.Submission, *platform.Error)) *platform.Error {
+	_, refusal := decideOnImage(t, context.Background(), "identity:submission", func(t *Tenant) (*pb.ChangeRecord, *platform.Error) {
 		if t.IdentityOwner == nil {
 			return nil, unknown()
 		}
 		var caller platform.Caller
-		sub, refusal := controlowner.JoinSubmission(t.IdentityOwner, t.ID, subject, func() string {
+		sub, refusal := prepare(t.IdentityOwner, t.ID, subject, func() string {
 			caller = t.automation(controlowner.PlatformApp, false)
 			return caller.ID
 		})
@@ -127,28 +136,12 @@ func (h *Host) join(t *Tenant, subject string, now time.Time) bool {
 	}, func(t *Tenant, decision preparedAccepted, record *pb.ChangeRecord, refusal *platform.Error) (*pb.ChangeRecord, *platform.Error) {
 		return t.finishPreparedSubmission(platform.Member{ID: "app:" + controlowner.PlatformApp, Tenant: t.ID}, decision, record, refusal)
 	})
-	if refusal != nil {
-		log.Printf("join %s to %s: %s", subject, t.ID, refusal.Error())
-	}
-	return refusal == nil
+	return refusal
 }
 
 func (h *Host) tenantsOf(r *http.Request) []transport.MeTenant {
-	subject, _ := h.authenticate(strings.TrimPrefix(r.Header.Get("Authorization"), "Bearer "))
-	out := []transport.MeTenant{}
-	for _, t := range h.currentTenants() {
-		if d := consoleOf(t); d != nil {
-			if _, ok := d.MemberBySubject(subject); !ok {
-				continue
-			}
-			name := ""
-			if p := t.IdentityOwner; p != nil {
-				name = p.TenantRecord().Name
-			}
-			out = append(out, transport.MeTenant{ID: t.ID, Name: name})
-		}
-	}
-	return out
+	subject, _ := h.authenticate(bearer(r))
+	return idp.MemberWorkspaces(h.workspaceIdentities(), subject)
 }
 
 func (h *Host) Handler() http.Handler {
@@ -157,6 +150,7 @@ func (h *Host) Handler() http.Handler {
 	h.routes = nil
 	h.routesCore(rt)
 	h.routesOnboarding(rt)
+	h.identityRoutes(rt)
 	h.routesDiscovery(rt)
 	h.routesApplications(rt)
 	h.routesMonitoring(rt)

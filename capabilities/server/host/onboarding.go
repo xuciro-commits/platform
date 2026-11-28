@@ -34,15 +34,7 @@ func (h *Host) EnableLocalOnboarding(accounts *idp.Accounts) {
 }
 
 func (h *Host) authWorkspaces(subject string) []runtimeprotocol.AuthWorkspace {
-	out := []runtimeprotocol.AuthWorkspace{}
-	for _, t := range h.currentTenants() {
-		if !t.console.Suspended() && t.IdentityOwner != nil {
-			if _, ok := t.IdentityOwner.MemberBySubject(subject); ok {
-				out = append(out, runtimeprotocol.AuthWorkspace{ID: t.ID, Name: t.IdentityOwner.TenantRecord().Name})
-			}
-		}
-	}
-	return out
+	return idp.MemberWorkspaces(h.workspaceIdentities(), subject)
 }
 
 func (h *Host) sendOnboardingMail(to, subject, text, id string, now time.Time) error {

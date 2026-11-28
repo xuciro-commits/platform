@@ -34,6 +34,13 @@ services:
     environment:
       PUB_URL: localhost:${PLATFORM_PORT:-8495}
       RP_ORIGIN: ${PLATFORM_PUBLIC_URL:?run make bootstrap}
+      OPEN_USER_REG: ${PLATFORM_IDENTITY_OPEN_REGISTRATION:-false}
+      SMTP_URL:
+      SMTP_PORT:
+      SMTP_USERNAME:
+      SMTP_PASSWORD:
+      SMTP_FROM:
+      SMTP_DANGER_INSECURE:
     volumes:
       - ${PLATFORM_LOCAL_ROOT}/rauthy/config.toml:/app/config.toml:ro
       - ${PLATFORM_LOCAL_ROOT}/rauthy/bootstrap:/app/bootstrap:ro
@@ -60,6 +67,13 @@ services:
     ports: ["127.0.0.1:${PLATFORM_PORT:-8495}:8495"]
     volumes: ["${PLATFORM_TENANTS_FILE}:/etc/platform/tenants.json", ../templates:/etc/templates:ro, compute-sockets:/run/platform-compute]
     environment:
+      PLATFORM_PUBLIC_URL: ${PLATFORM_PUBLIC_URL}
+      PLATFORM_SELF_SERVICE: ${PLATFORM_SELF_SERVICE:-0}
+      PLATFORM_IDENTITY_OPEN_REGISTRATION: ${PLATFORM_IDENTITY_OPEN_REGISTRATION:-false}
+      PLATFORM_IDENTITY_SMTP_URL: ${PLATFORM_IDENTITY_SMTP_URL:-}
+      PLATFORM_IDENTITY_SMTP_FROM: ${PLATFORM_IDENTITY_SMTP_FROM:-}
+      PLATFORM_IDENTITY_SMTP_PASSWORD: ${PLATFORM_IDENTITY_SMTP_PASSWORD:-}
+      PLATFORM_IDENTITY_SMTP_ALLOW_PRIVATE: ${PLATFORM_IDENTITY_SMTP_ALLOW_PRIVATE:-0}
       PLATFORM_CREDENTIAL_KEY: ${PLATFORM_CREDENTIAL_KEY:?run make bootstrap}
       PLATFORM_AI_INFERENCE_POLICY: ${PLATFORM_AI_INFERENCE_POLICY:-}
       PLATFORM_PERSONAL_TOKEN_KEY: ${PLATFORM_PERSONAL_TOKEN_KEY:?run make bootstrap}

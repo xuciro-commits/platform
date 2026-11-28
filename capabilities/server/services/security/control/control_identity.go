@@ -22,7 +22,7 @@ func (d *Console) currentMember(m *platform.Member) platform.Member {
 		out.Timezone = d.tenantDefault(SettingTimezone)
 	}
 	today := out.Today(time.Now())
-	if out.Status == platform.MemberInvited && !d.lastSeen[out.ID].IsZero() {
+	if out.Status == platform.MemberInvited && out.Invitation == nil && !d.lastSeen[out.ID].IsZero() {
 		out.Status = ""
 	}
 	if !out.Active() {
@@ -623,4 +623,13 @@ func JoinSubmission(d runtimeprotocol.IdentitySessions, tenant, subject string, 
 	}
 	payload, _ := json.Marshal(map[string]string{"subject": subject})
 	return &pb.Submission{TenantId: tenant, PrincipalId: principal(), Authority: PlatformApp, IdempotencyKey: "join:" + subject, Target: &pb.EntityRef{Type: MemberType, Id: d.JoinID(subject)}, Schema: &pb.SchemaRef{Name: SchemaJoin, Version: 1}, Payload: payload}, nil
+}
+
+func InvitationSubmission(d runtimeprotocol.IdentitySessions, tenant, subject string, principal func() string) (*pb.Submission, *platform.Error) {
+	member, ok := d.MemberBySubject(subject)
+	if !ok || member.Invitation == nil || member.Invitation.State != "pending" {
+		return nil, platform.Refuse(pb.ErrorCode_ERROR_CODE_POLICY_DENIED, "The invitation is not available.")
+	}
+	payload, _ := json.Marshal(map[string]string{"subject": subject})
+	return &pb.Submission{TenantId: tenant, PrincipalId: principal(), Authority: PlatformApp, IdempotencyKey: "invite-accept:" + member.ID, Target: &pb.EntityRef{Type: MemberType, Id: member.ID}, Schema: &pb.SchemaRef{Name: SchemaInviteAccept, Version: 1}, Payload: payload}, nil
 }

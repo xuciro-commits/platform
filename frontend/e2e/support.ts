@@ -18,6 +18,9 @@ export async function signIn(page: Page, seat = "admin-1 · acceptance") {
   if (page.url().startsWith("http")) await page.evaluate(() => sessionStorage.clear());
   await page.goto("/");
   await page.getByRole("button", { name: member, exact: true }).click();
+  const invitations = page.getByRole("button", { name: /^Accept invitation to / });
+  await expect(signedIn.or(invitations.first())).toBeVisible();
+  if (await invitations.count()) await invitations.first().click();
   await expect(signedIn).toBeVisible();
   if (tenant) {
     const switched = await page.evaluate((target) => {

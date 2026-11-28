@@ -154,6 +154,7 @@ func (t *Tenant) notify(c platform.Caller, n platform.Notification, now time.Tim
 	t.opsMu.Lock()
 	defer t.opsMu.Unlock()
 	out := t.Notices.Deliver(c.App, n, now, members, delivery, func(x platform.Notification, to protocol.Reach) {
+		to = actions.IdentityMailReach(x, to, t.IdentityOwner)
 		t.outbound.Add(trace.SpanContext{}, actions.PlanMailNotice(t.ID, x, to, t.endpoints.All, func(lang, s string) string { return t.i18n.Say(lang, s) })...)
 	})
 	t.acted += len(out)
@@ -216,6 +217,7 @@ func (d *stagedDecision) Notify(c platform.Caller, n platform.Notification, now 
 		router := d.routingTenant()
 		router.opsMu.Lock()
 		defer router.opsMu.Unlock()
+		reach = actions.IdentityMailReach(x, reach, console)
 		return actions.PlanMailNotice(router.ID, x, reach, router.endpoints.All, func(lang, s string) string { return router.i18n.Say(lang, s) })
 	})
 }

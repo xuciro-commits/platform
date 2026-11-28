@@ -5,12 +5,14 @@ import (
 	"go.opentelemetry.io/otel/trace"
 	"io"
 	"net/http"
+	"os"
 	pb "platformkernel/gen/platform/kernel/v1alpha1"
 	"platformserver/kernel/protocol"
 	transport "platformserver/kernel/transport"
 	"platformserver/platform"
 	"platformserver/services/security"
 	controlowner "platformserver/services/security/control"
+	"platformserver/services/security/idp"
 	"strconv"
 	"strings"
 	"time"
@@ -109,18 +111,16 @@ func (h *Host) routesCore(rt *routes) {
 		})
 	})
 	rt.public(transport.Route{Pattern: "GET /v1/sign-in", Summary: "How the workspace signs in: the OpenID issuer and client, or development identities", Answer: transport.SignIn{}}, func(w http.ResponseWriter, _ *http.Request) {
-		WriteJSON(w, http.StatusOK, transport.SignInOf(h.Issuer, h.Client, h.Development, h.loginIdentities, h.Mint, h.Accounts != nil && h.Issuer == ""))
+		sign := transport.SignInOf(h.Issuer, h.Client, h.Development, h.loginIdentities, h.Mint, h.Accounts != nil && h.Issuer == "")
+		if h.Issuer != "" && os.Getenv("PLATFORM_IDENTITY_OPEN_REGISTRATION") == "true" {
+			sign.RegistrationURL = strings.TrimRight(h.Issuer, "/") + "/users/register"
+		}
+		WriteJSON(w, http.StatusOK, sign)
 	})
 }
 
 func (h *Host) loginIdentities() []protocol.LoginIdentity {
-	var out []protocol.LoginIdentity
-	for _, t := range h.currentTenants() {
-		if t.IdentityOwner != nil {
-			out = append(out, t.IdentityOwner.Identities()...)
-		}
-	}
-	return out
+	return idp.LoginIdentities(h.workspaceIdentities())
 }
 
 func bearer(r *http.Request) string {

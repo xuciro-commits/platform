@@ -11,6 +11,7 @@ import { useToast } from "@astryxdesign/core/Toast";
 import { useMemo, useState } from "react";
 import { type Api, reread, useRead, reasonOf, send } from "../host";
 import { t } from "../i18n";
+import { currentSession, requireSession } from "../host/session";
 import { roleTitle } from "./rebac/shared";
 
 function normalizeAccount(raw: string): { subject: string; email: string; slug: string } {
@@ -39,6 +40,7 @@ export function InviteMemberDialog({ onClose }: { onClose: () => void }) {
   const [accessMode, setAccessMode] = useState<"edit" | "readonly">("edit");
   const [busy, setBusy] = useState(false);
   const [failure, setFailure] = useState("");
+  const [created, setCreated] = useState("");
 
   const grantableApps = useMemo(() => {
     const out = new Map<string, { id: string; title: string; roles: string[] }>();
@@ -71,13 +73,14 @@ export function InviteMemberDialog({ onClose }: { onClose: () => void }) {
   const chosenRole = availableRoles.includes(selectedRole) ? selectedRole : availableRoles[0] ?? "";
 
   const actions = catalog.status === "ready" ? catalog.data : [];
-  const addAction = actions.find((action) => action.schema === "platform.member.add");
+  const inviteAction = actions.find((action) => action.schema === "platform.member.invite");
+  const sendAction = actions.find((action) => action.schema === "platform.member.invite.send");
   const profileAction = actions.find((action) => action.schema === "platform.profile.update");
   const grantAction = actions.find((action) => action.schema === "platform.member.grant");
   const policyAction = actions.find((action) => action.schema === "platform.policy.save");
 
   const parsed = normalizeAccount(account);
-  const canInvite = !busy && Boolean(addAction && parsed.subject);
+  const canInvite = !busy && !created && Boolean(inviteAction && sendAction && parsed.email) && members.status === "ready" && !members.data.some((member) => member.status !== "left" && member.subjects.includes(parsed.subject));
 
   const uniqueMemberId = () => {
     const taken = new Set((members.status === "ready" ? members.data : []).map((member) => member.id));
@@ -116,23 +119,29 @@ export function InviteMemberDialog({ onClose }: { onClose: () => void }) {
   };
 
   const invite = async () => {
-    if (!canInvite || !addAction) return;
+    if (!canInvite || !inviteAction || !sendAction) return;
+    const session = currentSession();
     setBusy(true);
     setFailure("");
     try {
       const memberId = uniqueMemberId();
-      await send(addAction, memberId, { subject: parsed.subject, agent: parsed.subject.startsWith("client:") });
+      await send(inviteAction, memberId, { subject: parsed.subject, agent: parsed.subject.startsWith("client:") });
+      setCreated(memberId);
+      requireSession(session);
       if (profileAction && (displayName.trim() || parsed.email)) {
         await send(profileAction, memberId, {
           displayName: displayName.trim() || memberId,
           ...(parsed.email ? { email: parsed.email } : {}),
         });
       }
+      requireSession(session);
       if (grantAction && chosenApp && chosenRole) {
         await send(grantAction, memberId, { app: chosenApp, role: chosenRole });
         for (const dep of dependencyUserSpaces(chosenApp)) {
+          requireSession(session);
           await send(grantAction, memberId, { app: dep, role: "user" });
         }
+        requireSession(session);
         if (accessMode === "readonly" && policyAction) {
           const schemas = appWriteSchemas(chosenApp);
           await Promise.all(schemas.map((schema, index) => {
@@ -146,11 +155,14 @@ export function InviteMemberDialog({ onClose }: { onClose: () => void }) {
           }));
         }
       }
+      requireSession(session);
+      await send(sendAction, memberId, {});
       reread();
       toast({ body: t("Colleague invited.") });
       onClose();
     } catch (problem) {
       setFailure(reasonOf(problem));
+      reread();
       setBusy(false);
     }
   };
@@ -173,6 +185,8 @@ export function InviteMemberDialog({ onClose }: { onClose: () => void }) {
                 {t("Enter the colleague's account email and choose their application role.")}
               </Text>
               {failure && <Banner status="error" title={t("Not saved")} description={failure} />}
+              {created && failure && <Banner status="warning" title={t("Member created; finish profile and access in Members.")} /> }
+              {members.status === "ready" && parsed.subject && members.data.some((member) => member.status !== "left" && member.subjects.includes(parsed.subject)) && !created && <Banner status="warning" title={t("This account is already a member of this workspace.")} /> }
               <FormLayout defaultOptionality="optional">
                 <TextInput
                   label={t("Customer account")}

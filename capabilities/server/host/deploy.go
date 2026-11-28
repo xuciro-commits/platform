@@ -214,6 +214,7 @@ func (d *Deployment) Serve(tenants ...*Tenant) (serveErr error) {
 		host.AuthorizationEngine = d.HostAuthorization
 	}
 	host.SecondFactor = attest
+	host.SelfService = os.Getenv("PLATFORM_SELF_SERVICE") == "1"
 	host.HostAdmins = controlowner.HostAdministrators(d.HostAdmins)
 	host.tenantsFrom = registry.List
 	host.Templates = d.Templates
@@ -222,6 +223,9 @@ func (d *Deployment) Serve(tenants ...*Tenant) (serveErr error) {
 		host.CreateTenant = func(req runtimeprotocol.CreateTenantRequest, by string) (*Tenant, error) {
 			createMu.Lock()
 			defer createMu.Unlock()
+			if registry.Current(req.ID) != nil {
+				return nil, fmt.Errorf("tenant %s exists", req.ID)
+			}
 			t, err := d.createTenant(req, by, files, func(t *Tenant) error {
 				if journal == nil {
 					memoryJournal(t)

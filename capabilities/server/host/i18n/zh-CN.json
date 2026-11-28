@@ -3022,5 +3022,14 @@
   "Too many verification codes requested for this email. Try again shortly.": "该邮箱请求验证码过于频繁，稍后再试。",
   "Verification code could not be generated.": "无法生成验证码。",
   "Verification code is invalid or expired.": "验证码无效或已过期。",
-  "Verification email could not be sent.": "验证邮件发送失败。"
+  "Verification email could not be sent.": "验证邮件发送失败。",
+  "Accept a pending invitation as its authenticated recipient.": "由已认证的收件人接受待处理邀请。",
+  "Accept invitation": "接受邀请",
+  "Cancel an invitation before it is accepted.": "在邀请被接受前撤回。",
+  "Prepare an invitation for a verified email identity. It grants no access until sent and accepted.": "为已验证的邮箱身份准备邀请，发送并接受前不会授予访问权限。",
+  "Revoke invitation": "撤回邀请",
+  "Send invitation": "发送邀请",
+  "Send or renew an invitation after preparing its access.": "准备好权限后发送或续期邀请。",
+  "The invitation is not available.": "邀请不可用。",
+  "A workspace must retain an administrator.": "工作区必须保留至少一位管理员。"
 }

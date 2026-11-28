@@ -13,11 +13,21 @@ import (
 func PlanMailNotice(tenant string, n platform.Notification, to protocol.Reach, endpoints func() []Endpoint, say func(lang, s string) string) []platform.Effect {
 	var effects []platform.Effect
 	address, lang := to.Address, to.Language
+	selected := slices.DeleteFunc(slices.Clone(endpoints()), func(ep Endpoint) bool { return ep.ID == IdentityMailID })
+	if InvitationMail(n.App, n.Key) {
+		to.Mail = true
+		if ep, ok := IdentityMailEndpoint(); ok {
+			selected = []Endpoint{ep}
+		}
+	}
 	if address == "" || !to.Mail {
 		return effects
 	}
 	due := to.Due(n.At)
-	for _, ep := range endpoints() {
+	if InvitationMail(n.App, n.Key) {
+		due = n.At
+	}
+	for _, ep := range selected {
 		if ep.Kind != "email" || !slices.Contains(ep.Notifications, n.App) {
 			continue
 		}

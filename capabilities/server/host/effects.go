@@ -90,7 +90,7 @@ func (t *Tenant) dispatches(now time.Time) []func() {
 		},
 		Report: func(id string, ok bool) { t.breakers.Report("endpoint:"+id, ok, now) },
 		Settle: func(id string, o platform.Outcome, usage *platform.AIUsage) { t.settleWithUsage(id, o, usage, now) },
-	}.Sends(&t.outbound, actions.DeferredRequestEndpoints(append(t.endpoints.All(), actions.ConnectionEndpoints(t.outbound.Select(nil), dataowner.WritebackEndpoint)...)), now)
+	}.Sends(&t.outbound, actions.DeferredRequestEndpoints(append(actions.IdentityMailEndpoints(t.endpoints.All()), actions.ConnectionEndpoints(t.outbound.Select(nil), dataowner.WritebackEndpoint)...)), now)
 	for _, id := range actions.RunnableIDs(t.outbound.Select(func(x actions.Queued) bool { return x.Endpoint == acceptedformat.OperationEndpoint }), now, 4) {
 		if x, ok := t.claimOperation(id, now); ok {
 			sends = append(sends, func() { out := t.executeOperation(x, now); t.settleWithUsage(x.ID, out, nil, time.Now().UTC()) })

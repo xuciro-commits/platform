@@ -34,3 +34,17 @@ source deploy/local/.env && docker compose --env-file deploy/local/.env -f deplo
 轻量模式沿原签名角色卡登录，与完整环境的密码登录不同。运行 `make lite LITE_HOST=0.0.0.0` 可供受信任网络访问；不要与其他模式同时占用 8495。备份轻量数据前停止宿主，一起保存日志、文件、快照和签名密钥。
 
 运行态 AI 推断许可由启动环境的 `PLATFORM_AI_INFERENCE_POLICY` 指定，格式为 `{"runtime":[{"provider":"实际提供方ID","origin":"http://实际推断服务:8000","location":"edge"}]}`，`location` 为 `local` 或 `edge`。默认没有运行态推断许可；配置提供方本身不授予许可。
+
+
+## 注册与邀请
+
+完整部署可显式设置 `PLATFORM_IDENTITY_OPEN_REGISTRATION=true`（Rauthy 注册入口）与 `PLATFORM_SELF_SERVICE=1`（用户自助创建工作区），默认关闭；不修改 bootstrap 生成的私有配置。重启相关服务后生效。
+Rauthy 的验证邮件通过部署环境的 `SMTP_URL`（主机名）、`SMTP_PORT`、`SMTP_USERNAME`、`SMTP_PASSWORD`、`SMTP_FROM` 配置；Platform 邀请使用 `PLATFORM_IDENTITY_SMTP_URL`（如 `smtp://user@mail.example.com:587`）、`PLATFORM_IDENTITY_SMTP_FROM`（裸邮箱）、`PLATFORM_IDENTITY_SMTP_PASSWORD`。邀请链接采用 `PLATFORM_PUBLIC_URL`。不把密码放进 URL 或仓库。仅隔离测试可启用 `SMTP_DANGER_INSECURE=true` 与 `PLATFORM_IDENTITY_SMTP_ALLOW_PRIVATE=1`。
+已有工作区从切换器进入 Workspaces，零工作区用户登录后直接进入该页；受邀者用对应已验证邮箱登录并接受。未配置投递通道不代表邮件已送达；管理员可重发邀请或撤回。自助开通当前不含起步包自动安装及失败后的持久化恢复。
+
+## 身份与入驻
+
+- 身份提供方验证登录身份；`/v1/auth/me` 不要求租户成员关系。选择工作区后才进入租户业务授权。账号注册、密码与邮箱验证由身份提供方负责，平台不另存密码。
+- 宿主启用自助开通时，已认证的用户可创建工作区，首位管理员由宿主从当前认证身份推导，不接受请求指定另一主体。
+- 添加已有账号与邀请是不同动作：添加建立成员关系，不继承来源工作区权限；邀请先建立草稿并配置预授角色，发送后七天内由对应认证邮箱显式接受才激活。撤回、过期或草稿均不提供访问权；接受和撤回进入接受日志。历史无邀请凭证的成员保持原行为。
+- 身份邀请使用宿主专用邮件端点（未配置时沿租户邮件通道）；收件人为登录身份邮箱，不取可编辑的联系邮箱。直接撤销、停用或移除最后一名管理员不得导致工作区无管理员。

@@ -22,10 +22,23 @@ type Member struct {
 	Roles             map[string]string `json:"roles"`
 	Grants            []Grant           `json:"grants,omitempty"`
 	Status            string            `json:"status,omitempty"`
+	Invitation        *Invitation       `json:"invitation,omitempty"`
 	Scopes            []string          `json:"scopes,omitempty"`
 	Agent             bool              `json:"agent,omitempty"`
 	Language          string            `json:"language,omitempty"`
 	Timezone          string            `json:"timezone,omitempty"`
+}
+
+type Invitation struct {
+	State     string    `json:"state"`
+	InvitedBy string    `json:"invitedBy"`
+	Created   time.Time `json:"created"`
+	Expires   time.Time `json:"expires,omitzero"`
+	Accepted  time.Time `json:"accepted,omitzero"`
+}
+
+func (m Member) PendingInvitation() bool {
+	return m.Invitation != nil && m.Invitation.State != "accepted"
 }
 
 type Grant struct {
@@ -90,8 +103,10 @@ func (m Member) WithAuthorization(engine AuthorizationEngine) Member {
 	return m
 }
 
-func (m Member) Active() bool { return m.Status != MemberSuspended && m.Status != MemberLeft }
-func (m Member) IsAI() bool   { return m.Agent || len(m.AICaller) > 0 }
+func (m Member) Active() bool {
+	return m.Status != MemberSuspended && m.Status != MemberLeft && !m.PendingInvitation()
+}
+func (m Member) IsAI() bool { return m.Agent || len(m.AICaller) > 0 }
 
 func (m Member) InScope(permission string) bool {
 	return m.Scopes == nil || slices.ContainsFunc(m.Scopes, func(p string) bool {

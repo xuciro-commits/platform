@@ -15,10 +15,7 @@ type EmailVerifyRequest struct {
 	Code  string `json:"code"`
 }
 
-type AuthWorkspace struct {
-	ID   string `json:"id"`
-	Name string `json:"name,omitempty"`
-}
+type AuthWorkspace = MeTenant
 
 type AuthSession struct {
 	Token     string          `json:"token,omitempty"`

@@ -31,7 +31,7 @@ func (m Members[T]) Resolve(authorization, want, agent string) (platform.Member,
 	if strings.HasPrefix(credential, controlowner.TokenPrefix) {
 		for _, c := range m.Consoles() {
 			if d := c.Sessions; d != nil && (want == "" || c.ID == want) {
-				if member, ok := d.MemberByToken(credential, now); ok && d.NoticeSession(member.ID, credential, agent, "token", now) {
+				if member, ok := d.MemberByToken(credential, now); ok && member.Active() && d.NoticeSession(member.ID, credential, agent, "token", now) {
 					return member, c.Tenant, true
 				}
 			}
@@ -46,6 +46,9 @@ func (m Members[T]) Resolve(authorization, want, agent string) (platform.Member,
 		if d := c.Sessions; d == nil || want != "" && c.ID != want {
 			continue
 		} else if member, ok := d.MemberBySubject(subject); ok {
+			if !member.Active() {
+				continue
+			}
 			if d.SecondFactorRequired() && (m.SecondFactor == nil || !m.SecondFactor(credential)) {
 				return platform.Member{}, none, false
 			}

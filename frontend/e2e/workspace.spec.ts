@@ -201,6 +201,58 @@ test("tenants: a host administrator creates a workspace from the switcher", asyn
 });
 
 
+test("tenants: add existing accounts in bulk and invite new users independently", async ({ page }) => {
+  await signIn(page);
+  const tag = Date.now().toString(36);
+  const people = ["alpha", "beta"].map((name) => ({ id: `cross-${name}-${tag}`, email: `${name}-${tag}@example.com`, name: `Cross ${name} ${tag}` }));
+  const session = await page.evaluate(() => JSON.parse(sessionStorage.getItem("platform:session")!) as { token: string; tenant: string });
+  for (const person of people) {
+    await submit(page, "platform.member.add", "platform.member", person.id, { subject: `user:${person.email}` });
+    await submit(page, "platform.profile.update", "platform.profile", person.id, { displayName: person.name, email: person.email });
+    await submit(page, "platform.member.grant", "platform.member", person.id, { app: "build", role: "builder" });
+  }
+  const directory = async (tenant: string) => {
+    const response = await page.request.get("/v1/members", { headers: { authorization: `Bearer ${session.token}`, "platform-tenant": tenant } });
+    expect(response.ok()).toBeTruthy();
+    return await response.json() as Api.MemberView[];
+  };
+  await page.getByRole("navigation", { name: "Primary navigation" }).getByRole("button", { name: "星河科技", exact: true }).click();
+  await page.getByRole("group", { name: "Switch workspace" }).getByRole("menuitem", { name: "远山实业" }).click();
+  await page.goto("/admin/members");
+  await page.getByRole("button", { name: "Add existing accounts", exact: true }).click();
+  const add = page.getByRole("dialog", { name: "Add existing accounts" });
+  await add.getByRole("combobox", { name: "Source workspace" }).click();
+  await page.getByRole("option", { name: "星河科技", exact: true }).click();
+  await add.getByRole("textbox", { name: "Search accounts" }).fill(tag);
+  for (const person of people) await add.getByRole("checkbox", { name: `${person.name} · ${person.email}` }).check();
+  await add.getByRole("button", { name: "Add accounts", exact: true }).click();
+  await expect(add).toBeHidden({ timeout: 30_000 });
+  const after = await directory("publisher");
+  for (const person of people) {
+    const copied = after.find((member) => member.subjects.includes(`user:${person.email}`));
+    expect(copied?.profile.displayName).toBe(person.name);
+    expect(copied?.roles).toEqual({});
+    expect(copied?.status || "active").toBe("active");
+    const original = (await directory("acceptance")).find((member) => member.id === person.id);
+    expect(original?.roles.build).toBe("builder");
+  }
+  await page.getByRole("button", { name: "Add existing accounts", exact: true }).click();
+  await add.getByRole("textbox", { name: /^Email/ }).fill(people[0].email);
+  await expect(add.getByRole("button", { name: "Add accounts", exact: true })).toBeDisabled();
+  await add.getByRole("button", { name: "Cancel", exact: true }).click();
+  await page.getByRole("button", { name: "Invite colleague", exact: true }).click();
+  const invite = page.getByRole("dialog", { name: "Invite colleague" });
+  const invitedEmail = `invite-${tag}@example.com`;
+  await invite.getByRole("textbox", { name: /^Customer account/ }).fill(invitedEmail);
+  await invite.getByRole("combobox", { name: "Application", exact: true }).click();
+  await page.getByRole("option", { name: "None", exact: true }).click();
+  await invite.getByRole("button", { name: "Invite", exact: true }).click();
+  await expect(invite).toBeHidden({ timeout: 30_000 });
+  const invited = (await directory("publisher")).find((member) => member.subjects.includes(`user:${invitedEmail}`));
+  expect(invited?.status).toBe("invited");
+  expect(invited?.roles).toEqual({});
+});
+
 test("sign-in: a work account signs in by password or single sign-on and lands where it was", async ({ page }) => {
   await page.route("**/v1/sign-in", (route) => route.fulfill({ json: { issuer: new URL("/auth/v1/", page.url()).href, client: "platform-web" } }));
   await page.route("**/auth/v1/oidc/token", (route) => {

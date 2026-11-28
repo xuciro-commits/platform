@@ -74,7 +74,7 @@ func (h *Host) hostCompositionRoutes(mux *http.ServeMux) {
 			image.DisabledOwners = slices.Clone(body.DisabledOwners)
 			image.Lifecycle = "suspend"
 			return runtimeprotocol.SupportGrant{}, nil
-		}, hostRequestAuthorization(r, t.ID)...)
+		}, transport.HostRequestAuthorization(r, t.ID)...)
 		t.Lane.Unlock()
 		if err != nil {
 			WriteJSON(w, http.StatusConflict, map[string]string{"error": err.Error()})

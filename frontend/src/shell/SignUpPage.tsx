@@ -8,20 +8,14 @@ import { Icon } from "@astryxdesign/core/Icon";
 import { HStack, VStack } from "@astryxdesign/core/Layout";
 import { Link } from "@astryxdesign/core/Link";
 import { Section } from "@astryxdesign/core/Section";
-import { Skeleton } from "@astryxdesign/core/Skeleton";
 import { Text } from "@astryxdesign/core/Text";
 import { TextInput } from "@astryxdesign/core/TextInput";
 import { CubeIcon, EnvelopeIcon } from "@heroicons/react/24/outline";
 import { useState } from "react";
 import {
-  type Api,
-  endSession,
   enterVerifiedSession,
   reasonOf,
   requestEmailCode,
-  startSession,
-  useRead,
-  useSession,
   verifyEmailCode,
 } from "../host";
 import { t } from "../i18n";
@@ -165,67 +159,6 @@ export function SignUpPage({ mode: fixedMode }: { mode?: "signup" | "signin" }) 
               </VStack>
             </VStack>
           )}
-        </VStack>
-      </Card>
-    </Center>
-  );
-}
-
-export function AccountHome() {
-  const session = useSession();
-  const auth = useRead<Api.AuthSession>(session ? "/v1/auth/session" : null);
-
-  if (auth.status === "loading") {
-    return (
-      <Center axis="both" padding={6} minHeight="100dvh">
-        <Card padding={8} width="100%" maxWidth={440}>
-          <Skeleton height={80} />
-        </Card>
-      </Center>
-    );
-  }
-
-  const workspaces = auth.status === "ready" ? auth.data.tenants : [];
-  const email = auth.status === "ready" ? auth.data.email : "";
-
-  return (
-    <Center axis="both" padding={6} minHeight="100dvh">
-      <Card padding={8} width="100%" maxWidth={440}>
-        <VStack gap={5} hAlign="stretch">
-          <HStack gap={2} vAlign="center">
-            <Icon icon={CubeIcon} />
-            <Text type="body" weight="bold">{t("Platform")}</Text>
-          </HStack>
-          <VStack gap={1}>
-            <Heading level={1}>{workspaces.length > 0 ? t("Choose a workspace") : t("Account verified")}</Heading>
-            <Text type="body" color="secondary" size="sm">
-              {email
-                ? t("Signed in as {email}.").replace("{email}", email)
-                : t("Your identity is verified.")}
-            </Text>
-          </VStack>
-          {auth.status === "error" || auth.status === "refused" ? (
-            <Banner status="error" title={t("The platform could not be reached")} description={auth.reason} />
-          ) : workspaces.length > 0 ? (
-            <VStack gap={2} hAlign="stretch">
-              {workspaces.map((ws) => (
-                <Button
-                  key={ws.id}
-                  label={ws.name || ws.id}
-                  variant="secondary"
-                  size="lg"
-                  onClick={() => {
-                    if (session) startSession({ token: session.token, tenant: ws.id });
-                  }}
-                />
-              ))}
-            </VStack>
-          ) : (
-            <Text type="supporting" color="secondary">
-              {t("You are not a member of any workspace yet.")}
-            </Text>
-          )}
-          <Button label={t("Sign out")} variant="ghost" size="lg" onClick={endSession} />
         </VStack>
       </Card>
     </Center>

@@ -28,6 +28,7 @@ export type ListDefinition<Answer, Row> = Omit<ListShape<Answer, Row>, "columns"
   more?: (answer: Answer) => string | undefined;
   actions?: { create?: string; row?: (row: Row) => RowAction[] };
   createLabel?: string;
+  secondaryCreate?: { schema: string; label: string; creator: (props: { onClose: () => void }) => ReactNode };
   creator?: (props: { onClose: () => void }) => ReactNode;
   detail?: (id: string, row?: Row) => ReactNode;
   import?: (answer: Answer, action: (schema: string) => Api.Action | undefined) => ImportTarget | undefined;
@@ -99,6 +100,9 @@ export function listPage<Answer, Row>(definition: ListDefinition<Answer, Row>) {
     const creatable = create ? !create.payload.some((parameter) => parameter.required && !enterable(parameter)) : Boolean(definition.creator && !definition.actions?.create && first.status === "ready");
     const importTarget = first.status === "ready" && definition.import ? definition.import(first.data, action) : undefined;
     const [creating, setCreating] = useState(false);
+    const [secondaryCreating, setSecondaryCreating] = useState(false);
+    const secondary = definition.secondaryCreate;
+    const secondaryAllowed = Boolean(secondary && action(secondary.schema));
     const [importing, setImporting] = useState(false);
     const exportRef = useRef<(() => { headers: string[]; rows: string[][] }) | null>(null);
     const act = useAct();
@@ -177,8 +181,9 @@ export function listPage<Answer, Row>(definition: ListDefinition<Answer, Row>) {
           }}
           read={first}
           exportRef={definition.export ? exportRef : undefined}
-          primary={creatable || moreItems.length > 0 ? (
+          primary={creatable || secondaryAllowed || moreItems.length > 0 ? (
             <HStack gap={2} vAlign="center">
+              {secondaryAllowed && secondary && <Button label={t(secondary.label)} variant="secondary" onClick={() => setSecondaryCreating(true)} />}
               {creatable && <Button label={t(definition.createLabel ?? "New")} variant="primary" onClick={() => setCreating(true)} />}
               {moreItems.length > 0 && <MoreMenu label={t("More actions")} alignment="end" items={moreItems} />}
             </HStack>
@@ -186,6 +191,7 @@ export function listPage<Answer, Row>(definition: ListDefinition<Answer, Row>) {
         />
         {importing && importTarget && <Suspense fallback={null}><ImportWizard target={importTarget} onClose={() => setImporting(false)} /></Suspense>}
         {act.element}
+        {secondaryCreating && secondaryAllowed && secondary && secondary.creator({ onClose: () => setSecondaryCreating(false) })}
         {creating && creatable && definition.creator && definition.creator({ onClose: () => setCreating(false) })}
         {creating && create && !definition.creator && (
           <ActionDialog action={create} heading={t(create.title)} confirm={t("Create")} onClose={() => setCreating(false)} onDone={() => setCreating(false)}

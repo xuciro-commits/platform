@@ -64,7 +64,7 @@ func firstDecisions(t *Tenant, spec protocol.TenantSpec, tpl protocol.TenantTemp
 
 func (h *Host) tenantRoutes(mux *http.ServeMux) {
 	h.hostRoute(mux, transport.Route{Pattern: "GET /v1/host/templates", Summary: "Tenant templates this host offers (host administrators)", Answer: []protocol.TenantTemplate{}},
-		hostAnswer(func(string, *Tenant) any {
+		transport.HostAnswer(func(string, *Tenant) any {
 			out := []protocol.TenantTemplate{}
 			if h.Templates != nil {
 				out = h.Templates()

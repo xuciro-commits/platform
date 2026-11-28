@@ -11,6 +11,7 @@ import {
   type Api,
   HostRefusal,
   signInWithPassword,
+  signInDevelopment,
   startSession,
   startSingleSignOn,
   useAccounts,
@@ -94,8 +95,7 @@ export function AddAccountDialog({ onClose }: { onClose: () => void }) {
                 variant="secondary"
                 isDisabled={existing.has(identity.token)}
                 onClick={() => {
-                  startSession({ token: identity.token, tenant: identity.tenant });
-                  onClose();
+                  void signInDevelopment(identity.token, identity.tenant).then((session) => { startSession(session); onClose(); });
                 }}
               />
             ))}

@@ -25,6 +25,7 @@ import {
   requestEmailCode,
   returningFromSingleSignOn,
   signInWithPassword,
+  signInDevelopment,
   startSession,
   startSingleSignOn,
   useRead,
@@ -90,6 +91,7 @@ function Credentials({ sign }: { sign: Api.SignIn }) {
       <Button label={t("Sign in")} variant="primary" size="lg" isLoading={busy} isDisabled={!email || !password} onClick={submit} />
       <Divider label={t("Or")} />
       <Button label={t("Continue with single sign-on")} variant="secondary" size="lg" onClick={() => void startSingleSignOn(sign)} />
+      {sign.registrationUrl && <Button label={t("Create an account")} variant="secondary" size="lg" onClick={() => location.assign(sign.registrationUrl!)} />}
     </VStack>
   );
 }
@@ -219,7 +221,7 @@ export function SignIn() {
                       <VStack gap={3} hAlign="stretch">
                         {identities.map((identity) => (
                           <Button key={identity.token} label={identity.member}
-                            variant="secondary" size="lg" onClick={() => startSession({ token: identity.token, tenant: identity.tenant })} />
+                            variant="secondary" size="lg" onClick={() => void signInDevelopment(identity.token, identity.tenant).then(startSession)} />
                         ))}
                         {sign.localAuth && (
                           <>

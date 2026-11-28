@@ -772,12 +772,7 @@ export type AuthSession = {
   accountId: string;
   email: string;
   subject: string;
-  tenants: AuthWorkspace[];
-};
-
-export type AuthWorkspace = {
-  id: string;
-  name?: string;
+  tenants: MeTenant[];
 };
 
 export type AuthorityDeclaration = Record<string, unknown>;
@@ -2536,6 +2531,13 @@ export type Identity = {
   roles: Record<string, string>;
 };
 
+export type IdentityEntry = {
+  subject: string;
+  workspaces: MeTenant[];
+  invitations: PendingWorkspace[];
+  canCreate: boolean;
+};
+
 export type ImageRegion = {
   id: string;
   label: string;
@@ -2688,6 +2690,14 @@ export type InterfaceRecord = {
 export type InterfaceRecordPage = {
   records: InterfaceRecord[];
   total: number;
+};
+
+export type Invitation = {
+  state: string;
+  invitedBy: string;
+  created: string;
+  expires?: string;
+  accepted?: string;
 };
 
 export type Issue = {
@@ -3093,6 +3103,7 @@ export type Member = {
   roles: Record<string, string>;
   grants?: Grant[];
   status?: string;
+  invitation?: Invitation;
   scopes?: string[];
   agent?: boolean;
   language?: string;
@@ -3114,6 +3125,7 @@ export type MemberView = {
   roles: Record<string, string>;
   grants?: Grant[];
   status?: string;
+  invitation?: Invitation;
   scopes?: string[];
   agent?: boolean;
   language?: string;
@@ -4394,6 +4406,12 @@ export type PathConflict = {
   branch?: unknown;
 };
 
+export type PendingWorkspace = {
+  id: string;
+  name?: string;
+  expires: string;
+};
+
 export type Period = {
   from?: string;
   until?: string;
@@ -5387,6 +5405,7 @@ export type SettingValue = {
 };
 
 export type SignIn = {
+  registrationUrl?: string;
   issuer?: string;
   client?: string;
   localAuth?: boolean;
@@ -6312,6 +6331,13 @@ export type WorkingStateList = {
 export type WorkingStateView = {
   record?: WorkingState;
   id: string;
+};
+
+export type WorkspaceCreate = {
+  id: string;
+  name: string;
+  language?: string;
+  timezone?: string;
 };
 
 export const imageRegionLimits = {"maxIDBytes":128,"maxLabelBytes":256,"maxRegions":64} as const;

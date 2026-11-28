@@ -13,9 +13,11 @@ import (
 	"mime"
 	"net"
 	"net/http"
+	"net/mail"
 	"net/smtp"
 	"net/textproto"
 	"net/url"
+	"os"
 	"platformserver/platform"
 	"strconv"
 	"strings"
@@ -117,15 +119,34 @@ func (d Transport) Webhook(ep Endpoint, x platform.Effect, now time.Time) platfo
 func (d Transport) Mail(ep Endpoint, x platform.Effect, now time.Time) platform.Outcome {
 	sum := sha256.Sum256([]byte(x.Body))
 	out := platform.Outcome{Effect: x.ID, Digest: hex.EncodeToString(sum[:])}
+	if ep.ID == IdentityMailID {
+		configured, ok := IdentityMailEndpoint()
+		if !ok || ep.URL != configured.URL || ep.From != configured.From {
+			out.Result, out.Detail = "rejected", "identity mail endpoint not configured"
+			return out
+		}
+		ep = configured
+	}
 	var m Letter
 	u, err := url.Parse(ep.URL)
 	if err != nil || u.Scheme != "smtp" || json.Unmarshal([]byte(x.Body), &m) != nil {
 		out.Result, out.Detail = "rejected", "not an smtp:// endpoint or not a mail"
 		return out
 	}
+	if addr, err := mail.ParseAddress(m.To); err != nil || addr.Address != m.To {
+		out.Result, out.Detail = "rejected", "invalid recipient address"
+		return out
+	}
 	var auth smtp.Auth
 	if u.User != nil {
-		secret, ok := d.Credentials.CredentialValue(ep.Secret, "endpoint/"+ep.ID, ep.URL)
+		var secret []byte
+		var ok bool
+		if ep.ID == IdentityMailID {
+			secret = []byte(os.Getenv("PLATFORM_IDENTITY_SMTP_PASSWORD"))
+			ok = len(secret) > 0
+		} else {
+			secret, ok = d.Credentials.CredentialValue(ep.Secret, "endpoint/"+ep.ID, ep.URL)
+		}
 		if !ok {
 			out.Result, out.Detail = "retry", "secret "+ep.Secret+" missing"
 			return out
